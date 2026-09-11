@@ -1,0 +1,143 @@
+#ifndef DPLATFORM_H
+#define DPLATFORM_H
+//--------------------------------------------------------------------------//
+//                                                                          //
+//                                DPlatform.h                                 //
+//                                                                          //
+//                  COPYRIGHT (C) 1998 BY DIGITAL ANVIL, INC.               //
+//                                                                          //
+//--------------------------------------------------------------------------//
+/*
+
+    $Author: Rmarr $
+
+    $Header: /Conquest/App/DInclude/DPlatform.h 53    10/08/00 9:45p Rmarr $
+*/			    
+//--------------------------------------------------------------------------//
+#ifndef DBASEDATA_H
+#include "DBaseData.h"
+#endif
+
+#ifndef DTYPES_H
+#include "DTypes.h"
+#endif
+
+#ifndef DINSTANCE_H
+#include "DInstance.h"
+#endif
+
+#ifndef DFABRICATOR_H
+#include "DFabricator.h"		// for DRONE_RELEASE
+#endif
+
+#ifndef DMTECHNODE_H
+#include "DMTechNode.h"
+#endif
+
+#ifndef DEXTENSION_H
+#include "DExtension.h"
+#endif
+
+#define NUM_BLINKIES 6
+
+//----------------------------------------------------------------
+//
+struct BASE_PLATFORM_DATA : BASIC_DATA
+{
+	PLATFORMCLASS type;
+    char fileName[GT_PATH];
+	MISSION_DATA missionData;		// retail schema: full 72-byte MISSION_DATA
+	EXTENSION_DATA extension[MAX_EXTENSIONS];
+	U8 extensionBits;
+	S8 extensionLevel;
+	char explosionType[GT_PATH];
+	char shieldHitType[GT_PATH];
+	char ambient_animation[GT_PATH];
+	// ambientEffect not in VS6 binary; size/bMoonPlatform not in binary
+	SINGLE mass;
+	SINGLE_TECHNODE techActive;
+	struct SHIELD_DATA shield;
+	U32 slotsNeeded;
+	struct BLINKER_DATA blinkers;
+	U8 commandPoints;
+	U32 metalStorage;
+	U32 gasStorage;
+	U32 crewStorage;
+};
+static_assert(sizeof(BASE_PLATFORM_DATA) == 560, "BASE_PLATFORM_DATA binary layout mismatch");
+static_assert(offsetof(BASE_PLATFORM_DATA, slotsNeeded) == 476, "BASE_PLATFORM_DATA::slotsNeeded offset mismatch");
+// The two asserts above BOTH passed while this struct was wrong: MISSION_DATA_BIN was 32 bytes
+// short and extension[5] was 32 bytes long, so sizeof stayed 560 and slotsNeeded -- which sits
+// after the extension array -- stayed at 476. Guards must STRADDLE the divergent region:
+static_assert(offsetof(BASE_PLATFORM_DATA, extension)
+              == offsetof(BASE_PLATFORM_DATA, missionData) + sizeof(MISSION_DATA),
+              "extension[] must begin immediately after a full MISSION_DATA (retail schema)");
+static_assert(offsetof(BASE_PLATFORM_DATA, extensionBits)
+              == offsetof(BASE_PLATFORM_DATA, extension) + sizeof(EXTENSION_DATA) * 4,
+              "extension[] must hold exactly 4 entries (retail schema)");
+//----------------------------------------------------------------
+//
+#ifndef _ADB
+struct IEffectHandle;
+
+template <class BT_TYPE> 
+struct PLATFORM_INIT
+{
+	const BT_TYPE * pData;
+ 	PARCHETYPE pArchetype;
+ 	S32 animArchetype, archIndex, smoke_archID;
+	IMeshArchetype * meshArch;
+
+	IEffectHandle * ambientEffect;
+		
+ 	PARCHETYPE pExplosionType;
+ 	PARCHETYPE pShieldHitType;
+	PARCHETYPE pDamageBlast, pSparkBlast;
+	PARCHETYPE pBuildEffect;
+	PARCHETYPE pExtBuildEffect;
+
+	struct AnimArchetype * damageAnimArch;
+	struct AnimArchetype * shieldAnimArch, *shieldFizzAnimArch;
+	struct SMesh *smesh;
+	struct BaseExtent *m_extent;
+	struct EXTENT_DATA extent;
+
+	struct BlinkersArchetype *blink_arch;
+	U32 blinkTex,damageTexID, controlTexID;
+	//render experiment
+	int numChildren;
+	struct IMeshInfoTree *mesh_info;
+	struct IMeshRender **mr;
+	SINGLE fp_radius;  //this sucks
+
+	////////////////////
+
+	void * operator new (size_t size)
+	{
+		return calloc(size,1);
+	}
+	void   operator delete (void *ptr)
+	{
+		::free(ptr);
+	}
+
+	PLATFORM_INIT (void)
+	{
+		meshArch = NULL;
+		smoke_archID = 
+		animArchetype = archIndex = -1;
+		ambientEffect = NULL;
+	}
+
+	/* methods defined in TPlatform.h */
+
+	bool loadPlatformArchetype (BT_TYPE * _pData, PARCHETYPE _pArchetype);		// load archetype data (return true on success)
+
+	~PLATFORM_INIT (void);					// free archetype references
+};
+
+#endif		// end #ifndef _ADB
+//----------------------------------------------------------------
+//
+
+#endif
