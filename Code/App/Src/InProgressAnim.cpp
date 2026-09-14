@@ -30,6 +30,7 @@
 #include <EventSys.h>
 #include <TComponent.h>
 #include <IDDBackDoor.h>
+#include <FrontierX/PlatformTime.h>
 
 void __stdcall SetPipelineCriticalSection (CRITICAL_SECTION * criticalSection);
 void __stdcall SetWindowManagerCriticalSection (CRITICAL_SECTION * criticalSection);
@@ -77,7 +78,7 @@ struct IPAnim : IPANIM, BaseHotRect
 	CRITICAL_SECTION criticalSection;
 	HANDLE hThread;
 	U32 threadID;
-	__int64 lastUpdateTick, clockFrequency;
+	U64 lastUpdateTick;
 
 
 	COMPTR<IEventCallback> background, foreground;
@@ -316,7 +317,6 @@ void IPAnim::init (void)
 	draw_S();
 
 	// now do the multi-threaded stuff
-	QueryPerformanceFrequency((LARGE_INTEGER *) &clockFrequency);
 	InitializeCriticalSection(&criticalSection);
 	SetPipelineCriticalSection(&criticalSection);
 	SetWindowManagerCriticalSection(&criticalSection);
@@ -448,19 +448,14 @@ void IPAnim::draw_S (void)
 //
 void IPAnim::update_S (void)
 {
-	__int64 diff, clockTick;
-	
-	QueryPerformanceCounter((LARGE_INTEGER *)&clockTick);
+	const U64 clockTick = FrontierX::Platform::MonotonicMicroseconds();
 	if (lastUpdateTick==0)
 		lastUpdateTick = clockTick;
-	diff = clockTick - lastUpdateTick;
-
+	const U64 diff = FrontierX::Platform::ClampedElapsedMicroseconds(
+		lastUpdateTick, clockTick, 250000);
 	lastUpdateTick = clockTick;
 
-	if (diff > clockFrequency / 4)
-		diff = clockFrequency / 4;
-
-	U32 time = (diff * 1024 * 1000) / clockFrequency;
+	U32 time = U32(diff * 1024 / 1000);
 
 	if (time)
 	{
@@ -486,7 +481,7 @@ void IPAnim::main (void)
 		draw_S();
 		LeaveCriticalSection(&criticalSection);
 
-		Sleep(1000 / 15);		// wait for about 1/15 of a second
+		FrontierX::Platform::SleepForMilliseconds(1000 / 15);		// wait for about 1/15 of a second
 	}
 }
 

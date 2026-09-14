@@ -38,6 +38,7 @@
 #include <IConnection.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
+#include <FrontierX/PlatformTime.h>
 
 
 #include <mmsystem.h>
@@ -47,40 +48,22 @@ static GETBATCHHEAP GetBatchHeap;
 //__declspec(dllimport) IHeap * __stdcall GetBatchHeap (void);
 //--------------------------------------------------------------------------
 //
-static DOUBLE clockPeriod;
-static void init_frame_time (void)
-{
-	__int64 clockFrequency;
-
- 	if (QueryPerformanceFrequency((LARGE_INTEGER *) &clockFrequency) == 0)
- 		CQBOMB0("High performance clock not supported on this system.");
-
- 	clockPeriod = 1.0 / ((DOUBLE) clockFrequency);
-}
-//--------------------------------------------------------------------------
-//
 static S32 currentFrameTime=0;
 
-#define MAX_FRAMEPERIOD 0.25		// 1/4 second
 static S32 get_frame_time (void)
 {
-	__int64 clockTick;
-	static __int64 lastClockTick;
-	double elapsedTime;
-
-	QueryPerformanceCounter((LARGE_INTEGER *)&clockTick);
+	const U64 clockTick = FrontierX::Platform::MonotonicMicroseconds();
+	static U64 lastClockTick;
 
 	if (lastClockTick == 0)
 		lastClockTick = clockTick;
 
-	elapsedTime = DOUBLE(clockTick - lastClockTick) * clockPeriod;
-	if (elapsedTime < 0 || elapsedTime > MAX_FRAMEPERIOD)
-		elapsedTime = MAX_FRAMEPERIOD;
+	const U64 elapsedTime = FrontierX::Platform::ClampedElapsedMicroseconds(
+		lastClockTick, clockTick, 250000);
 	lastClockTick = clockTick;
 	
-	// comment - the 1024x1000 converts it to micro-seconds, we use 1024 for part of it since most
-	// controls shift the time down by 10 - capeche?
-	currentFrameTime = S32(elapsedTime * 1024*1000);
+	// Controls consume elapsed time in 1/1024 millisecond units.
+	currentFrameTime = S32(elapsedTime * 1024 / 1000);
 	return currentFrameTime;
 }
 
@@ -526,10 +509,6 @@ struct _modalfactory : GlobalComponent
 			GetBatchHeap = (GETBATCHHEAP) GetProcAddress(hInstance, "_GetBatchHeap@0");
 	}
 
-	virtual void Initialize (void)
-	{
-		init_frame_time();
-	}
 };
 
 static _modalfactory startup;

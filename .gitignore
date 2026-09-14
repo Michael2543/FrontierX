@@ -95,6 +95,9 @@ Code/Libs/ExplicitDLL/release/x86Math.dll
 # Rebuilt runtime modules are reproducible through Build-Conquest.ps1.
 Code/Libs/ExplicitDLL/release/*.dll
 
+# Out-of-tree CMake and Ninja outputs.
+/out/
+
 # Third-party files whose redistribution provenance is unresolved (see LEGAL.md).
 binkw32.dll
 /Conquest_Frontier_Wars_Manual.pdf

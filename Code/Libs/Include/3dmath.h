@@ -30,12 +30,14 @@
 //
 // Allow warning-free conversions from "const double" to "float."
 //
+#ifdef _MSC_VER
 #pragma warning(disable: 4244 4305)
+#endif
 
 //
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 //

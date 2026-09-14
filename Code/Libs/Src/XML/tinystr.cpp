@@ -22,8 +22,7 @@ must not be misrepresented as being the original software.
 distribution.
 */
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+// FrontierX modification: removed the unused Windows header dependency.
 
 #include "tinyxml.h"
 

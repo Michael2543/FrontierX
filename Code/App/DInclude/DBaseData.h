@@ -14,15 +14,19 @@
 */			    
 //--------------------------------------------------------------------------//
 #ifndef US_TYPEDEFS
-#include "typedefs.h"
+#include "TYPEDEFS.H"
+#endif
+
+#ifndef DMISSIONDATALAYOUT_H
+#include "DMissionDataLayout.h"
 #endif
 
 #ifndef OBJCLASS_H
-#include "objclass.h"
+#include "ObjClass.h"
 #endif
 
 #ifndef SFXID_H
-#include "sfxid.h"
+#include "Sfxid.h"
 #endif
 
 #ifndef _ADB
@@ -149,14 +153,6 @@ struct ARMOR_DATA
 #endif
 };
 
-struct ResourceCost
-{
-	U32 gas:8;
-	U32 metal:8;
-	U32 crew:8;
-	U32 commandPt:8;
-};
-
 struct DamageSave
 {
 	U32 damage;
@@ -224,77 +220,6 @@ struct GT_VFXSHAPE : GENBASE_DATA
 //---------------------Mission definitions------------------------
 //----------------------------------------------------------------
 //
-// Binary layout of MISSION_DATA as stored in gametypes.db (VS6-compiled, 40 bytes).
-// armorData/silhouetteImage/specialAbility/speechPriority were added to the source
-// after the binary data files were compiled and are NOT present in the binary.
-// Use MISSION_DATA_BIN for archetype binary structs; use MISSION_DATA for runtime objects.
-struct MISSION_DATA_BIN
-{
-	// VS6 packed these three differently-typed enum bitfields into one int
-	// (9+4+17 = 30 bits ≤ 32) because it treated all enum bitfields as
-	// int-typed.  VS2022 gives each different type its own storage unit →
-	// 3×4 = 12 bytes instead of 4.  Use unsigned int to force packing and
-	// match the VS6 binary layout.
-	unsigned int mObjClass:8;	// was M_OBJCLASS (retail width; CQ2 widened to 9 for more classes)
-	unsigned int race:4;		// was M_RACE
-	unsigned int displayName:18;	// was M_DISPLAY_NAME (retail width; CQ2 narrowed to 17)
-
-	struct M_CAPS
-	{
-		U8 padding;
-		// VS6 bool:1 uses byte-sized storage (1-byte per group), packing 8 flags
-		// per byte.  24 flags × bool:1 = 3 bytes + 1 byte padding = 4 bytes total.
-		// VS2022 bool:1 behaves identically, so no type change is needed.
-		bool moveOk:1;
-		bool attackOk:1;
-		bool specialAttackOk:1;
-		bool specialEOAOk:1;
-		bool specialAbilityOk:1;
-		bool specialAttackWormOk:1;
-		bool defendOk:1;	// an area or a friendly unit
-		bool supplyOk:1;
-		bool harvestOk:1;
-		bool buildOk:1;
-		bool repairOk:1;
-		bool jumpOk:1;
-		bool admiralOk:1;	// ship contains admiral
-		bool captureOk:1;	// capture enemy units
-		bool salvageOk:1;
-		bool probeOk:1;
-		bool mimicOk:1;
-		bool recoverOk:1;
-		bool createWormholeOk:1;
-		bool synthesisOk:1;
-		bool cloakOk:1;
-		bool specialAttackShipOk:1;  //repulsor and tractor
-		bool targetPositionOk:1;		// CQ2 cap, kept (used by ObjComm; layout-harmless spare bit)
-		bool specialTargetPlanetOk:1;	// CQ2 cap, kept (used by ObjComm/MScript)
-
-#ifndef _ADB
-		M_CAPS & operator |= (const M_CAPS & other);
-		M_CAPS & operator &= (const M_CAPS & other);
-#endif
-
-	} caps;
-
-	U16			hullPointsMax;
-	U16			supplyPointsMax;
-	U16			scrapValue;
-	U16			buildTime;
-
-	ResourceCost	resourceCost;
-
-	SINGLE		sensorRadius;
-	SINGLE		cloakedSensorRadius;
-	SINGLE		maxVelocity;
-	SINGLE		baseWeaponAccuracy;
-	SINGLE		baseShieldLevel;
-};
-
-#ifndef _ADB
-static_assert(sizeof(MISSION_DATA_BIN) == 40, "MISSION_DATA_BIN must be 40 bytes to match VS6 binary");
-#endif
-
 // Runtime MISSION_DATA extends the binary portion with fields that were added
 // to the source after gametypes.db was compiled.  These are NOT read from the
 // binary; they are zero-initialised and then populated via MISSION_DATA_OVERRIDE

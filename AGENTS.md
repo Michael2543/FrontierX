@@ -134,13 +134,27 @@ These require Windows, VS2022, Python 3, and the June 2010 DirectX SDK. Do not a
 them as native Linux commands. Full rebuilds are required; incremental legacy builds can reuse
 stale intermediates.
 
-No FrontierX Linux build command exists yet. When one is introduced, document the exact configure,
-build, test, and run commands in `README.md` and `docs/PROJECT.md`, and validate them before adding
-them here.
+No native Linux game build exists yet. The CMake graph currently contains the dependency-free
+x86_64 layout probe, an isolated TinyXML static library and test consumer, and a standard-C++
+platform timing library plus timing and data-root test consumers. Its verified GCC commands are:
+
+```text
+cmake --preset linux-gcc-debug
+cmake --build --preset linux-gcc-debug
+ctest --preset linux-gcc-debug
+```
+
+Use `linux-clang-debug` in all three commands for the Clang check. Both presets configured, built,
+and passed four CTests on Linux x86_64 on 2026-09-12. These commands do not build or run the game
+and do not replace the required Windows regression path.
 
 Use `Tools/abicheck`, schema readers, compile-time layout assertions, and
 `RETAIL_TEST_MATRIX.md` where relevant. Runtime claims require an actual run against a legitimate
 retail installation.
+
+The ABI scripts require native Windows, VS2022 `dumpbin`, and PE binaries. They reject non-Windows
+hosts by design. Do not run them through Docker, Podman, Wine, or Linux PowerShell, and do not add
+them to the Linux CMake/CTest graph.
 
 ## Legal and Distribution
 
@@ -183,21 +197,118 @@ by `LEGAL.md`.
 - `Code/Libs/Src/RenderPipeline/DirectDraw/D3D/Direct3D_pipe.cpp`: active D3D9 renderer
 - `Code/App/Src/Scripts/`: retail campaign modules
 - `Tools/abicheck/`: cross-module ABI checks
+- `Tools/portability/layout_probe.cpp`: first native Linux type-width probe
+- `Tools/portability/tinyxml_probe.cpp`: first linked portable-library behavior test
+- `Tools/portability/data_root_probe.cpp`: exact-case startup data-directory inspector
+- `CMakePresets.json`: Linux x86_64 GCC and Clang probe presets
+- `docs/DEPENDENCIES.md`: native-build dependency provenance and release blockers
 - `Tools/read_gendata.py`: retail schema inspection
 - `HANDOFF.md`: detailed restoration state and unresolved defects
 - `RETAIL_TEST_MATRIX.md`: runtime acceptance evidence
 - `LEGAL.md`: compliance and interoperability policy
 - `MODIFICATIONS.md`: required prominent modification notice
 
-## Scoped Copilot Instructions
+## Scoped Instructions for Codex and GitHub Copilot
 
-GitHub Copilot must also apply these files when their paths match:
+Codex and GitHub Copilot must read and apply these files when their paths match.
+The legal/release instructions apply repository-wide; their individual requirements remain
+conditional on the action being performed.
 
 | File | Scope |
 |---|---|
 | `.github/instructions/cpp-conventions.instructions.md` | C and C++ source/header changes |
 | `.github/instructions/build.instructions.md` | CMake, project, and build tooling changes |
 | `.github/instructions/docs.instructions.md` | Markdown documentation changes |
-| `.github/instructions/legal-release.instructions.md` | Dependencies, binaries, assets, reverse engineering, packaging, and releases |
+| `.github/instructions/legal-release.instructions.md` | All paths; action-specific dependency, asset, interoperability, and release rules |
 
 Keep this table synchronized when scoped instruction files are added, removed, or renamed.
+
+## Port readiness follow-up
+
+See [Linux port readiness](docs/PORT_READINESS.md) for the first proposed layout-probe milestone,
+initial blocker inventory, ABI tool parameters and pending validation. The layout probe and isolated
+TinyXML library now build with GCC and Clang; no native game target exists. The ABI scripts are
+parameterized and statically checked, but still require native Windows execution with `dumpbin`.
+
+## Build declaration inventory
+
+Run `python3 Tools/portability/build_inventory.py` from the repository root to inspect the
+supported Windows entry points without invoking Windows tools. See [build graph evidence](docs/BUILD_GRAPH.md)
+for scope, test commands, measured dependencies and the next profile-parser candidate. This
+read-only inventory does not evaluate MSBuild or replace native Windows ABI validation.
+
+## Profile buffer core (2026-09-13)
+
+The Linux presets now also build `frontierx_profile_buffer_probe`; both GCC and Clang
+passed all five CTests. `FrontierX/ProfileBuffer.h` owns section marking and line/section
+navigation shared with the production DACOM parser. This is an internal, borrowed-buffer
+contract with sentinel padding, not a complete portable profile parser or game target.
+The DACOM wrapper retains its Win32 I/O, allocator and public interfaces. Native Windows
+Debug/Final rebuilds and ABI checks remain required before accepting that integration.
+
+### Owning native profile reader (2026-09-13)
+
+The existing GCC and Clang presets now build `frontierx_profile_document_probe` and pass six
+CTests. `FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
+and key lookup through the shared profile-buffer core. Native startup configuration currently
+accepts ASCII without NUL bytes, up to 1 MiB, with locale-independent ASCII case folding.
+This policy is limited to the new reader; Windows DACOM comparison behavior is unchanged.
+No native game startup or retail-configuration compatibility is claimed by the synthetic tests.
+
+## Native headless startup check (2026-09-13)
+
+The GCC and Clang presets build `frontierx_headless` and pass seven CTests; the headless CTest
+contains six process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
+The following help command was executed:
+
+```text
+out/build/linux-gcc-debug/frontierx_headless --help
+```
+
+The executable accepts `--data-root DIRECTORY` and an optional `--config FILE`. The latter is a
+new native configuration, not retail Conquest.ini: use `[FrontierX]` and `DataRoot=path` with a
+final LF newline. Relative config paths resolve against the config file's directory. Selection
+order is CLI, FRONTIERX_DATA_ROOT, explicit config, then Data relative to the working directory.
+An explicitly supplied invalid configuration always fails, even when another path overrides it.
+ASCII/control-character restrictions of the native reader apply; paths are not silently trimmed.
+
+Exit codes: 0 means directory checks passed (or help), 1 invalid arguments, 2 invalid configuration,
+3 unusable required data directories, 4 unexpected startup-check failure. Optional directories
+produce status lines without failing the process. Reports are deterministic and do not print the
+user's absolute installation path. No media contents, metadata, campaign or game startup are
+validated. Synthetic tests cover selection precedence, relative configuration paths, malformed
+options/configuration, missing roots, case mismatches and optional-media behavior.
+
+### UTF metadata header check (2026-09-13)
+
+`frontierx_headless` additionally accepts `--metadata FILE`, an explicit path resolved from the
+working directory. After directory checks, it reads only the 56-byte UTF 1.01 header and validates
+signature, version, 44-byte directory stride, aligned directory size, metadata ranges, overlap and
+free-entry offset. Fields are decoded as little-endian fixed-width words; native structs are never
+mapped onto disk bytes. Invalid metadata returns exit code 5. Omitting the option leaves this check
+unperformed. Success does not validate directory entries, names, payloads or GenData archetypes.
+
+Both preset builds passed seven CTests; the headless suite now has seven process scenarios,
+including synthetic UTF header mutations and missing/truncated metadata. No retail files were read.
+The format evidence is the source declarations in DOSFile/BaseUTF.h, header validation in
+UTFDMan.cpp and the GenData.cpp loadTypesData caller. The UTF inspector is not yet the DOSFile
+backend replacement. Its summary is diagnostic only and does not certify a compatible installation.
+
+### UTF directory validation (2026-09-13)
+
+The metadata check now reads directory and used-name tables (combined limit 64 MiB), walks the
+reachable tree iteratively, rejects repeated/cyclic/misaligned links, validates NUL-terminated
+name references and bounds file allocation/used extents against the container size. The free-entry
+chain is checked separately. Source review of UTFDMan.cpp corrected the earlier assumption:
+the header's first free-entry offset is absolute; its subsequent dwNext links are directory-relative.
+Synthetic tests include a valid free chain and a cyclic one. Unreachable slots and free payload-space
+lists are not certified; payload contents/decompression and archetype schemas remain unchecked.
+
+GCC and Clang passed all seven CTests, including eight headless process scenarios with synthetic
+UTF trees, invalid links, names and payload ranges. No retail installation was inspected. This
+extends the read-only inspector; it does not yet replace the Windows DOSFile implementation.
+
+The headless checker now accepts `--metadata FILE --entry VIRTUAL_PATH` to read a bounded UTF
+entry into memory and report its byte count and diagnostic checksum (2026-09-13). Both presets
+passed seven CTests. No schema or retail compatibility is implied; see the UTF entry-reading
+section of the port-readiness plan for limits and outstanding work.

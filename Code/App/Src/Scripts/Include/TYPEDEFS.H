@@ -7,6 +7,7 @@
 #ifndef US_TYPEDEFS
 #define US_TYPEDEFS
 
+#if defined(_WIN32) || defined(SGI)
 typedef signed   long    BOOL32;
 typedef unsigned char    U8 ;
 typedef unsigned short   U16;
@@ -15,6 +16,17 @@ typedef          char    C8 ;
 typedef signed   char    S8 ;
 typedef signed   short   S16;
 typedef signed   long    S32;
+#else
+#include <stdint.h>
+typedef int32_t          BOOL32;
+typedef uint8_t          U8 ;
+typedef uint16_t         U16;
+typedef uint32_t         U32;
+typedef          char    C8 ;
+typedef int8_t           S8 ;
+typedef int16_t          S16;
+typedef int32_t          S32;
+#endif
 
 // bool is not defined on SGI
 #ifdef SGI
@@ -38,9 +50,12 @@ typedef unsigned char bool;
 #ifdef SGI
 typedef __uint64_t U64;
 typedef __int64_t S64;
-#else
+#elif defined(_WIN32)
 typedef unsigned __int64 U64;
 typedef signed   __int64 S64;
+#else
+typedef uint64_t U64;
+typedef int64_t  S64;
 #endif
 #endif
 

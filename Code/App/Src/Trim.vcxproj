@@ -360,6 +360,7 @@ xcopy /Y "$(OutDir)Trim.pdb" "$(ConquestDebugDeployDir)\"</Command>
     </Bscmake>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Libs\Include\FrontierX\PlatformTime.h" />
     <ClInclude Include="..\DInclude\DAdmiralBar.h" />
     <ClInclude Include="..\DInclude\DAnimate.h" />
     <ClInclude Include="..\DInclude\Data.h" />
@@ -479,6 +480,9 @@ xcopy /Y "$(OutDir)Trim.pdb" "$(ConquestDebugDeployDir)\"</Command>
     <ClInclude Include="VoxCompress.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Libs\Src\Platform\PlatformTime.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Animate.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='DEMO Final|Win32'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Final|Win32'">MaxSpeed</Optimization>

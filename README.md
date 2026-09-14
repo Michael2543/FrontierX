@@ -5,10 +5,11 @@ while preserving retail gameplay, data compatibility, and deterministic simulati
 starts from Revan67's Windows 11 retail-restoration work rather than from the uncorrected 2013
 source snapshot.
 
-The Linux port is in its bootstrap phase: no native Linux build exists yet. The working VS2022
-Win32 build remains the behavioral and regression baseline while portable build, platform, and
-rendering boundaries are introduced incrementally. See [docs/PROJECT.md](docs/PROJECT.md) for the
-project charter and current architecture decisions.
+The Linux port is in its bootstrap phase: native layout, TinyXML, platform timing, and data-root
+inspection targets build, but no game or engine-module target exists yet. The working VS2022 Win32
+build remains the behavioral and regression baseline while portable build, platform, and rendering
+boundaries are introduced incrementally. See [docs/PROJECT.md](docs/PROJECT.md) for the project
+charter and current architecture decisions.
 
 FrontierX does not include or grant rights to missing retail media. Running the game requires a
 lawfully obtained retail installation. This entire Program Derivative is non-commercial and is
@@ -43,10 +44,14 @@ Linux-port bootstrap and project instructions are community modifications by Mic
 
 ## Current status
 
-Last verified: **2026-08-30**
+Status snapshot: **2026-09-12**. Windows runtime evidence was last verified on **2026-08-30**.
 
 | Area | Status |
 |---|---|
+| Linux x86_64 layout probe | **Working** with CMake/Ninja, GCC, Clang, and CTest |
+| Linux TinyXML support library | **Working** as an isolated static library with a linked behavior test |
+| Portable timing library | **Working** with monotonic milliseconds, sleep, yield, and a linked behavior test |
+| Linux data-root inspector | **Working** with exact-case diagnostics; retail installation validation pending |
 | VS2022 Win32 build | **Working** — Debug and Final rebuild successfully |
 | Retail campaign DLLs | **Working** — all 18 build, verify, and deploy together |
 | Startup and mission loading | **Working**, with repeated-launch soak still required |
@@ -96,6 +101,11 @@ development source disagrees with shipped data.
 
 ## Requirements
 
+The Linux layout probe requires Linux x86_64, CMake 3.25 or newer, Ninja, and either GCC or Clang.
+It does not require retail media or a graphics SDK because it does not build or run the game.
+
+The supported game build requires:
+
 - Windows 10 or Windows 11 with 32-bit application support.
 - Visual Studio 2022 with the **Desktop development with C++** workload.
 - Python 3 with the Windows `py` launcher. It replaces the original 16-bit XMIFF build utility.
@@ -117,6 +127,51 @@ Visual C++ redistributables. Do not remove system redistributables. Extract the 
 files are `Include\d3dx9.h`, `Lib\x86\d3dx9.lib`, `d3dx9d.lib`, and `DxGuid.lib`.
 
 ## Build and run
+
+### Linux layout probe
+
+The current Linux targets check fundamental storage widths, the LP64 runtime model, retail mission
+enum values, the production `MISSION_DATA_BIN` layout, the existing TinyXML parser as an isolated
+static library, the first standard-C++ platform timing contract, and exact-case data-root paths.
+Build and test them with GCC:
+
+```text
+cmake --preset linux-gcc-debug
+cmake --build --preset linux-gcc-debug
+ctest --preset linux-gcc-debug
+```
+
+Run the independent Clang build with:
+
+```text
+cmake --preset linux-clang-debug
+cmake --build --preset linux-clang-debug
+ctest --preset linux-clang-debug
+```
+
+Both sequences passed four CTests on Linux x86_64 on 2026-09-12. They do not build `Conquest.exe`,
+any engine module, campaign modules, or a native Linux game executable. The modal UI frame clock
+and progress-animation clock and sleep now use the portable contract, but the owning `Trim` module
+still requires Windows validation. The vendored TinyXML snapshot has unresolved exact-version
+provenance and is not approved for distribution; see [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
+
+Inspect a lawfully obtained external data directory without reading or copying file contents:
+
+```text
+./out/build/linux-gcc-debug/frontierx_data_root_probe /path/to/retail/Data
+```
+
+When no argument is supplied, the probe uses `FRONTIERX_DATA_ROOT` and then falls back to `Data` in
+the current directory. The resulting Linux precedence is command-line path, environment variable,
+then `Data`. This does not change the Windows game's existing registry-backed `DataPath` behavior.
+
+The command returns zero when all seven startup-required directory names have exact case. Missing
+or mismatched optional movie, music, SFX, speech, and mission-speech directories are reported but
+do not block startup. The repository's development `Data` tree currently reports case mismatches
+for four required and all five optional paths, plus missing `Profiles`, `Maps/Campaign`, and
+`Maps/Multiplayer`. This is a source-tree check, not evidence about a retail installation.
+
+### Windows game build
 
 Use the supported root-level entry points:
 
@@ -387,3 +442,94 @@ Contributions are welcome when they follow the project order of operations:
 - Fever Pitch Studios for releasing the development source.
 - The original Conquest: Frontier Wars development and publishing teams.
 - The Conquest modding community for preserving documentation, tools, and knowledge of the game.
+
+## Port readiness follow-up
+
+See [Linux port readiness](docs/PORT_READINESS.md) for the first proposed layout-probe milestone,
+initial blocker inventory, ABI tool parameters and pending validation. The layout probe and isolated
+TinyXML library are implemented; no native game build exists. The ABI scripts are parameterized and
+must be run only on native Windows with VS2022 `dumpbin`; container, Wine, and Linux PowerShell
+execution is intentionally blocked.
+
+## Build declaration inventory
+
+Run `python3 Tools/portability/build_inventory.py` from the repository root to inspect the
+supported Windows entry points without invoking Windows tools. See [build graph evidence](docs/BUILD_GRAPH.md)
+for scope, test commands, measured dependencies and the next profile-parser candidate. This
+read-only inventory does not evaluate MSBuild or replace native Windows ABI validation.
+
+## Profile buffer core (2026-09-13)
+
+The Linux presets now also build `frontierx_profile_buffer_probe`; both GCC and Clang
+passed all five CTests. `FrontierX/ProfileBuffer.h` owns section marking and line/section
+navigation shared with the production DACOM parser. This is an internal, borrowed-buffer
+contract with sentinel padding, not a complete portable profile parser or game target.
+The DACOM wrapper retains its Win32 I/O, allocator and public interfaces. Native Windows
+Debug/Final rebuilds and ABI checks remain required before accepting that integration.
+
+### Owning native profile reader (2026-09-13)
+
+The existing GCC and Clang presets now build `frontierx_profile_document_probe` and pass six
+CTests. `FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
+and key lookup through the shared profile-buffer core. Native startup configuration currently
+accepts ASCII without NUL bytes, up to 1 MiB, with locale-independent ASCII case folding.
+This policy is limited to the new reader; Windows DACOM comparison behavior is unchanged.
+No native game startup or retail-configuration compatibility is claimed by the synthetic tests.
+
+## Native headless startup check (2026-09-13)
+
+The GCC and Clang presets build `frontierx_headless` and pass seven CTests; the headless CTest
+contains six process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
+The following help command was executed:
+
+```text
+out/build/linux-gcc-debug/frontierx_headless --help
+```
+
+The executable accepts `--data-root DIRECTORY` and an optional `--config FILE`. The latter is a
+new native configuration, not retail Conquest.ini: use `[FrontierX]` and `DataRoot=path` with a
+final LF newline. Relative config paths resolve against the config file's directory. Selection
+order is CLI, FRONTIERX_DATA_ROOT, explicit config, then Data relative to the working directory.
+An explicitly supplied invalid configuration always fails, even when another path overrides it.
+ASCII/control-character restrictions of the native reader apply; paths are not silently trimmed.
+
+Exit codes: 0 means directory checks passed (or help), 1 invalid arguments, 2 invalid configuration,
+3 unusable required data directories, 4 unexpected startup-check failure. Optional directories
+produce status lines without failing the process. Reports are deterministic and do not print the
+user's absolute installation path. No media contents, metadata, campaign or game startup are
+validated. Synthetic tests cover selection precedence, relative configuration paths, malformed
+options/configuration, missing roots, case mismatches and optional-media behavior.
+
+### UTF metadata header check (2026-09-13)
+
+`frontierx_headless` additionally accepts `--metadata FILE`, an explicit path resolved from the
+working directory. After directory checks, it reads only the 56-byte UTF 1.01 header and validates
+signature, version, 44-byte directory stride, aligned directory size, metadata ranges, overlap and
+free-entry offset. Fields are decoded as little-endian fixed-width words; native structs are never
+mapped onto disk bytes. Invalid metadata returns exit code 5. Omitting the option leaves this check
+unperformed. Success does not validate directory entries, names, payloads or GenData archetypes.
+
+Both preset builds passed seven CTests; the headless suite now has seven process scenarios,
+including synthetic UTF header mutations and missing/truncated metadata. No retail files were read.
+The format evidence is the source declarations in DOSFile/BaseUTF.h, header validation in
+UTFDMan.cpp and the GenData.cpp loadTypesData caller. The UTF inspector is not yet the DOSFile
+backend replacement. Its summary is diagnostic only and does not certify a compatible installation.
+
+### UTF directory validation (2026-09-13)
+
+The metadata check now reads directory and used-name tables (combined limit 64 MiB), walks the
+reachable tree iteratively, rejects repeated/cyclic/misaligned links, validates NUL-terminated
+name references and bounds file allocation/used extents against the container size. The free-entry
+chain is checked separately. Source review of UTFDMan.cpp corrected the earlier assumption:
+the header's first free-entry offset is absolute; its subsequent dwNext links are directory-relative.
+Synthetic tests include a valid free chain and a cyclic one. Unreachable slots and free payload-space
+lists are not certified; payload contents/decompression and archetype schemas remain unchecked.
+
+GCC and Clang passed all seven CTests, including eight headless process scenarios with synthetic
+UTF trees, invalid links, names and payload ranges. No retail installation was inspected. This
+extends the read-only inspector; it does not yet replace the Windows DOSFile implementation.
+
+The headless checker now accepts `--metadata FILE --entry VIRTUAL_PATH` to read a bounded UTF
+entry into memory and report its byte count and diagnostic checksum (2026-09-13). Both presets
+passed seven CTests. No schema or retail compatibility is implied; see the UTF entry-reading
+section of the port-readiness plan for limits and outstanding work.

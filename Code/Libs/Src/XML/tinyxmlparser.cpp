@@ -22,8 +22,7 @@ must not be misrepresented as being the original software.
 distribution.
 */
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+// FrontierX modification: removed the unused Windows header dependency.
 
 #include "tinyxml.h"
 #include <ctype.h>
@@ -975,10 +974,6 @@ const char* TiXmlAttribute::Parse( const char* p, TiXmlParsingData* data )
 {
 	p = SkipWhiteSpace( p );
 	if ( !p || !*p ) return 0;
-
-	int tabsize = 4;
-	if ( document )
-		tabsize = document->TabSize();
 
 //	TiXmlParsingData data( p, prevData );
 	if ( data )

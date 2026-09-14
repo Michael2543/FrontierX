@@ -22,13 +22,12 @@ must not be misrepresented as being the original software.
 distribution.
 */
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+// FrontierX modification: removed the unused Windows header dependency.
 
 #include <ctype.h>
 #include "tinyxml.h"
 
-void uword_to_hexstring (unsigned int input, char *str, char numdigits);
+void uword_to_hexstring (unsigned int input, char *str, unsigned int numdigits);
 unsigned int hexstring_to_uword (char *str);
 
 #ifdef TIXML_USE_STL
@@ -624,7 +623,7 @@ void TiXmlElement::SetAttribute( const char * name, double val )
 void TiXmlElement::SetAttribute( const char * name, unsigned long val )
 {
 	char buf[64];
-	sprintf( buf, "%u", val );
+	sprintf( buf, "%lu", val );
 	SetAttribute( name, buf );
 }
 
@@ -667,7 +666,7 @@ void TiXmlElement::SetAttribute( const char * name, const wchar_t* value )
 	sprintf(pBuffer,"0000");
 
 	SetAttribute( name, longBuffer );
-	delete longBuffer;
+	delete [] longBuffer;
 }
 
 void TiXmlElement::Print( FILE* cfile, int depth ) const
@@ -998,7 +997,7 @@ TIXML_QRESULT TiXmlAttribute::QueryDoubleValue( double* dval ) const
 
 TIXML_QRESULT TiXmlAttribute::QueryUnsignedIntValue( unsigned long* uival ) const
 {
-	if ( sscanf( value.c_str(), "%u", uival ) == 1 )
+	if ( sscanf( value.c_str(), "%lu", uival ) == 1 )
 	{
 		return TIXML_SUCCESS;
 	}
@@ -1019,12 +1018,12 @@ void TiXmlAttribute::SetDoubleValue( double _value )
 	SetValue (buf);
 }
 
-const int TiXmlAttribute::IntValue() const
+int TiXmlAttribute::IntValue() const
 {
 	return atoi (value.c_str ());
 }
 
-const double  TiXmlAttribute::DoubleValue() const
+double TiXmlAttribute::DoubleValue() const
 {
 	return atof (value.c_str ());
 }
@@ -1395,9 +1394,9 @@ TiXmlHandle TiXmlHandle::ChildElement( const char* value, int count ) const
 * Returns     : none
 *********************************************************************************************************
 */
-void uword_to_hexstring (unsigned int input, char *str, char numdigits)
+void uword_to_hexstring (unsigned int input, char *str, unsigned int numdigits)
 {
-  char digit;
+	unsigned int digit;
 
   for (digit=numdigits; digit > 0; digit--) 
   {

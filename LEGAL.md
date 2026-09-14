@@ -79,6 +79,10 @@ that source release. In particular, the separately added `binkw32.dll` and
 they are included in any new public release package. Until that review is complete, release tooling
 must exclude them and maintainers should not represent them as covered by the source license.
 
+Native-build dependency evidence and unresolved provenance are tracked in
+[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md). A successful local build does not clear a component
+for distribution.
+
 ## Reverse engineering for interoperability
 
 The project's compatibility research has a narrow purpose: make an independently rebuilt Program

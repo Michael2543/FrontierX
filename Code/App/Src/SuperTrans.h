@@ -42,7 +42,7 @@
 //-------------------------------------------------------------------
 
 #ifndef _3DMATH_H
-#include <3DMath.h>
+#include <3dmath.h>
 #endif
 
 #ifndef MUL_RAD_TO_DEG

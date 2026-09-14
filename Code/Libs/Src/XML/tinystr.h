@@ -30,7 +30,10 @@ distribution.
 #ifndef TIXML_STRING_INCLUDED
 #define TIXML_STRING_INCLUDED
 
+// FrontierX modification: keep compiler-specific warning controls on MSVC.
+#ifdef _MSC_VER
 #pragma warning( disable : 4514 )
+#endif
 
 #include <assert.h>
 

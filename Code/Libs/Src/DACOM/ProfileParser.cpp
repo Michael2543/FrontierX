@@ -16,6 +16,7 @@
 #include <windows.h>
 
 #include "IProfileParser.h"
+#include <FrontierX/ProfileBuffer.h>
 #include "TComponent.h"
 #include "HeapObj.h"
 #include <da_heap_utility.h>
@@ -200,33 +201,8 @@ GENRESULT ProfileParser::Initialize (const C8 *fileName, ACCESS access)
 			::free(oldBuffer);
 			bufferSize = fileSize+1;
 
-			oldBuffer = fileBuffer+1;
-			while (*oldBuffer == ' ')
-				oldBuffer++;			// skip white space
-			do
-			{
-				if (*oldBuffer == '[')      // next section
-				{
-					char * tmp, * tmp2;
+			FrontierX::ProfileBuffer::MarkSections(fileBuffer);
 
-					if ((tmp = strchr(oldBuffer, ']')) != 0)
-					{
-						tmp2 = strchr(oldBuffer, '\n');			// if no return between [ ... ]
-
-						if (tmp2 == 0 || tmp2 > tmp)
-						{
-							// assume that previous character is not important,
-							// put double 00 for '[', single 0 for ']'
-
-							oldBuffer[-1] = 0;
-							*oldBuffer = 0;		// mark it
-							*tmp = 0;
-							oldBuffer = tmp+1;
-						}
-					}
-				}
-			} while ((oldBuffer = (C8 *) getLine(oldBuffer, 1)) != 0);
-			
 			result = GR_OK;
 		}
 		else
@@ -252,75 +228,13 @@ GENRESULT ProfileParser2::Initialize2 (const C8 *buffer, U32 bufferSize )
 //
 const char * ProfileParser::getLine (const char * buffer, int line)
 {
-	const char * tmp;
-
-	while (line>0)
-	{
-		if ((tmp = strchr(buffer, '\n')) == 0)
-		{
-			int len = strlen(buffer);
-
-			buffer += len+1;
-			if (buffer[0] == 0)
-			{
-				buffer = 0;
-				goto Done;
-			}
-		}
-		else
-		{
-			buffer = tmp+1;
-			switch (*buffer)
-			{
-			case 0:
-				buffer = 0;
-				goto Done;
-			case '\r':
-				buffer++;
-				break;
-			}
-
-			while (*buffer == ' ')
-				buffer++;
-			if (*buffer == 0)
-			{
-				buffer = 0;
-				goto Done;
-			}
-
-			line--;
-		}
-
-	}
-
-Done:	
-	return buffer;
+	return FrontierX::ProfileBuffer::GetLine(buffer, line);
 }
 //--------------------------------------------------------------------------//
 //
 const char * ProfileParser::getSection (const char * buffer, int count)
 {
-	int len;
-
-	while (count>0)
-	{
-		len = strlen(buffer);
-		buffer += len;
-		if (buffer[1] != 0)		// found a ']'
-		{
-			buffer++;
-		}
-		else
-		if (buffer[2] != 0)		// found a '['
-		{
-			count--;
-			buffer += 2;
-		}
-		else
-			return 0;			// end of the line
-	}
-
-	return buffer;
+	return FrontierX::ProfileBuffer::GetSection(buffer, count);
 }
 //--------------------------------------------------------------------------//
 //
@@ -482,100 +396,20 @@ BOOL32 ProfileParser::CloseSection (HANDLE hSection)
 //
 U32 ProfileParser::ReadProfileLine (HANDLE hSection, U32 lineNumber, C8 * buffer, U32 bufferSize)
 {
-	U32 result = 0;
-	const char * tmp, * tmp2;
-
-	if ((tmp = getLine(hSection, lineNumber+1)) != 0)		// line 0 is really the section name
-	{
-		if ((tmp2 = strchr(tmp, '\n')) != 0)
-		{
-			result = tmp2 - tmp;
-			if (result && tmp[result-1] == '\r')
-				result--;	// get rid of extra char
-		}
-		else
-			result = strlen(tmp);
-		if (bufferSize < result+1)
-			result = bufferSize-1;
-
-		if (buffer)
-		{
-			if (result == 0 && bufferSize>1)
-			{
-				*buffer = ' ';
-				result++;
-			}
-			else
-				memcpy(buffer, tmp, result);
-			buffer[result] = 0;
-		}
-		else
-		if (result == 0)
-			result++;
-	}
-
-	return result;
+	const char * line = getLine(hSection, lineNumber+1);
+	return line ? static_cast<U32>(FrontierX::ProfileBuffer::CopyLine(line, buffer, bufferSize)) : 0;
 }
 //--------------------------------------------------------------------------//
 //
 U32 ProfileParser::ReadKeyValue (HANDLE hSection, const C8 * keyName, C8 * buffer, U32 outBufferSize)
 {
-	U32 result = 0;
-	const char * tmp, * tmp2;
-	int cmplen;
-
-	cmplen = strlen(keyName);
-	tmp = fileBuffer+((U32)hSection);
-
-	while ((tmp = getLine(tmp, 1)) != 0)
-	{
-		// is there enough room in the buffer for a match to be possible?
-		if (U32(tmp) - U32(fileBuffer) + cmplen <= bufferSize)
-		{
-			// make sure last character of tmp[] is not a letter,number,or underscore
-			if (__iscsym(tmp[cmplen])==0)
-			{
-				if (compare_len(tmp, keyName, cmplen) == 0)
-				{
-					if ((tmp = strchr(tmp, '=')) != 0)
-					{
-						tmp++;
-						while (*tmp == ' ')
-							tmp++;
-
-						if ((tmp2 = strchr(tmp, '\n')) != 0)
-						{
-							result = tmp2 - tmp;
-							if (result && tmp[result-1] == '\r')
-								result--;	// get rid of extra char
-						}
-						else
-							result = strlen(tmp);
-						if (outBufferSize < result+1)
-							result = outBufferSize-1;
-
-						if (buffer)
-						{
-							if (result == 0 && outBufferSize>1)
-							{
-								*buffer = ' ';
-								result++;
-							}
-							else
-								memcpy(buffer, tmp, result);
-							buffer[result] = 0;
-						}
-						else
-						if (result == 0)
-							result++;
-						break;
-					}
-				}
-			}
-		}
-	}
-
-	return result;
+	const char * value = FrontierX::ProfileBuffer::FindValue(
+		fileBuffer, bufferSize, fileBuffer + ((U32)hSection), keyName,
+		[](const char * left, const char * right, std::size_t count) {
+			return compare_len(left, right, count);
+		},
+		[](char character) { return __iscsym(character); });
+	return value ? static_cast<U32>(FrontierX::ProfileBuffer::CopyLine(value, buffer, outBufferSize)) : 0;
 }
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
