@@ -416,7 +416,8 @@ GENRESULT EventCallback::Notify (U32 message, void *param)
 	DRAGGER *target;
 
 	if (message < WM_USER)
-		RHOTKEY->SystemMessage((S32)msg->hwnd,(S32)message, (S32)msg->wParam,(S32)msg->lParam);
+		RHOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(msg->hwnd),
+			message, msg->wParam, msg->lParam);
 	
 	switch (message)
 	{

@@ -115,7 +115,8 @@ BOOL32 GetHotkeyState (U32 hotkey);
 
 //-------------------------------------------------------------------------------------
 //
-void __cdecl SystemMessage (S32 hwnd, S32 message, S32 wParam, S32 lParam, S32 unused1,	S32 unused2);
+void __cdecl SystemMessage (LegacyWindowToken hwnd, LegacyMessageId message,
+	LegacyWParam wParam, LegacyLParam lParam, S32 unused1, S32 unused2);
 	INPUT:
 		hwnd: Handle to the window that generated the message
 		message: The windows message or user defined joystick message number.
@@ -172,20 +173,22 @@ GENRESULT Notify (U32 message, void *param)
 #include <DACOM.h>
 #endif
 
+#include "FrontierX/LegacyMessage.h"
+
 
 #define IID_IEventMessageFilter MAKE_IID("IEventMessageFilter",1)
 
 struct DACOM_NO_VTABLE IEventMessageFilter : public IDAComponent
 {
-	DEFMETHOD(PreMessageFilter) (S32 * hwnd,    
-                                 S32 * message,    
-                                 S32 * wParam,
-                                 S32 * lParam) = 0;
+	DEFMETHOD(PreMessageFilter) (FrontierX::LegacyWindowToken * hwnd,
+	                             FrontierX::LegacyMessageId * message,
+	                             FrontierX::LegacyWParam * wParam,
+	                             FrontierX::LegacyLParam * lParam) = 0;
 
-	DEFMETHOD(PostMessageFilter)(S32   hwnd,    
-                                 S32   message,    
-                                 S32   wParam,
-                                 S32   lParam) = 0;
+	DEFMETHOD(PostMessageFilter)(FrontierX::LegacyWindowToken hwnd,
+	                             FrontierX::LegacyMessageId message,
+	                             FrontierX::LegacyWParam wParam,
+	                             FrontierX::LegacyLParam lParam) = 0;
 };
 
 
@@ -250,10 +253,10 @@ struct DACOM_NO_VTABLE IHotkeyEvent : public IAggregateComponent
 
 	DEFMETHOD_(BOOL32,GetHotkeyState) (U32 hotkey) = 0;
 
-    virtual void __cdecl SystemMessage ( S32   hwnd,    
-                                         S32   message,    
-                                         S32   wParam,
-                                         S32   lParam,
+    virtual void __cdecl SystemMessage ( FrontierX::LegacyWindowToken hwnd,
+                                         FrontierX::LegacyMessageId message,
+                                         FrontierX::LegacyWParam wParam,
+                                         FrontierX::LegacyLParam lParam,
                                          S32   unused1=0,
                                          S32   unused2=0) = 0;
 

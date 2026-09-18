@@ -12,16 +12,14 @@
 //--------------------------------------------------------------------------//
 
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <stdio.h>
+#include <cstring>
 
 #include "EventSys.h"
 
 #include "TComponent.h"
 #include "TConnContainer.h"
 #include "TConnPoint.h"
-#include "System.h"
+#include "SYSTEM.H"
 #include "da_heap_utility.h"
 
 //--------------------------------------------------------------------------//
@@ -73,12 +71,21 @@ struct DACOM_NO_VTABLE EventSystem : public ISystemComponent,
 	MESSAGE_NODE *pFreeList;
 	MESSAGE_NODE *pShadowList, *pShadowListEnd;
 	MESSAGE_NODE *pMessageList, *pMessageListEnd;
-	DWORD dwLastPeek;
+	U32 dwLastPeek;
 	MESSAGE_NODE *pPeekNode;
 	BOOL32 bInitialized;
 	ConnectionPoint<EventSystem, IEventCallback> eventCallback;
 
-	EventSystem (void) : eventCallback(0)
+	EventSystem (void) :
+		pFreeList(0),
+		pShadowList(0),
+		pShadowListEnd(0),
+		pMessageList(0),
+		pMessageListEnd(0),
+		dwLastPeek(0),
+		pPeekNode(0),
+		bInitialized(0),
+		eventCallback(0)
 	{
 	}
 
@@ -134,19 +141,19 @@ EventSystem::~EventSystem (void)
 	while (pFreeList)
 	{
 		pTmp = pFreeList->pNext;
-		delete pFreeList;
+		DA_HEAP_FREE(HEAP, pFreeList);
 		pFreeList = pTmp;
 	}
 	while (pShadowList)
 	{
 		pTmp = pShadowList->pNext;
-		delete pShadowList;
+		DA_HEAP_FREE(HEAP, pShadowList);
 		pShadowList = pTmp;
 	}
 	while (pMessageList)
 	{
 		pTmp = pMessageList->pNext;
-		delete pMessageList;
+		DA_HEAP_FREE(HEAP, pMessageList);
 		pMessageList = pTmp;
 	}
 }
@@ -201,12 +208,10 @@ GENRESULT EventSystem::Send (U32 message, void *param)
 	// service all of the callbacks
 	//------------------------------
 
-	int idx = 0;
 	while (pList)
 	{
 		pNext = pList->pNext;
 		pList->client->Notify(message, param);
-		idx++;
 		pList = pNext;
 	}
 

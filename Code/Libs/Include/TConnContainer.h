@@ -39,16 +39,15 @@ GENRESULT ConnectionPointContainer< Type >::FindConnectionPoint (const C8 *conne
 {
 	int i;
 	const _DACOM_INTMAP_ENTRY *array = Type::_GetEntriesOut();
+	Type *owner = static_cast<Type *>(this);
 
 	for (i = 0; array[i].interface_name; i++)
 	{
 		IDAConnectionPoint *point;
 
-		point = (IDAConnectionPoint *) ( ((U32)this) + array[i].offset - ((U32)
-					(static_cast<ConnectionPointContainer<Type>*>((Type*)8) )
-					-8) );
+		point = FrontierX::MemberAtOffset<IDAConnectionPoint>(owner, array[i].offset);
 
-		if (strcmp(array[i].interface_name, connectionName) == 0)
+		if (std::strcmp(array[i].interface_name, connectionName) == 0)
 		{
 			*connPoint = point;
 			point->AddRef();
@@ -67,14 +66,13 @@ BOOL32 ConnectionPointContainer< Type >::EnumerateConnectionPoints (CONNCONTAINE
 	BOOL32 result=1;
 	const _DACOM_INTMAP_ENTRY *array = Type::_GetEntriesOut();
 	int i;
+	Type *owner = static_cast<Type *>(this);
 	
 	for (i = 0; array[i].interface_name && result; i++)
 	{
 		IDAConnectionPoint *point;
 
-		point = (IDAConnectionPoint *) ( ((U32)this) + array[i].offset - ((U32)
-					(static_cast<ConnectionPointContainer<Type>*>((Type*)8) )
-					-8) );
+		point = FrontierX::MemberAtOffset<IDAConnectionPoint>(owner, array[i].offset);
 		
 		result = proc(this, point, context);
 	}

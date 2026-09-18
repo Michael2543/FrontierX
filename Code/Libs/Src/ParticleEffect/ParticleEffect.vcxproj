@@ -140,6 +140,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Include\IParticleManager.h" />
+    <ClInclude Include="..\..\Include\FrontierX\ParticleContext.h" />
     <ClInclude Include="..\..\Include\ParticleParameters.h" />
     <ClInclude Include="ParticleParamFunctions.h" />
     <ClInclude Include="ParticleSaveStructs.h" />

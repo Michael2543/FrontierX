@@ -18,11 +18,13 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
 #undef UDEXTERN
-#ifdef BUILD_TRIM
+#if !defined(_MSC_VER)
+#define UDEXTERN
+#elif defined(BUILD_TRIM)
 #define UDEXTERN __declspec(dllexport)
 #else
 #define UDEXTERN __declspec(dllimport)
@@ -104,49 +106,49 @@ struct USER_DEFAULTS
 
 struct DACOM_NO_VTABLE IUserDefaults : public IDAComponent
 {
-virtual BOOL32 __stdcall LoadDefaults (void) = 0;
+virtual BOOL32 COMAPI LoadDefaults (void) = 0;
 
-virtual BOOL32 __stdcall StoreDefaults (void) = 0;
+virtual BOOL32 COMAPI StoreDefaults (void) = 0;
 
-virtual BOOL32 __stdcall DeletePlayerDefaults (const char * playerName) = 0;
+virtual BOOL32 COMAPI DeletePlayerDefaults (const char * playerName) = 0;
 
-virtual U32 __stdcall GetDataFromRegistry (const char *szKey, void *buffer, U32 dwBufferSize) = 0;
+virtual U32 COMAPI GetDataFromRegistry (const char *szKey, void *buffer, U32 dwBufferSize) = 0;
 	
-virtual BOOL32 __stdcall SetDataInRegistry (const char *szKey, void *buffer, U32 dwBufferSize) = 0;
+virtual BOOL32 COMAPI SetDataInRegistry (const char *szKey, void *buffer, U32 dwBufferSize) = 0;
 
-virtual BOOL32 __stdcall GetStringFromRegistry (char *szDirName, U32 id) = 0;
+virtual BOOL32 COMAPI GetStringFromRegistry (char *szDirName, U32 id) = 0;
 	
-virtual BOOL32 __stdcall SetStringInRegistry (const char *szDirName, U32 id) = 0;
+virtual BOOL32 COMAPI SetStringInRegistry (const char *szDirName, U32 id) = 0;
 
-virtual BOOL32 __stdcall GetInputFilename (char *dst, U32 id) = 0;	// stores resulting directory name in registry
+virtual BOOL32 COMAPI GetInputFilename (char *dst, U32 id) = 0;	// stores resulting directory name in registry
 
-virtual BOOL32 __stdcall GetOutputFilename (char *dst, U32 id) = 0;	// stores resulting directory name in registry
+virtual BOOL32 COMAPI GetOutputFilename (char *dst, U32 id) = 0;	// stores resulting directory name in registry
 
-virtual BOOL32 __stdcall SetNameInMRU (const char *szFileName, U32 id, U32 pos=0) = 0;
+virtual BOOL32 COMAPI SetNameInMRU (const char *szFileName, U32 id, U32 pos=0) = 0;
 
-virtual BOOL32 __stdcall GetNameInMRU (char *szFileName, U32 id, U32 pos=0) = 0;
+virtual BOOL32 COMAPI GetNameInMRU (char *szFileName, U32 id, U32 pos=0) = 0;
 
-virtual S32 __stdcall FindNameInMRU (const char *szFileName, U32 id) = 0;
+virtual S32 COMAPI FindNameInMRU (const char *szFileName, U32 id) = 0;
 
-virtual BOOL32 __stdcall RemoveNameFromMRU (const char *szFileName, U32 id) = 0;
+virtual BOOL32 COMAPI RemoveNameFromMRU (const char *szFileName, U32 id) = 0;
 
-virtual BOOL32 __stdcall RemoveNameFromMRU (U32 id, U32 pos) = 0;
+virtual BOOL32 COMAPI RemoveNameFromMRU (U32 id, U32 pos) = 0;
 
-virtual BOOL32 __stdcall InsertNameIntoMRU (const char *szFileName, U32 id) = 0;
+virtual BOOL32 COMAPI InsertNameIntoMRU (const char *szFileName, U32 id) = 0;
 
-virtual BOOL32 __stdcall GetUserData (const C8 * typeName, const C8 * instanceName, void * data, U32 dataSize) = 0;
+virtual BOOL32 COMAPI GetUserData (const C8 * typeName, const C8 * instanceName, void * data, U32 dataSize) = 0;
 
-virtual BOOL32 __stdcall GetScriptData (void * symbol, const C8 * instanceName, void * data, U32 dataSize) = 0;
+virtual BOOL32 COMAPI GetScriptData (void * symbol, const C8 * instanceName, void * data, U32 dataSize) = 0;
 
-virtual U32 __stdcall GetStringFromRegistry (const char * szKey, char *buffer, U32 dwBufferSize) = 0;
+virtual U32 COMAPI GetStringFromRegistry (const char * szKey, char *buffer, U32 dwBufferSize) = 0;
 	
-virtual U32 __stdcall SetStringInRegistry (const char *szKey, const char *buffer) = 0;
+virtual U32 COMAPI SetStringInRegistry (const char *szKey, const char *buffer) = 0;
 
-virtual U32 __stdcall GetInstallStringFromRegistry (const char * szKey, char *buffer, U32 dwBufferSize) = 0;
+virtual U32 COMAPI GetInstallStringFromRegistry (const char * szKey, char *buffer, U32 dwBufferSize) = 0;
 
-virtual void __stdcall ResetToDefaultSettings (void) = 0;
+virtual void COMAPI ResetToDefaultSettings (void) = 0;
 
-virtual BOOL32 __stdcall UbiEula () = 0;
+virtual BOOL32 COMAPI UbiEula () = 0;
 
 static USER_DEFAULTS * GetDefaults (void)
 	{

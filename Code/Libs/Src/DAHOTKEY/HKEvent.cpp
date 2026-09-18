@@ -221,10 +221,10 @@ struct DACOM_NO_VTABLE HotkeyEvent : public IHotkeyEvent,
 
 	DEFMETHOD(Disable) (void);
 
-    virtual void __cdecl SystemMessage ( S32   hwnd,    
-                                         S32   message,    
-                                         S32   wParam,
-                                         S32   lParam,
+    virtual void __cdecl SystemMessage ( FrontierX::LegacyWindowToken hwnd,
+                                         FrontierX::LegacyMessageId message,
+                                         FrontierX::LegacyWParam wParam,
+                                         FrontierX::LegacyLParam lParam,
                                          S32   unused1=0,
                                          S32   unused2=0);
 
@@ -239,7 +239,7 @@ struct DACOM_NO_VTABLE HotkeyEvent : public IHotkeyEvent,
 	
 	/* HotkeyEvent members */
 
-	LONG WndCallback (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+	LRESULT WndCallback (HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 	void UpdateModifiers (void);
 
@@ -273,15 +273,15 @@ struct DACOM_NO_VTABLE HotkeyEvent : public IHotkeyEvent,
 
 	void SendEvent (U32 eventNum);
 
-	GENRESULT PreMessageFilter  (S32 * hwnd,    
-                                 S32 * message,    
-                                 S32 * wParam,
-                                 S32 * lParam);
+	GENRESULT PreMessageFilter  (FrontierX::LegacyWindowToken * hwnd,
+	                             FrontierX::LegacyMessageId * message,
+	                             FrontierX::LegacyWParam * wParam,
+	                             FrontierX::LegacyLParam * lParam);
 
-	GENRESULT PostMessageFilter (S32   hwnd,    
-                                 S32   message,    
-                                 S32   wParam,
-                                 S32   lParam);
+	GENRESULT PostMessageFilter (FrontierX::LegacyWindowToken hwnd,
+	                             FrontierX::LegacyMessageId message,
+	                             FrontierX::LegacyWParam wParam,
+	                             FrontierX::LegacyLParam lParam);
 };
 
 //--------------------------------------------------------------------------//
@@ -445,7 +445,9 @@ BOOL32 HotkeyEvent::UpdateKeyboard (DWORD dwVirtKey, BOOL bKeyPress)
 }
 //--------------------------------------------------------------------------//
 //
-inline GENRESULT HotkeyEvent::PreMessageFilter (S32 * hwnd, S32 * message, S32 * wParam, S32 * lParam)
+inline GENRESULT HotkeyEvent::PreMessageFilter (FrontierX::LegacyWindowToken * hwnd,
+	FrontierX::LegacyMessageId * message, FrontierX::LegacyWParam * wParam,
+	FrontierX::LegacyLParam * lParam)
 {
 	CONNECTION_NODE<IEventMessageFilter> *pNode = (CONNECTION_NODE<IEventMessageFilter> *) messageFilter.pClientList;
 	GENRESULT result = GR_OK;
@@ -462,7 +464,9 @@ inline GENRESULT HotkeyEvent::PreMessageFilter (S32 * hwnd, S32 * message, S32 *
 
 //--------------------------------------------------------------------------//
 //
-inline GENRESULT HotkeyEvent::PostMessageFilter (S32 hwnd, S32 message, S32 wParam, S32 lParam)
+inline GENRESULT HotkeyEvent::PostMessageFilter (FrontierX::LegacyWindowToken hwnd,
+	FrontierX::LegacyMessageId message, FrontierX::LegacyWParam wParam,
+	FrontierX::LegacyLParam lParam)
 {
 	CONNECTION_NODE<IEventMessageFilter> *pNode = (CONNECTION_NODE<IEventMessageFilter> *) messageFilter.pClientList;
 	GENRESULT result = GR_OK;
@@ -478,16 +482,18 @@ inline GENRESULT HotkeyEvent::PostMessageFilter (S32 hwnd, S32 message, S32 wPar
 }
 //--------------------------------------------------------------------------//
 //
-void HotkeyEvent::SystemMessage (S32 hwnd, S32 message, S32 wParam, S32 lParam, S32 unused1, S32 unused2)
+void HotkeyEvent::SystemMessage (FrontierX::LegacyWindowToken hwnd,
+	FrontierX::LegacyMessageId message, FrontierX::LegacyWParam wParam,
+	FrontierX::LegacyLParam lParam, S32 unused1, S32 unused2)
 {
 	if (PreMessageFilter(&hwnd, &message, &wParam, &lParam) != GR_OK)
 		return;
 
 	bFilterMessage = 0;
 
-	if (dwJoyMessage && message == (S32) dwJoyMessage)
+	if (dwJoyMessage && message == dwJoyMessage)
 	{
-		JOYINFOEX *joy = (JOYINFOEX *) lParam;
+		JOYINFOEX *joy = FrontierX::PointerFromLegacyLParam<JOYINFOEX>(lParam);
 		DWORD dwJoyDIR = 0, dwPOV=JOY_POVCENTERED, dwButtons=0;
 
 		if (joy->dwFlags & JOY_RETURNBUTTONS)
@@ -530,7 +536,8 @@ void HotkeyEvent::SystemMessage (S32 hwnd, S32 message, S32 wParam, S32 lParam, 
 		UpdateJoystick(dwButtons, dwPOV, dwJoyDIR);
 	}
 	else
-		WndCallback((HWND) hwnd, message, wParam, lParam);
+		WndCallback(reinterpret_cast<HWND>(hwnd), message,
+			static_cast<WPARAM>(wParam), static_cast<LPARAM>(lParam));
 
 	if (bFilterMessage == 0)
 		PostMessageFilter(hwnd, message, wParam, lParam);
@@ -563,20 +570,21 @@ U32 HotkeyEvent::GetHotkeyText (U32 hotkey, C8 *outBuffer, U32 bufferSize)
 GENRESULT HotkeyEvent::Notify (U32 message, void *param)
 {
 	if (dwJoyMessage && message == dwJoyMessage)
-		SystemMessage(0, message, 0, (S32) param);
+		SystemMessage(0, message, 0, FrontierX::LegacyLParamFromPointer(param));
 	else
 	if (message < WM_USER)
 	{
 		MSG *msg = (MSG *) param;
 
-		SystemMessage((S32) msg->hwnd, msg->message, msg->wParam, msg->lParam);
+		SystemMessage(FrontierX::LegacyWindowTokenFromPointer(msg->hwnd),
+			msg->message, msg->wParam, msg->lParam);
 	}
 
 	return GR_OK;
 }
 //--------------------------------------------------------------------------//
 //
-LONG HotkeyEvent::WndCallback (HWND _hwnd, UINT message, UINT wParam, LONG lParam)
+LRESULT HotkeyEvent::WndCallback (HWND _hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{

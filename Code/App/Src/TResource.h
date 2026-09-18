@@ -58,11 +58,7 @@ struct DACOM_NO_VTABLE Resource : public Base
 
 	Type * getBase (void)
 	{
-		Type * base = (Type *) ( ((U32)this) - ((U32)
-					(static_cast<Resource<Type,Base>*>((Type*)8) )
-					-8) );
-
-		return base;
+		return static_cast<Type *>(this);
 	}
 
 	void updateResource (void);

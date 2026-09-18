@@ -370,17 +370,18 @@
   #endif
 
 #else
-  #error Must define WIN32 or _WIN32 to use DACOM.H
+  #define DXDEC
+  #define DXDEF
 #endif
 
 //#include <memory.h>
 
 #ifndef US_TYPEDEFS
-#include "typedefs.h"      // General type definitions
+#include "TYPEDEFS.H"      // General type definitions
 #endif
 
 #ifndef RESULTS_H
-#include "results.h"       // General result codes
+#include "Results.h"       // General result codes
 #endif
 
 #ifndef YES
@@ -400,7 +401,19 @@
 #endif
 
 #ifndef COMAPI
-#define COMAPI __stdcall
+  #ifdef _MSC_VER
+    #define COMAPI __stdcall
+  #else
+    #define COMAPI
+  #endif
+#endif
+
+#ifndef DACOM_CDECL
+  #ifdef _MSC_VER
+    #define DACOM_CDECL __cdecl
+  #else
+    #define DACOM_CDECL
+  #endif
 #endif
 
 #ifndef DEFMETHOD
@@ -412,10 +425,10 @@
 #endif
 
 #ifndef DACOM_NO_VTABLE	
-  #if (_MSC_VER < 1100)      // 1100 = VC++ 5.0
-    #define DACOM_NO_VTABLE
-  #else
+  #if defined(_MSC_VER) && (_MSC_VER >= 1100) // 1100 = VC++ 5.0
     #define DACOM_NO_VTABLE __declspec(novtable)
+  #else
+    #define DACOM_NO_VTABLE
   #endif
 #endif
 
@@ -528,7 +541,7 @@ struct DACOM_NO_VTABLE IAggregateComponent : public IDAComponent
 //-------------------------------------
 // callback prototype for EnumerateComponents
 //-------------------------------------
-typedef BOOL32 (__cdecl * DACOMENUMCALLBACK)(IComponentFactory *component,
+typedef BOOL32 (DACOM_CDECL * DACOMENUMCALLBACK)(IComponentFactory *component,
                                              const C8    *interface_name,
                                              U32           priority,
                                              void         *context);
@@ -577,7 +590,7 @@ extern "C"
 	// pointer to the DA Component Manager
 	//
 	
-	DXDEC ICOManager * __cdecl DACOM_Acquire(void);
+	DXDEC ICOManager * DACOM_CDECL DACOM_Acquire(void);
 
 	// This allows clients to retrieve the version information about a DLL.
 	// The version information is pulled out of the product version resource in the DLL and

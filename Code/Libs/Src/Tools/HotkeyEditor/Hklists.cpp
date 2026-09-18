@@ -1271,7 +1271,8 @@ BOOL TestWindowUpdate (void)
 
 	if (joyGetPosEx(JOYSTICKID1, &joyinfo) == JOYERR_NOERROR)
 	{
-		HotkeyEvent->SystemMessage((S32)hTestWindow, JOY_EVENT, 0, (LONG)&joyinfo);
+		HotkeyEvent->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hTestWindow),
+			JOY_EVENT, 0, FrontierX::LegacyLParamFromPointer(&joyinfo));
 	}
 
 	return (bGlobalRecording = 1);
@@ -1303,7 +1304,8 @@ LONG CALLBACK TestWndProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 	HDC hdc;
 
 	if (HotkeyEvent)
-		HotkeyEvent->SystemMessage((S32)hwnd, message, wParam, lParam);
+		HotkeyEvent->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hwnd),
+			message, wParam, lParam);
 
 	switch (message)
 	{

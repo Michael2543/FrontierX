@@ -134,6 +134,7 @@ xcopy /Y "..\..\ExplicitDLL\$(OutDir)MeshManager.pdb" "D:\Games\GOG\Conquest Fro
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Include\FrontierX\RayGeometry.h" />
     <ClInclude Include="..\..\Include\IMeshManager.h" />
     <ClInclude Include="IInternalMeshManager.h" />
     <ClInclude Include="MeshArch.h" />

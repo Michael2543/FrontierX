@@ -184,14 +184,17 @@
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Include\Dacom.h" />
+    <ClInclude Include="..\..\Include\FrontierX\DacomRuntime.h" />
+    <ClInclude Include="..\..\Include\FrontierX\EncodedHandle.h" />
+    <ClInclude Include="..\..\Include\FrontierX\ProfileBuffer.h" />
+    <ClInclude Include="..\..\Include\DACOM.H" />
     <ClInclude Include="..\..\Include\FDump.h" />
     <ClInclude Include="..\..\Include\HeapObj.h" />
     <ClInclude Include="..\..\Include\IProfileParser.h" />
     <ClInclude Include="..\..\Include\Results.h" />
-    <ClInclude Include="..\..\Include\Stddat.h" />
+    <ClInclude Include="..\..\Include\STDDAT.H" />
     <ClInclude Include="..\..\Include\TComponent.h" />
-    <ClInclude Include="..\..\Include\Typedefs.h" />
+    <ClInclude Include="..\..\Include\TYPEDEFS.H" />
     <ClInclude Include="BaseHeap.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>

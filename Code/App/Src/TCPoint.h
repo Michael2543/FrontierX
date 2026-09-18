@@ -29,6 +29,7 @@ struct CONNECTION_NODE2
 	CONNECTION_NODE2<Type> *pNext;
 	Type *client;
 	U32   priority;
+	FrontierX::ConnectionToken connectionToken;
 };
 
 template <class Base, class Type=IDAComponent> 
@@ -109,9 +110,8 @@ GENRESULT ConnectionPoint2< Base,Type >::GetContainer (IDAConnectionPointContain
 {
 	const _DACOM_INTMAP_ENTRY *array = Base::_GetEntriesOut();
 
-	*container = (IDAConnectionPointContainer *) ( ((U32)this) - array[index].offset + ((U32)
-					(static_cast<IDAConnectionPointContainer*>((Base*)8) )
-					-8) );
+	Base *owner = FrontierX::OwnerFromMember<Base>(this, array[index].offset);
+	*container = static_cast<IDAConnectionPointContainer *>(owner);
 
 	(*container)->AddRef();			
 
@@ -125,6 +125,10 @@ GENRESULT ConnectionPoint2< Base,Type >::Advise (IDAComponent *component, U32 *h
 	CONNECTION_NODE2<Type> *pList = pClientList, *pPrev=0;
 	Type *client;
 	const _DACOM_INTMAP_ENTRY *array = Base::_GetEntriesOut();
+	const FrontierX::ConnectionToken connectionToken =
+		FrontierX::NextConnectionToken(pClientList);
+	if (connectionToken == 0)
+		return GR_OUT_OF_SPACE;
 	// check to make sure we have the right interface pointer
 
 	if (component->QueryInterface(array[index].interface_name, (void **) &client) != GR_OK)
@@ -151,7 +155,8 @@ GENRESULT ConnectionPoint2< Base,Type >::Advise (IDAComponent *component, U32 *h
 		pPrev->pNext=0;
 		pPrev->client = client;
 		pPrev->priority = 0;
-		*handle = (U32) pPrev;
+		pPrev->connectionToken = connectionToken;
+		*handle = connectionToken;
 		return GR_OK;
 	}
 
@@ -163,11 +168,10 @@ template <class Base, class Type>
 GENRESULT ConnectionPoint2< Base,Type >::Unadvise (U32 handle)
 {
 	CONNECTION_NODE2<Type> *pList = pClientList, *pPrev=0;
-	CONNECTION_NODE2<Type> *client = (CONNECTION_NODE2<Type> *) handle;
 
 	while (pList)
 	{
-		if (pList == client)
+		if (pList->connectionToken == handle)
 		{
 			if (pPrev)
 				pPrev->pNext = pList->pNext;

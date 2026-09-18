@@ -14,9 +14,22 @@
 
 #include "DACOM.h"
 #include "BaseUTF.h"
+#include "FrontierX/EncodedHandle.h"
 
 #define MAX_GROUP_HANDLES   4
 #define MEMORY_MAP_FLAG		0x40000000
+
+static HANDLE EncodeHandleIndex(std::size_t index)
+{
+	return FrontierX::EncodeHandleValue(index);
+}
+
+static HANDLE HandleFromIndexResult(long result)
+{
+	if (result < 0)
+		return INVALID_HANDLE_VALUE;
+	return EncodeHandleIndex(static_cast<std::size_t>(result));
+}
 
 struct UTF_CHILD
 {
@@ -295,20 +308,17 @@ inline BOOL32 UTF::isValidHandle (HANDLE _handle)
 {
 	BOOL32 result = 0;
 	UTF_CHILD_GROUP *pNode = &children;
-	LONG handle = (LONG) _handle;
+	FrontierX::EncodedHandleValue handle = FrontierX::DecodeEncodedHandle(_handle);
 
-	if (handle >= 0)
+	while (handle >= MAX_GROUP_HANDLES)
 	{
-		while (handle >= MAX_GROUP_HANDLES)
-		{
-			if ((pNode = pNode->pNext) == 0)
-				goto Done;
+		if ((pNode = pNode->pNext) == 0)
+			goto Done;
 
-			handle -= MAX_GROUP_HANDLES;
-		}
-
-		result = (pNode->array[handle].pEntry != 0);
+		handle -= MAX_GROUP_HANDLES;
 	}
+
+	result = (pNode->array[static_cast<std::size_t>(handle)].pEntry != 0);
 Done:
 	return result;
 }
@@ -317,7 +327,7 @@ Done:
 inline UTF_CHILD * UTF::GetUTFChild (HANDLE _handle)
 {
 	UTF_CHILD_GROUP *pNode = &children;
-	LONG handle = (LONG) _handle;
+	FrontierX::EncodedHandleValue handle = FrontierX::DecodeEncodedHandle(_handle);
 
 	while (handle >= MAX_GROUP_HANDLES)
 	{
@@ -326,7 +336,7 @@ inline UTF_CHILD * UTF::GetUTFChild (HANDLE _handle)
 		handle -= MAX_GROUP_HANDLES;
 	}
 
-	return pNode->array + handle;
+	return pNode->array + static_cast<std::size_t>(handle);
 
 Error:
 	return children.array + 0;
@@ -336,7 +346,10 @@ Error:
 inline UTF_FFHANDLE * UTF::GetFF (HANDLE _handle)
 {
 	UTF_FFGROUP *pNode = &ffhandles;
-	U32 handle = ((U32) _handle) - 1;
+	FrontierX::EncodedHandleValue value = FrontierX::DecodeEncodedHandle(_handle);
+	if (value == 0)
+		return 0;
+	FrontierX::EncodedHandleValue handle = value - 1;
 
 	while (handle >= MAX_GROUP_HANDLES)
 	{
@@ -345,7 +358,7 @@ inline UTF_FFHANDLE * UTF::GetFF (HANDLE _handle)
 		handle -= MAX_GROUP_HANDLES;
 	}
 
-	return pNode->array + handle;
+	return pNode->array + static_cast<std::size_t>(handle);
 
 Error:
 	return 0;
@@ -419,9 +432,12 @@ Done:
 //
 BOOL UTF::CloseHandle (HANDLE handle)
 {
-	if (handle==0 || ((DWORD)handle & MEMORY_MAP_FLAG))
+	const FrontierX::EncodedHandleValue value = FrontierX::DecodeEncodedHandle(handle);
+	if (handle == 0 || (value & MEMORY_MAP_FLAG))
 	{
-		if (isValidHandle((HANDLE)((DWORD)handle & ~MEMORY_MAP_FLAG)))
+		HANDLE childHandle = FrontierX::EncodeHandleValue(
+			value & ~FrontierX::EncodedHandleValue(MEMORY_MAP_FLAG));
+		if (isValidHandle(childHandle))
 			return 1;
 
 		dwLastError = ERROR_INVALID_HANDLE;
@@ -466,8 +482,10 @@ BOOL UTF::ReadFile (HANDLE hFileHandle, LPVOID lpBuffer, DWORD nNumberOfBytesToR
 		return result;
 	}
 
-	// take advantage of parameters on the stack
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &UTF::ReadFile_S, &hFileHandle);
+	UTF_READ_STRUCT context = {
+		hFileHandle, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped
+	};
+	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &UTF::ReadFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
@@ -730,20 +748,20 @@ HANDLE UTF::CreateFileMapping (HANDLE hFileHandle, LPSECURITY_ATTRIBUTES lpFileM
 		return 0;
 	}
 
-	// take advantage of parameters on the stack
 	pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &UTF::CreateMapping_S, 0);
 
 	if (hMapping == 0)
 		return 0;
 
-	return (HANDLE) (MEMORY_MAP_FLAG + (LONG)hFileHandle);
+	const FrontierX::EncodedHandleValue childValue = FrontierX::DecodeEncodedHandle(hFileHandle);
+	return FrontierX::EncodeHandleValue(childValue | MEMORY_MAP_FLAG);
 }
 //--------------------------------------------------------------------------//
 //
 LONG UTF::CreateMapping_S (LPVOID lpContext)
 {
 	if (hMapping)
-		return (LONG) hMapping;
+		return 1;
 
 	// if this is for a child file, adjust his size to fit current mapping
 	// if mapping size is larger than current child filesize AND child 
@@ -754,7 +772,7 @@ LONG UTF::CreateMapping_S (LPVOID lpContext)
 	if (hMapping == 0)
 		dwLastError = pParent->GetLastError();
 
-	return (LONG) hMapping;
+	return hMapping ? 1 : 0;
 }
 //--------------------------------------------------------------------------//
 //
@@ -768,7 +786,10 @@ LPVOID UTF::MapViewOfFile (HANDLE hFileMappingObject,
 
 	if (hFileMappingObject)
 	{
-		hFileMappingObject = (HANDLE) ((LONG)hFileMappingObject & ~MEMORY_MAP_FLAG);
+		const FrontierX::EncodedHandleValue mappingValue =
+			FrontierX::DecodeEncodedHandle(hFileMappingObject);
+		hFileMappingObject = FrontierX::EncodeHandleValue(
+			mappingValue & ~FrontierX::EncodedHandleValue(MEMORY_MAP_FLAG));
 		if (isValidHandle(hFileMappingObject) == 0)
 		{
 			dwLastError = ERROR_INVALID_HANDLE;
@@ -1247,7 +1268,7 @@ HANDLE UTF::allocFFHandle (UTF_DIR_ENTRY * pEntry, const char * pattern)
 	dwLastError = ERROR_OUT_OF_STRUCTURES;
 Done:
 	LeaveCriticalSection(&criticalSection);
-	return (HANDLE ) result;
+	return HandleFromIndexResult(result);
 }
 //--------------------------------------------------------------------------//
 //
@@ -1289,7 +1310,7 @@ HANDLE UTF::allocHandle (UTF_DIR_ENTRY * pEntry)
 Done:
 	LeaveCriticalSection(&criticalSection);
 
-	return (HANDLE) result;
+	return HandleFromIndexResult(result);
 }
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//

@@ -15,6 +15,7 @@
 
 #include "DACOM.h"
 #include "FileSys.h"
+#include "FrontierX/EncodedHandle.h"
 #include "TComponent.h"
 
 //--------------------------------------------------------------------------//
@@ -51,6 +52,47 @@ struct WRITE_STRUCT
 	LPDWORD			lpNumberOfBytesWritten;
 	LPOVERLAPPED	lpOverlapped;
 };
+
+struct FIND_FIRST_STRUCT
+{
+	LPCTSTR lpFileName;
+	LPWIN32_FIND_DATA lpFindFileData;
+};
+
+struct FIND_NEXT_STRUCT
+{
+	HANDLE hFindFile;
+	LPWIN32_FIND_DATA lpFindFileData;
+};
+
+static FrontierX::EncodedHandleValue HandleValue(HANDLE handle)
+{
+	return FrontierX::DecodeEncodedHandle(handle);
+}
+
+static size_t HandleIndex(HANDLE handle)
+{
+	return static_cast<size_t>(HandleValue(handle));
+}
+
+static HANDLE EncodeHandleIndex(size_t index)
+{
+	return FrontierX::EncodeHandleValue(index);
+}
+
+static HANDLE HandleFromSerialResult(LONG result)
+{
+	if (result == -1)
+		return INVALID_HANDLE_VALUE;
+	return EncodeHandleIndex(static_cast<DWORD>(result));
+}
+
+static LONG SerialResultFromHandle(HANDLE handle)
+{
+	if (handle == INVALID_HANDLE_VALUE)
+		return -1;
+	return static_cast<LONG>(HandleValue(handle));
+}
 
 
 struct FORM
@@ -397,7 +439,11 @@ GENRESULT IFF::CreateInstance (DACOMDESC *descriptor,  //)
 			if (lpInfo->lpFileName)
 			{
 				if ((lpInfo->dwDesiredAccess & dwAccess) == lpInfo->dwDesiredAccess)
-					handle = (HANDLE) pParent->SerialCall(this, (DAFILE_SERIAL_PROC) OpenExistingForm_S, (void *) *((DWORD *) lpInfo->lpFileName));
+				{
+					DWORD formName = *((DWORD *) lpInfo->lpFileName);
+					handle = HandleFromSerialResult(
+						pParent->SerialCall(this, (DAFILE_SERIAL_PROC) OpenExistingForm_S, &formName));
+				}
 			}
 		
 			if (handle == INVALID_HANDLE_VALUE)
@@ -566,19 +612,22 @@ Done:
 //
 BOOL IFF::CloseHandle (HANDLE handle)
 {
-	if (handle==0 || (DWORD)handle >= MAX_CHILD_HANDLES)
+	const FrontierX::EncodedHandleValue handleValue = HandleValue(handle);
+	if (handleValue == 0 || handleValue >= MAX_CHILD_HANDLES)
 	{
-		if ((DWORD)handle < MAX_CHILD_HANDLES*2)	// memory mapping handle
+		if (handleValue < MAX_CHILD_HANDLES*2)	// memory mapping handle
 			return 1;
 
 		dwLastError = ERROR_INVALID_HANDLE;
 		return 0;
 	}
 
-	if (handles[(DWORD)handle] != INVALID_HANDLE_VALUE)
+	const size_t handleIndex = static_cast<size_t>(handleValue);
+	if (handles[handleIndex] != INVALID_HANDLE_VALUE)
 	{
-		SerialCall(this, (DAFILE_SERIAL_PROC) ReleaseForm_S, (void *) child[(DWORD)handle].dwCurrentForm);
-		handles[(DWORD)handle] = INVALID_HANDLE_VALUE;
+		DWORD formIndex = child[handleIndex].dwCurrentForm;
+		SerialCall(this, (DAFILE_SERIAL_PROC) ReleaseForm_S, &formIndex);
+		handles[handleIndex] = INVALID_HANDLE_VALUE;
 		return 1;
 	}
 	else
@@ -593,18 +642,16 @@ BOOL IFF::ReadFile (HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead,
                LPDWORD lpNumberOfBytesRead,
                LPOVERLAPPED lpOverlapped)
 {
-	// take advantage of parameters already on the stack
-
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) ReadFile_S, &hFile);
+	READ_STRUCT context = { hFile, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped };
+	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) ReadFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
 BOOL IFF::WriteFile (HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite,
                 LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)
 {
-	// take advantage of parameters already on the stack
-
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) WriteFile_S, &hFile);
+	WRITE_STRUCT context = { hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, lpOverlapped };
+	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) WriteFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
@@ -613,7 +660,7 @@ LONG IFF::ReadFile_S (VOID *lpContext)
 	BOOL result;
 	READ_STRUCT *pRead = (READ_STRUCT *) lpContext;
 
-	if ((DWORD)pRead->hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(pRead->hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		return 0;
@@ -633,10 +680,10 @@ LONG IFF::ReadFile_S (VOID *lpContext)
 				pRead->nNumberOfBytesToRead += iOver;
 		}
 
-		pRead->lpOverlapped->Offset += child[(DWORD)pRead->hFileHandle].dwStartOffset;
+		pRead->lpOverlapped->Offset += child[HandleIndex(pRead->hFileHandle)].dwStartOffset;
 		result = pParent->ReadFile(handles[0], pRead->lpBuffer, pRead->nNumberOfBytesToRead, pRead->lpNumberOfBytesRead,
 				   pRead->lpOverlapped);
-		pRead->lpOverlapped->Offset -= child[(DWORD)pRead->hFileHandle].dwStartOffset;
+		pRead->lpOverlapped->Offset -= child[HandleIndex(pRead->hFileHandle)].dwStartOffset;
 		if (result==0)
 			dwLastError = pParent->GetLastError();
 	}
@@ -658,7 +705,7 @@ LONG IFF::ReadFile_S (VOID *lpContext)
 				pRead->nNumberOfBytesToRead += iOver;
 		}
 
-		dwOffset += child[(DWORD)pRead->hFileHandle].dwStartOffset;
+		dwOffset += child[HandleIndex(pRead->hFileHandle)].dwStartOffset;
 		if (GetFilePosition() != dwOffset)
 			SetFilePointer(0, dwOffset);
 		result = pParent->ReadFile(handles[0], pRead->lpBuffer, pRead->nNumberOfBytesToRead, 
@@ -667,7 +714,7 @@ LONG IFF::ReadFile_S (VOID *lpContext)
 		if (result == 0)
 			dwLastError = pParent->GetLastError();
 		else
-			child[(DWORD)pRead->hFileHandle].dwFilePosition += *(pRead->lpNumberOfBytesRead);
+			child[HandleIndex(pRead->hFileHandle)].dwFilePosition += *(pRead->lpNumberOfBytesRead);
 	}
 
 	return result;
@@ -679,7 +726,7 @@ LONG IFF::WriteFile_S (VOID *lpContext)
 	BOOL result;
 	WRITE_STRUCT *pWrite = (WRITE_STRUCT *) lpContext;
 
-	if ((DWORD)pWrite->hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(pWrite->hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		return 0;
@@ -704,10 +751,10 @@ LONG IFF::WriteFile_S (VOID *lpContext)
 					return 0;
 		}
 
-		pWrite->lpOverlapped->Offset += child[(DWORD)pWrite->hFileHandle].dwStartOffset;
+		pWrite->lpOverlapped->Offset += child[HandleIndex(pWrite->hFileHandle)].dwStartOffset;
 		result = pParent->WriteFile(handles[0], pWrite->lpBuffer, pWrite->nNumberOfBytesToWrite, pWrite->lpNumberOfBytesWritten,
 				   pWrite->lpOverlapped);
-		pWrite->lpOverlapped->Offset -= child[(DWORD)pWrite->hFileHandle].dwStartOffset;
+		pWrite->lpOverlapped->Offset -= child[HandleIndex(pWrite->hFileHandle)].dwStartOffset;
 		if (result==0)
 			dwLastError = pParent->GetLastError();
 	}
@@ -727,7 +774,7 @@ LONG IFF::WriteFile_S (VOID *lpContext)
 					return 0;
 		}
 
-		dwOffset += child[(DWORD)pWrite->hFileHandle].dwStartOffset;
+		dwOffset += child[HandleIndex(pWrite->hFileHandle)].dwStartOffset;
 		if (GetFilePosition() != dwOffset)
 			SetFilePointer(0, dwOffset);
 
@@ -738,7 +785,7 @@ LONG IFF::WriteFile_S (VOID *lpContext)
 		if (result == 0)
 			dwLastError = pParent->GetLastError();
 		else
-			child[(DWORD)pWrite->hFileHandle].dwFilePosition += *(pWrite->lpNumberOfBytesWritten);
+			child[HandleIndex(pWrite->hFileHandle)].dwFilePosition += *(pWrite->lpNumberOfBytesWritten);
 	}
 
 	return result;
@@ -764,7 +811,7 @@ DWORD IFF::SetFilePointer (HANDLE hFileHandle, LONG lDistanceToMove,
 {
 	DWORD result;
 
-	if ((DWORD)hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		return 0xFFFFFFFF;
@@ -795,7 +842,7 @@ DWORD IFF::SetFilePointer (HANDLE hFileHandle, LONG lDistanceToMove,
 		if ((dwAccess & GENERIC_WRITE) == 0 && (DWORD)lDistanceToMove > GetFileSize(hFileHandle))
 			lDistanceToMove = GetFileSize(hFileHandle);
 
-		result = child[(DWORD)hFileHandle].dwFilePosition = lDistanceToMove;
+		result = child[HandleIndex(hFileHandle)].dwFilePosition = lDistanceToMove;
 		if (lpDistanceToMoveHigh)
 			*lpDistanceToMoveHigh = 0;
 	}
@@ -811,7 +858,7 @@ BOOL IFF::SetEndOfFile (HANDLE hFileHandle)
 {
 	BOOL result=0;
 
-	if ((DWORD)hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 	}
@@ -838,7 +885,7 @@ DWORD IFF::GetFileSize (HANDLE hFileHandle, LPDWORD lpFileSizeHigh)
 {
 	DWORD result;
 
-	if ((DWORD)hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		return 0xFFFFFFFF;
@@ -850,7 +897,7 @@ DWORD IFF::GetFileSize (HANDLE hFileHandle, LPDWORD lpFileSizeHigh)
 	}
 	else
 	{
-		result = child[(DWORD)hFileHandle].dwFileSize;
+		result = child[HandleIndex(hFileHandle)].dwFileSize;
 		if (lpFileSizeHigh)
 			*lpFileSizeHigh = 0;
 	}	
@@ -870,7 +917,7 @@ BOOL IFF::LockFile (HANDLE hFileHandle,
 {
 	BOOL result;
 
-	if ((DWORD)hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		result = 0;
@@ -901,7 +948,7 @@ BOOL IFF::UnlockFile (HANDLE hFileHandle,
 {
 	BOOL result;
 
-	if ((DWORD)hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		result = 0;
@@ -944,7 +991,7 @@ BOOL IFF::SetFileTime (HANDLE hFileHandle, CONST FILETIME *lpCreationTime,
 HANDLE IFF::CreateFileMapping (HANDLE hFileHandle, LPSECURITY_ATTRIBUTES lpFileMappingAttributes,
                                  DWORD flProtect, DWORD dwMaximumSizeHigh, DWORD dwMaximumSizeLow, LPCTSTR lpName)
 {
-	if ((DWORD)hFileHandle >= MAX_CHILD_HANDLES)
+	if (HandleValue(hFileHandle) >= MAX_CHILD_HANDLES)
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		return 0;
@@ -962,13 +1009,12 @@ HANDLE IFF::CreateFileMapping (HANDLE hFileHandle, LPSECURITY_ATTRIBUTES lpFileM
 		return 0;		// don't support enlarging via mapping mechanism
 	}
 
-	// take advantage of parameters on the stack
 	SerialCall(this, (DAFILE_SERIAL_PROC) CreateMapping_S, 0);
 
 	if (hMapping == 0)
 		return 0;
 
-	return (HANDLE) (MAX_CHILD_HANDLES + (LONG)hFileHandle);
+	return EncodeHandleIndex(MAX_CHILD_HANDLES + HandleIndex(hFileHandle));
 }
 //--------------------------------------------------------------------------//
 //
@@ -980,10 +1026,11 @@ LPVOID IFF::MapViewOfFile (HANDLE hFileMappingObject,
 {
 	LPVOID result;
 
+	size_t childIndex = 0;
 	if (hFileMappingObject)
 	{
-		hFileMappingObject = (HANDLE) ((LONG)hFileMappingObject - MAX_CHILD_HANDLES);
-		if ((DWORD)hFileMappingObject >= MAX_CHILD_HANDLES)
+		if (!FrontierX::TryDecodeOffsetHandleIndex(
+			hFileMappingObject, MAX_CHILD_HANDLES, MAX_CHILD_HANDLES, childIndex))
 		{
 			dwLastError = ERROR_INVALID_HANDLE;
 			return 0;
@@ -991,13 +1038,13 @@ LPVOID IFF::MapViewOfFile (HANDLE hFileMappingObject,
 	}
 
 	// if mapping a child file
-	if (hFileMappingObject)
+	if (childIndex)
 	{
 		if (dwNumberOfBytesToMap == 0)
-			dwNumberOfBytesToMap = GetFileSize(hFileMappingObject);
+			dwNumberOfBytesToMap = GetFileSize(EncodeHandleIndex(childIndex));
 		else
-			dwNumberOfBytesToMap = __min(dwNumberOfBytesToMap, GetFileSize(hFileMappingObject));
-		dwFileOffsetLow+=child[(DWORD)hFileMappingObject].dwStartOffset;
+			dwNumberOfBytesToMap = __min(dwNumberOfBytesToMap, GetFileSize(EncodeHandleIndex(childIndex)));
+		dwFileOffsetLow+=child[childIndex].dwStartOffset;
 	}
 
 	result = pParent->MapViewOfFile(hMapping,
@@ -1202,7 +1249,8 @@ DWORD IFF::GetLastError (VOID)
 //
 HANDLE IFF::OpenChild (DAFILEDESC *lpInfo)
 {
-	return (HANDLE) pParent->SerialCall(this, (DAFILE_SERIAL_PROC) OpenChild_S, lpInfo);
+	return HandleFromSerialResult(
+		pParent->SerialCall(this, (DAFILE_SERIAL_PROC) OpenChild_S, lpInfo));
 }
 //--------------------------------------------------------------------------//
 //
@@ -1215,7 +1263,7 @@ LONG IFF::OpenChild_S (LPVOID lpContext)
 	if ((lpInfo->dwDesiredAccess & dwAccess) != lpInfo->dwDesiredAccess)
 	{
 		dwLastError = ERROR_ACCESS_DENIED;
-		return (LONG) INVALID_HANDLE_VALUE;
+		return -1;
 	}
 	
 	switch (lpInfo->dwCreationDistribution)
@@ -1225,9 +1273,9 @@ LONG IFF::OpenChild_S (LPVOID lpContext)
 			if (SeekChunk(*((DWORD *)lpInfo->lpFileName)))
 			{
 				dwLastError = ERROR_FILE_EXISTS;
-				return (LONG) INVALID_HANDLE_VALUE;
+				return -1;
 			}
-			return (LONG) CreateNewChunk(*((DWORD *)lpInfo->lpFileName), 0, 0);
+			return SerialResultFromHandle(CreateNewChunk(*((DWORD *)lpInfo->lpFileName), 0, 0));
 		}
 		break;
 
@@ -1238,15 +1286,15 @@ LONG IFF::OpenChild_S (LPVOID lpContext)
 			if ((handle = OpenExistingChunk(*((DWORD *)lpInfo->lpFileName))) != INVALID_HANDLE_VALUE)
 			{
 				SetEndOfFile(handle);	// truncate this chunk
-				return (LONG) handle;
+				return SerialResultFromHandle(handle);
 			}
 			else	// create the file
-				return (LONG) CreateNewChunk(*((DWORD *)lpInfo->lpFileName), 0, 0);
+				return SerialResultFromHandle(CreateNewChunk(*((DWORD *)lpInfo->lpFileName), 0, 0));
 		}
 		break;
 
 	case OPEN_EXISTING:
-			return (LONG) OpenExistingChunk(*((DWORD *)lpInfo->lpFileName));
+		return SerialResultFromHandle(OpenExistingChunk(*((DWORD *)lpInfo->lpFileName)));
 		break;
 
 	case OPEN_ALWAYS:
@@ -1254,9 +1302,9 @@ LONG IFF::OpenChild_S (LPVOID lpContext)
 			HANDLE handle;
 
 			if ((handle = OpenExistingChunk(*((DWORD *)lpInfo->lpFileName))) != INVALID_HANDLE_VALUE)
-				return (LONG) handle;
+				return SerialResultFromHandle(handle);
 			else
-				return (LONG) CreateNewChunk(*((DWORD *)lpInfo->lpFileName), 0, 0);
+				return SerialResultFromHandle(CreateNewChunk(*((DWORD *)lpInfo->lpFileName), 0, 0));
 		}
 		break;
 
@@ -1265,11 +1313,11 @@ LONG IFF::OpenChild_S (LPVOID lpContext)
 			HANDLE handle;
 
 			if ((handle = OpenExistingChunk(*((DWORD *)lpInfo->lpFileName))) == INVALID_HANDLE_VALUE)
-				return (LONG) handle;
+				return SerialResultFromHandle(handle);
 			else
 			{
 				SetEndOfFile(handle);	// truncate this chunk
-				return (LONG) handle;
+				return SerialResultFromHandle(handle);
 			}
 		}
 		break;
@@ -1277,7 +1325,7 @@ LONG IFF::OpenChild_S (LPVOID lpContext)
 	
 Error:
 	dwLastError = ERROR_INVALID_PARAMETER;
-	return (LONG) INVALID_HANDLE_VALUE;
+	return -1;
 }
 //--------------------------------------------------------------------------//
 //
@@ -1349,7 +1397,7 @@ BOOL IFF::GetAbsolutePath (char *lpOutput, LPCTSTR lpInput, LONG lSize)
 LONG IFF::CreateMapping_S (VOID *lpContext)
 {
 	if (hMapping)
-		return (LONG) hMapping;
+		return 1;
 
 	// if this is for a child file, adjust his size to fit current mapping
 	// if mapping size is larger than current child filesize AND child 
@@ -1362,7 +1410,7 @@ LONG IFF::CreateMapping_S (VOID *lpContext)
 	if (hMapping == 0)
 		dwLastError = pParent->GetLastError();
 
-	return (LONG) hMapping;
+	return hMapping ? 1 : 0;
 }
 //--------------------------------------------------------------------------//
 //
@@ -1373,12 +1421,12 @@ LONG IFF::AddHandle (void)
 	for (i = 1; i < MAX_CHILD_HANDLES; i++)
 		if (handles[i] == INVALID_HANDLE_VALUE)
 		{
-			handles[i] = (HANDLE) i;
+			handles[i] = EncodeHandleIndex(i);
 			return i;
 		}
 
 	dwLastError = ERROR_OUT_OF_STRUCTURES;
-	return 0;
+	return (DWORD) INVALID_HANDLE_VALUE;
 }
 //--------------------------------------------------------------------------//
 // Called from a serialized method
@@ -1388,32 +1436,39 @@ BOOL IFF::AddToChild (HANDLE hFile, DWORD _dwNumBytes)
 {
 	DWORD dwReadWrite, dwNumBytes, dwReversed;
 	BOOL result = 0;
+	size_t childIndex = 0;
+
+	if (!FrontierX::TryDecodeHandleIndex(hFile, MAX_CHILD_HANDLES, childIndex) || childIndex == 0)
+	{
+		dwLastError = ERROR_INVALID_HANDLE;
+		return 0;
+	}
 
 	// make sure file stays WORD aligned
-	dwNumBytes = ((child[(DWORD)hFile].dwFileSize + 1 + _dwNumBytes) & ~1) - 
-				  ((child[(DWORD)hFile].dwFileSize + 1) & ~1);
+	dwNumBytes = ((child[childIndex].dwFileSize + 1 + _dwNumBytes) & ~1) -
+				  ((child[childIndex].dwFileSize + 1) & ~1);
 
 	// move everything from end of child file to a new location
 
 	{
 		DWORD dwOffset;
 
-		dwOffset = (child[(DWORD)hFile].dwFileSize + child[(DWORD)hFile].dwStartOffset + 1) & ~1;
+		dwOffset = (child[childIndex].dwFileSize + child[childIndex].dwStartOffset + 1) & ~1;
 
 		if ((LONG)dwNumBytes < 0)
 			dwOffset += dwNumBytes;
-		if (InsertSpace(dwOffset, dwNumBytes, child[(DWORD)hFile].dwCurrentForm) == 0)
+		if (InsertSpace(dwOffset, dwNumBytes, child[childIndex].dwCurrentForm) == 0)
 			goto Done;
 	}
 
-	child[(DWORD)hFile].dwFileSize += _dwNumBytes;
+	child[childIndex].dwFileSize += _dwNumBytes;
 
 	// write new chunk length
 
-	if (child[(DWORD)hFile].dwChunkLengthOffset == (DWORD)-4)	// if child is a CHUNK, not a FORM
+	if (child[childIndex].dwChunkLengthOffset == (DWORD)-4)	// if child is a CHUNK, not a FORM
 	{
-		dwReversed = Reverse(child[(DWORD)hFile].dwFileSize);
-		if (SetFilePointer(0, child[(DWORD)hFile].dwStartOffset+child[(DWORD)hFile].dwChunkLengthOffset) == 0xFFFFFFFF)
+		dwReversed = Reverse(child[childIndex].dwFileSize);
+		if (SetFilePointer(0, child[childIndex].dwStartOffset+child[childIndex].dwChunkLengthOffset) == 0xFFFFFFFF)
 			goto Done;
 		if (WriteFile(0, &dwReversed, sizeof(dwReversed), &dwReadWrite, 0) == 0)
 			goto Done;
@@ -1430,9 +1485,15 @@ Done:
 LONG IFF::SetEndOfFile_S (HANDLE hFile)
 {
 	DWORD dwNumBytes;
+	size_t childIndex = 0;
 
-	dwNumBytes = child[(DWORD)hFile].dwFilePosition - 
-					child[(DWORD)hFile].dwFileSize;
+	if (!FrontierX::TryDecodeHandleIndex(hFile, MAX_CHILD_HANDLES, childIndex) || childIndex == 0)
+	{
+		dwLastError = ERROR_INVALID_HANDLE;
+		return 0;
+	}
+
+	dwNumBytes = child[childIndex].dwFilePosition - child[childIndex].dwFileSize;
 
 	return AddToChild(hFile, dwNumBytes);
 }
@@ -1441,8 +1502,9 @@ LONG IFF::SetEndOfFile_S (HANDLE hFile)
 DWORD IFF::GetFilePosition (HANDLE hFileHandle, PLONG pPositionHigh)
 {
 	DWORD result;
+	size_t handleIndex = 0;
 
-	if ((DWORD)hFileHandle >= MAX_CHILD_HANDLES)
+	if (!FrontierX::TryDecodeHandleIndex(hFileHandle, MAX_CHILD_HANDLES, handleIndex))
 	{
 		dwLastError = ERROR_INVALID_HANDLE;
 		return 0xFFFFFFFF;
@@ -1454,7 +1516,7 @@ DWORD IFF::GetFilePosition (HANDLE hFileHandle, PLONG pPositionHigh)
 	}
 	else
 	{
-		result = child[(DWORD)hFileHandle].dwFilePosition;
+		result = child[handleIndex].dwFilePosition;
 		if (pPositionHigh)
 			*pPositionHigh = 0;
 	}
@@ -1524,7 +1586,7 @@ void IFF::ExitForm(void)
 	{	
 		DWORD dwOldForm = child[0].dwCurrentForm;
 		child[0].dwCurrentForm = form[dwOldForm].dwParent;
-		ReleaseForm_S((LPVOID) dwOldForm);
+		ReleaseForm_S(&dwOldForm);
 
 		if (child[0].dwCurrentForm < MAX_FORMS)
 		{
@@ -1608,15 +1670,18 @@ int IFF::SeekChunk (DWORD dwSearchName)
 //
 HANDLE IFF::FindFirstFile (LPCTSTR lpFileName, LPWIN32_FIND_DATA lpFindFileData)
 {
-	return (HANDLE) pParent->SerialCall(this, (DAFILE_SERIAL_PROC) FindFirstFile_S, &lpFileName);
+	FIND_FIRST_STRUCT context = { lpFileName, lpFindFileData };
+	return HandleFromSerialResult(
+		pParent->SerialCall(this, (DAFILE_SERIAL_PROC) FindFirstFile_S, &context));
 }
 //--------------------------------------------------------------------------//
 //
 LONG IFF::FindFirstFile_S (LPVOID lpContext)
 {
 	LONG result=0;
-	LPCTSTR lpFileName = ((LPCTSTR *)lpContext)[0];
-	LPWIN32_FIND_DATA lpFindFileData = ((LPWIN32_FIND_DATA *)lpContext)[1];
+	FIND_FIRST_STRUCT *findFirst = (FIND_FIRST_STRUCT *) lpContext;
+	LPCTSTR lpFileName = findFirst->lpFileName;
+	LPWIN32_FIND_DATA lpFindFileData = findFirst->lpFindFileData;
 
 	RootChunk();
 	if (!end_of_form(dwChunkOffset))
@@ -1635,10 +1700,11 @@ LONG IFF::FindFirstFile_S (LPVOID lpContext)
 					form[child[0].dwCurrentForm].dwUsers++;
 				ffhandles[i].dwUsers = 2;
 				result = i;
-				if (FindNextFile((HANDLE)result, lpFindFileData) == 0)
+				HANDLE findHandle = EncodeHandleIndex(static_cast<size_t>(result));
+				if (FindNextFile(findHandle, lpFindFileData) == 0)
 				{
-					FindClose((HANDLE)result);
-					return (LONG) INVALID_HANDLE_VALUE;
+					FindClose(findHandle);
+					return -1;
 				}
 				break;
 			}
@@ -1648,7 +1714,7 @@ LONG IFF::FindFirstFile_S (LPVOID lpContext)
 	if (result==0)
 	{
 		dwLastError = ERROR_OUT_OF_STRUCTURES;
-		return (LONG) INVALID_HANDLE_VALUE;
+		return -1;
 	}
 
 	return result;
@@ -1657,18 +1723,20 @@ LONG IFF::FindFirstFile_S (LPVOID lpContext)
 //
 BOOL IFF::FindNextFile (HANDLE hFindFile, LPWIN32_FIND_DATA lpData)
 {
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) FindNextFile_S, &hFindFile);
+	FIND_NEXT_STRUCT context = { hFindFile, lpData };
+	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) FindNextFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
 LONG IFF::FindNextFile_S (LPVOID lpContext)
 {
-//	HANDLE hFindFile = 	((HANDLE *)lpContext)[0];
-	LPWIN32_FIND_DATA lpData = ((LPWIN32_FIND_DATA *)lpContext)[1];
+	FIND_NEXT_STRUCT *findNext = (FIND_NEXT_STRUCT *) lpContext;
+	LPWIN32_FIND_DATA lpData = findNext->lpFindFileData;
 	LONG result;
-	DWORD i = ((DWORD *)lpContext)[0];
+	size_t i = 0;
 
-	if (i >= MAX_FINDFIRST_HANDLES || ffhandles[i].dwUsers == 0)
+	if (!FrontierX::TryDecodeHandleIndex(
+		findNext->hFindFile, MAX_FINDFIRST_HANDLES, i) || ffhandles[i].dwUsers == 0)
 	{
 		result = 0;
 		dwLastError = ERROR_INVALID_HANDLE;
@@ -1725,17 +1793,18 @@ LONG IFF::FindNextFile_S (LPVOID lpContext)
 BOOL IFF::FindClose (HANDLE hFindFile)
 {
 	BOOL result;
-	DWORD i = (DWORD) hFindFile;
+	size_t i = 0;
    
-	if (i >= MAX_FINDFIRST_HANDLES)
+	if (!FrontierX::TryDecodeHandleIndex(hFindFile, MAX_FINDFIRST_HANDLES, i))
 	{
-		result = 0;
 		dwLastError = ERROR_INVALID_HANDLE;
+		return 0;
 	}
 	if (ffhandles[i].dwUsers)
 	{
 		result = 1;
-		SerialCall(this, (DAFILE_SERIAL_PROC) ReleaseForm_S, (void *) ffhandles[i].dwParent);
+		DWORD formIndex = ffhandles[i].dwParent;
+		SerialCall(this, (DAFILE_SERIAL_PROC) ReleaseForm_S, &formIndex);
 		ffhandles[i].dwUsers = 0;
 	}
 	else
@@ -1793,7 +1862,7 @@ HANDLE IFF::CreateNewChunk (DWORD dwName, LPCVOID lpData, DWORD dwSize)
 	if (child[0].dwCurrentForm < MAX_FORMS)
 		form[child[0].dwCurrentForm].dwUsers++;
 
-	return (HANDLE) dwHandle;
+	return EncodeHandleIndex(dwHandle);
 
 
 Error:
@@ -1930,7 +1999,7 @@ HANDLE IFF::OpenExistingChunk (DWORD dwName)
 	
 	dwHandle = AddHandle();
 
-	if ((LONG)dwHandle >= MAX_CHILD_HANDLES)
+	if (dwHandle >= MAX_CHILD_HANDLES)
 		goto Done;
 
 	if (SeekChunk(dwName) == 0)
@@ -1952,18 +2021,20 @@ HANDLE IFF::OpenExistingChunk (DWORD dwName)
 		form[child[0].dwCurrentForm].dwUsers++;
 
 Done:
-	return (HANDLE) dwHandle;
+	if (dwHandle == (DWORD) INVALID_HANDLE_VALUE)
+		return INVALID_HANDLE_VALUE;
+	return EncodeHandleIndex(dwHandle);
 }
 //--------------------------------------------------------------------------//
 //
 LONG IFF::OpenExistingForm_S (LPVOID lpContext)
 {
 	DWORD dwHandle;
-	DWORD dwName = (DWORD) lpContext;
+	DWORD dwName = *((DWORD *) lpContext);
 
 	dwHandle = AddHandle();
 
-	if ((LONG)dwHandle >= MAX_CHILD_HANDLES)
+	if (dwHandle >= MAX_CHILD_HANDLES)
 		goto Done;
 
 	if (SeekForm(dwName) == 0)
@@ -2022,7 +2093,7 @@ LONG IFF::AddForm (FORM * lpForm)
 //
 LONG IFF::ReleaseForm_S (LPVOID lpContext)
 {
-	DWORD dwIndex = (DWORD) lpContext;
+	DWORD dwIndex = *((DWORD *) lpContext);
 
 	if (dwIndex >= MAX_FORMS || form[dwIndex].dwUsers == 0)
 		return 0;
@@ -2030,7 +2101,7 @@ LONG IFF::ReleaseForm_S (LPVOID lpContext)
 	if (--form[dwIndex].dwUsers == 0)
 	{
 		dwIndex = form[dwIndex].dwParent;
-		ReleaseForm_S((LPVOID) dwIndex);
+		ReleaseForm_S(&dwIndex);
 	}
 
 	return 1;

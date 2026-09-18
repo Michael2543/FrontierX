@@ -173,7 +173,8 @@ static void readJoystick (void)
 			joyinfo.dwButtons--;
 		}
 
-		DBHOTKEY->SystemMessage((S32)hMainWindow, CQE_JOYSTICK, 0, (LONG)&joyinfo);
+		DBHOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hMainWindow),
+			CQE_JOYSTICK, 0, FrontierX::LegacyLParamFromPointer(&joyinfo));
 	}
 }
 #endif

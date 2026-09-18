@@ -173,6 +173,7 @@
     <ClInclude Include="..\..\Include\Filesys.h" />
     <ClInclude Include="..\..\Include\HeapObj.h" />
     <ClInclude Include="..\..\Include\HKEvent.h" />
+    <ClInclude Include="..\..\Include\FrontierX\LegacyMessage.h" />
     <ClInclude Include="..\..\Include\HkeyRec.h" />
     <ClInclude Include="..\..\Include\IConnection.h" />
     <ClInclude Include="..\..\Include\Results.h" />

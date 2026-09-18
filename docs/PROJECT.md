@@ -64,8 +64,8 @@ platform, renderer, ABI, and gameplay changes in one step.
 |---|---|---|
 | Primary target | Linux x86_64, native ELF | Accepted goal |
 | Windows | VS2022 Win32 restoration build | Regression baseline |
-| Build | CMake presets with Ninja; preserve existing MSBuild path | Layout, TinyXML, platform-time, and data-root targets implemented; game graph planned |
-| Window/input/time | SDL3 plus standard C++ behind a FrontierX platform boundary | Standard-C++ timing contract implemented; window and input planned |
+| Build | CMake presets with Ninja; preserve existing MSBuild path | Isolated probes, platform services, an explicit native DACOM ELF-module contract, production event/profile owners and native lifecycle shell build; game graph planned |
+| Window/input/time | SDL3 plus standard C++ behind a FrontierX platform boundary | A native shell owns SDL window/text input, neutral-to-production event pumping and bounded shutdown; application cadence, `IWindowManager` parity and game integration remain |
 | Graphics | Keep D3D9-facing code for bring-up; evaluate a maintained native Vulkan translation path | Prototype required |
 | D3DX9 | Inventory and replace effects, texture helpers, and math dependencies | Required |
 | Audio | Portable backend, selected after dependency and behavior evaluation | Undecided |
@@ -111,6 +111,24 @@ installation was inspected, and no file contents were read or copied.
 The headless Linux selection order is an explicit command-line path, `FRONTIERX_DATA_ROOT`, then
 the existing `Data` relative-path default. Synthetic process checks verified environment selection
 and command-line precedence. The Windows registry-backed `DataPath` policy remains unchanged.
+
+The platform library also owns a bounded native preference store for the two value classes used by
+`IUserDefaults`: strings and opaque binary values. Its new `FXSET001` format uses explicit
+little-endian lengths and types rather than dumping native structs. Keys are serialized in stable
+byte order, malformed loads are transactional, and saves replace the target through a temporary
+file in the same directory. `LegacyPreferenceValues` now reproduces the existing typed
+binary/string, deletion, short-buffer and four-entry MRU value semantics without registry or dialog
+calls. The real `IUserDefaults` interface header compiles on the portable DACOM path, but the live
+native component, file-dialog behavior and immediate/shutdown save integration remain open.
+`NativeUserSettingsOwner` executes the isolated player/global lifecycle in headless startup:
+it selects player/global/default settings, scopes player keys by hex-encoded name bytes, removes
+only an invalid player namespace, and stores global/player schemas transactionally. The
+separate `NativeUserSettings` conversion persists 25 required fixed-width version-1 fields and 31
+explicit flag assignments rather than native bitfields. Headless startup resolves an explicit
+preference path, then absolute `XDG_CONFIG_HOME`, then
+`$HOME/.config/frontierx/preferences.dat`; it ignores relative base-directory variables and
+validates both the container and user-default schema without exposing the resolved path. The
+supported Windows registry implementation is unchanged.
 
 The archived `misyltoad/dxvk-native` project is useful historical evidence that native D3D9 and SDL
 integration can work, but it is not an approved or maintained dependency. Do not vendor it or make
@@ -174,31 +192,40 @@ reject non-Windows hosts, and still require native Windows execution with `dumpb
 
 Run `python3 Tools/portability/build_inventory.py` from the repository root to inspect the
 supported Windows entry points without invoking Windows tools. See [build graph evidence](BUILD_GRAPH.md)
-for scope, test commands, measured dependencies and the next profile-parser candidate. This
+for scope, test commands, measured dependencies and production profile-parser evidence. This
 read-only inventory does not evaluate MSBuild or replace native Windows ABI validation.
 
 ## Profile buffer core (2026-09-13)
 
-The Linux presets now also build `frontierx_profile_buffer_probe`; both GCC and Clang
-passed all five CTests. `FrontierX/ProfileBuffer.h` owns section marking and line/section
-navigation shared with the production DACOM parser. This is an internal, borrowed-buffer
-contract with sentinel padding, not a complete portable profile parser or game target.
-The DACOM wrapper retains its Win32 I/O, allocator and public interfaces. Native Windows
-Debug/Final rebuilds and ABI checks remain required before accepting that integration.
+The Linux presets build `frontierx_profile_buffer_probe`; both GCC and Clang pass the complete
+twenty-four-test matrix. `FrontierX/ProfileBuffer.h` owns section marking, line/section navigation,
+key lookup/copying, and section/key callback traversal shared with the production DACOM parser.
+Runtime section offsets now use the pointer-width encoded-handle contract instead of `U32`
+decoding. This remains an internal borrowed-buffer contract with sentinel padding, not a complete
+portable DACOM implementation or game target. Native Windows Debug/Final rebuilds, callback
+comparison and ABI checks remain required; see
+[PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
 
 ### Owning native profile reader (2026-09-13)
 
-The existing GCC and Clang presets now build `frontierx_profile_document_probe` and pass six
+The existing GCC and Clang presets build `frontierx_profile_document_probe` and pass twenty-four
 CTests. `FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
 and key lookup through the shared profile-buffer core. Native startup configuration currently
 accepts ASCII without NUL bytes, up to 1 MiB, with locale-independent ASCII case folding.
 This policy is limited to the new reader; Windows DACOM comparison behavior is unchanged.
 No native game startup or retail-configuration compatibility is claimed by the synthetic tests.
 
+The production DACOM profile-parser source now builds as a native static service with both real
+factories and interfaces. Standard-library file I/O is isolated to the non-Windows branch, buffer
+initialization no longer transports sizes through invalid enum values, and the aggregate passes
+GCC/Clang plus sanitizer execution through the native component manager. Manager INI/library
+bootstrap and Windows parity remain open; see
+[PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
+
 ## Native headless startup check (2026-09-13)
 
-The GCC and Clang presets build `frontierx_headless` and pass seven CTests; the headless CTest
-contains six process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
+The GCC and Clang presets build `frontierx_headless` and pass twenty-four CTests; the headless CTest
+contains ten process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
 The following help command was executed:
 
 ```text
@@ -228,7 +255,7 @@ free-entry offset. Fields are decoded as little-endian fixed-width words; native
 mapped onto disk bytes. Invalid metadata returns exit code 5. Omitting the option leaves this check
 unperformed. Success does not validate directory entries, names, payloads or GenData archetypes.
 
-Both preset builds passed seven CTests; the headless suite now has seven process scenarios,
+Both preset builds passed twenty-four CTests; the headless suite now has ten process scenarios,
 including synthetic UTF header mutations and missing/truncated metadata. No retail files were read.
 The format evidence is the source declarations in DOSFile/BaseUTF.h, header validation in
 UTFDMan.cpp and the GenData.cpp loadTypesData caller. The UTF inspector is not yet the DOSFile
@@ -244,11 +271,31 @@ the header's first free-entry offset is absolute; its subsequent dwNext links ar
 Synthetic tests include a valid free chain and a cyclic one. Unreachable slots and free payload-space
 lists are not certified; payload contents/decompression and archetype schemas remain unchecked.
 
-GCC and Clang passed all seven CTests, including eight headless process scenarios with synthetic
+GCC and Clang passed all twenty-four CTests, including ten headless process scenarios with synthetic
 UTF trees, invalid links, names and payload ranges. No retail installation was inspected. This
 extends the read-only inspector; it does not yet replace the Windows DOSFile implementation.
 
 The headless checker now accepts `--metadata FILE --entry VIRTUAL_PATH` to read a bounded UTF
 entry into memory and report its byte count and diagnostic checksum (2026-09-13). Both presets
-passed seven CTests. No schema or retail compatibility is implied; see the UTF entry-reading
+passed twenty-four CTests. Synthetic coverage includes a nested `dir/file` entry, exact case-sensitive
+lookup and rejection of malformed virtual separators. No schema or retail compatibility is
+implied; see the UTF entry-reading
 section of the port-readiness plan for limits and outstanding work.
+
+### Portable scalar math core
+
+An isolated `frontierx_math` target now implements the scalar operation surface behind
+`I3DMathEngine` using ABI-neutral values and fixed-width inverse-square-root bit handling. Its
+GCC/Clang targets disable FMA contraction, and the complete sixteen-test matrices cover the new
+probe. The historical K62/3DNow sources own the concentrated assembly findings and are separate
+from scalar `x86math.cpp`. The supported Windows wrapper currently reaches `MathLib` but does not
+build or verify the provider DLL. The native DACOM adapter, Windows numerical oracle and
+floating-point-environment policy remain open; see [MATH_BACKEND.md](MATH_BACKEND.md).
+
+### Portable mesh ray geometry
+
+The production MeshManager hit test now converts named engine positions into a header-only
+portable ray-geometry boundary instead of aliasing them as D3DX vectors. GCC and Clang probes cover
+the documented box and triangle contract; the full matrices contain sixteen tests. This removes
+two D3DX helper functions from one real engine path, but Windows boundary-tolerance comparison and
+the remaining renderer replacements are open. See [D3DX9_PORT.md](D3DX9_PORT.md).

@@ -462,6 +462,7 @@
     <ClInclude Include="..\..\Include\Dacom.h" />
     <ClInclude Include="..\..\Include\FDump.h" />
     <ClInclude Include="..\..\Include\Filesys.h" />
+    <ClInclude Include="..\..\Include\FrontierX\EncodedHandle.h" />
     <ClInclude Include="..\..\Include\HeapObj.h" />
     <ClInclude Include="..\..\Include\IUTFWriter.h" />
     <ClInclude Include="..\..\Include\MemFile.h" />

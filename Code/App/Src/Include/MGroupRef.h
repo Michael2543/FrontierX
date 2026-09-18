@@ -17,6 +17,8 @@
 #include <MPartRef.h>
 #endif
 
+#include "FrontierX/StackAddress.h"
+
 #define MAX_SELECTED_UNITS 22		// also defined in globals.h
 
 //--------------------------------------------------------------------------//
@@ -66,11 +68,8 @@ public:
 	{
 #ifdef _DEBUG
 #ifdef CQASSERT
-		U32 stack;
-
-		__asm mov stack, esp
-
-		CQASSERT((U32(this) - stack < 8196) && "INVALID USE OF MGroupRef");
+		CQASSERT(FrontierX::IsAddressNearCurrentStack(this, 8196) &&
+			"INVALID USE OF MGroupRef");
 #endif
 #endif
 	}

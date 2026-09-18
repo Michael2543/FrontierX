@@ -280,11 +280,11 @@ void MenuResource::updateMenuVisibility (U32 dt)
 				SetMenu(hMainWindow, hMenu);
 				bVisible=1;
 				WM->SetWindowPos(SCREENRESX, SCREENRESY, 0);
-				DBHOTKEY->SystemMessage((S32)hMainWindow,    
+				DBHOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hMainWindow),
                                          WM_SYSKEYUP,    
                                          VK_MENU,
 										 (1 << 24) | (1 << 31));		// right alt, release event
-				DBHOTKEY->SystemMessage((S32)hMainWindow,    
+				DBHOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hMainWindow),
                                          WM_SYSKEYUP,    
                                          VK_MENU,
 										 (1 << 31));		// left alt, release event
@@ -304,11 +304,11 @@ void MenuResource::updateMenuVisibility (U32 dt)
 			{
 				SetMenu(hMainWindow, hMenu);
 				bVisible=1;
-				DBHOTKEY->SystemMessage((S32)hMainWindow,    
+				DBHOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hMainWindow),
                                          WM_SYSKEYUP,    
                                          VK_MENU,
 										 (1 << 24) | (1 << 31));		// right alt, release event
-				DBHOTKEY->SystemMessage((S32)hMainWindow,    
+				DBHOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hMainWindow),
                                          WM_SYSKEYUP,    
                                          VK_MENU,
 										 (1 << 31));		// left alt, release event

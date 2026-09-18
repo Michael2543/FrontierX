@@ -17,8 +17,67 @@
 #include "UTFDMan.h"
 #include "da_heap_utility.h"
 #include "IUTFWriter.h"
+#include "FrontierX/EncodedHandle.h"
 
 #define MAX_GROUP_HANDLES   4
+
+struct UTF_FIND_CONTEXT
+{
+	LPCTSTR lpFileName;
+	LPWIN32_FIND_DATA lpFindFileData;
+};
+
+struct UTF_FIND_NEXT_CONTEXT
+{
+	HANDLE hFindFile;
+	LPWIN32_FIND_DATA lpFindFileData;
+};
+
+struct UTF_FILE_SIZE_CONTEXT
+{
+	HANDLE hFileHandle;
+	LPDWORD lpFileSizeHigh;
+};
+
+struct UTF_FILE_TIME_CONTEXT
+{
+	HANDLE hFileHandle;
+	LPFILETIME lpCreationTime;
+	LPFILETIME lpLastAccessTime;
+	LPFILETIME lpLastWriteTime;
+};
+
+struct UTF_SET_FILE_TIME_CONTEXT
+{
+	HANDLE hFileHandle;
+	const FILETIME *lpCreationTime;
+	const FILETIME *lpLastAccessTime;
+	const FILETIME *lpLastWriteTime;
+};
+
+struct UTF_MOVE_CONTEXT
+{
+	LPCTSTR lpExistingFileName;
+	LPCTSTR lpNewFileName;
+};
+
+struct UTF_ATTRIBUTES_CONTEXT
+{
+	LPCTSTR lpFileName;
+	DWORD dwFileAttributes;
+};
+
+static HANDLE EncodeHandleIndex(std::size_t index)
+{
+	return FrontierX::EncodeHandleValue(index);
+}
+
+static HANDLE HandleFromSerialResult(LONG result)
+{
+	if (result < 0)
+		return INVALID_HANDLE_VALUE;
+	return EncodeHandleIndex(static_cast<std::size_t>(result));
+}
 
 struct UTF_SHARED_FF
 {
@@ -332,12 +391,12 @@ BOOL32 SharedUTF::isValidHandle (HANDLE _handle)
 {
 	BOOL32 result = 0;
 	UTF_SHARED_GROUP *pNode = &children;
-	LONG handle = (LONG) _handle;
+	FrontierX::EncodedHandleValue handle = FrontierX::DecodeEncodedHandle(_handle);
 
 	if (handle == 0)
 		result = 1;
 	else
-	if (handle > 0)
+	if (handle != 0)
 	{
 		while (handle >= MAX_GROUP_HANDLES)
 		{
@@ -347,7 +406,7 @@ BOOL32 SharedUTF::isValidHandle (HANDLE _handle)
 			handle -= MAX_GROUP_HANDLES;
 		}
 
-		result = (pNode->array[handle].szFilename[0] != 0);
+		result = (pNode->array[static_cast<std::size_t>(handle)].szFilename[0] != 0);
 	}
 Done:
 	return result;
@@ -357,7 +416,7 @@ Done:
 UTF_SHARED_CHILD *SharedUTF::GetUTFChild (HANDLE _handle)
 {
 	UTF_SHARED_GROUP *pNode = &children;
-	LONG handle = (LONG) _handle;
+	FrontierX::EncodedHandleValue handle = FrontierX::DecodeEncodedHandle(_handle);
 
 	while (handle >= MAX_GROUP_HANDLES)
 	{
@@ -366,7 +425,7 @@ UTF_SHARED_CHILD *SharedUTF::GetUTFChild (HANDLE _handle)
 		handle -= MAX_GROUP_HANDLES;
 	}
 
-	return pNode->array + handle;
+	return pNode->array + static_cast<std::size_t>(handle);
 
 Error:
 	return children.array + 0;
@@ -376,7 +435,10 @@ Error:
 UTF_SHARED_FF *SharedUTF::GetFF (HANDLE _handle)
 {
 	UTF_SHARED_FFGROUP *pNode = &ffhandles;
-	U32 handle = ((U32) _handle) - 1;
+	FrontierX::EncodedHandleValue value = FrontierX::DecodeEncodedHandle(_handle);
+	if (value == 0)
+		return 0;
+	FrontierX::EncodedHandleValue handle = value - 1;
 
 	while (handle >= MAX_GROUP_HANDLES)
 	{
@@ -385,7 +447,7 @@ UTF_SHARED_FF *SharedUTF::GetFF (HANDLE _handle)
 		handle -= MAX_GROUP_HANDLES;
 	}
 
-	return pNode->array + handle;
+	return pNode->array + static_cast<std::size_t>(handle);
 
 Error:
 	return 0;
@@ -549,8 +611,10 @@ BOOL SharedUTF::ReadFile (HANDLE hFileHandle, LPVOID lpBuffer, DWORD nNumberOfBy
 		return 0;
 	}
 
-	// take advantage of parameters on the stack
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::ReadFile_S, &hFileHandle);
+	UTF_READ_STRUCT context = {
+		hFileHandle, lpBuffer, nNumberOfBytesToRead, lpNumberOfBytesRead, lpOverlapped
+	};
+	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::ReadFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
@@ -651,8 +715,10 @@ BOOL SharedUTF::WriteFile (HANDLE hFileHandle, LPCVOID lpBuffer, DWORD nNumberOf
 		dwLastError = ERROR_ACCESS_DENIED;
 		return 0;
 	}
-	// take advantage of parameters on the stack
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::WriteFile_S, &hFileHandle);
+	UTF_WRITE_STRUCT context = {
+		hFileHandle, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, lpOverlapped
+	};
+	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::WriteFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
@@ -855,7 +921,9 @@ DWORD SharedUTF::GetFileSize (HANDLE hFileHandle, LPDWORD lpFileSizeHigh)
 	}
 	else
 	{
-		result = pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::GetFileSize_S, &hFileHandle);
+		UTF_FILE_SIZE_CONTEXT context = { hFileHandle, lpFileSizeHigh };
+		result = pParent->SerialCall(
+			this, (DAFILE_SERIAL_PROC) &SharedUTF::GetFileSize_S, &context);
 	}
 	return result;
 }
@@ -934,8 +1002,14 @@ BOOL SharedUTF::GetFileTime (HANDLE hFileHandle,   LPFILETIME lpCreationTime,
 		if (result == 0)
 			dwLastError = pParent->GetLastError();
 	}
-	else	// take advantage of parameters on the stack
-		result = pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::GetFileTime_S, &hFileHandle);
+	else
+	{
+		UTF_FILE_TIME_CONTEXT context = {
+			hFileHandle, lpCreationTime, lpLastAccessTime, lpLastWriteTime
+		};
+		result = pParent->SerialCall(
+			this, (DAFILE_SERIAL_PROC) &SharedUTF::GetFileTime_S, &context);
+	}
 	
 	return result;
 }
@@ -962,8 +1036,14 @@ BOOL SharedUTF::SetFileTime (HANDLE hFileHandle,   CONST FILETIME *lpCreationTim
 	{
 		if (GetUTFChild(hFileHandle)->Sharing.write == 0)
 			dwLastError = ERROR_ACCESS_DENIED;
-		else  // take advantage of parameters on the stack
-			result = pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::SetFileTime_S, &hFileHandle);
+		else
+		{
+			UTF_SET_FILE_TIME_CONTEXT context = {
+				hFileHandle, lpCreationTime, lpLastAccessTime, lpLastWriteTime
+			};
+			result = pParent->SerialCall(
+				this, (DAFILE_SERIAL_PROC) &SharedUTF::SetFileTime_S, &context);
+		}
 	}
 	
 	return result;
@@ -1004,13 +1084,17 @@ BOOL SharedUTF::UnmapViewOfFile (LPCVOID lpBaseAddress)
 //
 HANDLE SharedUTF::FindFirstFile (LPCTSTR lpFileName, LPWIN32_FIND_DATA lpFindFileData)
 {
-	return (HANDLE) pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::FindFirstFile_S, &lpFileName);
+	UTF_FIND_CONTEXT context = { lpFileName, lpFindFileData };
+	return HandleFromSerialResult(
+		pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::FindFirstFile_S, &context));
 }	
 //--------------------------------------------------------------------------//
 //
 BOOL SharedUTF::FindNextFile (HANDLE hFindFile, LPWIN32_FIND_DATA lpData)
 {
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::FindNextFile_S, &hFindFile);
+	UTF_FIND_NEXT_CONTEXT context = { hFindFile, lpData };
+	return pParent->SerialCall(
+		this, (DAFILE_SERIAL_PROC) &SharedUTF::FindNextFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
@@ -1106,7 +1190,8 @@ BOOL SharedUTF::DeleteFile  (LPCTSTR lpFileName)
 //
 BOOL SharedUTF::MoveFile (LPCTSTR lpExistingFileName, LPCTSTR lpNewFileName)
 {
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::MoveFile_S, (void *)&lpExistingFileName);
+	UTF_MOVE_CONTEXT context = { lpExistingFileName, lpNewFileName };
+	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::MoveFile_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
@@ -1118,20 +1203,23 @@ DWORD SharedUTF::GetFileAttributes (LPCTSTR lpFileName)
 //
 BOOL SharedUTF::SetFileAttributes (LPCTSTR lpFileName, DWORD dwFileAttributes)
 {
-	return pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::SetFileAttributes_S, (void *)&lpFileName);
+	UTF_ATTRIBUTES_CONTEXT context = { lpFileName, dwFileAttributes };
+	return pParent->SerialCall(
+		this, (DAFILE_SERIAL_PROC) &SharedUTF::SetFileAttributes_S, &context);
 }
 //--------------------------------------------------------------------------//
 //
 HANDLE SharedUTF::OpenChild (DAFILEDESC *lpDesc)
 {
-	return (HANDLE) pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::OpenChild_S, lpDesc);
+	return HandleFromSerialResult(
+		pParent->SerialCall(this, (DAFILE_SERIAL_PROC) &SharedUTF::OpenChild_S, lpDesc));
 }
 //--------------------------------------------------------------------------//
 //
 LONG SharedUTF::OpenChild_S (LPVOID lpContext)
 {
 	DAFILEDESC *lpInfo = (DAFILEDESC *) lpContext;
-	LONG result = (LONG) INVALID_HANDLE_VALUE;
+	LONG result = -1;
 	DirectoryManager dir(locker);
 	UTF_DIR_ENTRY *pEntry=dir.getDirectory();
 	UTF_SHARED_CHILD *child = children.array + 0;
@@ -1164,10 +1252,10 @@ LONG SharedUTF::OpenChild_S (LPVOID lpContext)
 	 	goto Done;
 	}
 
-	if ((result = AllocHandle_S()) == (LONG) INVALID_HANDLE_VALUE)
+	if ((result = AllocHandle_S()) < 0)
 		goto Done;
 
-	child = GetUTFChild((HANDLE)result);
+	child = GetUTFChild(EncodeHandleIndex(static_cast<std::size_t>(result)));
 
 	if (GetAbsolutePath(child->szFilename, lpInfo->lpFileName, MAX_PATH) == 0)
 	{
@@ -1337,7 +1425,7 @@ LONG SharedUTF::OpenChild_S (LPVOID lpContext)
 
 Fail:
 	child->szFilename[0] = 0;
-	result = (LONG) INVALID_HANDLE_VALUE;
+	result = -1;
 Done:
 	return result;
 }
@@ -1472,7 +1560,7 @@ LONG SharedUTF::CloseAllHandles_S (LPVOID lpContext)
 		for ( ; i < MAX_GROUP_HANDLES; i++, j++)
 		{	
 			if (pNode->array[i].szFilename[0] != 0)
-				CloseHandle_S((HANDLE)j);
+				CloseHandle_S(EncodeHandleIndex(static_cast<std::size_t>(j)));
 		}
 		i = 0;
 	} while ((pNode = pNode->pNext) != 0);
@@ -1580,8 +1668,7 @@ Done:
 //
 LONG SharedUTF::GetFileSize_S (LPVOID lpContext)
 {	
-	HANDLE hFileHandle;
-	LPDWORD lpFileSizeHigh;
+	UTF_FILE_SIZE_CONTEXT *context = (UTF_FILE_SIZE_CONTEXT *) lpContext;
 	DirectoryManager dir(locker);
 	UTF_DIR_ENTRY *pEntry;
 	BOOL result=0;
@@ -1589,19 +1676,17 @@ LONG SharedUTF::GetFileSize_S (LPVOID lpContext)
 	if (dir.isLocked() == 0)
 		goto Done;
 
-	hFileHandle    = ((HANDLE *)lpContext)[0];
-	lpFileSizeHigh = ((LPDWORD *)lpContext)[1];
-
 	pEntry = dir.getDirectory();
-	if (GetDirectoryEntry(GetUTFChild(hFileHandle)->szFilename, dir.getDirectory(), dir.getNames(), &pEntry) == 0)
+	if (GetDirectoryEntry(GetUTFChild(context->hFileHandle)->szFilename,
+		dir.getDirectory(), dir.getNames(), &pEntry) == 0)
 	{
-		GetUTFChild(hFileHandle)->szFilename[0] = 0;
+		GetUTFChild(context->hFileHandle)->szFilename[0] = 0;
 		goto Done;
 	}
 
 	result = pEntry->dwUncompressedSize;
-	if (lpFileSizeHigh)
-		*lpFileSizeHigh = 0;
+	if (context->lpFileSizeHigh)
+		*context->lpFileSizeHigh = 0;
 
 Done:
 	return result;
@@ -1610,10 +1695,7 @@ Done:
 //
 LONG SharedUTF::GetFileTime_S (LPVOID lpContext)
 {
-	HANDLE hFileHandle;
-	LPFILETIME lpCreationTime;
-	LPFILETIME lpLastAccessTime;
-	LPFILETIME lpLastWriteTime;
+	UTF_FILE_TIME_CONTEXT *context = (UTF_FILE_TIME_CONTEXT *) lpContext;
 	DirectoryManager dir(locker);
 	UTF_DIR_ENTRY *pEntry;
 	BOOL result=0;
@@ -1621,24 +1703,20 @@ LONG SharedUTF::GetFileTime_S (LPVOID lpContext)
 	if (dir.isLocked() == 0)
 		goto Done;
 
-	hFileHandle      = ((HANDLE *)lpContext)[0];
-	lpCreationTime	 = ((LPFILETIME *)lpContext)[1];
-	lpLastAccessTime = ((LPFILETIME *)lpContext)[2];
-	lpLastWriteTime	 = ((LPFILETIME *)lpContext)[3];
-
 	pEntry = dir.getDirectory();
-	if (GetDirectoryEntry(GetUTFChild(hFileHandle)->szFilename, dir.getDirectory(), dir.getNames(), &pEntry) == 0)
+	if (GetDirectoryEntry(GetUTFChild(context->hFileHandle)->szFilename,
+		dir.getDirectory(), dir.getNames(), &pEntry) == 0)
 	{
-		GetUTFChild(hFileHandle)->szFilename[0] = 0;
+		GetUTFChild(context->hFileHandle)->szFilename[0] = 0;
 		goto Done;
 	}
 
-	if (lpCreationTime)
-		DOSTimeToFileTime(pEntry->DOSCreationTime, lpCreationTime);
-	if (lpLastAccessTime)
-		DOSTimeToFileTime(pEntry->DOSLastAccessTime, lpLastAccessTime);
-	if (lpLastWriteTime)
-		DOSTimeToFileTime(pEntry->DOSLastWriteTime, lpLastWriteTime);
+	if (context->lpCreationTime)
+		DOSTimeToFileTime(pEntry->DOSCreationTime, context->lpCreationTime);
+	if (context->lpLastAccessTime)
+		DOSTimeToFileTime(pEntry->DOSLastAccessTime, context->lpLastAccessTime);
+	if (context->lpLastWriteTime)
+		DOSTimeToFileTime(pEntry->DOSLastWriteTime, context->lpLastWriteTime);
 	
 	result=1;
 
@@ -1649,10 +1727,7 @@ Done:
 //
 LONG SharedUTF::SetFileTime_S (LPVOID lpContext)
 {
-	HANDLE hFileHandle;
-	LPFILETIME lpCreationTime;
-	LPFILETIME lpLastAccessTime;
-	LPFILETIME lpLastWriteTime;
+	UTF_SET_FILE_TIME_CONTEXT *context = (UTF_SET_FILE_TIME_CONTEXT *) lpContext;
 	DirectoryManager dir(locker);
 	UTF_DIR_ENTRY *pEntry;
 	BOOL result=0;
@@ -1660,24 +1735,20 @@ LONG SharedUTF::SetFileTime_S (LPVOID lpContext)
 	if (dir.isLocked() == 0)
 		goto Done;
 
-	hFileHandle      = ((HANDLE *)lpContext)[0];
-	lpCreationTime	 = ((LPFILETIME *)lpContext)[1];
-	lpLastAccessTime = ((LPFILETIME *)lpContext)[2];
-	lpLastWriteTime	 = ((LPFILETIME *)lpContext)[3];
-
 	pEntry = dir.getDirectory();
-	if (GetDirectoryEntry(GetUTFChild(hFileHandle)->szFilename, dir.getDirectory(), dir.getNames(), &pEntry) == 0)
+	if (GetDirectoryEntry(GetUTFChild(context->hFileHandle)->szFilename,
+		dir.getDirectory(), dir.getNames(), &pEntry) == 0)
 	{
-		GetUTFChild(hFileHandle)->szFilename[0] = 0;
+		GetUTFChild(context->hFileHandle)->szFilename[0] = 0;
 		goto Done;
 	}
 
-	if (lpCreationTime)
-		pEntry->DOSCreationTime = FileTimeToDOSTime(lpCreationTime);
-	if (lpLastAccessTime)
-		pEntry->DOSLastAccessTime =  FileTimeToDOSTime(lpLastAccessTime);
-	if (lpLastWriteTime)
-		pEntry->DOSLastWriteTime = FileTimeToDOSTime(lpLastWriteTime);
+	if (context->lpCreationTime)
+		pEntry->DOSCreationTime = FileTimeToDOSTime(context->lpCreationTime);
+	if (context->lpLastAccessTime)
+		pEntry->DOSLastAccessTime = FileTimeToDOSTime(context->lpLastAccessTime);
+	if (context->lpLastWriteTime)
+		pEntry->DOSLastWriteTime = FileTimeToDOSTime(context->lpLastWriteTime);
 	
 	dir.updateWriteTime();
 	result=1;
@@ -1689,14 +1760,16 @@ Done:
 //
 LONG SharedUTF::FindFirstFile_S (LPVOID lpContext)
 {
-	DWORD i = (DWORD) INVALID_HANDLE_VALUE;
+	LONG i = -1;
 	char buffer[MAX_PATH+4];
 	char *ptr;
 	DirectoryManager dir(locker);
 	UTF_DIR_ENTRY *pEntry;
-	LPCSTR lpFileName = ((LPCSTR *)lpContext)[0];
-	LPWIN32_FIND_DATA lpFindFileData = ((LPWIN32_FIND_DATA *)lpContext)[1];
+	UTF_FIND_CONTEXT *context = (UTF_FIND_CONTEXT *) lpContext;
+	LPCTSTR lpFileName = context->lpFileName;
+	LPWIN32_FIND_DATA lpFindFileData = context->lpFindFileData;
 	UTF_SHARED_FF * pFF=0;
+	HANDLE findHandle = INVALID_HANDLE_VALUE;
 
 	if (dir.isLocked() == 0)
 		goto Done;
@@ -1704,7 +1777,7 @@ LONG SharedUTF::FindFirstFile_S (LPVOID lpContext)
 	if (GetAbsolutePath(buffer, lpFileName, MAX_PATH) == 0)
 	{
 		dwLastError = ERROR_BAD_PATHNAME;
-		return (LONG) INVALID_HANDLE_VALUE;
+		return -1;
 	}
 
 	pEntry = dir.getDirectory();
@@ -1716,7 +1789,7 @@ LONG SharedUTF::FindFirstFile_S (LPVOID lpContext)
 			if (GetDirectoryEntry(buffer, dir.getDirectory(), dir.getNames(), &pEntry) == 0)
 			{
 				dwLastError = ERROR_BAD_PATHNAME;
-				return (LONG) INVALID_HANDLE_VALUE;
+				return -1;
 			}
 		}
 		else
@@ -1730,12 +1803,18 @@ LONG SharedUTF::FindFirstFile_S (LPVOID lpContext)
 
 	// find an empty slot
 	i = AllocHandleFF_S(0);
-	pFF = GetFF((HANDLE)i);
+	if (i < 0)
+	{
+		dwLastError = ERROR_OUT_OF_STRUCTURES;
+		return -1;
+	}
+	findHandle = EncodeHandleIndex(static_cast<std::size_t>(i));
+	pFF = GetFF(findHandle);
 
 	if (pFF==0)
 	{
 		dwLastError = ERROR_OUT_OF_STRUCTURES;
-		return (LONG) INVALID_HANDLE_VALUE;
+		return -1;
 	}
 
 	memcpy(pFF->szDirectory, buffer, sizeof(pFF->szDirectory));
@@ -1744,10 +1823,10 @@ LONG SharedUTF::FindFirstFile_S (LPVOID lpContext)
 	pFF->szPreviousFile[0] = 0;
 	pFF->szNextFile[0] = 0;
 
-	if (FindNextFile((HANDLE)i, lpFindFileData) == 0)
+	if (FindNextFile(findHandle, lpFindFileData) == 0)
 	{
-		FindClose((HANDLE)i);
-		return (LONG) INVALID_HANDLE_VALUE;
+		FindClose(findHandle);
+		return -1;
 	}
 
 Done:
@@ -1757,8 +1836,9 @@ Done:
 //
 LONG SharedUTF::FindNextFile_S (LPVOID lpContext)
 {
-	HANDLE hFindFile = ((HANDLE *)lpContext)[0];
-	LPWIN32_FIND_DATA lpData = ((LPWIN32_FIND_DATA *)lpContext)[1];
+	UTF_FIND_NEXT_CONTEXT *context = (UTF_FIND_NEXT_CONTEXT *) lpContext;
+	HANDLE hFindFile = context->hFindFile;
+	LPWIN32_FIND_DATA lpData = context->lpFindFileData;
 	
 	DirectoryManager dir(locker);
 	UTF_DIR_ENTRY *pEntry, *pSearchDir;
@@ -2172,8 +2252,9 @@ Done:
 //
 LONG SharedUTF::MoveFile_S (LPVOID lpContext)
 {
-	LPCTSTR lpExistingFileName = ((LPCTSTR *)lpContext)[0];
-	LPCTSTR lpNewFileName = ((LPCTSTR *)lpContext)[1];
+	UTF_MOVE_CONTEXT *context = (UTF_MOVE_CONTEXT *) lpContext;
+	LPCTSTR lpExistingFileName = context->lpExistingFileName;
+	LPCTSTR lpNewFileName = context->lpNewFileName;
  	char buffer1[MAX_PATH+4];
  	char buffer2[MAX_PATH+4];
 
@@ -2343,8 +2424,9 @@ Done:
 //
 LONG SharedUTF::SetFileAttributes_S (LPVOID lpContext)
 {
-	LPCTSTR lpFileName = ((LPCTSTR *)lpContext)[0];
-	DWORD dwFileAttributes = ((DWORD *)lpContext)[1];
+	UTF_ATTRIBUTES_CONTEXT *context = (UTF_ATTRIBUTES_CONTEXT *) lpContext;
+	LPCTSTR lpFileName = context->lpFileName;
+	DWORD dwFileAttributes = context->dwFileAttributes;
  	char buffer[MAX_PATH+4];
 	DirectoryManager dir(locker);
 	UTF_DIR_ENTRY *pEntry;

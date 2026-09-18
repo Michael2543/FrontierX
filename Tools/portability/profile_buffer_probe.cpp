@@ -81,6 +81,60 @@ int main()
         checkSections("[broken\ntext]\n[valid]\n", {"valid"});
         checkSections(";[comment]\n\t[tab]\n[real]\n", {"real"});
         checkSections("[Final]", {"Final"});
+        auto callbacks = prepare("[One] suffix\r\nfirst = value\r\n[Two]\r\nlast=no-newline");
+        std::vector<std::string> callbackSections;
+        require(EnumerateSections(callbacks.data(),
+                    [&](const char * name, const char * suffix) {
+                        callbackSections.emplace_back(name);
+                        if (callbackSections.size() == 1)
+                            require(std::strncmp(suffix, " suffix", 7) == 0,
+                                    "section suffix callback changed");
+                        return true;
+                    }) &&
+                callbackSections == std::vector<std::string>({"One", "Two"}),
+                "section callback order/completion changed");
+        require(!EnumerateSections(callbacks.data(),
+                    [](const char *, const char *) { return false; }),
+                "section callback stop was ignored");
+        auto noSections = prepare("plain text");
+        require(EnumerateSections(noSections.data(),
+                    [](const char *, const char *) { return false; }),
+                "empty section enumeration did not complete");
+
+        auto callbackKeys = prepare(
+            "[Keys]\r\nfirst = value\r\n;comment=no\r\npunct-key!! = kept\r\nempty=\r\nlast=tail");
+        const char * keySection = GetSection(callbackKeys.data(), 1);
+        std::vector<std::string> names;
+        std::vector<std::string> values;
+        require(EnumerateKeys(keySection, symbol,
+                    [&](const char * name, const char * valueText) {
+                        names.emplace_back(name);
+                        values.emplace_back(valueText);
+                        return true;
+                    }),
+                "key callback did not complete");
+        require(names == std::vector<std::string>({"first", "punct-key", "empty", "last"}) &&
+                values == std::vector<std::string>({"value", "kept", "", "tail"}),
+                "key callback trimming/order or final unterminated value changed");
+        int callbackCount = 0;
+        require(!EnumerateKeys(keySection, symbol,
+                    [&](const char *, const char *) {
+                        ++callbackCount;
+                        return false;
+                    }) && callbackCount == 1,
+                "key callback stop was ignored");
+        auto noKeys = prepare("[Empty]\r\nplain text");
+        require(!EnumerateKeys(GetSection(noKeys.data(), 1), symbol,
+                    [](const char *, const char *) { return true; }),
+                "empty key enumeration unexpectedly succeeded");
+        const std::string longEntry =
+            "[Long]\n" + std::string(300, 'k') + "=" + std::string(300, 'v');
+        auto longKeys = prepare(longEntry.c_str());
+        require(EnumerateKeys(GetSection(longKeys.data(), 1), symbol,
+                    [](const char * name, const char * valueText) {
+                        return std::strlen(name) == 255 && std::strlen(valueText) == 255;
+                    }),
+                "key callback 255-byte cap changed");
         auto adjacent = prepare("[One]\r\nkey=1\r\n\r\n[Two]\r\n");
         const char * first = GetSection(adjacent.data(), 1);
         require(GetLine(GetLine(first, 1), 1) == nullptr,

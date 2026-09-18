@@ -906,18 +906,13 @@ DWORD DOSFileSystem::SetFilePointer (HANDLE hFileHandle, LONG lDistanceToMove,
 		return result;
 	}
 	
-	/*
 	SEEK_STRUCT seek;
 	
-	  seek.hFileHandle = TranslateHandle(hFileHandle);
-	  seek.lDistanceToMove = lDistanceToMove;
-	  seek.lpDistanceToMoveHigh = lpDistanceToMoveHigh;
-	  seek.dwMoveMethod = dwMoveMethod;
-	  result = SerialCall(this, (DAFILE_SERIAL_PROC) Seek_S, &seek);
-	*/
-	// take advantage of parameters on the stack
-	hFileHandle = TranslateHandle(hFileHandle);
-	result = SerialCall(this, (DAFILE_SERIAL_PROC) &DOSFileSystem::Seek_S, &hFileHandle);
+	seek.hFileHandle = TranslateHandle(hFileHandle);
+	seek.lDistanceToMove = lDistanceToMove;
+	seek.lpDistanceToMoveHigh = lpDistanceToMoveHigh;
+	seek.dwMoveMethod = dwMoveMethod;
+	result = SerialCall(this, (DAFILE_SERIAL_PROC) &DOSFileSystem::Seek_S, &seek);
 	
 	return result;
 }

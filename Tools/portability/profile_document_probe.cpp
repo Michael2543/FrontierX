@@ -33,9 +33,15 @@ int main()
         FrontierX::ProfileDocument document;
         std::string error;
         require(document.Sections().empty() && !document.Value("a", "b"), "unloaded document");
-        const char * text = "[Startup]\r\nDataPath= Data\r\nEmpty=\r\nBoundary=\r\n[Startup]\r\nDataPath=other";
+        const char * text = "[Startup]\r\n;Ignored=comment\r\nDataPath= Data\r\nInline=first ;literal\r\nEmpty=\r\nBoundary=\r\n[Startup]\r\nDataPath=other";
         require(document.LoadText(text, error) && error.empty(), "load text");
         require(document.Sections() == std::vector<std::string>({"Startup", "Startup"}), "section enumeration");
+        require(document.Lines("startup") == std::vector<std::string>({
+            ";Ignored=comment", "DataPath= Data", "Inline=first ;literal", "Empty=",
+            "Boundary=\r"}), "raw line enumeration");
+        require(document.Lines("absent").empty(), "missing section lines");
+        require(document.Keys("startup") == std::vector<std::string>({"DataPath", "Inline", "Empty", "Boundary", "DataPath"}),
+            "key enumeration/duplicate order");
         require(document.Value("STARTUP", "datapath") == "Data", "ASCII lookup/duplicate precedence");
         require(document.Value("Startup", "Empty") == " ", "empty sentinel");
         require(document.Value("Startup", "Boundary") == "\r", "legacy boundary CR changed");

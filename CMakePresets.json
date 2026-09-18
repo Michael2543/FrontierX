@@ -19,7 +19,8 @@
       "cacheVariables": {
         "BUILD_TESTING": "ON",
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "FRONTIERX_BUILD_SDL3": "ON"
       }
     },
     {
@@ -48,9 +49,26 @@
         "frontierx_tinyxml_probe",
         "frontierx_platform_time_probe",
         "frontierx_data_root_probe",
+        "frontierx_event_queue_probe",
+        "frontierx_dynamic_library_probe",
+        "frontierx_event_system_probe",
+        "frontierx_profile_parser_probe",
+        "frontierx_preference_store_probe",
+        "frontierx_native_user_settings_probe",
+        "frontierx_encoded_handle_probe",
+        "frontierx_dacom_runtime_probe",
+        "frontierx_dacom_interface_probe",
+        "frontierx_stack_address_probe",
+        "frontierx_particle_context_probe",
+        "frontierx_math_core_probe",
+        "frontierx_ray_geometry_probe",
         "frontierx_profile_buffer_probe",
         "frontierx_profile_document_probe",
-        "frontierx_headless"
+        "frontierx_headless",
+        "frontierx_sdl3_platform",
+        "frontierx_sdl3_window_probe",
+        "frontierx_legacy_input_probe",
+        "frontierx_native_shell"
       ]
     },
     {
@@ -61,9 +79,26 @@
         "frontierx_tinyxml_probe",
         "frontierx_platform_time_probe",
         "frontierx_data_root_probe",
+        "frontierx_event_queue_probe",
+        "frontierx_dynamic_library_probe",
+        "frontierx_event_system_probe",
+        "frontierx_profile_parser_probe",
+        "frontierx_preference_store_probe",
+        "frontierx_native_user_settings_probe",
+        "frontierx_encoded_handle_probe",
+        "frontierx_dacom_runtime_probe",
+        "frontierx_dacom_interface_probe",
+        "frontierx_stack_address_probe",
+        "frontierx_particle_context_probe",
+        "frontierx_math_core_probe",
+        "frontierx_ray_geometry_probe",
         "frontierx_profile_buffer_probe",
         "frontierx_profile_document_probe",
-        "frontierx_headless"
+        "frontierx_headless",
+        "frontierx_sdl3_platform",
+        "frontierx_sdl3_window_probe",
+        "frontierx_legacy_input_probe",
+        "frontierx_native_shell"
       ]
     }
   ],

@@ -38,8 +38,6 @@
 //
 struct DumpView : GlobalComponent, IDAComponent
 {
-	typedef DWORD (__stdcall DumpView::*DUMP_PROC) (LPBYTE pbBuff, LONG cb, LONG FAR *pcb);
-
     void * operator new (size_t size)
 	{
 		return calloc(size, 1);
@@ -144,7 +142,8 @@ struct DumpView : GlobalComponent, IDAComponent
 
 	bool sendData (const char * buffer, DWORD length, DWORD dwFlags=SF_TEXT|SFF_SELECTION);
 	
-	DWORD CALLBACK editStreamCallback (LPBYTE pbBuff, LONG cb, LONG FAR *pcb); 
+	static DWORD CALLBACK editStreamCallback (DWORD_PTR cookie, LPBYTE pbBuff, LONG cb,
+		LONG FAR *pcb);
 
 	static int __cdecl STANDARD_DUMP (ErrorCode code, const C8 *fmt, ...);
 
@@ -217,17 +216,11 @@ bool DumpView::sendData (const char * _buffer, DWORD length, DWORD dwFlags)
 	if (hEdit)
 	{
 		EDITSTREAM editStream;
-		DUMP_PROC _proc = &DumpView::editStreamCallback;
 		CHARRANGE charRange;
 
-		// use assembly to avoid type checking here
 		memset(&editStream, 0, sizeof(editStream));
-		editStream.dwCookie = (DWORD) this;
-		__asm
-		{
-			mov edx, DWORD ptr [_proc]
-			mov DWORD PTR [editStream.pfnCallback], edx
-		}
+		editStream.dwCookie = reinterpret_cast<DWORD_PTR>(this);
+		editStream.pfnCallback = &DumpView::editStreamCallback;
 		charRange.cpMax = charRange.cpMin = totalBytesSent;		// set caret to the end of the file
 
 		buffer = _buffer;
@@ -353,13 +346,14 @@ int DumpView::STANDARD_DUMP (ErrorCode code, const C8 *fmt, ...)
 }
 //-------------------------------------------------------------------
 //
-DWORD DumpView::editStreamCallback (LPBYTE pbBuff, LONG cb, LONG FAR *pcb)
+DWORD DumpView::editStreamCallback (DWORD_PTR cookie, LPBYTE pbBuff, LONG cb, LONG FAR *pcb)
 {
-	cb = __min(cb, bufferSize);
-	memcpy(pbBuff, buffer, cb);
-	buffer += cb;
-	bufferSize -= cb;
-	totalBytesSent += cb;
+	DumpView * view = reinterpret_cast<DumpView *>(cookie);
+	cb = __min(cb, view->bufferSize);
+	memcpy(pbBuff, view->buffer, cb);
+	view->buffer += cb;
+	view->bufferSize -= cb;
+	view->totalBytesSent += cb;
 	*pcb = cb;
 
 	return 0;  //	continue the operation

@@ -15,7 +15,7 @@
 
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 
@@ -23,9 +23,9 @@
 // return TRUE to continue the enumeration
 //-----------------------------------------
 
-typedef BOOL32  (__stdcall * CONNECTION_ENUM_PROC) (struct IDAConnectionPoint * connPoint, struct IDAComponent *client, void *context);
+typedef BOOL32  (COMAPI * CONNECTION_ENUM_PROC) (struct IDAConnectionPoint * connPoint, struct IDAComponent *client, void *context);
 
-typedef BOOL32  (__stdcall * CONNCONTAINER_ENUM_PROC) (struct IDAConnectionPointContainer * container, struct IDAConnectionPoint *connPoint, void *context);
+typedef BOOL32  (COMAPI * CONNCONTAINER_ENUM_PROC) (struct IDAConnectionPointContainer * container, struct IDAConnectionPoint *connPoint, void *context);
 
 //-----------------------------------------
 

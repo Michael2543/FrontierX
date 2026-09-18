@@ -123,7 +123,7 @@
 
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 typedef void *HANDLE;
@@ -161,7 +161,7 @@ struct DACOM_NO_VTABLE IProfileParser : public IDAComponent
 {
 	// enumeration callback routine - return TRUE to continue the enumeration
 
-	typedef BOOL32  (__stdcall * ENUM_PROC) (struct IProfileParser * parser, 
+	typedef BOOL32  (COMAPI * ENUM_PROC) (struct IProfileParser * parser,
 													const C8 * sectionName,
 													void *context);
 
@@ -198,7 +198,7 @@ struct DACOM_NO_VTABLE IProfileParser : public IDAComponent
 //
 struct DACOM_NO_VTABLE IProfileCallback
 {
-	virtual BOOL32 __stdcall ProfileCallback (struct IProfileParser2 * parser, const C8 * name, const C8 * value, void *context) = 0;
+	virtual BOOL32 COMAPI ProfileCallback (struct IProfileParser2 * parser, const C8 * name, const C8 * value, void *context) = 0;
 };
 
 //-----------------------------------------------------------------------------
@@ -208,21 +208,21 @@ struct DACOM_NO_VTABLE IProfileCallback
 
 struct DACOM_NO_VTABLE IProfileParser2 : public IDAComponent
 {
-	virtual GENRESULT __stdcall Initialize (const C8 *fileName, IProfileParser::ACCESS access = IProfileParser::READ_ACCESS ) = 0;
+	virtual GENRESULT COMAPI Initialize (const C8 *fileName, IProfileParser::ACCESS access = IProfileParser::READ_ACCESS ) = 0;
 
-	virtual GENRESULT __stdcall Initialize2 (const C8 *buffer, U32 bufferSize ) = 0;
+	virtual GENRESULT COMAPI Initialize2 (const C8 *buffer, U32 bufferSize ) = 0;
 
-	virtual HANDLE __stdcall CreateSection (const C8 *sectionName, IProfileParser::CREATE_MODE mode = IProfileParser::PP_OPENEXISTING) = 0;
+	virtual HANDLE COMAPI CreateSection (const C8 *sectionName, IProfileParser::CREATE_MODE mode = IProfileParser::PP_OPENEXISTING) = 0;
 
-	virtual BOOL32 __stdcall CloseSection (HANDLE hSection) = 0;
+	virtual BOOL32 COMAPI CloseSection (HANDLE hSection) = 0;
 
-	virtual U32 __stdcall ReadProfileLine (HANDLE hSection, U32 lineNumber, C8 * buffer, U32 bufferSize) = 0;
+	virtual U32 COMAPI ReadProfileLine (HANDLE hSection, U32 lineNumber, C8 * buffer, U32 bufferSize) = 0;
 
-	virtual U32 __stdcall ReadKeyValue (HANDLE hSection, const C8 * keyName, C8 * buffer, U32 bufferSize) = 0;
+	virtual U32 COMAPI ReadKeyValue (HANDLE hSection, const C8 * keyName, C8 * buffer, U32 bufferSize) = 0;
 
-	virtual BOOL32 __stdcall EnumerateSections (IProfileCallback * callback, void *context=0) = 0;
+	virtual BOOL32 COMAPI EnumerateSections (IProfileCallback * callback, void *context=0) = 0;
 
-	virtual BOOL32 __stdcall EnumerateKeys (IProfileCallback * callback, HANDLE hSection, void *context=0) = 0;
+	virtual BOOL32 COMAPI EnumerateKeys (IProfileCallback * callback, HANDLE hSection, void *context=0) = 0;
 };
 
 

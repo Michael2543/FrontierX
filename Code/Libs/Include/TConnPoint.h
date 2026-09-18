@@ -29,6 +29,7 @@ struct CONNECTION_NODE
 {
 	CONNECTION_NODE<Type> *pNext;
 	Type *client;
+	FrontierX::ConnectionToken connectionToken;
 };
 
 template <class Base, class Type=IDAComponent> 
@@ -70,6 +71,7 @@ struct ConnectionPoint : public IDAConnectionPoint
 template <class Base, class Type>
 GENRESULT ConnectionPoint<Base,Type>::QueryInterface (const C8 *interface_name, void **instance)
 {
+	(void) interface_name;
 	*instance = 0;
 	return GR_INTERFACE_UNSUPPORTED;
 }
@@ -109,9 +111,8 @@ GENRESULT ConnectionPoint< Base,Type >::GetContainer (IDAConnectionPointContaine
 {
 	const _DACOM_INTMAP_ENTRY *array = Base::_GetEntriesOut();
 
-	*container = (IDAConnectionPointContainer *) ( ((U32)this) - array[index].offset + ((U32)
-					(static_cast<IDAConnectionPointContainer*>((Base*)8) )
-					-8) );
+	Base *owner = FrontierX::OwnerFromMember<Base>(this, array[index].offset);
+	*container = static_cast<IDAConnectionPointContainer *>(owner);
 
 	(*container)->AddRef();			
 
@@ -125,6 +126,10 @@ GENRESULT ConnectionPoint< Base,Type >::Advise (IDAComponent *component, U32 *ha
 	CONNECTION_NODE<Type> *pList = pClientList, *pPrev=0;
 	Type *client;
 	const _DACOM_INTMAP_ENTRY *array = Base::_GetEntriesOut();
+	const FrontierX::ConnectionToken connectionToken =
+		FrontierX::NextConnectionToken(pClientList);
+	if (connectionToken == 0)
+		return GR_OUT_OF_SPACE;
 	// check to make sure we have the right interface pointer
 
 	if (component->QueryInterface(array[index].interface_name, (void **) &client) != GR_OK)
@@ -150,7 +155,8 @@ GENRESULT ConnectionPoint< Base,Type >::Advise (IDAComponent *component, U32 *ha
 	{
 		pPrev->pNext=0;
 		pPrev->client = client;
-		*handle = (U32) pPrev;
+		pPrev->connectionToken = connectionToken;
+		*handle = connectionToken;
 		return GR_OK;
 	}
 
@@ -162,12 +168,11 @@ template <class Base, class Type>
 GENRESULT ConnectionPoint< Base,Type >::Unadvise (U32 handle)
 {
 	CONNECTION_NODE<Type> *pList = pClientList, *pPrev=0;
-	CONNECTION_NODE<Type> *client = (CONNECTION_NODE<Type> *) handle;
 
 
 	while (pList)
 	{
-		if (pList == client)
+		if (pList->connectionToken == handle)
 		{
 			if (pPrev)
 				pPrev->pNext = pList->pNext;

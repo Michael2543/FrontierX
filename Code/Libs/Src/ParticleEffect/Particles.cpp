@@ -399,7 +399,7 @@ struct ParticleSystem : public IParticleInstance ,IParticleSystem
 	Vector maxVect;
 	bool bHasExtents;
 
-	DWORD context;
+	FrontierX::ParticleContext context;
 
 	bool bShutdown;//true if a shutdown has been called in any way
 	bool bAllDone;//true if there are no active particles
@@ -462,7 +462,7 @@ struct ParticleSystem : public IParticleInstance ,IParticleSystem
 
 	virtual Particle * GetParticle(U32 i);
 
-	virtual DWORD GetContext();
+	virtual FrontierX::ParticleContext GetContext();
 
 	virtual U32 StartTime();
 
@@ -473,9 +473,9 @@ struct ParticleSystem : public IParticleInstance ,IParticleSystem
 	virtual SINGLE GetRenderTime();
 
 	//IParticleInstance
-	virtual void SetContext(DWORD _context);
+	virtual void SetContext(FrontierX::ParticleContext _context);
 
-	virtual void Initialize(DWORD _context);
+	virtual void Initialize(FrontierX::ParticleContext _context);
 
 	virtual void Render(bool bVisible);
 
@@ -512,7 +512,7 @@ Particle * ParticleSystem::GetParticle(U32 i)
 	return &(myParticles->particles2[i]);
 }
 
-DWORD ParticleSystem::GetContext()
+FrontierX::ParticleContext ParticleSystem::GetContext()
 {
 	return context;
 }
@@ -537,12 +537,12 @@ SINGLE ParticleSystem::GetRenderTime()
 	return renderTime;
 }
 
-void ParticleSystem::SetContext(DWORD _context)
+void ParticleSystem::SetContext(FrontierX::ParticleContext _context)
 {
 	context = _context;
 }
 
-void ParticleSystem::Initialize(DWORD _context)
+void ParticleSystem::Initialize(FrontierX::ParticleContext _context)
 {
 	startTimeMS = owner->GetRealTimeMS();
 	context = _context;

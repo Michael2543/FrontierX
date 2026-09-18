@@ -135,11 +135,11 @@ inline void da_heap_print( IHeap *heap )
 	dstptr = HEAP_Acquire();
 
 #define DA_HEAP_DEFINE_NEW_OPERATOR(classname)	\
-	void * classname::operator new( size_t size ) \
+	void * operator new( size_t size ) \
 	{ \
 		return HEAP->ClearAllocateMemory( size, #classname ); \
 	} \
-	void classname::operator delete( void *ptr ) \
+	void operator delete( void *ptr ) \
 	{ \
 		HEAP->FreeMemory( ptr ); \
 	} 
@@ -150,6 +150,8 @@ inline void da_heap_print( IHeap *heap )
 #define DA_HEAP_MALLOC( heap, size, tag )	(HEAP)->AllocateMemory( (size), (tag) )
 
 #define DA_HEAP_CALLOC( heap, size, tag )	(HEAP)->ClearAllocateMemory( (size), (tag) )
+
+#define DA_HEAP_FREE( heap, ptr )	(HEAP)->FreeMemory( (ptr) )
 
 #else
 
@@ -168,14 +170,16 @@ inline void da_heap_print( IHeap *heap )
 // NOTE: for some components, hence let it in there.
 //
 #define DA_HEAP_DEFINE_NEW_OPERATOR(classname)	\
-	void * classname::operator new( size_t size ) { return calloc( size, 1 ); } \
-	void classname::operator delete( void *ptr ) { free( ptr ); }
+	void * operator new( size_t size ) { return ::calloc( size, 1 ); } \
+	void operator delete( void *ptr ) { ::free( ptr ); }
 
 #define DA_HEAP_DEFINE_HEAP_MESSAGE(hinstance) 
 
-#define DA_HEAP_MALLOC( heap, size, tag )	malloc( (size) )
+#define DA_HEAP_MALLOC( heap, size, tag )	::malloc( (size) )
 
-#define DA_HEAP_CALLOC( heap, size, tag )	calloc( (size), 
+#define DA_HEAP_CALLOC( heap, size, tag )	::calloc( 1, (size) )
+
+#define DA_HEAP_FREE( heap, ptr )	::free( (ptr) )
 
 #endif
 

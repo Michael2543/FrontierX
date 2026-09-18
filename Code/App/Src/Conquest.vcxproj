@@ -523,6 +523,8 @@
     <ClInclude Include="MeshRender.h" />
     <ClInclude Include="MineField.h" />
     <ClInclude Include="MPart.h" />
+    <ClInclude Include="..\..\Libs\Include\FrontierX\StackAddress.h" />
+    <ClInclude Include="..\..\Libs\Include\FrontierX\ParticleContext.h" />
     <ClInclude Include="MultiCloakLauncher.h" />
     <ClInclude Include="MyVertex.h" />
     <ClInclude Include="NetVector.h" />

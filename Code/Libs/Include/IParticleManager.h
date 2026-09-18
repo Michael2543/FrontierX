@@ -29,6 +29,8 @@
 #include <DACOM.h>
 #endif
 
+#include "FrontierX/ParticleContext.h"
+
 #include "ParticleParameters.h"
 
 #ifndef _NO_VTABLE	
@@ -107,19 +109,19 @@ struct IMeshInstance;
 ///////////////////////////////////////////////////////////////
 struct _NO_VTABLE IGamePositionCallback
 {
-	virtual bool GetObjectTransform(U32 objectID, U32 hardpoint, DWORD context, Transform & trans) = 0;
+	virtual bool GetObjectTransform(U32 objectID, U32 hardpoint, FrontierX::ParticleContext context, Transform & trans) = 0;
 
-	virtual bool GetObjectTransform(U32 objectID, const char * hpName, DWORD context, Transform & trans) = 0;
+	virtual bool GetObjectTransform(U32 objectID, const char * hpName, FrontierX::ParticleContext context, Transform & trans) = 0;
 
-	virtual SINGLE GetParameter(const char * name, U32 objectID,DWORD context) = 0;
+	virtual SINGLE GetParameter(const char * name, U32 objectID, FrontierX::ParticleContext context) = 0;
 
-	virtual void ObjectPostionCallback(U32 objectID,DWORD context, char * string, Transform & trans) = 0;
+	virtual void ObjectPostionCallback(U32 objectID, FrontierX::ParticleContext context, char * string, Transform & trans) = 0;
 
 	virtual bool TestCollision(Vector p1,Vector p2,Vector & collisionPoint,Vector & finalPoint,bool bTerrain,bool bTinkerToys,bool bWater,bool bUnits) = 0;
 
 	virtual void ShakeCamera(SINGLE durration, SINGLE power) = 0;
 
-	virtual IMeshInstance * GetObjectMesh(U32 objectID, DWORD context) = 0;
+	virtual IMeshInstance * GetObjectMesh(U32 objectID, FrontierX::ParticleContext context) = 0;
 };
 
 struct _NO_VTABLE IParticleProgramer
@@ -205,9 +207,9 @@ struct _NO_VTABLE IParticleListener
 
 struct _NO_VTABLE IParticleInstance
 {
-	virtual void SetContext(DWORD _context);
+	virtual void SetContext(FrontierX::ParticleContext _context);
 
-	virtual void Initialize(DWORD _context) = 0;
+	virtual void Initialize(FrontierX::ParticleContext _context) = 0;
 
 	virtual void Render(bool bVisible=true) = 0;
 

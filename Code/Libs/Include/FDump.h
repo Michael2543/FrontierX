@@ -96,7 +96,7 @@
 //
 
 #ifndef US_TYPEDEFS
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 #endif
 
 #undef DXDEC

@@ -17,6 +17,16 @@
 #include <IHardpoint.h>
 #include <IChannel2.h>
 #include <ChannelEventTypes.h>
+#include <FrontierX/RayGeometry.h>
+
+namespace
+{
+	frontierx::RayPoint3 ToRayPoint(const Vector & value)
+	{
+		frontierx::RayPoint3 result = { value.x, value.y, value.z };
+		return result;
+	}
+}
 
 MeshInstance::MeshInstance()
 {
@@ -366,8 +376,8 @@ bool MeshInstance::ComputeHitTest(Vector * start, Vector * dir, HitDef & hitDef)
 		Vector transStart = inv.rotate_translate(*start);
 		Vector transDir = inv.rotate(*dir);
 
-		if(D3DXBoxBoundProbe ((D3DXVECTOR3 *)(&(arch->GetFaceArray()[faceGroup].minBox)),
-			(D3DXVECTOR3 *)(&(arch->GetFaceArray()[faceGroup].maxBox)),(D3DXVECTOR3 *)(&transStart),(D3DXVECTOR3 *)(&transDir)))
+		if(frontierx::ray_intersects_box(ToRayPoint(arch->GetFaceArray()[faceGroup].minBox),
+			ToRayPoint(arch->GetFaceArray()[faceGroup].maxBox),ToRayPoint(transStart),ToRayPoint(transDir)))
 		{
 			if(arch->GetFaceArray()[faceGroup].indexBuffer)
 			{
@@ -376,16 +386,14 @@ bool MeshInstance::ComputeHitTest(Vector * start, Vector * dir, HitDef & hitDef)
 
 				for(U32 face = 0; face*3 < arch->GetFaceArray()[faceGroup].numIndex; ++face)
 				{
-					SINGLE u,v,dist;
-					if(D3DXIntersectTri((D3DXVECTOR3 *)(&(arch->GetVertexList()[ind[face*3]])),
-						(D3DXVECTOR3 *)(&(arch->GetVertexList()[ind[face*3+1]])),
-						(D3DXVECTOR3 *)(&(arch->GetVertexList()[ind[face*3+2]])),
-						(D3DXVECTOR3 *)(&transStart),
-						(D3DXVECTOR3 *)(&transDir),
-						&u,
-						&v,
-						&dist))
+					frontierx::RayTriangleHit hit;
+					if(frontierx::ray_intersects_triangle(
+						ToRayPoint(arch->GetVertexList()[ind[face*3]].pos),
+						ToRayPoint(arch->GetVertexList()[ind[face*3+1]].pos),
+						ToRayPoint(arch->GetVertexList()[ind[face*3+2]].pos),
+						ToRayPoint(transStart),ToRayPoint(transDir),hit))
 					{
+						const SINGLE dist = hit.distance;
 						if(bHit)
 						{
 							if(dist < bestDist)

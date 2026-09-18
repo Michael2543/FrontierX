@@ -44,7 +44,7 @@
 
 #define DACOM_DISPATCH_STATIC_PROPERTY(x,y,z)\
 	{x, \
-	 (U32) &y, \
+	 reinterpret_cast<std::uintptr_t>(&y), \
 	 sizeof(y),  \
 	 _DACOM_PROPTYPE_ADDRESS, \
 	 (U16)z, \
@@ -92,7 +92,7 @@ struct __dispatch_type_coercion
 	struct _DUMMY_ENTRY
 	{	
 		const C8 *	name;
-		U32			addr;				// address of property
+		std::uintptr_t addr;			// address or runtime offset of property
 		U8			size;				// size of property
 		U8			type;				// record type
 		U16			paramTypes[_DACOM_MAX_AUTO_PARMS];
@@ -118,7 +118,7 @@ struct DACOM_NO_VTABLE Dispatch : public Base
 	struct _DACOM_DISPATCH_ENTRY
 	{	
 		const C8 *	name;
-		U32			addr;				// address of property
+		std::uintptr_t addr;			// address or runtime offset of property
 		U8			size;				// size of property
 		U8			type;				// record type
 		U16			paramTypes[_DACOM_MAX_AUTO_PARMS];
@@ -146,9 +146,7 @@ GENRESULT Dispatch<Type, Base>::Invoke (const C8 *methodName, DACOM_VARIANT parm
 {
 	U32 i;
 	const _DACOM_DISPATCH_ENTRY * properties = Type::_GetAutomationEntries();
-	void *instance = (void *) ( ((U32)this) - ((U32)
-					(static_cast<Dispatch<Type, Base>*>((Type*)8) )
-					-8) );
+	void *instance = static_cast<Type *>(this);
 
 	for (i = 0; properties[i].name; i++)
 	{
@@ -214,15 +212,13 @@ GENRESULT __dispatch_type_coercion<dummy>::get_property (void *instance, void * 
 	switch (property->type)
 	{
 	case _DACOM_PROPTYPE_ADDRESS:
-		memcpy(value, (void *)property->addr, property->size);
+		memcpy(value, reinterpret_cast<void *>(property->addr), property->size);
 		break;
 
 	case _DACOM_PROPTYPE_OFFSET:
 		{
-			U32 address;
-
-			address = ((U32)instance + property->addr);
-			memcpy(value, (void *)address, property->size);
+			void *address = static_cast<unsigned char *>(instance) + property->addr;
+			memcpy(value, address, property->size);
 		}
 		break;
 
@@ -250,21 +246,19 @@ GENRESULT __dispatch_type_coercion<dummy>::set_property (void *instance, void * 
 	{
 	case _DACOM_PROPTYPE_ADDRESS:
 		if (value.variantType & DAVT_BYREF)
-			memcpy((void *)property->addr, value.pVoid, property->size);
+			memcpy(reinterpret_cast<void *>(property->addr), value.pVoid, property->size);
 		else
-			memcpy((void *)property->addr, &value.longVal, property->size);
+			memcpy(reinterpret_cast<void *>(property->addr), &value.longVal, property->size);
 		break;
 
 	case _DACOM_PROPTYPE_OFFSET:
 		{
-			U32 address;
-
-			address = ((U32)instance + property->addr);
+			void *address = static_cast<unsigned char *>(instance) + property->addr;
 
 			if (value.variantType & DAVT_BYREF)
-				memcpy((void *)address, value.pVoid, property->size);
+				memcpy(address, value.pVoid, property->size);
 			else
-				memcpy((void *)address, &value.longVal, property->size);
+				memcpy(address, &value.longVal, property->size);
 		}
 		break;
 

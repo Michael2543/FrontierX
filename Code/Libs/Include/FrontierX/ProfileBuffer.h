@@ -87,6 +87,91 @@ inline const char * GetSection(const char * buffer, int count)
 	return buffer;
 }
 
+// Preserve the parser callback contract: an initialized document with no sections
+// completes successfully, while a callback returning false stops enumeration.
+template<class Callback>
+bool EnumerateSections(const char * storage, Callback callback)
+{
+	if (!storage)
+		return false;
+
+	const char * section = storage;
+	while ((section = GetSection(section, 1)) != 0)
+	{
+		const char * suffix = section + std::strlen(section) + 1;
+		if (!callback(section, suffix))
+			return false;
+	}
+	return true;
+}
+
+// Enumerate the legacy key/value view for one marked section. Names and values
+// are capped at 255 bytes as in ProfileParser2. No matching key returns false.
+template<class IsSymbol, class Callback>
+bool EnumerateKeys(const char * section, IsSymbol isSymbol, Callback callback)
+{
+	if (!section)
+		return false;
+
+	bool result = false;
+	const char * line = section;
+	while ((line = GetLine(line, 1)) != 0)
+	{
+		const char * equals = std::strchr(line, '=');
+		if (!equals)
+			continue;
+
+		const char * keyEnd = equals;
+		while (keyEnd > line && !isSymbol(keyEnd[-1]))
+			--keyEnd;
+		if (keyEnd == line)
+			continue;
+
+		bool rejected = false;
+		for (const char * character = line; character < keyEnd; ++character)
+		{
+			if (*character == ';' || *character == '\n')
+			{
+				rejected = true;
+				break;
+			}
+		}
+		if (rejected)
+			continue;
+
+		std::size_t keyLength = static_cast<std::size_t>(keyEnd - line);
+		if (keyLength > 255)
+			keyLength = 255;
+		char key[256];
+		std::memcpy(key, line, keyLength);
+		key[keyLength] = 0;
+
+		const char * valueBegin = equals + 1;
+		while (*valueBegin == ' ')
+			++valueBegin;
+		const char * valueEnd = std::strchr(valueBegin, '\n');
+		if (valueEnd)
+		{
+			if (valueEnd > valueBegin && valueEnd[-1] == '\r')
+				--valueEnd;
+		}
+		else
+			valueEnd = valueBegin + std::strlen(valueBegin);
+
+		std::size_t valueLength = static_cast<std::size_t>(valueEnd - valueBegin);
+		if (valueLength > 255)
+			valueLength = 255;
+		char value[256];
+		std::memcpy(value, valueBegin, valueLength);
+		value[valueLength] = 0;
+
+		result = callback(key, value);
+		if (!result)
+			break;
+	}
+	return result;
+}
+
 // The caller supplies its existing case/locale policy. section must point into storage;
 // textSize includes the leading sentinel, as in ProfileParser::bufferSize.
 template<class Compare, class IsSymbol>

@@ -244,7 +244,8 @@ void DSStream::ThreadedOpen (const char * pathName)
 			goto Done;
 		}
 
-		if (pME) hr = pME->SetNotifyWindow((OAHWND)hMainWindow, CQE_STREAMER2, (LONG) this);
+		if (pME) hr = pME->SetNotifyWindow((OAHWND)hMainWindow, CQE_STREAMER2,
+			reinterpret_cast<LONG_PTR>(this));
    		if (hr != DD_OK)
 		{
 			CQTRACE10("IMediaControl::SetNotifyWindow() failed.");

@@ -813,7 +813,7 @@ void EffectInstance::activateParticle(ActionNode * node)
 	EFFECT_TRACE1("   Name:%s\n",node->particleSave.actionName);
 	
 	IParticleInstance * inst = PARTMAN->CreateBaseParticleInstance();
-	inst->SetContext((DWORD)this);
+	inst->SetContext(FrontierX::ParticleContextFromPointer(this));
 	FilterNode * filter = node->filterList;
 	while(filter)
 	{
@@ -821,7 +821,7 @@ void EffectInstance::activateParticle(ActionNode * node)
 			addFilterToInst(inst,filter,NULL,0,0);
 		filter = filter->next;
 	}
-	inst->Initialize((DWORD)this);
+	inst->Initialize(FrontierX::ParticleContextFromPointer(this));
 	internalPlayer->AddParticleInst(inst,node,this);
 	
 }
@@ -1764,19 +1764,19 @@ struct DACOM_NO_VTABLE EffectPlayer : public IEffectPlayer, IInternalEffectPlaye
 
 	/* IGamePositionCallback methods */
 
-	virtual bool GetObjectTransform(U32 objectID, U32 hardpoint, U32 context, Transform & trans);
+	virtual bool GetObjectTransform(U32 objectID, U32 hardpoint, FrontierX::ParticleContext context, Transform & trans);
 
-	virtual bool GetObjectTransform(U32 objectID, const char * hpName, U32 context, Transform & trans);
+	virtual bool GetObjectTransform(U32 objectID, const char * hpName, FrontierX::ParticleContext context, Transform & trans);
 
-	virtual SINGLE GetParameter(const char * name, U32 objectID,DWORD context);
+	virtual SINGLE GetParameter(const char * name, U32 objectID, FrontierX::ParticleContext context);
 
-	virtual void ObjectPostionCallback(U32 objectID,DWORD context, char * string, Transform & trans);
+	virtual void ObjectPostionCallback(U32 objectID, FrontierX::ParticleContext context, char * string, Transform & trans);
 
 	virtual bool TestCollision(Vector p1,Vector p2,Vector & collisionPoint,Vector & finalPoint,bool bTerrain,bool bTinkerToys,bool bWater,bool bUnits);
 
 	virtual void ShakeCamera(SINGLE durration, SINGLE power);
 
-	virtual IMeshInstance * GetObjectMesh(U32 objectID, DWORD context);
+	virtual IMeshInstance * GetObjectMesh(U32 objectID, FrontierX::ParticleContext context);
 
 	/* IEffectPlayer methods */
 	virtual IEffectHandle * LoadEffect(const char * effectFile);
@@ -1885,11 +1885,11 @@ EffectPlayer::~EffectPlayer (void)
 }
 //--------------------------------------------------------------------------//
 //
-bool EffectPlayer::GetObjectTransform(U32 objectID, U32 hardpoint, U32 context, Transform & trans)
+bool EffectPlayer::GetObjectTransform(U32 objectID, U32 hardpoint, FrontierX::ParticleContext context, Transform & trans)
 {
 	if(context)
 	{
-		EffectInstance * inst = (EffectInstance *) context;
+		EffectInstance * inst = FrontierX::PointerFromParticleContext<EffectInstance>(context);
 		TargetNode * tNode = inst->findTarget(objectID);
 		if(tNode && tNode->target)
 		{
@@ -1915,11 +1915,11 @@ bool EffectPlayer::GetObjectTransform(U32 objectID, U32 hardpoint, U32 context, 
 }
 //--------------------------------------------------------------------------//
 //
-bool EffectPlayer::GetObjectTransform(U32 objectID, const char * hpName, U32 context, Transform & trans)
+bool EffectPlayer::GetObjectTransform(U32 objectID, const char * hpName, FrontierX::ParticleContext context, Transform & trans)
 {
 	if(context)
 	{
-		EffectInstance * inst = (EffectInstance *) context;
+		EffectInstance * inst = FrontierX::PointerFromParticleContext<EffectInstance>(context);
 		TargetNode * tNode = inst->findTarget(objectID);
 		if(tNode && tNode->target)
 		{
@@ -1946,7 +1946,7 @@ bool EffectPlayer::GetObjectTransform(U32 objectID, const char * hpName, U32 con
 }
 //--------------------------------------------------------------------------//
 //
-SINGLE EffectPlayer::GetParameter(const char * name, U32 objectID,DWORD context)
+SINGLE EffectPlayer::GetParameter(const char * name, U32 objectID, FrontierX::ParticleContext context)
 {
 	if(objectID == -1)
 	{
@@ -1954,7 +1954,7 @@ SINGLE EffectPlayer::GetParameter(const char * name, U32 objectID,DWORD context)
 	}
 	else if(context)
 	{
-		EffectInstance * inst = (EffectInstance *) context;
+		EffectInstance * inst = FrontierX::PointerFromParticleContext<EffectInstance>(context);
 		TargetNode * tNode = inst->findTarget(objectID);
 		if(tNode && tNode->target)
 		{
@@ -1965,11 +1965,11 @@ SINGLE EffectPlayer::GetParameter(const char * name, U32 objectID,DWORD context)
 }
 //--------------------------------------------------------------------------//
 //
-void EffectPlayer::ObjectPostionCallback(U32 objectID,DWORD context, char * string, Transform & trans)
+void EffectPlayer::ObjectPostionCallback(U32 objectID, FrontierX::ParticleContext context, char * string, Transform & trans)
 {
 	if(context)
 	{
-		EffectInstance * inst = (EffectInstance *) context;
+		EffectInstance * inst = FrontierX::PointerFromParticleContext<EffectInstance>(context);
 		TargetNode * tNode = inst->findTarget(objectID);
 		if(tNode && tNode->target)
 		{
@@ -2005,11 +2005,11 @@ void EffectPlayer::ShakeCamera(SINGLE durration, SINGLE power)
 }
 //--------------------------------------------------------------------------//
 //
-IMeshInstance * EffectPlayer::GetObjectMesh(U32 objectID, DWORD context)
+IMeshInstance * EffectPlayer::GetObjectMesh(U32 objectID, FrontierX::ParticleContext context)
 {
 	if(context)
 	{
-		EffectInstance * inst = (EffectInstance *) context;
+		EffectInstance * inst = FrontierX::PointerFromParticleContext<EffectInstance>(context);
 		TargetNode * tNode = inst->findTarget(objectID);
 		if(tNode && tNode->target)
 		{

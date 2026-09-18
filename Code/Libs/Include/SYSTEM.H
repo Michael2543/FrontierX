@@ -18,7 +18,7 @@ $Author: Rmarr $
 // 
 
 #ifndef DACOM_H
-#include "dacom.h"   // DA component object manager
+#include "DACOM.H"   // DA component object manager
 #endif
 
 //--------------------------------------------------------------------

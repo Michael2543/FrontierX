@@ -24,6 +24,8 @@
 #include <DMBaseData.h>
 #endif
 
+#include "FrontierX/StackAddress.h"
+
 //---------------------------------------------------------------------------
 //
 template <class MSaveClass>
@@ -62,11 +64,7 @@ private:
 	void verify (void)
 	{
 #ifdef _DEBUG
-		U32 stack;
-
-		__asm mov stack, esp
-
-		CQASSERT(U32(this) - stack < 8196);
+		CQASSERT(FrontierX::IsAddressNearCurrentStack(this, 8196));
 #endif
 	}
 	

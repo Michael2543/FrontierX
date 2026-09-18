@@ -13,24 +13,83 @@
 //--------------------------------------------------------------------------//
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include "IProfileParser.h"
+#include <FrontierX/EncodedHandle.h>
 #include <FrontierX/ProfileBuffer.h>
+#include <FrontierX/ProfileParserFactory.h>
 #include "TComponent.h"
-#include "HeapObj.h"
 #include <da_heap_utility.h>
 
-#include <stdlib.h>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
+#ifndef _WIN32
+#include <fstream>
+#endif
+
+namespace
+{
+bool IsProfileSymbol(char character)
+{
+    const auto value = static_cast<unsigned char>(character);
+    return (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') ||
+           (value >= '0' && value <= '9') || value == '_';
+}
+
+#if !defined(_WIN32) && !defined(PROFILE_PARSER_IS_CASE_SENSITIVE)
+unsigned char FoldAscii(unsigned char character)
+{
+    return character >= 'A' && character <= 'Z'
+        ? static_cast<unsigned char>(character + ('a' - 'A')) : character;
+}
+
+int CompareAscii(const char * left, const char * right)
+{
+    while (*left && FoldAscii(static_cast<unsigned char>(*left)) ==
+           FoldAscii(static_cast<unsigned char>(*right)))
+    {
+        ++left;
+        ++right;
+    }
+    const auto lhs = FoldAscii(static_cast<unsigned char>(*left));
+    const auto rhs = FoldAscii(static_cast<unsigned char>(*right));
+    return lhs == rhs ? 0 : lhs < rhs ? -1 : 1;
+}
+
+int CompareAscii(const char * left, const char * right, std::size_t count)
+{
+    for (std::size_t index = 0; index < count; ++index)
+    {
+        const auto lhs = FoldAscii(static_cast<unsigned char>(left[index]));
+        const auto rhs = FoldAscii(static_cast<unsigned char>(right[index]));
+        if (lhs != rhs) return lhs < rhs ? -1 : 1;
+        if (!lhs) return 0;
+    }
+    return 0;
+}
+#endif
+}
 
 #ifdef PROFILE_PARSER_IS_CASE_SENSITIVE
-#define compare strcmp
-#define compare_len strncmp
+#define compare std::strcmp
+#define compare_len std::strncmp
+#elif defined(_WIN32)
+#define compare _stricmp
+#define compare_len _strnicmp
 #else
-#define compare stricmp
-#define compare_len strnicmp
+#define compare CompareAscii
+#define compare_len CompareAscii
 #endif
+#ifdef _MSC_VER
 #pragma warning (disable : 4100)		// formal parameter unused
+#define PROFILE_FASTCALL __fastcall
+#else
+#define PROFILE_FASTCALL
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -57,7 +116,7 @@ struct DACOM_NO_VTABLE ProfileParser : public IProfileParser
 	// startup / shutdown code
 	//
 
-	GENRESULT init (PROFPARSEDESC * info) { return GR_OK; }
+	GENRESULT init (PROFPARSEDESC *) { return GR_OK; }
 
 	DA_HEAP_DEFINE_NEW_OPERATOR(ProfileParser);
 
@@ -89,21 +148,25 @@ struct DACOM_NO_VTABLE ProfileParser : public IProfileParser
 
 	/* ProfileParser methods */
 
+	GENRESULT InitializeBuffer (const C8 *buffer, U32 size);
+
 	void free (void);
 
-	static const char * __fastcall getLine (const char *buffer, int line);
+	static const char * PROFILE_FASTCALL getLine (const char *buffer, int line);
 
-	static const char * __fastcall getSection (const char * buffer, int count);
+	static const char * PROFILE_FASTCALL getSection (const char * buffer, int count);
 
 	const char * getLine (HANDLE hSection, int line)
 	{
-		return getLine(fileBuffer+((U32)hSection), line);
+		return getLine(fileBuffer + FrontierX::DecodeEncodedHandle(hSection), line);
 	}
 };
 //--------------------------------------------------------------------------//
 //
 struct DACOM_NO_VTABLE ProfileParser2 : public IProfileParser2, ProfileParser
 {
+	using ProfileParser::EnumerateSections;
+
 	//
 	// interface mapping
 	//
@@ -115,7 +178,7 @@ struct DACOM_NO_VTABLE ProfileParser2 : public IProfileParser2, ProfileParser
 	END_DACOM_MAP()
 
 
-	GENRESULT init (PROFPARSEDESC2 * info) { return GR_OK; }
+	GENRESULT init (PROFPARSEDESC2 *) { return GR_OK; }
 
 	/* IProfileParser methods */
 
@@ -124,33 +187,33 @@ struct DACOM_NO_VTABLE ProfileParser2 : public IProfileParser2, ProfileParser
 		return ProfileParser::Initialize(fileName, access);
 	}
 
-	virtual HANDLE __stdcall CreateSection (const C8 *sectionName, IProfileParser::CREATE_MODE mode)
+	virtual HANDLE COMAPI CreateSection (const C8 *sectionName, IProfileParser::CREATE_MODE mode)
 	{
 		return ProfileParser::CreateSection(sectionName, mode);
 	}
 
-	virtual BOOL32 __stdcall CloseSection (HANDLE hSection)
+	virtual BOOL32 COMAPI CloseSection (HANDLE hSection)
 	{
 		return ProfileParser::CloseSection(hSection);
 	}
 
-	virtual U32 __stdcall ReadProfileLine (HANDLE hSection, U32 lineNumber, C8 * buffer, U32 bufferSize)
+	virtual U32 COMAPI ReadProfileLine (HANDLE hSection, U32 lineNumber, C8 * buffer, U32 bufferSize)
 	{
 		return ProfileParser::ReadProfileLine(hSection, lineNumber, buffer, bufferSize);
 	}
 
-	virtual U32 __stdcall ReadKeyValue (HANDLE hSection, const C8 * keyName, C8 * buffer, U32 bufferSize)
+	virtual U32 COMAPI ReadKeyValue (HANDLE hSection, const C8 * keyName, C8 * buffer, U32 bufferSize)
 	{
 		return ProfileParser::ReadKeyValue(hSection, keyName, buffer, bufferSize);
 	}
 
 	/* IProfileParser2 methods */
 
-	virtual GENRESULT __stdcall Initialize2 (const C8 *buffer, U32 bufferSize );
+	virtual GENRESULT COMAPI Initialize2 (const C8 *buffer, U32 bufferSize );
 
-	virtual BOOL32 __stdcall EnumerateSections (IProfileCallback * callback, void *context);
+	virtual BOOL32 COMAPI EnumerateSections (IProfileCallback * callback, void *context);
 
-	virtual BOOL32 __stdcall EnumerateKeys (IProfileCallback * callback, HANDLE hSection, void *context);
+	virtual BOOL32 COMAPI EnumerateKeys (IProfileCallback * callback, HANDLE hSection, void *context);
 };
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -164,6 +227,7 @@ void ProfileParser::free (void)
 //
 GENRESULT ProfileParser::Initialize (const C8 *fileName, ACCESS access)
 {
+#ifdef _WIN32
 	HANDLE hFile=INVALID_HANDLE_VALUE;
 	GENRESULT result = GR_FILE_ERROR;
 	U32 dwAccess = GENERIC_READ;
@@ -216,23 +280,77 @@ GENRESULT ProfileParser::Initialize (const C8 *fileName, ACCESS access)
 	}
 
 	return result;
+#else
+    if (!fileName) return GR_FILE_ERROR;
+    if (access != READ_ACCESS && access != WRITE_ACCESS) return GR_INVALID_PARMS;
+    std::size_t fileSize = 0;
+    std::ifstream input;
+    input.open(fileName, std::ios::binary | std::ios::ate);
+    if (!input && access == WRITE_ACCESS)
+    {
+        std::ofstream create(fileName, std::ios::binary | std::ios::app);
+        if (!create) return GR_FILE_ERROR;
+        create.close();
+        input.open(fileName, std::ios::binary | std::ios::ate);
+    }
+    if (!input) return GR_FILE_ERROR;
+    const auto end = input.tellg();
+    if (end < 0 || static_cast<std::uintmax_t>(end) >
+        static_cast<std::uintmax_t>(std::numeric_limits<U32>::max() - 8U))
+        return GR_FILE_ERROR;
+    fileSize = static_cast<std::size_t>(end);
+
+    C8 * next = static_cast<C8 *>(std::calloc(fileSize + 8, 1));
+    if (!next) return GR_OUT_OF_MEMORY;
+    if (fileSize)
+    {
+        input.seekg(0, std::ios::beg);
+        input.read(next + 1, static_cast<std::streamsize>(fileSize));
+        if (!input || static_cast<std::size_t>(input.gcount()) != fileSize)
+        {
+            std::free(next);
+            return GR_FILE_ERROR;
+        }
+    }
+
+    std::free(fileBuffer);
+    fileBuffer = next;
+    bufferSize = static_cast<U32>(fileSize + 1);
+    FrontierX::ProfileBuffer::MarkSections(fileBuffer);
+    return GR_OK;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 GENRESULT ProfileParser2::Initialize2 (const C8 *buffer, U32 bufferSize )
 {
-	return Initialize(buffer, ACCESS(bufferSize | 0x80000000));
+	return InitializeBuffer(buffer, bufferSize);
+}
+//--------------------------------------------------------------------------//
+//
+GENRESULT ProfileParser::InitializeBuffer (const C8 *buffer, U32 size)
+{
+	if (!buffer && size) return GR_INVALID_PARMS;
+	if (size > std::numeric_limits<U32>::max() - 8U) return GR_OUT_OF_MEMORY;
+	C8 * next = static_cast<C8 *>(std::calloc(static_cast<std::size_t>(size) + 8, 1));
+	if (!next) return GR_OUT_OF_MEMORY;
+	if (size) std::memcpy(next + 1, buffer, size);
+	std::free(fileBuffer);
+	fileBuffer = next;
+	bufferSize = size + 1;
+	FrontierX::ProfileBuffer::MarkSections(fileBuffer);
+	return GR_OK;
 }
 //--------------------------------------------------------------------------//
 // find 0D0A, then skip white space
 //
-const char * ProfileParser::getLine (const char * buffer, int line)
+const char * PROFILE_FASTCALL ProfileParser::getLine (const char * buffer, int line)
 {
 	return FrontierX::ProfileBuffer::GetLine(buffer, line);
 }
 //--------------------------------------------------------------------------//
 //
-const char * ProfileParser::getSection (const char * buffer, int count)
+const char * PROFILE_FASTCALL ProfileParser::getSection (const char * buffer, int count)
 {
 	return FrontierX::ProfileBuffer::GetSection(buffer, count);
 }
@@ -240,109 +358,39 @@ const char * ProfileParser::getSection (const char * buffer, int count)
 //
 BOOL32 ProfileParser::EnumerateSections (ENUM_PROC proc, void *context)
 {
-	BOOL32 result = 0;
-	const char * buffer = fileBuffer;
-
 	if (proc == 0 || fileBuffer==0)
-		goto Done;
+		return 0;
 
-	result++;
-	buffer = getSection(buffer, 1);
-	while (result && buffer)
-	{
-		result = proc(this, buffer, context);
-		buffer = getSection(buffer, 1);
-	}
-
-Done:
-	return result;
+	return FrontierX::ProfileBuffer::EnumerateSections(fileBuffer,
+		[this, proc, context](const char * section, const char *) {
+			return proc(this, section, context) != 0;
+		});
 }
 //--------------------------------------------------------------------------//
 //
 BOOL32 ProfileParser2::EnumerateSections (IProfileCallback * callback, void *context)
 {
-	BOOL32 result = 0;
-	const char * buffer = fileBuffer;
-	const char * name;
-
 	if (callback == 0 || fileBuffer==0)
-		goto Done;
+		return 0;
 
-	result++;
-	buffer = getSection(buffer, 1);
-	while (result && buffer)
-	{
-		name = buffer + strlen(buffer) + 1;	// name -> string to the right of the [section]
-		result = callback->ProfileCallback(this, buffer, name, context);
-		buffer = getSection(buffer, 1);
-	}
-
-Done:
-	return result;
+	return FrontierX::ProfileBuffer::EnumerateSections(fileBuffer,
+		[this, callback, context](const char * section, const char * suffix) {
+			return callback->ProfileCallback(this, section, suffix, context) != 0;
+		});
 }
 //--------------------------------------------------------------------------//
 //
 BOOL32 ProfileParser2::EnumerateKeys (IProfileCallback * callback, HANDLE hSection, void *context)
 {
-	U32 result = 0;
-	const char * tmp, * tmp2, * tmp3;
-	char name[256];
-	char value[256];
-	int len;
+	if (callback == 0 || fileBuffer == 0)
+		return 0;
 
-	tmp = fileBuffer+((U32)hSection);
-
-	while ((tmp = getLine(tmp, 1)) != 0)
-	{
-		if ((tmp2 = strchr(tmp, '=')) != 0)
-		{
-			tmp3 = tmp2--;
-			while (tmp2 >= tmp)
-			{
-				// make sure last character of tmp[] is a letter,number,or underscore
-				if (__iscsym(*tmp2))
-					break;
-				tmp2--;
-			}
-
-			// tmp2 -> last char of keyName
-			if (tmp2 >= tmp)
-			{
-				len = tmp2-tmp+1;
-				len = __min(255, len);
-				memcpy(name, tmp, len);
-				name[len] = 0;
-
-				// elliminate newline and commented lines
-				if (strchr(name, ';') == 0 && strchr(name, '\n') == 0)
-				{
-					do
-					{	tmp3++;
-					} while (*tmp3 == ' ');
-			
-					if ((tmp2 = strchr(tmp3, '\n')) != 0)
-					{
-						if (tmp2[-1] == '\r')
-							tmp2--;	// get rid of extra char
-					}
-					else
-					{
-						tmp2 = tmp3 + strlen(tmp2);
-					}
-
-					len = tmp2-tmp3;
-					len = __min(255, len);
-					memcpy(value, tmp3, len);
-					value[len] = 0;
-
-					if ((result = callback->ProfileCallback(this, name, value, context)) == 0)
-						break;
-				}
-			}
-		}
-	}
-
-	return result;
+	const char * section = fileBuffer + FrontierX::DecodeEncodedHandle(hSection);
+	return FrontierX::ProfileBuffer::EnumerateKeys(section,
+		[](char character) { return IsProfileSymbol(character); },
+		[this, callback, context](const char * name, const char * value) {
+			return callback->ProfileCallback(this, name, value, context) != 0;
+		});
 }
 //--------------------------------------------------------------------------//
 //
@@ -361,7 +409,8 @@ HANDLE ProfileParser::CreateSection (const C8 *sectionName, CREATE_MODE mode)
 
 	if (sectionName > fileBuffer && sectionName < fileBuffer+bufferSize)
 	{
-		result = (HANDLE) (sectionName - fileBuffer);
+		result = FrontierX::EncodeHandleValue(
+			static_cast<FrontierX::EncodedHandleValue>(sectionName - fileBuffer));
 	}
 	else
 	{	  
@@ -375,7 +424,8 @@ HANDLE ProfileParser::CreateSection (const C8 *sectionName, CREATE_MODE mode)
 		{
 			if (compare(buffer, sectionName) == 0)
 			{
-				result = (HANDLE) (buffer - fileBuffer);
+				result = FrontierX::EncodeHandleValue(
+					static_cast<FrontierX::EncodedHandleValue>(buffer - fileBuffer));
 				goto Done;
 			}
 
@@ -388,7 +438,7 @@ Done:
 }
 //--------------------------------------------------------------------------//
 //
-BOOL32 ProfileParser::CloseSection (HANDLE hSection)
+BOOL32 ProfileParser::CloseSection (HANDLE)
 {
 	return 1;
 }
@@ -404,11 +454,12 @@ U32 ProfileParser::ReadProfileLine (HANDLE hSection, U32 lineNumber, C8 * buffer
 U32 ProfileParser::ReadKeyValue (HANDLE hSection, const C8 * keyName, C8 * buffer, U32 outBufferSize)
 {
 	const char * value = FrontierX::ProfileBuffer::FindValue(
-		fileBuffer, bufferSize, fileBuffer + ((U32)hSection), keyName,
+		fileBuffer, bufferSize,
+		fileBuffer + FrontierX::DecodeEncodedHandle(hSection), keyName,
 		[](const char * left, const char * right, std::size_t count) {
 			return compare_len(left, right, count);
 		},
-		[](char character) { return __iscsym(character); });
+		[](char character) { return IsProfileSymbol(character); });
 	return value ? static_cast<U32>(FrontierX::ProfileBuffer::CopyLine(value, buffer, outBufferSize)) : 0;
 }
 //--------------------------------------------------------------------------//
@@ -422,6 +473,23 @@ IComponentFactory * CreateProfileParserFactory2 (void)
 IComponentFactory * CreateProfileParserFactory (void)
 {
 	return new DAComponentFactory2<DAComponentAggregate<ProfileParser>, PROFPARSEDESC> ("IProfileParser");
+}
+
+void RegisterProfileParsers(ICOManager * manager)
+{
+    if (!manager) return;
+    IComponentFactory * factory = CreateProfileParserFactory();
+    if (factory)
+    {
+        manager->RegisterComponent(factory, "IProfileParser");
+        factory->Release();
+    }
+    factory = CreateProfileParserFactory2();
+    if (factory)
+    {
+        manager->RegisterComponent(factory, "IProfileParser2");
+        factory->Release();
+    }
 }
 
 //--------------------------------------------------------------------------//

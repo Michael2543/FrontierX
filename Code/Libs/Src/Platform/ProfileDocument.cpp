@@ -61,8 +61,53 @@ std::vector<std::string> ProfileDocument::Sections() const
 {
     std::vector<std::string> result;
     if (storage_.empty()) return result;
+    ProfileBuffer::EnumerateSections(storage_.data(),
+        [&result](const char * section, const char *) {
+            result.emplace_back(section);
+            return true;
+        });
+    return result;
+}
+std::vector<std::string> ProfileDocument::Lines(std::string_view name) const
+{
+    std::vector<std::string> result;
+    if (storage_.empty() || !ascii(name)) return result;
     const char * section = storage_.data();
-    while ((section = ProfileBuffer::GetSection(section, 1))) result.emplace_back(section);
+    while ((section = ProfileBuffer::GetSection(section, 1)))
+    {
+        if (std::strlen(section) != name.size() || compare(section, name.data(), name.size()))
+            continue;
+        const char * line = section;
+        while ((line = ProfileBuffer::GetLine(line, 1)))
+        {
+            std::vector<char> output(storage_.size(), 0);
+            const auto count = ProfileBuffer::CopyLine(line, output.data(), output.size());
+            result.emplace_back(output.data(), count);
+        }
+        break;
+    }
+    return result;
+}
+std::vector<std::string> ProfileDocument::Keys(std::string_view name) const
+{
+    std::vector<std::string> result;
+    if (storage_.empty() || !ascii(name)) return result;
+    const char * section = storage_.data();
+    while ((section = ProfileBuffer::GetSection(section, 1)))
+    {
+        if (std::strlen(section) != name.size() || compare(section, name.data(), name.size())) continue;
+        ProfileBuffer::EnumerateKeys(section,
+            [](char character) {
+                const auto value = static_cast<unsigned char>(character);
+                return (value >= 'A' && value <= 'Z') ||
+                       (value >= 'a' && value <= 'z') ||
+                       (value >= '0' && value <= '9') || value == '_';
+            },
+            [&result](const char * key, const char *) {
+                result.emplace_back(key);
+                return true;
+            });
+    }
     return result;
 }
 std::optional<std::string> ProfileDocument::Value(std::string_view name, std::string_view key) const

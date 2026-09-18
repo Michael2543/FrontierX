@@ -1,5 +1,8 @@
 #include <FrontierX/DataRoot.h>
-#include <FrontierX/ProfileDocument.h>
+#include <FrontierX/NativeUserSettingsOwner.h>
+#include <FrontierX/PreferenceStore.h>
+#include <FrontierX/SettingsPath.h>
+#include <FrontierX/StartupDataRoot.h>
 #include <FrontierX/UtfMetadata.h>
 #include <cstdlib>
 #include <iostream>
@@ -9,68 +12,112 @@ namespace
 {
 int run(int argc, char ** argv)
 {
-    std::filesystem::path cliRoot, configPath, metadataPath, entryPath;
+    std::filesystem::path cliRoot, configPath, metadataPath, entryPath, preferencesPath;
     for (int i = 1; i < argc; ++i)
     {
         const std::string option(argv[i]);
         if (option == "--help" && argc == 2)
         {
-            std::cout << "Usage: frontierx_headless [--config FILE] [--data-root DIRECTORY] [--metadata FILE [--entry VIRTUAL_PATH]]\n"
+            std::cout << "Usage: frontierx_headless [--config FILE] [--preferences FILE] "
+                         "[--data-root DIRECTORY] [--metadata FILE [--entry VIRTUAL_PATH]]\n"
                          "Checks native startup paths only; does not start the game.\n";
             return 0;
         }
-        if ((option != "--config" && option != "--data-root" && option != "--metadata" && option != "--entry") || i + 1 == argc)
-            throw std::invalid_argument("expected --config FILE, --metadata FILE or --data-root DIRECTORY");
-        auto & destination = option == "--config" ? configPath : option == "--metadata" ? metadataPath : option == "--entry" ? entryPath : cliRoot;
+        if ((option != "--config" && option != "--preferences" && option != "--data-root" &&
+             option != "--metadata" && option != "--entry") || i + 1 == argc)
+            throw std::invalid_argument(
+                "expected --config, --preferences, --metadata, --entry or --data-root");
+        auto & destination = option == "--config" ? configPath :
+            option == "--preferences" ? preferencesPath :
+            option == "--metadata" ? metadataPath : option == "--entry" ? entryPath : cliRoot;
         if (!destination.empty()) throw std::invalid_argument("duplicate option: " + option);
         const std::string value(argv[++i]);
-        if (value.empty() || value.rfind("--", 0) == 0) throw std::invalid_argument("missing option value");
+        if (value.empty() || value.rfind("--", 0) == 0)
+            throw std::invalid_argument("missing option value");
         destination = value;
     }
 
-    if (!entryPath.empty() && metadataPath.empty()) throw std::invalid_argument("--entry requires --metadata");
+    if (!entryPath.empty() && metadataPath.empty())
+        throw std::invalid_argument("--entry requires --metadata");
     std::filesystem::path configRoot;
     if (!configPath.empty())
     {
-        FrontierX::ProfileDocument config;
         std::string error;
-        if (!config.LoadFile(configPath, error))
+        if (!FrontierX::LoadConfiguredDataRoot(configPath, configRoot, error))
         { std::cerr << "Configuration error: " << error << '\n'; return 2; }
-        auto root = config.Value("FrontierX", "DataRoot");
-        if (!root || root->empty() || root->find_first_not_of(" \t\r\n") == std::string::npos)
-        { std::cerr << "Configuration requires [FrontierX] DataRoot\n"; return 2; }
-        // The legacy parser can retain CR immediately before a section marker.
-        // Path values reject control characters instead of silently rewriting them.
-        for (unsigned char c : *root)
-            if (c < 32 || c == 127)
-            { std::cerr << "Configuration DataRoot contains a control character\n"; return 2; }
-        configRoot = *root;
-        if (configRoot.is_relative()) configRoot = configPath.parent_path() / configRoot;
     }
+
+    const char * xdg_config_environment = std::getenv("XDG_CONFIG_HOME");
+    const char * home_environment = std::getenv("HOME");
+    const auto settings = FrontierX::SelectSettingsPath(
+        preferencesPath,
+        xdg_config_environment ? xdg_config_environment : "",
+        home_environment ? home_environment : "");
+    if (!settings)
+    {
+        std::cerr << "Preferences error: no absolute XDG_CONFIG_HOME or HOME is available\n";
+        return 6;
+    }
+    FrontierX::PreferenceStore preferences;
+    std::string preferences_error;
+    const auto preferences_result = preferences.Load(settings.path, &preferences_error);
+    if ((!preferencesPath.empty() &&
+         preferences_result == FrontierX::PreferenceLoadResult::NotFound) ||
+        preferences_result == FrontierX::PreferenceLoadResult::Invalid ||
+        preferences_result == FrontierX::PreferenceLoadResult::IoError)
+    {
+        std::cerr << "Preferences error: "
+                  << (preferences_error.empty() ? "explicit preference file is missing" :
+                      preferences_error) << '\n';
+        return 6;
+    }
+    FrontierX::NativeUserSettingsOwner userSettings;
+    std::string user_settings_error;
+    const auto user_settings_result = userSettings.Load(preferences, &user_settings_error);
+    if (user_settings_result == FrontierX::NativeUserSettingsOwnerLoadResult::Invalid)
+    {
+        std::cerr << "Preferences error: " << user_settings_error << '\n';
+        return 6;
+    }
+    std::cout << "Preferences source: " << FrontierX::SettingsPathSourceName(settings.source)
+              << "; status: "
+              << (preferences_result == FrontierX::PreferenceLoadResult::Loaded ? "loaded" :
+                  "missing") << "; entries: " << preferences.Size()
+              << "; user-defaults: "
+              << (user_settings_result ==
+                      FrontierX::NativeUserSettingsOwnerLoadResult::Loaded ?
+                  "loaded" : "absent")
+              << "; settings-source: "
+              << FrontierX::NativeUserSettingsSourceName(userSettings.Source()) << '\n';
+
     const char * environment = std::getenv("FRONTIERX_DATA_ROOT");
     const std::filesystem::path envRoot = environment ? environment : "";
-    const auto root = FrontierX::Platform::SelectDataRootPath(cliRoot, envRoot,
-        configRoot.empty() ? std::filesystem::path("Data") : configRoot);
-    const char * source = !cliRoot.empty() ? "command-line" : !envRoot.empty() ? "environment" :
-        !configRoot.empty() ? "configuration" : "default";
-    std::cout << "Data root source: " << source << '\n';
-    std::error_code error;
-    if (!std::filesystem::is_directory(root, error) || error)
-    { std::cerr << "Data root is not an accessible directory; set --data-root or FRONTIERX_DATA_ROOT\n"; return 3; }
-    const auto entries = FrontierX::Platform::InspectDataRoot(root);
-    for (const auto & entry : entries)
+    const auto startupRoot = FrontierX::ResolveStartupDataRoot(cliRoot, envRoot, configRoot);
+    std::cout << "Data root source: "
+              << FrontierX::StartupDataRootSourceName(startupRoot.source) << '\n';
+    if (!startupRoot.directoryAccessible)
+    {
+        std::cerr << "Data root is not an accessible directory; set --data-root or "
+                     "FRONTIERX_DATA_ROOT\n";
+        return 3;
+    }
+    for (const auto & entry : startupRoot.entries)
         std::cout << entry.expectedPath.generic_string() << ": "
                   << FrontierX::Platform::DataRootEntryStatusName(entry.status)
                   << (entry.required ? " [required]" : " [optional]") << '\n';
-    if (!FrontierX::Platform::IsDataRootUsable(entries))
-    { std::cerr << "Required data directories are missing or have incompatible names/types\n"; return 3; }
+    if (!FrontierX::Platform::IsDataRootUsable(startupRoot.entries))
+    {
+        std::cerr << "Required data directories are missing or have incompatible names/types\n";
+        return 3;
+    }
     if (!metadataPath.empty())
     {
         FrontierX::UtfMetadata metadata;
         std::string metadataError;
         if (!FrontierX::InspectUtfMetadata(metadataPath, metadata, metadataError))
         { std::cerr << "Metadata error: " << metadataError << '\n'; return 5; }
-        std::cout << "UTF 1.01 metadata passed: " << metadata.directoryEntries << " directory slots, "
+        std::cout << "UTF 1.01 metadata passed: " << metadata.directoryEntries
+                  << " directory slots, "
                   << metadata.nameBytesUsed << " used name bytes, " << metadata.reachableFiles
                   << " reachable files; payload contents are not validated.\n";
     }
@@ -92,6 +139,14 @@ int run(int argc, char ** argv)
 int main(int argc, char ** argv)
 {
     try { return run(argc, argv); }
-    catch (const std::invalid_argument & error) { std::cerr << "Usage error: " << error.what() << '\n'; return 1; }
-    catch (const std::exception & error) { std::cerr << "Startup check failed: " << error.what() << '\n'; return 4; }
+    catch (const std::invalid_argument & error)
+    {
+        std::cerr << "Usage error: " << error.what() << '\n';
+        return 1;
+    }
+    catch (const std::exception & error)
+    {
+        std::cerr << "Startup check failed: " << error.what() << '\n';
+        return 4;
+    }
 }

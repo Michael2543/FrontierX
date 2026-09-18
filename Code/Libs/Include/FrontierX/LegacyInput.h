@@ -1,0 +1,83 @@
+#ifndef FRONTIERX_LEGACY_INPUT_H
+#define FRONTIERX_LEGACY_INPUT_H
+
+#include "FrontierX/LegacyMessage.h"
+#include "FrontierX/WindowEvent.h"
+
+#include <cstdint>
+#include <vector>
+
+namespace FrontierX
+{
+namespace LegacyMessage
+{
+constexpr std::uint32_t SetFocus = 0x0007;
+constexpr std::uint32_t KillFocus = 0x0008;
+constexpr std::uint32_t Size = 0x0005;
+constexpr std::uint32_t Close = 0x0010;
+constexpr std::uint32_t ActivateApp = 0x001c;
+constexpr std::uint32_t KeyDown = 0x0100;
+constexpr std::uint32_t KeyUp = 0x0101;
+constexpr std::uint32_t Character = 0x0102;
+constexpr std::uint32_t SystemKeyDown = 0x0104;
+constexpr std::uint32_t SystemKeyUp = 0x0105;
+constexpr std::uint32_t MouseMove = 0x0200;
+constexpr std::uint32_t LeftButtonDown = 0x0201;
+constexpr std::uint32_t LeftButtonUp = 0x0202;
+constexpr std::uint32_t LeftButtonDoubleClick = 0x0203;
+constexpr std::uint32_t RightButtonDown = 0x0204;
+constexpr std::uint32_t RightButtonUp = 0x0205;
+constexpr std::uint32_t RightButtonDoubleClick = 0x0206;
+constexpr std::uint32_t MiddleButtonDown = 0x0207;
+constexpr std::uint32_t MiddleButtonUp = 0x0208;
+constexpr std::uint32_t MiddleButtonDoubleClick = 0x0209;
+constexpr std::uint32_t MouseWheel = 0x020a;
+constexpr std::uint32_t UnicodeCharacter = 0x1019;
+}
+
+namespace LegacyMouseMask
+{
+constexpr std::uintptr_t Left = 0x0001;
+constexpr std::uintptr_t Right = 0x0002;
+constexpr std::uintptr_t Shift = 0x0004;
+constexpr std::uintptr_t Control = 0x0008;
+constexpr std::uintptr_t Middle = 0x0010;
+}
+
+struct LegacyWindowMessage
+{
+    LegacyWindowToken window = 0;
+    LegacyMessageId message = 0;
+    LegacyWParam wparam = 0;
+    LegacyLParam lparam = 0;
+};
+
+enum class LegacyInputPayload
+{
+    WindowMessage,
+    ImmediateValue
+};
+
+struct LegacyInputEvent
+{
+    std::uint32_t message = 0;
+    LegacyInputPayload payload = LegacyInputPayload::WindowMessage;
+    LegacyWindowMessage window_message;
+    std::uintptr_t immediate_value = 0;
+};
+
+class SdlLegacyInputAdapter
+{
+public:
+    using Sink = void (*)(void * context, std::uint32_t message, void * parameter) noexcept;
+
+    std::vector<LegacyInputEvent> Translate(const WindowEvent & event);
+    void Dispatch(const WindowEvent & event, Sink sink, void * context = nullptr);
+
+private:
+    std::uint32_t mouse_buttons_ = 0;
+    std::uint16_t key_modifiers_ = 0;
+};
+}
+
+#endif

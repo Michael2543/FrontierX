@@ -38,7 +38,7 @@ struct IParticleSystem
 
 	virtual Particle * GetParticle(U32 i) = 0;
 
-	virtual DWORD GetContext() = 0;
+	virtual FrontierX::ParticleContext GetContext() = 0;
 
 	virtual U32 StartTime() = 0;
 

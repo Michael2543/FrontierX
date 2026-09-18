@@ -148,6 +148,9 @@ bool ReadUtfEntry(const std::filesystem::path & path, const std::string & entry,
                   std::vector<unsigned char> & output, std::string & error)
 {
     if (entry.empty()) { error = "empty UTF entry path"; return false; }
+    if (entry.size() > 4096 || entry.front() == '/' || entry.back() == '/' ||
+        entry.find("//") != std::string::npos || entry.find('\\') != std::string::npos)
+    { error = "invalid UTF entry path"; return false; }
     UtfMetadata metadata;
     return Inspect(path, metadata, error, &entry, &output);
 }

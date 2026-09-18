@@ -422,7 +422,8 @@ struct DACOM_NO_VTABLE Cursor : public Resource<Cursor,ICursorResource>,
 		if (EVENTSYS)
 		{
 			if (HOTKEY)
-				HOTKEY->SystemMessage((S32)hMainWindow,(S32)event,(S32)0,(S32)msg.lParam);
+				HOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(hMainWindow),
+					event, 0, msg.lParam);
 			EVENTSYS->Send(event, &msg);
 		}
 	}

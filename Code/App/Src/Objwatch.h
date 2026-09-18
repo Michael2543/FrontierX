@@ -37,6 +37,8 @@
 #include "IObject.h"
 #endif
 
+#include "FrontierX/StackAddress.h"
+
 struct IObject;
 struct IBaseObject;
 
@@ -155,11 +157,8 @@ public:
 #ifdef _DEBUG
 		if (ptr && playerID == TOTALLYVOLATILEPTR)
 		{
-			U32 stack;
-
-			__asm mov stack, esp
-
-			CQASSERT((U32(this) - stack < 8196) && "INVALID USE OF VOLATILE OBJPTR");
+			CQASSERT(FrontierX::IsAddressNearCurrentStack(this, 8196) &&
+				"INVALID USE OF VOLATILE OBJPTR");
 		}
 		if(next)
 		{
@@ -293,11 +292,8 @@ public:
 #ifdef _DEBUG
 		if (ptr && playerID == TOTALLYVOLATILEPTR)
 		{
-			U32 stack;
-
-			__asm mov stack, esp
-
-			CQASSERT((U32(this) - stack < 8196) && "INVALID USE OF VOLATILE OBJPTR");
+			CQASSERT(FrontierX::IsAddressNearCurrentStack(this, 8196) &&
+				"INVALID USE OF VOLATILE OBJPTR");
 		}
 		if(next)
 		{
@@ -432,11 +428,8 @@ public:
 	void verify (void) const 
 	{
 #ifdef _DEBUG
-		U32 stack;
-
-		__asm mov stack, esp
-
-		CQASSERT((U32(this) - stack < 8196) && "INVALID USE OF VOLATILE OBJPTR2");
+		CQASSERT(FrontierX::IsAddressNearCurrentStack(this, 8196) &&
+			"INVALID USE OF VOLATILE OBJPTR2");
 		if(next)
 		{
 			CQASSERT(next->ptr == ptr || ptr == NULL  || next->ptr == NULL); 
@@ -569,11 +562,8 @@ public:
 	void verify (void) const 
 	{
 #ifdef _DEBUG
-		U32 stack;
-
-		__asm mov stack, esp
-
-		CQASSERT((U32(this) - stack < 8196) && "INVALID USE OF VOLATILE OBJPTR2");
+		CQASSERT(FrontierX::IsAddressNearCurrentStack(this, 8196) &&
+			"INVALID USE OF VOLATILE OBJPTR2");
 		if(next)
 		{
 			CQASSERT(next->ptr == ptr || ptr == NULL  || next->ptr == NULL); 

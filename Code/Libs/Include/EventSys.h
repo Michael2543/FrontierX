@@ -14,7 +14,7 @@
 
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 /*
@@ -148,6 +148,7 @@ struct DACOM_NO_VTABLE IEventSystem : public IDAComponent
 	DEFMETHOD(Peek) (U32 index, U32 *message = 0, void **param = 0) = 0;
 };
 
+void RegisterTheEventSystem(ICOManager * manager);
 
 
 #endif

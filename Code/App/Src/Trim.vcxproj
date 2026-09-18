@@ -361,6 +361,8 @@ xcopy /Y "$(OutDir)Trim.pdb" "$(ConquestDebugDeployDir)\"</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Libs\Include\FrontierX\PlatformTime.h" />
+    <ClInclude Include="..\..\Libs\Include\FrontierX\StackAddress.h" />
+    <ClInclude Include="..\..\Libs\Include\FrontierX\LegacyMessage.h" />
     <ClInclude Include="..\DInclude\DAdmiralBar.h" />
     <ClInclude Include="..\DInclude\DAnimate.h" />
     <ClInclude Include="..\DInclude\Data.h" />

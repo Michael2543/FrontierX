@@ -61,15 +61,15 @@ struct DACOM_NO_VTABLE HKManager : IEventMessageFilter, IEventCallback
 
 	/* IEventMessageFilter methods */
 
-	GENRESULT __stdcall PreMessageFilter (S32 * hwnd,    
-                                 S32 * message,    
-                                 S32 * wParam,
-                                 S32 * lParam);
+	GENRESULT __stdcall PreMessageFilter (FrontierX::LegacyWindowToken * hwnd,
+	                             FrontierX::LegacyMessageId * message,
+	                             FrontierX::LegacyWParam * wParam,
+	                             FrontierX::LegacyLParam * lParam);
 
-	GENRESULT __stdcall PostMessageFilter (S32   hwnd,    
-                                 S32   message,    
-                                 S32   wParam,
-                                 S32   lParam);
+	GENRESULT __stdcall PostMessageFilter (FrontierX::LegacyWindowToken hwnd,
+	                             FrontierX::LegacyMessageId message,
+	                             FrontierX::LegacyWParam wParam,
+	                             FrontierX::LegacyLParam lParam);
 
 
 	/* IEventCallback methods */
@@ -108,13 +108,17 @@ HKManager::~HKManager (void)
 }
 //--------------------------------------------------------------------------//
 //
-GENRESULT HKManager::PreMessageFilter (S32 * hwnd, S32 * message, S32 * wParam, S32 * lParam)
+GENRESULT HKManager::PreMessageFilter (FrontierX::LegacyWindowToken * hwnd,
+	FrontierX::LegacyMessageId * message, FrontierX::LegacyWParam * wParam,
+	FrontierX::LegacyLParam * lParam)
 {
 	return GR_OK;
 }
 //--------------------------------------------------------------------------//
 //
-GENRESULT HKManager::PostMessageFilter (S32 hwnd, S32 message, S32 wParam, S32 lParam)
+GENRESULT HKManager::PostMessageFilter (FrontierX::LegacyWindowToken hwnd,
+	FrontierX::LegacyMessageId message, FrontierX::LegacyWParam wParam,
+	FrontierX::LegacyLParam lParam)
 {
 	HOTKEY->SystemMessage(hwnd, message, wParam, lParam);
 	return GR_OK;
@@ -137,9 +141,11 @@ GENRESULT HKManager::Notify (U32 message, void *param)
 	if (message <= WM_USER && param && DBHOTKEY && (message != WM_SYSKEYDOWN || GetMenu(hMainWindow)==0))
 	{
 		if (bDebugEnabled)
-			DBHOTKEY->SystemMessage((LONG)msg->hwnd, message, msg->wParam, msg->lParam);
+			DBHOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(msg->hwnd),
+				message, msg->wParam, msg->lParam);
 		else
-			HOTKEY->SystemMessage((LONG)msg->hwnd, message, msg->wParam, msg->lParam);
+			HOTKEY->SystemMessage(FrontierX::LegacyWindowTokenFromPointer(msg->hwnd),
+				message, msg->wParam, msg->lParam);
 	}
 
 	return GR_OK;
