@@ -4,8 +4,10 @@ Status: production parser owner and shared parser-core integration, 2026-09-18
 
 This document records the portable callback slice shared by the production DACOM profile parser
 and the native startup configuration reader. It is source-review, compilation, synthetic-execution,
-and sanitizer evidence. The production parser now builds as a native static DACOM service, but the
-complete DACOM DLL, dynamic component loader, shared heap and native game owner do not.
+and sanitizer evidence. The production parser now builds as a native static DACOM service. The
+native manager also loads the production EventSystem ELF and is owned by the process-global
+`DACOM_Acquire` bootstrap. A process-local native `IHeap` now exists, but cross-ELF allocation
+ownership and a native game owner do not.
 
 ## Owning path
 
@@ -20,7 +22,8 @@ The production path is:
    names must be distinguished.
 
 `FrontierX::ProfileDocument` uses the same marked-buffer representation for native, read-only
-startup configuration. It does not expose DACOM interfaces or borrowed section handles.
+startup configuration. Its `Lines` view now reproduces raw line navigation for native
+`SetINIConfig` without exposing DACOM interfaces or borrowed section handles.
 
 ## Shared callback contract
 
@@ -55,9 +58,10 @@ order, and a final key/value without a trailing newline. That final case fixes a
 null-pointer bug in the legacy
 implementation: its no-newline branch called `strlen` on the null result of `strchr`.
 
-`ProfileDocument::Sections` and `ProfileDocument::Keys` now consume these shared walks. This gives
-the portable core two concrete owners and prevents the native reader from silently diverging from
-the callback traversal used by DACOM.
+`ProfileDocument::Sections` and `ProfileDocument::Keys` consume these shared walks, while `Lines`
+uses the same `GetLine` and `CopyLine` contract as production `ReadProfileLine`. This gives the
+portable core multiple concrete owners and prevents native startup and library configuration from
+silently diverging from DACOM traversal.
 
 ## Production native owner
 
@@ -116,10 +120,8 @@ section/key lookup, line and key enumeration, native file loading, writable empt
 missing-file failure and transactional state retention. GCC and Clang strict-warning builds pass, as does the combined
 AddressSanitizer/UndefinedBehaviorSanitizer run.
 
-The complete preset matrices now contain 24 CTests; later event-system and dynamic-library tests
-were added,
-while this slice expands existing probes rather than
-adding a new executable.
+The complete preset matrices now contain 28 CTests; later service-integration tests were added,
+while this slice expands existing probes rather than adding a new executable.
 
 ## Reproduction
 
@@ -152,8 +154,9 @@ Before treating this as a complete production integration:
 - exercise callback re-entry through `CreateSection` for duplicate section names;
 - validate section-handle behavior with native Windows ABI/layout checks;
 - compare native file-open/share/write behavior and ASCII case folding against the Windows owner;
-- connect the production parser to `NativeComponentManager::SetINIConfig` only together with a
-  defined native library-loading policy; that method remains deliberately unimplemented;
+- compare the shared raw-line traversal now used by native `SetINIConfig` with the production
+  parser on Windows, then decide whether the manager should aggregate the production parser rather
+  than retain the smaller owning-document bootstrap boundary;
 - validate DA-heap-enabled allocation ownership on native Windows and decide the Linux shared-heap
   policy before crossing dynamic module boundaries; and
 - retain the existing Windows registry-backed `IUserDefaults` behavior until its production

@@ -1,8 +1,8 @@
 # Native Settings Storage
 
-Status: storage, fixed-width schema, path policy, legacy value/MRU adapter, and native lifecycle
-owner implemented and tested; live `IUserDefaults` application component and Windows comparison
-pending
+Status: storage, fixed-width schema, path policy, legacy value/MRU adapter, native lifecycle owner,
+and shell-integrated `IUserDefaults` DACOM component implemented and tested; native game startup,
+portable UI services and Windows comparison pending
 
 ## Source-reviewed Windows contract
 
@@ -71,13 +71,16 @@ Those failure-path differences must be resolved at the live application boundary
 
 The real `IUserDefaults` declaration now uses the existing `COMAPI` macro and exact `DACOM.H` case.
 MSVC therefore retains its prior calling convention and import/export decoration, while GCC and
-Clang compile the unchanged interface order through `frontierx_dacom_interface_probe`. This is
-header/ABI-surface compile evidence, not a Linux implementation of the component.
+Clang compile the unchanged interface order through `frontierx_dacom_interface_probe` and execute
+it through `frontierx_native_user_defaults_probe`. This does not establish cross-compiler ABI
+parity with the supported MSVC module.
 
 ## Native settings owner and player precedence
 
-`FrontierX::NativeUserSettingsOwner` is the first owning native lifecycle boundary. The headless
-startup checker now uses it instead of calling the global schema decoder directly.
+`FrontierX::NativeUserSettingsOwner` is the first owning native lifecycle boundary.
+`FrontierX::StartupPreferences` composes path selection, container loading and this owner into one
+transactional startup result shared by the headless checker and native shell. Neither executable
+calls the global schema decoder directly.
 
 Player-specific settings use a new native namespace:
 
@@ -113,9 +116,10 @@ schema when a valid player name exists, and publishes the copy only if both conv
 This models the two production writes without exposing a half-updated in-memory store. File-system
 save durability and application save timing remain separate gates.
 
-Headless diagnostics now report `settings-source: defaults`, `global`, or `player` without printing
-the player name or settings path. Process tests exercise all three sources plus invalid
-player-to-global fallback.
+Startup diagnostics report `settings-source: defaults`, `global`, or `player` without printing the
+player name or settings path. Headless process tests exercise all three sources plus invalid
+player-to-global fallback; native-shell tests cover first-run, explicit valid, missing and malformed
+container paths.
 
 ## Portable container
 
@@ -147,13 +151,51 @@ The initial native policy follows the
    `$XDG_CONFIG_HOME/frontierx/preferences.dat`.
 3. Otherwise an absolute `HOME` selects `$HOME/.config/frontierx/preferences.dat`.
 4. Relative XDG or HOME values are invalid as base directories. A relative XDG value is ignored so
-   the HOME fallback can apply; if neither absolute base exists, startup reports exit code 6.
+   the HOME fallback can apply; if neither absolute base exists, startup reports its executable's
+   preferences failure code.
 
-The headless startup checker loads this path before data-root validation. A missing default file is
-normal first-run state and yields an empty store. A missing explicit file is an error so a mistyped
-diagnostic path is not silently ignored. Output identifies only the selection source, load status
-and entry count; it does not disclose the user's resolved path. The checker is read-only and does
-not create the application directory.
+`LoadStartupPreferences` applies this policy before data-root validation in both startup
+executables. A missing default file is normal first-run state and yields an empty store. A missing
+explicit file is an error so a mistyped diagnostic path is not silently ignored. Output identifies
+only the selection source, load status, entry count and settings source; it does not disclose the
+user's resolved path. Both consumers are read-only and do not create the application directory.
+The headless checker retains exit code 6 for unusable preferences; the native shell uses exit code
+5 because its existing codes 1 through 4 already identify argument, data/configuration, component
+and window failures.
+
+## Native `IUserDefaults` component
+
+`frontierx_native_user_defaults` implements the unchanged public `IUserDefaults` vtable as a native
+DACOM service. The native shell registers and creates it through `NativeComponentManager`, keeps
+the live `IUserDefaults::GetDefaults()` pointer valid for the process lifecycle, performs an
+explicit shutdown store, then releases it before manager teardown.
+
+The component maps every `NativeUserSettings` field and all 31 explicit flag bits to the legacy
+`USER_DEFAULTS` representation in memory. `dwSize` and version 11 are populated for legacy callers,
+but the compiler-owned struct and bitfields are never written to disk. Stores convert back into the
+fixed-width schema first; non-finite scroll rates or invalid fog values fail rather than serializing
+undefined state.
+
+Named binary/string and numeric-resource string operations use `LegacyPreferenceValues`. Their
+set/delete and MRU mutation calls write a copied store through same-directory replacement before
+publishing it in memory, so a failed write is transactional. `StoreDefaults` writes both global and
+selected-player schemas and the component destructor repeats the source-reviewed shutdown store.
+Missing parent directories are created under the selected settings path using the process umask.
+Explicit fsync, concurrent-writer arbitration and temporary-file recovery remain open durability
+policy.
+
+The following Windows-coupled methods have safe, explicit native failure behavior until their own
+owners exist:
+
+- input/output file dialogs clear the supplied result and return false;
+- document/viewer-backed user and script editors return false;
+- installation-registry lookup returns no value; and
+- `UbiEula` returns false, so missing native EULA presentation can never be mistaken for acceptance.
+
+These failures make the interface executable for non-UI startup consumers without claiming that
+the game can yet enter every menu/tool path. The production `CreateUserDefaults` function still
+constructs the Win32 implementation; a native game-startup owner must select the new component
+without altering that supported Windows path.
 
 ## Native user-default schema
 
@@ -267,7 +309,7 @@ cmake --build --preset linux-clang-debug
 ctest --preset linux-clang-debug
 ```
 
-Both presets pass all twenty-four CTests. The preference probe additionally covers legacy binary/string
+Both presets pass all twenty-eight CTests. The preference probe additionally covers legacy binary/string
 type checks, exact counts, short buffers, deletion, four-entry MRU shifting, lookup, compaction,
 duplicate removal and the historical removal return value. Focused GCC builds using
 AddressSanitizer and UndefinedBehaviorSanitizer also passed with leak detection disabled because
@@ -275,26 +317,34 @@ LeakSanitizer is incompatible with the host's ptrace-based execution environment
 
 The native-settings probe additionally covers prefixed round trips, global and player selection,
 the missing-player reset, hardware-cursor preservation, namespace-scoped invalid-player cleanup,
-global fallback, invalid-global rejection, dual-copy store, and oversized player names. The
-headless process suite constructs `FXSET001` fixtures for player, global, missing-player and
-invalid-player cases.
+global fallback, invalid-global rejection, dual-copy store, oversized player names, default and
+explicit shared-startup selection, transactional error preservation and redacted diagnostic names.
+The headless process suite constructs `FXSET001` fixtures for player, global, missing-player and
+invalid-player cases. The native-shell process suite exercises default first-run selection, an
+explicit valid empty container, missing or malformed explicit files, live component creation and a
+persisted fixed-width shutdown schema. `frontierx_native_user_defaults_probe` separately executes
+the real vtable across defaults exposure, binary/string short-buffer rules, deletion, numeric keys,
+MRU behavior, immediate writes, complete schema store/reload, player deletion, reset, singleton
+lifetime and explicit rejection of unsupported UI/EULA operations. Focused Clang
+AddressSanitizer/UndefinedBehaviorSanitizer runs pass with leak detection disabled for the host
+ptrace environment.
 
 ## Integration gates
 
-Before this storage can replace registry access in the native application:
+Before this component can serve the native game:
 
-1. Adapt `NativeUserSettingsOwner` and `LegacyPreferenceValues` to the real `IUserDefaults`
-   component lifetime without exposing the Win32 `USER_DEFAULTS` layout on Linux.
-2. Connect the source-reviewed immediate-save call sites and shutdown save to the native file
-   transaction, including error propagation and application-directory creation.
-3. Retain the selected XDG-aware path policy while defining directory creation permissions,
-   concurrent-write behavior, temporary-file recovery and durability.
-4. Connect the now-portable MRU manipulation to a native file-picker boundary while keeping UI,
+1. Select the tested component from a real native game-startup owner while retaining the supported
+   Win32 `CreateUserDefaults` and registry implementation.
+2. Connect shutdown/save failure reporting to the future application owner; define explicit fsync,
+   concurrent-write and temporary-file-recovery policy.
+3. Connect the now-portable MRU manipulation to a native file-picker boundary while keeping UI,
    current-directory restoration and path-separator behavior outside storage.
+4. Port or isolate the document/viewer editors, installation metadata and EULA presentation before
+   enabling callers that depend on those methods.
 5. Keep the current registry-backed implementation for supported Windows builds and run Debug and
    Final regression builds after any shared-interface integration.
-6. Extend the existing process-level startup/load coverage with application save/restart tests
-   before claiming persistent native settings work in the game.
+6. Extend process coverage from the shell to a real game-startup save/restart before claiming
+   persistent native settings work in the game.
 
 This format is new FrontierX configuration data. It is not a retail file format and does not import,
 copy, or redistribute retail media.

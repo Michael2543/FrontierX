@@ -57,6 +57,8 @@ private:
     };
 
     void RemoveRegistrations(std::size_t libraryId) noexcept;
+    static bool CanUnload(const LoadedLibrary & loaded) noexcept;
+    GENRESULT ConfigureLibraries(const C8 * info, U32 flags);
 
     std::vector<Registration> registrations_;
     std::vector<LoadedLibrary> libraries_;

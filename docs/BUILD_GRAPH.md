@@ -74,7 +74,7 @@ Before extracting it:
    adapter and require native Windows regression/ABI validation before accepting that integration.
 
 No replacement parser, generic configuration framework, math-policy change or new dependency was
-introduced. The current GCC and Clang matrices pass twenty-four CTests; focused profile buffer,
+introduced. The current GCC and Clang matrices pass twenty-eight CTests; focused profile buffer,
 document, and public callback paths also pass AddressSanitizer and UndefinedBehaviorSanitizer.
 Detailed contracts and remaining gates are in
 [PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
@@ -110,16 +110,29 @@ Win32 path. The legacy-input probe links the otherwise separate targets and sync
 compatibility records through the production `EventSystem` to a real DACOM subscriber; the
 `frontierx_sdl3_event_pump` integration target now owns complete queue draining and persistent
 adapter state, while keeping SDL out of the event-system target. Its injected batch test covers
-foreign-window filtering plus ordered resize, Unicode and quit delivery. The application cadence
-and lifecycle remain unconnected. See [SDL_EVENT_PUMP.md](SDL_EVENT_PUMP.md) and
+foreign-window filtering plus ordered resize, Unicode and quit delivery. See
+[SDL_EVENT_PUMP.md](SDL_EVENT_PUMP.md) and
 [PORT_READINESS.md](PORT_READINESS.md) for evidence.
 
+The public `WindowManager.h` declaration now compiles as part of the existing
+`frontierx_dacom_interface_probe` under GCC and Clang. The non-Windows branch uses the shared
+pointer-width legacy-message types and explicit 32-bit compatibility scalars.
+`frontierx_native_window_manager` now supplies the separate SDL-backed DACOM owner, and
+`frontierx_native_window_manager_probe` verifies its lifecycle through the real native manager. See
+[WINDOW_MANAGER_PORTABILITY.md](WINDOW_MANAGER_PORTABILITY.md).
+
 `frontierx_native_shell` is the first executable consumer of that integration target. It composes
-the existing `frontierx_platform`, `frontierx_dacom_core`, production event owner and SDL libraries,
+the existing `frontierx_platform`, `frontierx_dacom_core`, production event owner and native window-manager library,
 uses the headless checker's shared configuration/data-root owner, validates the required directory
-shape, initializes the real event aggregate, owns window/text
-input lifetime and exits on close, quit or a bounded smoke deadline. This is an application
+shape, loads the shared transactional preference owner, creates the real `IUserDefaults`, event and
+window services, persists the fixed-width settings schema, pumps through `IWindowManager`, and exits
+on close, quit or a bounded smoke deadline. This is an application
 lifecycle edge, not a game target or renderer edge. See [NATIVE_SHELL.md](NATIVE_SHELL.md).
+
+`frontierx_native_user_defaults` includes the production application interface header but not the
+Win32 implementation. Its probe exercises the unchanged vtable, live-default mapping, immediate
+value/MRU transactions, schema restart and explicit unsupported UI behavior. The compiler-owned
+legacy struct remains runtime-only; game-startup selection and Windows ABI validation remain open.
 
 The adjacent `EventSys.cpp` source was then reviewed as the next owner. Its portable queue contract
 is implemented in `frontierx_platform` and tested independently: callback-time posts remain in the
@@ -127,7 +140,7 @@ current FIFO dispatch batch, while `Peek` exposes the last completed batch. The 
 now also builds as `frontierx_event_system`; its real aggregate factory, DACOM maps, connection
 point, direct send and queue execute through `frontierx_event_system_probe`. That probe uses the
 real `ICOManager` interface provided by `frontierx_dacom_core`, including priority/fallback,
-enumeration, references and shutdown. Dynamic loading, profile bootstrap, the DA heap, the full
+enumeration, references and shutdown. Cross-ELF heap ownership, the full
 Hotkey module and native Windows validation remain open. See
 [EVENT_SYSTEM_PORTABILITY.md](EVENT_SYSTEM_PORTABILITY.md) and
 [DACOM_MANAGER_PORTABILITY.md](DACOM_MANAGER_PORTABILITY.md).
@@ -147,28 +160,41 @@ the established `IDAConnectionPoint` `U32` handle ABI without returning a node a
 removes all five previously measured public-header pointer truncations.
 
 The Linux graph now contains a native `ICOManager` core, production event/profile service owners,
-and an explicit ELF component-module loader. The dynamic path is proven with a synthetic module;
-profile-driven discovery, a production module and heap policy remain open. The explicit DACOM
+and an explicit ELF component-module loader. The dynamic path and configuration-relative
+`[Libraries]` bootstrap are wired into the native shell and proven with both a controllable fixture
+and the production EventSystem ELF module. `frontierx_native_dacom_bootstrap` now supplies the real
+process-global `DACOM_Acquire` symbol, registers both production profile factories once and owns the
+manager used by the shell. Its registered process-local `IHeap` supplies the public bootstrap and
+tracked allocation contract; cross-ELF ownership and legacy COMHeap behavior remain open. The explicit DACOM
 project still owns the supported Windows DLL loading and profile integration. The separate 32-bit MSVC automation dispatch is referenced only by four
 legacy Viewer tool headers, not by component creation. The public `DACOM.H`, `TComponent.h`, and connection-point template layer now has a real GCC/Clang
 executable probe, including an instantiated `DAComponent` map and connection container. It executes
 point lookup, owner recovery, subscription enumeration, removal, and deterministic token reuse.
-The next graph step is a profile-driven loader/heap closure followed by another game- or
-renderer-owned component, native Windows rebuild and ABI/layout evidence. See
+The next graph step is a production ELF heap-ownership closure followed by another game- or renderer-owned component,
+native Windows rebuild and ABI/layout evidence. See
 [DACOM_RUNTIME_PORTABILITY.md](DACOM_RUNTIME_PORTABILITY.md).
 
 The graph also compiles production `ProfileParser.cpp` as `frontierx_profile_parser`. Its two real
 factories and aggregate execute through the native manager, including typed buffer and native
-transactional file initialization. This adds a second production DACOM service closure; it does
-not implement `NativeComponentManager::SetINIConfig`, automatic Libraries-section loading or a
-cross-module heap. See [PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
+transactional file initialization. The owning `ProfileDocument` is now a focused reusable target;
+the manager uses its raw-line traversal for bounded file/string `[Libraries]` configuration rather
+than aggregating the service parser. The global bootstrap registers both production factories;
+writable INI behavior and a cross-module heap remain open. See
+[PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
+
+`frontierx_native_heap` implements the unchanged `IHeap` surface for process-local native startup,
+and `frontierx_native_dacom_bootstrap` registers it before the profile factories. Its probe covers
+public initialization, allocation/reallocation, metadata, enumeration, foreign-pointer rejection
+and repeated initialization. Descriptor capacity is diagnostic, private COMHeap pass-through slots
+are unsupported, and no cross-ELF ownership claim is made. See [NATIVE_HEAP.md](NATIVE_HEAP.md).
 
 `frontierx_dynamic_library` supplies a move-only Linux ELF handle with local eager symbol
 resolution. `NativeComponentManager` now layers explicit C-named registration and liveness entry
 points over it, attributes registrations, reference-counts repeated exact-path adds and removes
 factories before close. Its synthetic module probe covers failure, lookup, live-object refusal,
-reload and shutdown. No production component or campaign uses this path; profile/search ordering,
-heap ownership and broader ABI contracts remain owner-specific. See
+reload, configuration rollback and shutdown. The production EventSystem uses this path with
+instance-counted unload gating and runs from the native shell; campaigns and further components do
+not. Heap ownership and broader ABI contracts remain owner-specific. See
 [DYNAMIC_LIBRARY_PORTABILITY.md](DYNAMIC_LIBRARY_PORTABILITY.md).
 
 ## Stack-local debug guard follow-up

@@ -289,7 +289,7 @@ template <class Base>
 struct DAComponentAggregate : public Base
 {
 	IDAComponent *outerComponent;
-	DAComponentInner<Base> innerComponent;
+	DAComponentInner<DAComponentAggregate<Base> > innerComponent;
 
 	
 	DAComponentAggregate (struct AGGDESC * desc) : innerComponent(this)

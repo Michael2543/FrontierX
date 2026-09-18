@@ -79,7 +79,7 @@ acceptance.
 
 ## Evidence and current inventory
 
-The full GCC and Clang presets configure, build, and pass all 24 CTests on Linux x86_64. The
+The full GCC and Clang presets configure, build, and pass all 28 CTests on Linux x86_64. The
 particle-context probe executes independently; the legacy-input probe now additionally verifies
 pointer identity and the widths of window, `wParam`, and `lParam`. Production source regressions
 check the particle producer/consumer contract, RichEdit callback shape, DirectShow `LONG_PTR`, and
@@ -87,7 +87,7 @@ hotkey pointer-width types.
 
 The 2026-09-17 lexical inventory now reports:
 
-- 1,250 scanned C/C++ production source and header files;
+- 1,260 scanned C/C++ production source and header files;
 - 1,295 general legacy-integer casts in 224 files;
 - zero high-confidence object/address-to-legacy-integer casts;
 - zero measured encoded opaque-handle casts; and

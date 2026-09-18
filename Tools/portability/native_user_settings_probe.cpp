@@ -1,8 +1,10 @@
 #include "FrontierX/NativeUserSettings.h"
 #include "FrontierX/NativeUserSettingsOwner.h"
+#include "FrontierX/StartupPreferences.h"
 
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -10,6 +12,16 @@
 
 namespace
 {
+struct TemporaryPreferencesFile
+{
+    std::filesystem::path path = "frontierx_startup_preferences_probe.dat";
+    ~TemporaryPreferencesFile()
+    {
+        std::error_code error;
+        std::filesystem::remove(path, error);
+    }
+};
+
 void Require(bool condition, const char * message)
 {
     if (!condition) throw std::runtime_error(message);
@@ -246,6 +258,43 @@ int main()
             !longNameOwner.Store(longNameStore, &error) &&
             longNameStore.Size() == longNameSize,
             "oversized player name was accepted or modified storage");
+
+        TemporaryPreferencesFile startupFile;
+        std::error_code removeError;
+        std::filesystem::remove(startupFile.path, removeError);
+        FrontierX::StartupPreferences startupPreferences;
+        Require(FrontierX::LoadStartupPreferences(
+                    {}, std::filesystem::current_path(), {}, startupPreferences, &error) &&
+            startupPreferences.selection.source ==
+                FrontierX::SettingsPathSource::XdgConfigHome &&
+            startupPreferences.storeResult == FrontierX::PreferenceLoadResult::NotFound &&
+            startupPreferences.userSettingsResult ==
+                FrontierX::NativeUserSettingsOwnerLoadResult::Defaults,
+            "missing default startup preferences did not select defaults");
+        Require(!FrontierX::LoadStartupPreferences(
+                    "missing-explicit-preferences.dat", {}, {}, startupPreferences, &error) &&
+            error == "explicit preference file is missing" &&
+            startupPreferences.selection.source ==
+                FrontierX::SettingsPathSource::XdgConfigHome,
+            "explicit missing startup preferences were accepted or modified output");
+        Require(!FrontierX::LoadStartupPreferences(
+                    {}, "relative-xdg", "", startupPreferences, &error) &&
+            error == "no absolute XDG_CONFIG_HOME or HOME is available",
+            "unavailable startup preference base was accepted");
+        Require(globalStore.Save(startupFile.path, &error), error.c_str());
+        Require(FrontierX::LoadStartupPreferences(
+                    startupFile.path, {}, {}, startupPreferences, &error) &&
+            startupPreferences.selection.source == FrontierX::SettingsPathSource::Explicit &&
+            startupPreferences.storeResult == FrontierX::PreferenceLoadResult::Loaded &&
+            startupPreferences.userSettings.Source() ==
+                FrontierX::NativeUserSettingsSource::Global &&
+            Equal(startupPreferences.userSettings.Settings(), input),
+            "explicit startup preferences did not load global native settings");
+        Require(std::string(FrontierX::PreferenceLoadResultName(
+                    FrontierX::PreferenceLoadResult::Loaded)) == "loaded" &&
+            std::string(FrontierX::UserSettingsLoadResultName(
+                    FrontierX::NativeUserSettingsOwnerLoadResult::Defaults)) == "absent",
+            "startup preference diagnostic names changed");
 
         std::cout << "fixed-width native user settings semantics passed\n";
         return EXIT_SUCCESS;

@@ -60,7 +60,7 @@ Windows input parity, renderer integration, package portability or retail compat
 | Purpose | Local ELF module ownership and exact symbol lookup for native DACOM and future campaign owners |
 | API | `dlopen`, `dlsym`, `dlclose`, and `dlerror` through CMake's `${CMAKE_DL_LIBS}` |
 | Acquisition | Host C library/runtime; no source or binary was fetched or vendored |
-| Linux build role | Private dependency of `frontierx_dynamic_library` and its synthetic shared-object probe |
+| Linux build role | Private dependency of `frontierx_dynamic_library`, its synthetic fixture and the production EventSystem ELF module |
 | Distribution status | System runtime dependency; final minimum-runtime and packaging policy remain to be recorded |
 
 The probe builds a repository-owned synthetic ELF fixture and verifies local eager loading, exact

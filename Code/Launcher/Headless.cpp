@@ -1,8 +1,6 @@
 #include <FrontierX/DataRoot.h>
-#include <FrontierX/NativeUserSettingsOwner.h>
-#include <FrontierX/PreferenceStore.h>
-#include <FrontierX/SettingsPath.h>
 #include <FrontierX/StartupDataRoot.h>
+#include <FrontierX/StartupPreferences.h>
 #include <FrontierX/UtfMetadata.h>
 #include <cstdlib>
 #include <iostream>
@@ -49,46 +47,27 @@ int run(int argc, char ** argv)
 
     const char * xdg_config_environment = std::getenv("XDG_CONFIG_HOME");
     const char * home_environment = std::getenv("HOME");
-    const auto settings = FrontierX::SelectSettingsPath(
+    FrontierX::StartupPreferences preferences;
+    std::string preferences_error;
+    if (!FrontierX::LoadStartupPreferences(
         preferencesPath,
         xdg_config_environment ? xdg_config_environment : "",
-        home_environment ? home_environment : "");
-    if (!settings)
+        home_environment ? home_environment : "",
+        preferences, &preferences_error))
     {
-        std::cerr << "Preferences error: no absolute XDG_CONFIG_HOME or HOME is available\n";
+        std::cerr << "Preferences error: " << preferences_error << '\n';
         return 6;
     }
-    FrontierX::PreferenceStore preferences;
-    std::string preferences_error;
-    const auto preferences_result = preferences.Load(settings.path, &preferences_error);
-    if ((!preferencesPath.empty() &&
-         preferences_result == FrontierX::PreferenceLoadResult::NotFound) ||
-        preferences_result == FrontierX::PreferenceLoadResult::Invalid ||
-        preferences_result == FrontierX::PreferenceLoadResult::IoError)
-    {
-        std::cerr << "Preferences error: "
-                  << (preferences_error.empty() ? "explicit preference file is missing" :
-                      preferences_error) << '\n';
-        return 6;
-    }
-    FrontierX::NativeUserSettingsOwner userSettings;
-    std::string user_settings_error;
-    const auto user_settings_result = userSettings.Load(preferences, &user_settings_error);
-    if (user_settings_result == FrontierX::NativeUserSettingsOwnerLoadResult::Invalid)
-    {
-        std::cerr << "Preferences error: " << user_settings_error << '\n';
-        return 6;
-    }
-    std::cout << "Preferences source: " << FrontierX::SettingsPathSourceName(settings.source)
+    std::cout << "Preferences source: "
+              << FrontierX::SettingsPathSourceName(preferences.selection.source)
               << "; status: "
-              << (preferences_result == FrontierX::PreferenceLoadResult::Loaded ? "loaded" :
-                  "missing") << "; entries: " << preferences.Size()
+              << FrontierX::PreferenceLoadResultName(preferences.storeResult)
+              << "; entries: " << preferences.store.Size()
               << "; user-defaults: "
-              << (user_settings_result ==
-                      FrontierX::NativeUserSettingsOwnerLoadResult::Loaded ?
-                  "loaded" : "absent")
+              << FrontierX::UserSettingsLoadResultName(preferences.userSettingsResult)
               << "; settings-source: "
-              << FrontierX::NativeUserSettingsSourceName(userSettings.Source()) << '\n';
+              << FrontierX::NativeUserSettingsSourceName(
+                     preferences.userSettings.Source()) << '\n';
 
     const char * environment = std::getenv("FRONTIERX_DATA_ROOT");
     const std::filesystem::path envRoot = environment ? environment : "";

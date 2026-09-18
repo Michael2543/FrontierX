@@ -9,7 +9,8 @@ the production `EventSystem` class, its aggregate factory, inbound interface map
 
 This slice establishes a real engine-service closure above the previously isolated
 `FrontierX::EventQueue` characterization core. It does not link the complete DAHOTKEY module, the
-game, SDL input, the DACOM loader or a DA heap provider.
+game or a cross-ELF heap owner. Static, SDL-pump and configured ELF owners now exercise it; the
+process-local native `IHeap` does not by itself prove module-boundary ownership.
 
 ## Source-reviewed contract
 
@@ -68,6 +69,15 @@ the real registration and aggregate factory path. It verifies:
 - completed-batch `Peek` behavior and retirement on an empty update; and
 - immediate subscriber delivery through `Send`.
 
+The same production source also builds as `frontierx_event_system_module`, the first real ELF
+consumer of the native module contract. A two-function adapter registers the existing factory and
+reports whether the module-local EventSystem instance count is zero. Constructor/destructor
+accounting is enabled only for that ELF target, so the supported Windows and native static owners
+retain their existing path. The manager probe configures this module through `[Libraries]`, runs
+its queue, rejects unload while its aggregate lives, and unloads after final release. The native
+shell process suite loads the same production ELF; configured equal-priority factories precede
+the static fallback.
+
 The SDL legacy-input probe additionally creates this owner through `NativeComponentManager` and
 uses `DispatchLegacyInputToEventSystem` to deliver resize plus paired immediate-Unicode/character
 records to a real `IEventCallback`. This proves synchronous payload lifetime across the adapter and
@@ -103,8 +113,8 @@ This evidence does not establish a native game event loop. The following work re
   Windows-specific `IWindowManager` lifecycle without posting temporary pointers;
 - define the native application owner and update cadence without changing simulation ordering;
 - compile the remaining DAHOTKEY hotkey recorder and persistence paths;
-- adapt a production component to the native module contract and add profile-bootstrap and heap
-  policies; the separate Viewer-only automation dispatch still needs isolation;
+- adapt the next dependency-ordered production component and establish a general cross-module heap
+  policy; the separate Viewer-only automation dispatch still needs isolation;
 - compare callback mutation, aggregation, heap ownership and shutdown behavior with fresh native
   Windows Debug and Final builds; and
 - run the required Windows ABI and cross-module checks before accepting parity.

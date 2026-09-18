@@ -35,6 +35,15 @@ struct MESSAGE_NODE
 
 static char interface_name[] = "IEventSystem";
 
+#ifdef FRONTIERX_EVENT_SYSTEM_MODULE
+static U32 module_instance_count = 0;
+
+extern "C" BOOL32 FrontierXEventSystemModuleCanUnload()
+{
+	return module_instance_count == 0 ? TRUE : FALSE;
+}
+#endif
+
 
 //--------------------------------------------------------------------------//
 //--------------------------EventSystem Class definition--------------------//
@@ -87,6 +96,9 @@ struct DACOM_NO_VTABLE EventSystem : public ISystemComponent,
 		bInitialized(0),
 		eventCallback(0)
 	{
+#ifdef FRONTIERX_EVENT_SYSTEM_MODULE
+		module_instance_count++;
+#endif
 	}
 
 	~EventSystem (void);
@@ -156,6 +168,9 @@ EventSystem::~EventSystem (void)
 		DA_HEAP_FREE(HEAP, pMessageList);
 		pMessageList = pTmp;
 	}
+#ifdef FRONTIERX_EVENT_SYSTEM_MODULE
+	module_instance_count--;
+#endif
 }
 //--------------------------------------------------------------------------//
 //

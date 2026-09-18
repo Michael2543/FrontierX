@@ -1,5 +1,7 @@
 #include "FrontierX/DynamicLibrary.h"
 #include "FrontierX/NativeComponentManager.h"
+#include "EventSys.h"
+#include "SYSTEM.H"
 
 #include <chrono>
 #include <cstdlib>
@@ -47,7 +49,7 @@ int main(int argc, char ** argv)
 {
     try
     {
-        Require(argc == 2, "expected the fixture library path");
+        Require(argc == 3, "expected the fixture and production event-module paths");
         std::string error;
         FrontierX::DynamicLibrary library;
         Require(!library.Open(nullptr, error) && !error.empty() && !library.IsOpen(),
@@ -136,6 +138,20 @@ int main(int argc, char ** argv)
             "repeated library configuration registered the module twice");
         Require(inlineManager.ShutDown() == GR_OK,
             "inline-configured module did not shut down");
+        Require(inlineManager.SetINIConfig(inlineConfiguration.c_str(), DACOM_INI_STRING) ==
+            GR_OK && inlineManager.RegisteredCount() == 1,
+            "manager could not configure again after a complete shutdown");
+        Require(inlineManager.ShutDown() == GR_OK,
+            "reconfigured module did not shut down");
+
+        FrontierX::NativeComponentManager removalManager;
+        Require(removalManager.AddLibrary(argv[1]) == GR_OK,
+            "removal-config manager did not load the fixture");
+        const std::string removalConfiguration =
+            std::string("[Libraries]\n- \"") + argv[1] + "\"\n";
+        Require(removalManager.SetINIConfig(removalConfiguration.c_str(), DACOM_INI_STRING) ==
+            GR_OK && removalManager.RegisteredCount() == 0,
+            "configured removal did not unload the named module");
 
         ScratchDirectory scratch;
         const std::filesystem::path copiedLibrary = scratch.path / "fixture module.so";
@@ -163,11 +179,54 @@ int main(int argc, char ** argv)
         Require(retryManager.SetINIConfig("[Libraries]\n\"unterminated\n",
             DACOM_INI_STRING) == GR_INVALID_PARMS,
             "unterminated configured filename was accepted");
+        const std::string failingConfiguration = inlineConfiguration +
+            "/frontierx/no/such/configured-module.so\n";
+        Require(retryManager.SetINIConfig(failingConfiguration.c_str(), DACOM_INI_STRING) ==
+            GR_GENERIC && retryManager.RegisteredCount() == 0,
+            "failed multi-module configuration did not roll back earlier loads");
         Require(retryManager.SetINIConfig(inlineConfiguration.c_str(), DACOM_INI_STRING) ==
             GR_OK && retryManager.RegisteredCount() == 1,
             "failed configuration prevented a valid retry");
         Require(retryManager.ShutDown() == GR_OK,
             "retried module configuration did not shut down");
+
+        const std::string productionConfiguration =
+            std::string("[Libraries]\n\"") + argv[2] + "\"\n";
+        FrontierX::NativeComponentManager productionManager;
+        Require(productionManager.SetINIConfig(productionConfiguration.c_str(),
+            DACOM_INI_STRING) == GR_OK && productionManager.RegisteredCount() == 1,
+            "production event-system ELF module did not configure");
+        AGGDESC eventDescriptor("IEventSystem", "EventSystem");
+        void * rawEventAggregate = nullptr;
+        Require(productionManager.CreateInstance(&eventDescriptor, &rawEventAggregate) == GR_OK &&
+            rawEventAggregate, "production ELF factory did not create the event aggregate");
+        auto * eventAggregate = static_cast<IAggregateComponent *>(rawEventAggregate);
+        IEventSystem * dynamicEventSystem = nullptr;
+        ISystemComponent * dynamicSystem = nullptr;
+        Require(eventAggregate->QueryInterface(IID_IEventSystem,
+            reinterpret_cast<void **>(&dynamicEventSystem)) == GR_OK && dynamicEventSystem &&
+            eventAggregate->QueryInterface(IID_ISystemComponent,
+            reinterpret_cast<void **>(&dynamicSystem)) == GR_OK && dynamicSystem,
+            "production ELF event interfaces were unavailable");
+        Require(eventAggregate->Initialize() == GR_OK &&
+            dynamicEventSystem->Initialize(0) == GR_OK,
+            "production ELF event aggregate did not initialize");
+        Require(productionManager.RemoveLibrary(argv[2]) == GR_GENERIC,
+            "production ELF module unloaded while its event instance was alive");
+        Require(dynamicEventSystem->Post(91, reinterpret_cast<void *>(0x91)) == GR_OK,
+            "production ELF event instance did not accept a message");
+        dynamicSystem->Update();
+        U32 dynamicMessage = 0;
+        void * dynamicParameter = nullptr;
+        Require(dynamicEventSystem->Peek(0, &dynamicMessage, &dynamicParameter) == GR_OK &&
+            dynamicMessage == 91 && dynamicParameter == reinterpret_cast<void *>(0x91),
+            "production ELF event instance did not execute its queue");
+        dynamicSystem->Release();
+        dynamicEventSystem->Release();
+        eventAggregate->Release();
+        Require(productionManager.RemoveLibrary(argv[2]) == GR_OK &&
+            productionManager.RegisteredCount() == 0,
+            "production event-system ELF module did not unload after final release");
 
         IDAComponent * escaped = nullptr;
         {
@@ -180,6 +239,33 @@ int main(int argc, char ** argv)
         }
         Require(escaped->Release() == 0,
             "manager destruction unmapped a module with a live object");
+
+        FrontierX::DynamicLibrary failureControl;
+        Require(failureControl.Open(argv[1], error),
+            "unable to open fixture failure-control handle");
+        void * failSymbol = failureControl.Symbol(
+            "frontierx_fixture_fail_next_registration", error);
+        void * releaseSymbol = failureControl.Symbol(
+            "frontierx_fixture_release_failed_registration_object", error);
+        using FixtureControl = void (*)();
+        static_assert(sizeof(FixtureControl) == sizeof(failSymbol),
+            "fixture control pointer has an incompatible representation");
+        FixtureControl failRegistration = nullptr;
+        FixtureControl releaseFailedObject = nullptr;
+        std::memcpy(&failRegistration, &failSymbol, sizeof(failRegistration));
+        std::memcpy(&releaseFailedObject, &releaseSymbol, sizeof(releaseFailedObject));
+        Require(failRegistration && releaseFailedObject,
+            "fixture failure-control symbols did not resolve");
+        failRegistration();
+        {
+            FrontierX::NativeComponentManager failedManager;
+            Require(failedManager.AddLibrary(argv[1]) == GR_GENERIC &&
+                failedManager.RegisteredCount() == 0,
+                "failed registration with a live object was accepted");
+        }
+        releaseFailedObject();
+        Require(failureControl.Close(error),
+            "fixture failure-control handle did not close");
 
         std::cout << "native dynamic-library ownership, registration and safe unload passed\n";
         return EXIT_SUCCESS;

@@ -1,10 +1,16 @@
 #include "EventSys.h"
+#include "DACOM.H"
 #include "FrontierX/DataRoot.h"
-#include "FrontierX/NativeComponentManager.h"
+#include "FrontierX/LegacyInput.h"
+#include "FrontierX/NativeUserDefaults.h"
+#include "FrontierX/NativeWindowManager.h"
 #include "FrontierX/PlatformTime.h"
-#include "FrontierX/SdlEventPump.h"
 #include "FrontierX/SdlWindow.h"
 #include "FrontierX/StartupDataRoot.h"
+#include "FrontierX/StartupPreferences.h"
+#include "SYSTEM.H"
+#include "UserDefaults.h"
+#include "WindowManager.h"
 
 #include <charconv>
 #include <cstdint>
@@ -16,6 +22,28 @@
 
 namespace
 {
+IEventSystem * shellEventSystem = nullptr;
+bool shellCloseRequested = false;
+
+void DACOM_CDECL ShellExit(int)
+{
+    shellCloseRequested = true;
+}
+
+LRESULT COMAPI ShellWindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+{
+    if (message == FrontierX::LegacyMessage::Close) shellCloseRequested = true;
+    if (!shellEventSystem) return 0;
+
+    if (message == FrontierX::LegacyMessage::Character)
+        shellEventSystem->Send(FrontierX::LegacyMessage::UnicodeCharacter,
+            reinterpret_cast<void *>(wparam & 0xffffU));
+    FrontierX::LegacyWindowMessage record{
+        static_cast<FrontierX::LegacyWindowToken>(window), message, wparam, lparam};
+    shellEventSystem->Send(message, &record);
+    return 0;
+}
+
 template <class Interface>
 class InterfaceOwner
 {
@@ -36,6 +64,7 @@ struct Options
 {
     std::filesystem::path configPath;
     std::filesystem::path dataRoot;
+    std::filesystem::path preferencesPath;
     std::uint32_t smokeMilliseconds = 0;
     bool hidden = false;
 };
@@ -59,7 +88,8 @@ Options ParseOptions(int argc, char ** argv)
         const std::string option(argv[index]);
         if (option == "--help" && argc == 2)
         {
-            std::cout << "Usage: frontierx_native_shell [--config FILE] [--data-root DIRECTORY] "
+            std::cout << "Usage: frontierx_native_shell [--config FILE] [--preferences FILE] "
+                         "[--data-root DIRECTORY] "
                          "[--smoke-ms MILLISECONDS [--hidden]]\n"
                          "Opens the native startup shell; it does not start or render the game.\n";
             std::exit(0);
@@ -70,9 +100,11 @@ Options ParseOptions(int argc, char ** argv)
             options.hidden = true;
             continue;
         }
-        if ((option != "--config" && option != "--data-root" && option != "--smoke-ms") ||
+        if ((option != "--config" && option != "--preferences" &&
+             option != "--data-root" && option != "--smoke-ms") ||
             index + 1 == argc)
-            throw std::invalid_argument("expected --config, --data-root, --smoke-ms or --hidden");
+            throw std::invalid_argument(
+                "expected --config, --preferences, --data-root, --smoke-ms or --hidden");
         const char * value = argv[++index];
         if (!value[0] || std::string(value).rfind("--", 0) == 0)
             throw std::invalid_argument("missing option value");
@@ -81,6 +113,12 @@ Options ParseOptions(int argc, char ** argv)
             if (!options.configPath.empty())
                 throw std::invalid_argument("duplicate option: --config");
             options.configPath = value;
+        }
+        else if (option == "--preferences")
+        {
+            if (!options.preferencesPath.empty())
+                throw std::invalid_argument("duplicate option: --preferences");
+            options.preferencesPath = value;
         }
         else if (option == "--data-root")
         {
@@ -114,6 +152,30 @@ int Run(int argc, char ** argv)
             return 2;
         }
     }
+
+    const char * xdgConfigEnvironment = std::getenv("XDG_CONFIG_HOME");
+    const char * homeEnvironment = std::getenv("HOME");
+    FrontierX::StartupPreferences preferences;
+    std::string preferencesError;
+    if (!FrontierX::LoadStartupPreferences(
+        options.preferencesPath,
+        xdgConfigEnvironment ? xdgConfigEnvironment : "",
+        homeEnvironment ? homeEnvironment : "",
+        preferences, &preferencesError))
+    {
+        std::cerr << "Preferences error: " << preferencesError << '\n';
+        return 5;
+    }
+    std::cout << "Preferences source: "
+              << FrontierX::SettingsPathSourceName(preferences.selection.source)
+              << "; status: "
+              << FrontierX::PreferenceLoadResultName(preferences.storeResult)
+              << "; entries: " << preferences.store.Size()
+              << "; user-defaults: "
+              << FrontierX::UserSettingsLoadResultName(preferences.userSettingsResult)
+              << "; settings-source: "
+              << FrontierX::NativeUserSettingsSourceName(
+                     preferences.userSettings.Source()) << '\n';
     const char * environment = std::getenv("FRONTIERX_DATA_ROOT");
     const std::filesystem::path environmentRoot = environment ? environment : "";
     const auto startupRoot = FrontierX::ResolveStartupDataRoot(
@@ -138,11 +200,31 @@ int Run(int argc, char ** argv)
               << FrontierX::StartupDataRootSourceName(startupRoot.source)
               << "; required directories passed\n";
 
-    FrontierX::NativeComponentManager manager;
-    RegisterTheEventSystem(&manager);
+    ICOManager * manager = DACOM_Acquire();
+    if (!manager)
+    {
+        std::cerr << "Native component-manager acquisition failed\n";
+        return 3;
+    }
+    RegisterTheEventSystem(manager);
+    FrontierX::RegisterNativeUserDefaults(
+        manager, preferences.selection.path, preferences);
+    FrontierX::RegisterNativeWindowManager(manager);
+    if (!options.configPath.empty())
+    {
+        const std::string configName = options.configPath.string();
+        const GENRESULT configResult = manager->SetINIConfig(configName.c_str());
+        if (configResult != GR_OK && configResult != GR_DATA_NOT_FOUND)
+        {
+            std::cerr << "Native component configuration failed\n";
+            return 3;
+        }
+        if (configResult == GR_OK)
+            std::cout << "Native component library configuration applied\n";
+    }
     AGGDESC descriptor("IEventSystem", "EventSystem");
     InterfaceOwner<IAggregateComponent> aggregate;
-    if (manager.CreateInstance(&descriptor,
+    if (manager->CreateInstance(&descriptor,
         reinterpret_cast<void **>(aggregate.Receive())) != GR_OK || !aggregate.Get())
     {
         std::cerr << "Native event-system creation failed\n";
@@ -157,38 +239,73 @@ int Run(int argc, char ** argv)
         return 3;
     }
 
-    FrontierX::SdlWindow window;
-    std::string error;
-    if (!window.Open("FrontierX native shell (game not started)", 800, 600,
-        options.hidden, error) || !window.StartTextInput(error))
+    DACOMDESC defaultsDescriptor("IUserDefaults");
+    InterfaceOwner<IUserDefaults> userDefaults;
+    if (manager->CreateInstance(&defaultsDescriptor,
+        reinterpret_cast<void **>(userDefaults.Receive())) != GR_OK || !userDefaults.Get())
     {
-        std::cerr << "Native window startup failed: " << error << '\n';
+        std::cerr << "Native user-defaults creation failed\n";
+        return 3;
+    }
+
+    AGGDESC windowDescriptor("IWindowManager", "WindowManager");
+    InterfaceOwner<IAggregateComponent> windowAggregate;
+    if (manager->CreateInstance(&windowDescriptor,
+        reinterpret_cast<void **>(windowAggregate.Receive())) != GR_OK || !windowAggregate.Get())
+    {
+        std::cerr << "Native window-manager creation failed\n";
         return 4;
     }
-    const std::string driver = window.VideoDriverName();
+    InterfaceOwner<IWindowManager> windowManager;
+    if (windowAggregate.Get()->QueryInterface(IID_IWindowManager,
+        reinterpret_cast<void **>(windowManager.Receive())) != GR_OK || !windowManager.Get() ||
+        windowAggregate.Get()->Initialize() != GR_OK ||
+        windowManager.Get()->Startup(nullptr, "FrontierX native shell (game not started)",
+            ShellExit, WMF_PREVENT_MULTIPLE, nullptr) != 1)
+    {
+        std::cerr << "Native window-manager startup failed\n";
+        return 4;
+    }
+    shellEventSystem = eventSystem.Get();
+    shellCloseRequested = false;
+    windowManager.Get()->SetCallback(ShellWindowCallback);
+    const U32 windowFlags = WMF_CENTER | (options.hidden ? 0U : WMF_SHOW);
+    if (!windowManager.Get()->SetWindowPos(800, 600, windowFlags))
+    {
+        windowManager.Get()->SetCallback(nullptr);
+        shellEventSystem = nullptr;
+        std::cerr << "Native window-manager configuration failed\n";
+        return 4;
+    }
+    const std::string driver = FrontierX::CurrentSdlVideoDriverName();
     if (driver.empty())
     {
+        windowManager.Get()->SetCallback(nullptr);
+        shellEventSystem = nullptr;
         std::cerr << "Native window startup failed: SDL reported no video driver\n";
         return 4;
     }
     std::cout << "Native shell opened; video driver: " << driver << '\n';
 
-    FrontierX::SdlEventPump pump(window, *eventSystem.Get());
     const std::uint32_t started = FrontierX::Platform::MonotonicMilliseconds();
-    bool closeRequested = false;
-    while (!closeRequested)
+    while (!shellCloseRequested)
     {
-        const auto batch = pump.Pump();
-        closeRequested = batch.close_requested || batch.quit_requested;
-        if (!closeRequested && options.smokeMilliseconds)
+        windowManager.Get()->ServeMessageQueue(WMF_BACKGROUND);
+        if (!shellCloseRequested && options.smokeMilliseconds)
         {
             const std::uint32_t elapsed =
                 FrontierX::Platform::MonotonicMilliseconds() - started;
-            closeRequested = elapsed >= options.smokeMilliseconds;
+            shellCloseRequested = elapsed >= options.smokeMilliseconds;
         }
-        if (!closeRequested) FrontierX::Platform::SleepForMilliseconds(1);
+        if (!shellCloseRequested) FrontierX::Platform::SleepForMilliseconds(1);
     }
-    window.Close();
+    windowManager.Get()->SetCallback(nullptr);
+    shellEventSystem = nullptr;
+    if (userDefaults.Get()->StoreDefaults() == FALSE)
+    {
+        std::cerr << "Native preference save failed\n";
+        return 5;
+    }
     std::cout << "Native shell closed cleanly; game startup and rendering were not attempted\n";
     return 0;
 }

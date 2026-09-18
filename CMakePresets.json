@@ -53,8 +53,11 @@
         "frontierx_dynamic_library_probe",
         "frontierx_event_system_probe",
         "frontierx_profile_parser_probe",
+        "frontierx_native_dacom_bootstrap_probe",
+        "frontierx_native_heap_probe",
         "frontierx_preference_store_probe",
         "frontierx_native_user_settings_probe",
+        "frontierx_native_user_defaults_probe",
         "frontierx_encoded_handle_probe",
         "frontierx_dacom_runtime_probe",
         "frontierx_dacom_interface_probe",
@@ -68,6 +71,7 @@
         "frontierx_sdl3_platform",
         "frontierx_sdl3_window_probe",
         "frontierx_legacy_input_probe",
+        "frontierx_native_window_manager_probe",
         "frontierx_native_shell"
       ]
     },
@@ -83,8 +87,11 @@
         "frontierx_dynamic_library_probe",
         "frontierx_event_system_probe",
         "frontierx_profile_parser_probe",
+        "frontierx_native_dacom_bootstrap_probe",
+        "frontierx_native_heap_probe",
         "frontierx_preference_store_probe",
         "frontierx_native_user_settings_probe",
+        "frontierx_native_user_defaults_probe",
         "frontierx_encoded_handle_probe",
         "frontierx_dacom_runtime_probe",
         "frontierx_dacom_interface_probe",
@@ -98,6 +105,7 @@
         "frontierx_sdl3_platform",
         "frontierx_sdl3_window_probe",
         "frontierx_legacy_input_probe",
+        "frontierx_native_window_manager_probe",
         "frontierx_native_shell"
       ]
     }

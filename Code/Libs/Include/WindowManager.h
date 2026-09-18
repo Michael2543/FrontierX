@@ -202,11 +202,23 @@
 //---------------------------------------------------------------------------
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
-#ifndef _WINDOWS_
-#error Windows.h required for this to compile!
+#if !defined(_WIN32)
+#include "FrontierX/LegacyMessage.h"
+
+#include <cstdint>
+
+using HINSTANCE = void *;
+using HWND = FrontierX::LegacyWindowToken;
+using LONG = std::int32_t;
+using HRESULT = std::int32_t;
+using LRESULT = std::intptr_t;
+using HANDLE = void *;
+using UINT = std::uint32_t;
+using WPARAM = FrontierX::LegacyWParam;
+using LPARAM = FrontierX::LegacyLParam;
 #endif
 
 //-----------------------------
@@ -248,15 +260,8 @@ WM_WINAREA;
 // Function pointer types
 //
 
-typedef void (__cdecl * WMEXITCB) (int);
-typedef long LONG;
-typedef LONG HRESULT; 
-typedef LONG LRESULT;
-typedef void *HANDLE;
-typedef unsigned int UINT;
-typedef UINT WPARAM;
-typedef LONG LPARAM;
-typedef LRESULT (__stdcall * WNDPROC)(HWND, UINT, WPARAM, LPARAM);
+typedef void (DACOM_CDECL * WMEXITCB) (int);
+typedef LRESULT (COMAPI * WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 struct tagWNDCLASSEXA;
 
 //

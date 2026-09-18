@@ -228,9 +228,13 @@ Initial implemented slice, with compile and automated-check evidence from 2026-0
   paths pass GCC, Clang and focused sanitizer checks. A separate SDL pump drains synthetic batches
   synchronously into this owner; application/game-loop lifecycle and cadence remain open.
 - `NativeComponentManager` implements the existing `ICOManager` registration, priority, creation,
-  enumeration, reference and shutdown rules, hosts that production event owner, and loads synthetic
-  ELF factories through explicit registration/liveness entry points. A production ELF component,
-  profile bootstrap and the legacy heap explicitly remain unimplemented.
+  enumeration, reference and shutdown rules, hosts that production event owner, and loads native
+  ELF factories through explicit registration/liveness entry points. Its bounded read-only
+  `SetINIConfig` applies exact config-relative `[Libraries]` entries transactionally. The production
+  EventSystem is the first configured ELF component with instance-counted unload gating. The
+  process-global `DACOM_Acquire` bootstrap registers a process-local native `IHeap` before both
+  production profile factories. Cross-ELF allocation ownership and legacy COMHeap behavior remain
+  unimplemented.
 - A portable `PreferenceStore` provides bounded string and binary values beneath the isolated
   native settings adapters. Its fixed-width `FXSET001` file rejects invalid keys, types, sizes,
   duplicate/truncated/trailing data and preserves the previous in-memory state after a failed load.
@@ -244,9 +248,14 @@ Initial implemented slice, with compile and automated-check evidence from 2026-0
   explicitly assigned flag bits. The conversion rejects partial, wrong-type, non-finite,
   unknown-flag and unsupported-version input transactionally; headless process tests cover absent,
   complete and incomplete schemas.
-- `NativeUserSettingsOwner` now drives that schema in headless startup with player/global/default
-  selection, hex-encoded player namespaces, missing-player reset, hardware-cursor preservation,
-  invalid-player cleanup/global fallback and transactional global/player stores.
+- `StartupPreferences` now drives `NativeUserSettingsOwner` in both headless startup and the native
+  shell with shared path selection, player/global/default selection, hex-encoded player namespaces,
+  missing-player reset, hardware-cursor preservation, invalid-player cleanup/global fallback and
+  transactional global/player stores.
+- `frontierx_native_user_defaults` implements the unchanged real interface as a DACOM service,
+  maps all live fields/flags without serializing the legacy struct, persists named values and MRU
+  mutations transactionally, and performs the shell's global/player shutdown save. Its UI,
+  installation-metadata and EULA methods fail explicitly until portable owners exist.
 
 Remaining work:
 
@@ -257,10 +266,10 @@ Remaining work:
 - Run the data-root inspector against a lawfully obtained retail installation and record only the
   resulting directory-status summary, never retail files or private installation paths.
 - Keep Win32 behavior behind a Windows implementation while adding Linux implementations.
-- Adapt `NativeUserSettingsOwner` and the named-value/MRU adapter to the live `IUserDefaults`
-  component; connect the immediate/shutdown saves; and finish directory permissions/durability
-  without changing established Windows registry defaults or persisting the raw native
-  `USER_DEFAULTS` layout.
+- Select the tested live native `IUserDefaults` component from a real game-startup owner; port or
+  isolate its file-dialog, document/viewer, installation-metadata and EULA collaborators; and finish
+  fsync/concurrent-write durability policy without changing established Windows registry defaults
+  or persisting the raw native `USER_DEFAULTS` layout.
 - Resolve case-sensitive includes and runtime asset paths using exact on-disk spelling.
 - Load and validate a minimal set of retail metadata from a user-supplied installation path without
   copying media into the repository or build tree.
@@ -298,9 +307,10 @@ Implemented integration slice, with compile and automated-check evidence from 20
   and global quit, then proves filtering and ordered resize/Unicode/character/close delivery with
   both GCC and Clang under the SDL dummy driver.
 - `frontierx_native_shell` composes the headless checker's shared native configuration/data-root
-  policy, required-directory validation, static component registration,
-  production event-system initialization, SDL window/text-input lifetime, bounded pumping and
-  dependency-ordered teardown in one native process. Synthetic command-line, environment and
+  and preference owners, required-directory validation, static component registration,
+  real `IUserDefaults`, production event-system initialization, SDL window/text-input lifetime,
+  bounded pumping, settings persistence and dependency-ordered teardown in one native process.
+  Synthetic command-line, environment and
   failure scenarios pass under GCC, Clang and focused sanitizers.
 - The exact lifetime contract and remaining owner gates are in
   [SDL_EVENT_PUMP.md](SDL_EVENT_PUMP.md); the process lifecycle and explicit non-game scope are in
@@ -411,9 +421,9 @@ Exit criteria:
 | Win32/MSVC assumptions in shared headers | 150 direct-header matches and 1,379 extension matches measured lexically | Compile selected owner closures with GCC and Clang | 1-2 |
 | 32-bit runtime assumptions versus LP64 | Both measured object/address truncations and encoded DOSFile-handle casts are eliminated in source | Validate all affected modules and interfaces on native Windows, then continue the wider implicit-conversion audit | 1-3 |
 | Legacy solution dependency graph is unmapped | Source-review requirement | Map one selected library and link a real consumer | 2 |
-| Production startup/configuration owner remains Windows-bound | Headless Linux initialization, shared profile callbacks, native preferences and data-root checks pass | Compile and connect the first real startup owner without changing Windows registry behavior | 3 |
+| Production game startup owner remains Windows-bound | Headless and shell initialization, shared profile callbacks, native preferences and data-root checks pass | Compile and connect the first real game-startup owner without changing Windows registry behavior | 3 |
 | Linux path case and asset lookup are unmeasured | Known platform difference | Scan, then exercise external data discovery on a case-sensitive filesystem | 3 |
-| SDL3 integration is locally prototyped but not approved for distribution | System package, neutral backend, production-event batch pump and Wayland smoke | Review provenance/notice packaging and connect application cadence plus `IWindowManager` lifecycle ownership | 4 |
+| SDL3 integration is locally prototyped but not approved for distribution | System package, neutral backend, production-event batch pump, native DACOM `IWindowManager`, shell integration and Wayland smoke | Connect real application cadence, compare Windows behavior, and review provenance/notice packaging | 4 |
 | Native D3D9-to-Vulkan path is undecided | Architecture direction | Run and document one maintained-candidate prototype | 5 |
 | D3DX9 replacement remains incomplete | 155 lexical matches in eight files after production ray-geometry replacement | Characterize and replace shared renderer matrices/tangents, effects and cubemap decoding | 5 |
 | Campaign DLL model may not map directly to ELF | Native DACOM ELF registration/unload passes a synthetic module test; campaign ABI remains Windows-only and separate | Define and test one campaign C export/ABI strategy | 6 |
@@ -423,9 +433,9 @@ Exit criteria:
 
 ## Immediate Work Queue
 
-1. Adapt the tested value/MRU and player/global settings owners to a live native `IUserDefaults`
-   component, including immediate and shutdown save points, without changing supported Windows
-   defaults; the shared DACOM callback traversal still requires native Windows comparison.
+1. Select the tested live native `IUserDefaults` component from the first real game-startup owner;
+   add its portable UI/install/EULA collaborators and durability policy without changing supported
+   Windows defaults; the shared DACOM callback traversal still requires native Windows comparison.
 2. Validate the migrated DACOM runtime-offset, connection-token, native-manager and production
    `EventSystem` contracts on native Windows; adapt one real ELF component to the tested explicit
    registration/liveness contract after defining profile ordering and heap ownership.
@@ -476,7 +486,7 @@ text length plus eight. Section markers mutate that storage; returned pointers b
 The core must not receive arbitrary unpadded buffers or unvalidated external pointers.
 
 Current compile and automated evidence: both documented GCC/Clang preset build/test sequences
-pass twenty-four CTests. Synthetic cases cover empty text, absent/final/malformed/duplicate sections,
+pass twenty-eight CTests. Synthetic cases cover empty text, absent/final/malformed/duplicate sections,
 CRLF and LF, spaces versus tabs, comments preserved for callers, blank lines, end-of-section
 boundaries and a final line without newline. Blank CRLF handling is deliberately preserved,
 including the boundary case immediately before another section.
@@ -489,8 +499,9 @@ Key lookup, output truncation, section/key callback traversal, and the source-ob
 production adapter retains its MSVC comparison path and uses explicit ASCII folding natively. The
 real factories, aggregate, `IProfileParser` and `IProfileParser2` now execute through
 `NativeComponentManager`, including native file loading and transactional failure retention.
-`Initialize2` no longer passes a buffer size through an invalid enum value. A production ELF
-component, INI/library bootstrap, native Windows Debug/Final regression and ABI checks remain pending.
+`Initialize2` no longer passes a buffer size through an invalid enum value. The global native
+bootstrap registers both factories once. The next production ELF component, writable INI behavior, native Windows Debug/Final
+regression and ABI checks remain pending.
 Milestones 1-3 are not marked accepted by these Linux-only results.
 
 ### Profile lookup and output follow-up (2026-09-13)
@@ -507,7 +518,7 @@ CRLF versus bare CR, truncation, null-output length queries, capacities zero/one
 canary. Zero capacity now returns zero without writing, replacing the legacy unsigned underflow.
 Valid nonzero-capacity empty values retain the original single-space sentinel.
 
-Both GCC and Clang pass all twenty-four CTests after extraction. Focused AddressSanitizer and
+Both GCC and Clang pass all twenty-eight CTests after extraction. Focused AddressSanitizer and
 UndefinedBehaviorSanitizer runs pass with leak detection disabled. The owning portable reader,
 explicit Linux character policy, and enumeration are now implemented; native Windows rebuild,
 behavioral comparison and ABI validation remain required before accepting the DACOM integration.
@@ -522,7 +533,7 @@ matching is an explicit native-startup policy, not a claim of parity for localiz
 Empty documents are accepted; this reader intentionally does not turn permissive legacy parsing
 into an INI schema validator.
 
-Both GCC and Clang configured, compiled and pass twenty-four CTests. Synthetic tests cover real temporary
+Both GCC and Clang configured, compiled and pass twenty-eight CTests. Synthetic tests cover real temporary
 file loading, missing paths, directory rejection, transactional failure, copied-document ownership,
 case folding, duplicate section precedence, missing/empty values and invalid/oversized text.
 Tests retain the legacy CR at a section boundary where the marker replaces the preceding LF.
@@ -557,7 +568,7 @@ comparison, ABI checks and retail configuration compatibility remain open. See
 
 ## Native headless startup check (2026-09-13)
 
-The GCC and Clang presets build `frontierx_headless` and pass twenty-four CTests; the headless CTest
+The GCC and Clang presets build `frontierx_headless` and pass twenty-eight CTests; the headless CTest
 contains ten process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
 The following help command was executed:
 
@@ -608,7 +619,7 @@ built `frontierx_headless` successfully in a separate `/tmp` build directory, co
 dependency is not imposed on core/headless consumers.
 
 CTest injects representative events while using `SDL_VIDEODRIVER=dummy`; GCC and Clang both
-configured, built and pass the complete twenty-four-test matrix. Separately, the GCC
+configured, built and pass the complete twenty-eight-test matrix. Separately, the GCC
 probe's `--visible-smoke` mode opened a visible 320x200 window on the real desktop, reported SDL's
 `wayland` driver, pumped and translated events for 250 ms and shut down cleanly. That is runtime
 evidence for the local Wayland window/event loop only, not extended user-input parity or
@@ -618,8 +629,10 @@ The focused probe also built and passed in a separate `/tmp` GCC build with
 
 Milestone 4 remains open. The compatibility records now traverse the production `IEventSystem` and
 a real DACOM subscriber synchronously in the probe, including window-message and immediate Unicode
-payloads. They are not connected to `IWindowManager`, the application loop, live hotkey component
-or game state. Focus ordering, UTF-16/character policy and the broader key table still require a
+payloads. The real public `IWindowManager` declaration compiles under GCC and Clang with
+pointer-width message values, and a native SDL-backed factory now owns the shell's window and
+callback pump. The production game application loop, live hotkey component and game state remain
+unconnected. Focus ordering, UTF-16/character policy and the broader key table still require a
 native Windows A/B test.
 SDL3 acquisition and license-notice packaging are not approved for distribution, and no renderer
 is attached to the window.
@@ -699,7 +712,7 @@ tokens and uses explicit context structures instead of assuming adjacent x86 sta
 standalone probe covers zero, ordinary and offset indices, the UTF mapping flag, the all-bits-one
 invalid-handle sentinel, underflow, rejected bounds, and unchanged outputs on failure.
 
-GCC and Clang compile the probe with strict warnings and pass the full twenty-four-test matrix. A focused
+GCC and Clang compile the probe with strict warnings and pass the full twenty-eight-test matrix. A focused
 GCC UndefinedBehaviorSanitizer run also passed. The Linux build still does not compile the legacy
 DOSFile project, and its native Windows validation remains pending; `IFF.cpp` is excluded from all
 six current `DOSFile.vcxproj` configurations, so a normal rebuild will not compile it. The measured
@@ -722,7 +735,7 @@ of exposing a truncated address. Static dispatch property addresses use `std::ui
 
 The isolated multiple-inheritance/member/token probe passes with strict warnings under GCC and
 Clang and with AddressSanitizer plus UndefinedBehaviorSanitizer. Source regressions cover all six
-migrated production headers. Both complete presets pass 24 CTests. The DACOM slice reduced the
+migrated production headers. Both complete presets pass 28 CTests. The DACOM slice reduced the
 measured true pointer-cast subset from 18 occurrences in twelve files to 11 in seven App files; the
 subsequent stack-guard slice reduced it to five in four files.
 
@@ -736,13 +749,25 @@ now use exact on-disk case.
 
 This is not a complete portable DACOM implementation. The production `EventSystem` is the first
 native service-owner closure and `NativeComponentManager` now hosts static factories plus a
-synthetic dynamic module, but a production ELF component, profile bootstrap, the DA heap,
+synthetic module, the production EventSystem ELF and explicit `[Libraries]` configuration. Further
+production modules, cross-ELF heap ownership and legacy COMHeap behavior,
 cross-module callbacks, application `TCPoint`, and
 native Windows ABI behavior remain untested. The x86 automation dispatch is source-referenced only
 by four legacy Viewer tool headers and is a separate later boundary. Clean Windows Debug/Final
-rebuilds, ABI/layout checks, native Windows runtime connection tests, and a production loader closure
+rebuilds, ABI/layout checks, native Windows runtime connection tests, and further loader/heap closures
 remain required. See [DACOM_MANAGER_PORTABILITY.md](DACOM_MANAGER_PORTABILITY.md) and
 [DACOM_RUNTIME_PORTABILITY.md](DACOM_RUNTIME_PORTABILITY.md).
+
+### Native process-local heap bootstrap (2026-09-18)
+
+The native global manager now registers one `IHeap` before its production profile factories.
+`InitializeDAHeap` resolves that factory through public DACOM, while `HEAP_Acquire`,
+`SetDefaultHeapMsg` and `HEAP` expose the same process-lifetime owner. The focused probe validates
+tracked allocation/reallocation, zero fill, metadata, enumeration, foreign-pointer rejection,
+diagnostic accounting and repeated initialization under GCC, Clang and sanitizers. The public
+header uses existing calling-convention macros, preserving MSVC decoration while compiling natively.
+Configured capacity is not enforced, private COMHeap pass-through slots are unsupported, and no
+cross-ELF ownership or native Windows parity is claimed. See [NATIVE_HEAP.md](NATIVE_HEAP.md).
 
 ### Pointer-width stack-local debug guards (2026-09-17)
 
@@ -754,7 +779,7 @@ assertions. No object or persistent layout changed; the 92-byte retail `MGroupRe
 
 GCC, Clang, AddressSanitizer, and UndefinedBehaviorSanitizer execute the helper probe. Production
 regressions reject reintroduced `esp` assembly or legacy-width address casts in all three headers.
-The full presets pass 24 CTests. Native Windows builds and representative valid/invalid debug
+The full presets pass 28 CTests. Native Windows builds and representative valid/invalid debug
 lifetime checks remain required, and no owning Linux mission module is built yet. See
 [STACK_ADDRESS_PORTABILITY.md](STACK_ADDRESS_PORTABILITY.md).
 
@@ -769,8 +794,8 @@ message/filter boundary now shares pointer-width window, `wParam`, and `lParam` 
 legacy-input adapter, including its documented synchronous `JOYINFOEX*` payload.
 
 The particle and legacy-message helpers execute pointer round trips in native probes. Production
-source regressions cover each migrated owner. GCC and Clang pass all 24 CTests, and the measured
-high-confidence object/address cast category is zero across the 1,250-file production scan.
+source regressions cover each migrated owner. GCC and Clang pass all 28 CTests, and the measured
+high-confidence object/address cast category is zero across the 1,260-file production scan.
 
 This is source and isolated-runtime evidence, not Windows or game-runtime proof. The public virtual
 interfaces cross Conquest, Trim, DAHOTKEY, ParticleEffect and tool boundaries. Clean VS2022 Win32
@@ -787,7 +812,7 @@ free-entry offset. Fields are decoded as little-endian fixed-width words; native
 mapped onto disk bytes. Invalid metadata returns exit code 5. Omitting the option leaves this check
 unperformed. Success does not validate directory entries, names, payloads or GenData archetypes.
 
-Both preset builds passed twenty-four CTests; the headless suite now has ten process scenarios,
+Both preset builds passed twenty-eight CTests; the headless suite now has ten process scenarios,
 including synthetic UTF header mutations and missing/truncated metadata. No retail files were read.
 The format evidence is the source declarations in DOSFile/BaseUTF.h, header validation in
 UTFDMan.cpp and the GenData.cpp loadTypesData caller. The UTF inspector is not yet the DOSFile
@@ -803,7 +828,7 @@ the header's first free-entry offset is absolute; its subsequent dwNext links ar
 Synthetic tests include a valid free chain and a cyclic one. Unreachable slots and free payload-space
 lists are not certified; payload contents/decompression and archetype schemas remain unchecked.
 
-GCC and Clang passed all twenty-four CTests, including ten headless process scenarios with synthetic
+GCC and Clang passed all twenty-eight CTests, including ten headless process scenarios with synthetic
 UTF trees, invalid links, names and payload ranges. No retail installation was inspected. This
 extends the read-only inspector; it does not yet replace the Windows DOSFile implementation.
 
@@ -818,7 +843,7 @@ from data-start plus entry-offset using the logical size, which remains the sour
 
 The headless executable accepts `--metadata FILE --entry VIRTUAL_PATH` and reports byte count plus
 a diagnostic FNV-1a checksum, never content. This checksum is not the gameplay checksum. Both
-compiler presets passed twenty-four CTests; synthetic entry reads verified the exact `abc` byte checksum,
+compiler presets passed twenty-eight CTests; synthetic entry reads verified the exact `abc` byte checksum,
 missing case-sensitive names, unsupported size relationships and bounded nested paths. Broader real
 container coverage, archetype schema interpretation and the engine IFileSystem adapter remain
 outstanding. No retail files were accessed or copied.
@@ -832,7 +857,7 @@ separators and DOS `\\` separators are rejected before container traversal. This
 existing iterative path construction for a bounded nested tree; it does not validate compressed
 entries, payload schemas or retail containers.
 
-The GCC and Clang full preset checks passed twenty-four CTests after this addition. No retail files were
+The GCC and Clang full preset checks passed twenty-eight CTests after this addition. No retail files were
 read or copied.
 
 ## Portable scalar math core (2026-09-16)
@@ -846,7 +871,7 @@ The new `frontierx_math` library implements the scalar provider's matrix, transf
 historical inverse-square-root operation surface with ABI-neutral values and fixed-width bit
 handling. Its target disables FMA contraction explicitly. The probe covers inverse/singular/alias
 behavior, rigid transforms, quaternion conversion/rotation/slerp and representative square roots.
-GCC and Clang pass the complete twenty-four-test matrix. No legacy header, DACOM interface or Windows
+GCC and Clang pass the complete twenty-eight-test matrix. No legacy header, DACOM interface or Windows
 project was changed; a production adapter and Windows numerical oracle remain required. Full scope
 and limits are in [MATH_BACKEND.md](MATH_BACKEND.md).
 
@@ -857,6 +882,6 @@ The production `MeshManager` hit-test path no longer calls `D3DXBoxBoundProbe` o
 `FrontierX/RayGeometry.h` provides the narrow renderer-independent operations, while the call site
 converts named position fields explicitly. The registered probe covers box slab and triangle
 barycentric edge cases with unnormalized directions and both windings. GCC and Clang pass the full
-twenty-four-test matrix. A native Windows D3DX oracle remains required for extreme and near-degenerate
+twenty-eight-test matrix. A native Windows D3DX oracle remains required for extreme and near-degenerate
 parity before this production change is accepted. The remaining 155 matches in eight files are
 classified in [D3DX9_PORT.md](D3DX9_PORT.md).

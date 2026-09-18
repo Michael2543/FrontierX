@@ -5,6 +5,8 @@
 namespace
 {
 U32 liveInstances = 0;
+bool failNextRegistration = false;
+IDAComponent * failedRegistrationObject = nullptr;
 
 class FixtureComponent final : public IDAComponent
 {
@@ -100,10 +102,28 @@ extern "C" int frontierx_fixture_value()
 extern "C" GENRESULT FrontierXRegisterComponents(ICOManager * manager)
 {
     if (!manager) return GR_INVALID_PARMS;
+    if (failNextRegistration)
+    {
+        failNextRegistration = false;
+        failedRegistrationObject = new FixtureComponent;
+        return GR_GENERIC;
+    }
     return manager->RegisterComponent(&factory, "INativeFixture", DACOM_NORMAL_PRIORITY);
 }
 
 extern "C" BOOL32 FrontierXCanUnloadComponents()
 {
     return liveInstances == 0 ? TRUE : FALSE;
+}
+
+extern "C" void frontierx_fixture_fail_next_registration()
+{
+    failNextRegistration = true;
+}
+
+extern "C" void frontierx_fixture_release_failed_registration_object()
+{
+    if (!failedRegistrationObject) return;
+    failedRegistrationObject->Release();
+    failedRegistrationObject = nullptr;
 }

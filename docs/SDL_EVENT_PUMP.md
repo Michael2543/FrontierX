@@ -11,8 +11,11 @@ record through the production `IEventSystem`. It exists in the separate
 
 This boundary has two source-reviewed consumers: the legacy `IWindowManager::ServeMessageQueue`
 queue-service role and the `System.cpp::wndProc` path that sends focus, keyboard, character and mouse
-messages to `IEventSystem`. It does not implement the Windows-specific public `IWindowManager`
-surface and does not change that interface or the supported Win32 owner.
+messages to `IEventSystem`. The public `IWindowManager` declaration and a separate SDL-backed DACOM
+owner now have tested native paths. This isolated pump remains useful for direct adapter/event-system
+tests, but the native shell now uses `IWindowManager` and does not run both dispatch routes. The
+remaining parity requirements are tracked in
+[WINDOW_MANAGER_PORTABILITY.md](WINDOW_MANAGER_PORTABILITY.md).
 
 ## Dispatch contract
 
@@ -76,7 +79,7 @@ renderer surface, retail input parity or gameplay behavior. The next application
 - define which owner opens and closes `SdlWindow` and when text input is active;
 - place each pump relative to simulation and rendering without changing update order or timing;
 - translate shutdown observations into the existing exit callback/lifecycle contract;
-- decide how the Windows-specific `IWindowManager` public surface is isolated rather than exposing
+- connect the implemented `IWindowManager` cadence to the real application loop without exposing
   SDL or Linux calls to game logic;
 - compare focus, key repeat, text composition, mouse capture and double-click behavior against the
   supported Windows runtime; and

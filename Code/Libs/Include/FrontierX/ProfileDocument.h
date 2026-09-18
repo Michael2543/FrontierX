@@ -8,7 +8,7 @@
 
 namespace FrontierX
 {
-// Owning, read-only ASCII configuration document for native startup.
+// Owning, read-only ASCII configuration document for native configuration consumers.
 // No borrowed handles escape. Failed loads preserve the previous document.
 class ProfileDocument
 {

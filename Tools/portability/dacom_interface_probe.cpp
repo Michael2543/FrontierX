@@ -1,3 +1,4 @@
+#include "WindowManager.h"
 #include "TComponent.h"
 #include "TConnContainer.h"
 #include "TConnPoint.h"
@@ -146,6 +147,14 @@ int main()
         "IDAComponent ABI unexpectedly gained a virtual destructor");
     static_assert(std::is_base_of<IDAComponent, IUserDefaults>::value,
         "IUserDefaults no longer follows the DACOM component boundary");
+    static_assert(std::is_base_of<IDAComponent, IWindowManager>::value,
+        "IWindowManager no longer follows the DACOM component boundary");
+    static_assert(sizeof(HWND) == sizeof(void *),
+        "native window tokens must remain pointer-width");
+    static_assert(sizeof(WPARAM) == sizeof(void *) && sizeof(LPARAM) == sizeof(void *),
+        "native window callback parameters must remain pointer-width");
+    static_assert(sizeof(LONG) == 4 && sizeof(UINT) == 4,
+        "legacy scalar message types must remain fixed-width");
 
     try
     {
@@ -208,7 +217,8 @@ int main()
         Require(profileCallback.ProfileCallback(nullptr, "name", "value", &callbackCount) &&
             callbackCount == 1, "profile callback calling/context contract changed");
 
-        std::cout << "portable DACOM interface, connection point, and profile callback passed\n";
+        std::cout << "portable DACOM interface, window contract, connection point, and profile "
+                     "callback passed\n";
         return EXIT_SUCCESS;
     }
     catch (const std::exception & exception)

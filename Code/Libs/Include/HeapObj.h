@@ -17,7 +17,7 @@
 
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 //---------------------
@@ -58,8 +58,8 @@
 // error routine - return TRUE to retry the operation (also defined in FDUMP.h)
 // enum  routine - return TRUE to continue the enumeration
 
-typedef int (__cdecl * DA_ERROR_HANDLER) (struct ErrorCode code, const C8 *fmt, ...);
-typedef BOOL32  (__stdcall * IHEAP_ENUM_PROC) (struct IHeap * heap, 
+typedef int (DACOM_CDECL * DA_ERROR_HANDLER) (struct ErrorCode code, const C8 *fmt, ...);
+typedef BOOL32  (COMAPI * IHEAP_ENUM_PROC) (struct IHeap * heap,
 												void *allocatedBlock, 
 												U32 flags, 
 												void *context);
@@ -110,47 +110,47 @@ struct DAHEAPDESC : public DACOMDESC
 
 struct DACOM_NO_VTABLE IHeap : public IComponentFactory
 {
-	virtual void * __stdcall AllocateMemory (U32 numBytes, const C8 *msg = 0) = 0;
+	virtual void * COMAPI AllocateMemory (U32 numBytes, const C8 *msg = 0) = 0;
 
-	virtual void * __stdcall ClearAllocateMemory (U32 numBytes, const C8 *msg = 0, U8 initChar = 0) = 0;
+	virtual void * COMAPI ClearAllocateMemory (U32 numBytes, const C8 *msg = 0, U8 initChar = 0) = 0;
 	
-	virtual void * __stdcall ReallocateMemory (void *allocatedBlock, U32 newSize, const C8 *msg = 0) = 0;
+	virtual void * COMAPI ReallocateMemory (void *allocatedBlock, U32 newSize, const C8 *msg = 0) = 0;
 
-	virtual BOOL32 __stdcall FreeMemory (void *allocatedBlock) = 0;
+	virtual BOOL32 COMAPI FreeMemory (void *allocatedBlock) = 0;
 
-	virtual BOOL32 __stdcall EnumerateBlocks (IHEAP_ENUM_PROC proc = 0, void *context=0) = 0;
+	virtual BOOL32 COMAPI EnumerateBlocks (IHEAP_ENUM_PROC proc = 0, void *context=0) = 0;
 
-	virtual U32 __stdcall GetBlockSize (void *allocatedBlock) = 0;
+	virtual U32 COMAPI GetBlockSize (void *allocatedBlock) = 0;
 
-	virtual const char * __stdcall GetBlockMessage (void *allocatedBlock) = 0;
+	virtual const char * COMAPI GetBlockMessage (void *allocatedBlock) = 0;
 
-	virtual BOOL32 __stdcall DidAlloc (void *allocatedBlock) = 0;
+	virtual BOOL32 COMAPI DidAlloc (void *allocatedBlock) = 0;
 	
-	virtual U32 __stdcall GetAvailableMemory (void) = 0;
+	virtual U32 COMAPI GetAvailableMemory (void) = 0;
 
-	virtual U32 __stdcall GetLargestBlock (void) = 0;
+	virtual U32 COMAPI GetLargestBlock (void) = 0;
 
-	virtual U32 __stdcall GetHeapSize (void) = 0;
+	virtual U32 COMAPI GetHeapSize (void) = 0;
 
-	virtual DA_ERROR_HANDLER __stdcall SetErrorHandler (DA_ERROR_HANDLER proc) = 0;
+	virtual DA_ERROR_HANDLER COMAPI SetErrorHandler (DA_ERROR_HANDLER proc) = 0;
 
-	virtual DA_ERROR_HANDLER __stdcall GetErrorHandler (void) = 0;
+	virtual DA_ERROR_HANDLER COMAPI GetErrorHandler (void) = 0;
 
-	virtual BOOL32 __stdcall SetBlockOwner (void *allocatedBlock, U32 owner) = 0;
+	virtual BOOL32 COMAPI SetBlockOwner (void *allocatedBlock, U32 owner) = 0;
 
-	virtual U32 __stdcall GetBlockOwner (void *allocatedBlock) = 0;
+	virtual U32 COMAPI GetBlockOwner (void *allocatedBlock) = 0;
 
-	virtual BOOL32 __stdcall SetBlockMessage (void *allocatedBlock, const C8 *msg) = 0;
+	virtual BOOL32 COMAPI SetBlockMessage (void *allocatedBlock, const C8 *msg) = 0;
 
-	virtual void __stdcall HeapMinimize (void) = 0;		// return unused memory to the OS
+	virtual void COMAPI HeapMinimize (void) = 0;		// return unused memory to the OS
 
-	virtual U32 __stdcall GetHeapFlags (void) = 0;		// return flags used on last heap creation
+	virtual U32 COMAPI GetHeapFlags (void) = 0;		// return flags used on last heap creation
 
 private:
 	// called from Comheap.lib so that the return address is correct
-	virtual void * __stdcall malloc_pass_through (const C8 * msg = 0) = 0;
-	virtual void * __stdcall realloc_pass_through (const C8 * msg = 0) = 0;
-	virtual void * __stdcall calloc_pass_through (const C8 * msg = 0) = 0;
+	virtual void * COMAPI malloc_pass_through (const C8 * msg = 0) = 0;
+	virtual void * COMAPI realloc_pass_through (const C8 * msg = 0) = 0;
+	virtual void * COMAPI calloc_pass_through (const C8 * msg = 0) = 0;
 };
 
 
@@ -168,7 +168,7 @@ extern "C"
 // 
 //
 
-DXDEC IHeap * __cdecl HEAP_Acquire (void);
+DXDEC IHeap * DACOM_CDECL HEAP_Acquire (void);
 
 //
 // The external definitions are defined in COMHeap.asm
@@ -179,9 +179,9 @@ DXDEC IHeap * __cdecl HEAP_Acquire (void);
 
 extern struct IHeap * HEAP;
 
-extern void __cdecl SetDefaultHeapMsg (const C8 *msg);
+extern void DACOM_CDECL SetDefaultHeapMsg (const C8 *msg);
 
-extern BOOL32 __cdecl InitializeDAHeap (long heapSize, long growSize=0, long flags=0);
+extern BOOL32 DACOM_CDECL InitializeDAHeap (long heapSize, long growSize=0, long flags=0);
 
 
 #ifdef __cplusplus

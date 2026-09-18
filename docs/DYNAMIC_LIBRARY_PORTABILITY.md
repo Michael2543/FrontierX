@@ -5,8 +5,8 @@
 `FrontierX::DynamicLibrary` is the narrow Linux ELF loading boundary in the CMake graph. Two
 existing engine areas require this capability: DACOM loads component providers, while the
 campaign/script path loads mission modules. `FrontierX::NativeComponentManager` now consumes the
-boundary for explicitly adapted native DACOM modules. Campaigns, renderer modules and diagnostic
-loaders are not consumers of this slice.
+boundary for explicitly adapted native DACOM modules. The production `EventSystem` is the first
+such module. Campaigns, renderer modules and diagnostic loaders are not consumers of this slice.
 
 The generic boundary provides ownership and exact symbol lookup. It does not decide module naming,
 search paths or ABI compatibility. DACOM adds its own registration and unload policy above that
@@ -54,6 +54,11 @@ fails, throws, or succeeds without registering a factory. The manager rejects re
 loading during registration. A repeated add of the same exact filename increments a manager
 reference count without registering twice.
 
+Rollback removes attributed factories while the ELF remains mapped. If a failed registration has
+already created live executable state and its liveness callback rejects unload, the loader handle
+is deliberately abandoned so that state never retains invalid code pointers. This exceptional
+path leaks one mapping until process exit rather than risking use-after-`dlclose`.
+
 `RemoveLibrary` balances that reference count. On final removal it first asks the module whether
 any module-owned instances or other executable references remain. A false response leaves the
 module and registrations intact. A true response causes reverse registration removal while the ELF
@@ -66,10 +71,16 @@ lifetimes from the legacy `IDAComponent` interface. Loading/removal is a single-
 contract. Filenames are compared exactly; canonicalization, case folding, wildcard discovery and
 Windows DACOM INI search order are not implemented.
 
+`NativeComponentManager::SetINIConfig` supplies a deterministic discovery layer above this
+contract: it consumes an explicit `[Libraries]` section, resolves file-relative entries, supports
+ordered add/remove directives and rolls back an already applied prefix if a later operation fails.
+It intentionally performs no directory wildcard scan.
+
 ## Automated evidence
 
-CMake builds `frontierx_dynamic_library_fixture` as a small ELF shared object exporting a plain C
-value function and the native DACOM entry points. `frontierx_dynamic_library_probe` verifies:
+CMake builds `frontierx_dynamic_library_fixture` as a deliberately controllable synthetic ELF and
+`frontierx_event_system_module` from the production `EventSys.cpp` owner plus a narrow export
+adapter. `frontierx_dynamic_library_probe` verifies:
 
 - null and nonexistent paths fail without acquiring ownership;
 - lookup while closed and lookup with an empty name fail;
@@ -83,8 +94,19 @@ value function and the native DACOM entry points. `frontierx_dynamic_library_pro
 - one remove balances one repeated add without unloading;
 - final removal and manager shutdown refuse to unload while a fixture object is alive;
 - manager destruction pins a busy module so an escaped object's final `Release` remains valid;
-- successful final removal makes the factory unavailable; and
-- the same ELF can be loaded again after a complete unregister/close cycle.
+- a registration that fails after creating a live object is unregistered and pinned rather than
+  unsafely unmapped;
+- successful final removal makes the factory unavailable;
+- the same ELF can be loaded again after a complete unregister/close cycle;
+- inline and file-based `[Libraries]` configuration loads the module, including a quoted relative
+  filename containing a space;
+- malformed configuration and a later missing module roll back without making configuration
+  retries unusable;
+- a configured removal plus shutdown/reconfiguration preserve reference balance;
+- the configured production module creates and initializes the real event aggregate;
+- its production queue accepts, updates and exposes a message through `Peek`; and
+- a live production instance prevents unload until all queried interfaces and the aggregate are
+  released.
 
 GCC and Clang build and pass the registered test with strict warnings. A focused Clang build of the
 fixture, loader, manager and probe also passes AddressSanitizer and UndefinedBehaviorSanitizer with
@@ -105,10 +127,10 @@ ctest --test-dir out/build/linux-clang-debug -R portability.dynamic_library --ou
 
 ## Remaining DACOM integration gates
 
-- Adapt one real production component module to the explicit entry points and implement a complete
-  module-owned liveness count; the current evidence uses a synthetic fixture only.
-- Define deterministic filename/search ordering and `[Libraries]` bootstrap without copying
-  Windows case-insensitive wildcard behavior blindly.
+- Adapt the next dependency-ordered production component and determine whether the explicit
+  instance-count pattern generalizes to factories with callbacks, threads or background owners.
+- Connect the configured manager to the native game's global `DACOM_Acquire` bootstrap and decide
+  whether any deterministic, case-sensitive search path beyond config-relative paths is needed.
 - Select and validate cross-module heap/allocation ownership before returning production objects
   across ELF boundaries.
 - Exercise dependency order, a failing multi-registration module, close failure and concurrent-use
@@ -124,5 +146,5 @@ its C export surface, shared structure/vtable layout, global-state boundary, bui
 lifetime. All 18 shipped campaign modules and affected `Conquest`, `Mission`, `Globals`, and script
 targets require coordinated ABI/layout and behavioral checks.
 
-No existing Win32 `LoadLibrary` call has been replaced by this slice, and no production ELF
-component, retail module or retail data was loaded.
+No existing Win32 `LoadLibrary` call has been replaced by this slice. The production EventSystem
+source is loaded only as a native test/shell ELF; no retail module or retail data was loaded.

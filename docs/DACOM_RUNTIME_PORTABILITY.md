@@ -123,7 +123,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s Tools/portability -p 'test_platform_inventory.py' -v
 ```
 
-Both complete preset builds passed all 24 CTests on Linux x86_64 on 2026-09-17. A focused GCC
+Both complete preset builds passed all 28 CTests on Linux x86_64 on 2026-09-18. A focused GCC
 build with AddressSanitizer and UndefinedBehaviorSanitizer also passed after leak detection was
 disabled because LeakSanitizer cannot operate under this environment's process tracing. The
 production regression test rejects reintroduced pointer-to-legacy-integer casts in the six
@@ -134,6 +134,15 @@ object/address-to-legacy-integer casts in seven App files, down from 18 in twelv
 subsequent stack-guard migration reduced the current count to five in four files. No candidate
 remains in the public DACOM templates. Lexical absence is not compile or runtime proof.
 
+Focused AddressSanitizer coverage of the native window aggregate later exposed that
+`DAComponentAggregate<Base>` constructed `DAComponentInner<Base>` even though the allocated object
+was the larger aggregate wrapper. Final `Release` therefore deleted through the smaller static base
+type. The inner owner now uses `DAComponentAggregate<Base>` itself. The member still contains one
+reference count and one pointer, so this does not widen or reorder the aggregate layout; it changes
+the deletion target to the allocated type. The focused ASan/UBSan window-manager and shell process
+tests pass after the correction. Native Windows rebuild and aggregate behavior checks remain
+required because this shared template is used across module boundaries.
+
 ## Outstanding acceptance gates
 
 Before this migration can be accepted as a complete DACOM integration:
@@ -142,8 +151,9 @@ Before this migration can be accepted as a complete DACOM integration:
 - run the parameterized native-Windows ABI and layout checks against fresh PE binaries;
 - add native Windows behavioral tests for interface lookup, cross-module callback/heap ownership,
   and both connection-point implementations;
-- adapt a production component to the synthetic-tested ELF module contract, add profile-bootstrap
-  and heap policies, then compile another game- or renderer-owned component;
+- validate the new process-local native heap across a production ELF allocation boundary, then
+  compile another game- or renderer-owned component beyond the configured production EventSystem
+  ELF and static native window owner;
 - continue normalizing exact-case include spellings in each selected owner closure without creating
   case-colliding files that are unsafe on Windows filesystems;
 - replace or isolate the x86-only automation method-call assembly before porting the four legacy

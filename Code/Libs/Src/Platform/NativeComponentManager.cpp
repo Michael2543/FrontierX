@@ -193,6 +193,7 @@ GENRESULT NativeComponentManager::AddLibrary(const C8 * filename)
     if (result != GR_OK || !registered)
     {
         RemoveRegistrations(libraryId);
+        if (!CanUnload(libraries_.back())) libraries_.back().library.Abandon();
         libraries_.pop_back();
         return result == GR_OK ? GR_GENERIC : result;
     }
@@ -213,7 +214,7 @@ GENRESULT NativeComponentManager::RemoveLibrary(const C8 * filename)
         --position->references;
         return GR_OK;
     }
-    if (!position->canUnload || position->canUnload() == FALSE) return GR_GENERIC;
+    if (!CanUnload(*position)) return GR_GENERIC;
 
     RemoveRegistrations(position->id);
     std::string error;
@@ -226,7 +227,7 @@ GENRESULT NativeComponentManager::ShutDown()
 {
     for (const LoadedLibrary & loaded : libraries_)
     {
-        if (!loaded.canUnload || loaded.canUnload() == FALSE) return GR_GENERIC;
+        if (!CanUnload(loaded)) return GR_GENERIC;
     }
     for (auto position = registrations_.rbegin(); position != registrations_.rend(); ++position)
         position->component->Release();
@@ -242,6 +243,7 @@ GENRESULT NativeComponentManager::ShutDown()
         std::remove_if(libraries_.begin(), libraries_.end(),
             [](const LoadedLibrary & loaded) { return !loaded.library.IsOpen(); }),
         libraries_.end());
+    if (result == GR_OK) configured_ = false;
     return result;
 }
 
@@ -250,6 +252,26 @@ GENRESULT NativeComponentManager::SetINIConfig(const C8 * info, U32 flags)
     if (!info || (flags & (DACOM_INI_WRITABLE | DACOM_INI_STRING)) ==
         (DACOM_INI_WRITABLE | DACOM_INI_STRING))
         return GR_INVALID_PARMS;
+    try
+    {
+        return ConfigureLibraries(info, flags);
+    }
+    catch (const std::bad_alloc &)
+    {
+        return GR_OUT_OF_SPACE;
+    }
+    catch (const std::filesystem::filesystem_error &)
+    {
+        return GR_INVALID_PARMS;
+    }
+    catch (...)
+    {
+        return GR_GENERIC;
+    }
+}
+
+GENRESULT NativeComponentManager::ConfigureLibraries(const C8 * info, U32 flags)
+{
     if (flags & ~(DACOM_INI_WRITABLE | DACOM_INI_STRING)) return GR_INVALID_PARMS;
     if (flags & DACOM_INI_WRITABLE) return GR_NOT_IMPLEMENTED;
 
@@ -383,6 +405,19 @@ void NativeComponentManager::RemoveRegistrations(std::size_t libraryId) noexcept
         position->component->Release();
         position = std::vector<Registration>::reverse_iterator(
             registrations_.erase(std::next(position).base()));
+    }
+}
+
+bool NativeComponentManager::CanUnload(const LoadedLibrary & loaded) noexcept
+{
+    if (!loaded.canUnload) return false;
+    try
+    {
+        return loaded.canUnload() != FALSE;
+    }
+    catch (...)
+    {
+        return false;
     }
 }
 }

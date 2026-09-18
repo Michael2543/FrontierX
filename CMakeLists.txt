@@ -88,6 +88,7 @@ add_library(frontierx_platform STATIC
 	Code/Libs/Include/FrontierX/PreferenceStore.h
 	Code/Libs/Include/FrontierX/SettingsPath.h
 	Code/Libs/Include/FrontierX/StartupDataRoot.h
+	Code/Libs/Include/FrontierX/StartupPreferences.h
 	Code/Libs/Src/Platform/DataRoot.cpp
 	Code/Libs/Src/Platform/EventQueue.cpp
 	Code/Libs/Src/Platform/LegacyPreferenceValues.cpp
@@ -96,6 +97,7 @@ add_library(frontierx_platform STATIC
 	Code/Libs/Src/Platform/PreferenceStore.cpp
 	Code/Libs/Src/Platform/SettingsPath.cpp
 	Code/Libs/Src/Platform/StartupDataRoot.cpp
+	Code/Libs/Src/Platform/StartupPreferences.cpp
 	Code/Libs/Src/Platform/UtfMetadata.cpp
 	Code/Libs/Src/Platform/PlatformTime.cpp
 )
@@ -163,6 +165,34 @@ target_include_directories(frontierx_dacom_core
 target_compile_features(frontierx_dacom_core PUBLIC cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_dacom_core)
 
+add_library(frontierx_native_user_defaults STATIC
+	Code/Libs/Include/FrontierX/NativeUserDefaults.h
+	Code/Libs/Src/Platform/NativeUserDefaults.cpp
+)
+target_include_directories(frontierx_native_user_defaults
+	PUBLIC
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src)
+target_link_libraries(frontierx_native_user_defaults
+	PUBLIC frontierx_dacom_core frontierx_platform)
+target_compile_features(frontierx_native_user_defaults PUBLIC cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_user_defaults)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_native_user_defaults PRIVATE
+		-Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_native_user_defaults PRIVATE
+		-Wno-delete-non-abstract-non-virtual-dtor
+		-Wno-delete-abstract-non-virtual-dtor)
+endif()
+
+add_executable(frontierx_native_user_defaults_probe
+	Tools/portability/native_user_defaults_probe.cpp)
+target_link_libraries(frontierx_native_user_defaults_probe
+	PRIVATE frontierx_native_user_defaults)
+target_compile_features(frontierx_native_user_defaults_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_user_defaults_probe)
+
 add_library(frontierx_dynamic_library STATIC
 	Code/Libs/Include/FrontierX/DynamicLibrary.h
 	Code/Libs/Src/Platform/DynamicLibrary.cpp
@@ -217,6 +247,25 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		-Wno-delete-abstract-non-virtual-dtor)
 endif()
 
+add_library(frontierx_event_system_module SHARED
+	Code/Libs/Src/DAHOTKEY/EventSys.cpp
+	Code/Libs/Src/Platform/EventSystemModule.cpp
+)
+target_include_directories(frontierx_event_system_module
+	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_compile_definitions(frontierx_event_system_module
+	PRIVATE FRONTIERX_EVENT_SYSTEM_MODULE=1)
+target_compile_features(frontierx_event_system_module PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_event_system_module)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_event_system_module PRIVATE -Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_event_system_module PRIVATE
+		-Wno-delete-non-abstract-non-virtual-dtor
+		-Wno-delete-abstract-non-virtual-dtor)
+endif()
+add_dependencies(frontierx_dynamic_library_probe frontierx_event_system_module)
+
 add_executable(frontierx_event_system_probe
 	Tools/portability/event_system_probe.cpp
 )
@@ -254,6 +303,38 @@ target_link_libraries(frontierx_profile_parser_probe
 	PRIVATE frontierx_dacom_core frontierx_profile_parser)
 target_compile_features(frontierx_profile_parser_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_profile_parser_probe)
+
+add_library(frontierx_native_heap STATIC
+	Code/Libs/Include/FrontierX/NativeHeap.h
+	Code/Libs/Src/Platform/NativeHeap.cpp)
+target_include_directories(frontierx_native_heap
+	PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_link_libraries(frontierx_native_heap PUBLIC frontierx_dacom_core)
+target_compile_features(frontierx_native_heap PUBLIC cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_heap)
+
+add_library(frontierx_native_dacom_bootstrap STATIC
+	Code/Libs/Src/Platform/NativeDacomBootstrap.cpp)
+target_include_directories(frontierx_native_dacom_bootstrap
+	PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_link_libraries(frontierx_native_dacom_bootstrap
+	PUBLIC frontierx_dacom_core frontierx_native_heap frontierx_profile_parser)
+target_compile_features(frontierx_native_dacom_bootstrap PUBLIC cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_dacom_bootstrap)
+
+add_executable(frontierx_native_dacom_bootstrap_probe
+	Tools/portability/native_dacom_bootstrap_probe.cpp)
+target_link_libraries(frontierx_native_dacom_bootstrap_probe
+	PRIVATE frontierx_native_dacom_bootstrap)
+target_compile_features(frontierx_native_dacom_bootstrap_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_dacom_bootstrap_probe)
+
+add_executable(frontierx_native_heap_probe
+	Tools/portability/native_heap_probe.cpp)
+target_link_libraries(frontierx_native_heap_probe
+	PRIVATE frontierx_native_dacom_bootstrap)
+target_compile_features(frontierx_native_heap_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_heap_probe)
 
 add_executable(frontierx_preference_store_probe
 	Tools/portability/preference_store_probe.cpp
@@ -376,14 +457,33 @@ if(FRONTIERX_BUILD_SDL3)
 		PRIVATE frontierx_event_system frontierx_sdl3_platform)
 	target_compile_features(frontierx_sdl3_event_pump PUBLIC cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_sdl3_event_pump)
+	add_library(frontierx_native_window_manager STATIC
+		Code/Libs/Include/FrontierX/NativeWindowManager.h
+		Code/Libs/Src/Platform/NativeWindowManager.cpp)
+	target_include_directories(frontierx_native_window_manager PUBLIC Code/Libs/Include)
+	target_link_libraries(frontierx_native_window_manager
+		PUBLIC frontierx_sdl3_platform)
+	target_compile_features(frontierx_native_window_manager PUBLIC cxx_std_17)
+	frontierx_enable_strict_warnings(frontierx_native_window_manager)
+	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+		target_compile_options(frontierx_native_window_manager PRIVATE
+			-Wno-delete-non-virtual-dtor)
+	elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+		target_compile_options(frontierx_native_window_manager PRIVATE
+			-Wno-delete-non-abstract-non-virtual-dtor
+			-Wno-delete-abstract-non-virtual-dtor)
+	endif()
 	add_executable(frontierx_native_shell Code/Launcher/NativeShell.cpp)
+	add_dependencies(frontierx_native_shell frontierx_event_system_module)
 	target_link_libraries(frontierx_native_shell
 		PRIVATE
 			frontierx_dacom_core
 			frontierx_event_system
+			frontierx_native_dacom_bootstrap
+			frontierx_native_user_defaults
+			frontierx_native_window_manager
 			frontierx_platform
-			frontierx_sdl3_event_pump
-			frontierx_sdl3_platform)
+			PkgConfig::SDL3)
 	target_compile_features(frontierx_native_shell PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_native_shell)
 	add_executable(frontierx_sdl3_window_probe Tools/portability/sdl3_window_probe.cpp)
@@ -400,6 +500,15 @@ if(FRONTIERX_BUILD_SDL3)
 			PkgConfig::SDL3)
 	target_compile_features(frontierx_legacy_input_probe PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_legacy_input_probe)
+	add_executable(frontierx_native_window_manager_probe
+		Tools/portability/native_window_manager_probe.cpp)
+	target_link_libraries(frontierx_native_window_manager_probe
+		PRIVATE
+			frontierx_dacom_core
+			frontierx_native_window_manager
+			PkgConfig::SDL3)
+	target_compile_features(frontierx_native_window_manager_probe PRIVATE cxx_std_17)
+	frontierx_enable_strict_warnings(frontierx_native_window_manager_probe)
 endif()
 
 include(CTest)
@@ -420,11 +529,15 @@ if(BUILD_TESTING)
 	add_test(NAME portability.data_root COMMAND frontierx_data_root_probe --self-test)
 	add_test(NAME portability.event_queue COMMAND frontierx_event_queue_probe)
 	add_test(NAME portability.dynamic_library COMMAND frontierx_dynamic_library_probe
-		$<TARGET_FILE:frontierx_dynamic_library_fixture>)
+		$<TARGET_FILE:frontierx_dynamic_library_fixture>
+		$<TARGET_FILE:frontierx_event_system_module>)
 	add_test(NAME portability.event_system COMMAND frontierx_event_system_probe)
 	add_test(NAME portability.profile_parser COMMAND frontierx_profile_parser_probe)
+	add_test(NAME portability.native_dacom_bootstrap COMMAND frontierx_native_dacom_bootstrap_probe)
+	add_test(NAME portability.native_heap COMMAND frontierx_native_heap_probe)
 	add_test(NAME portability.preference_store COMMAND frontierx_preference_store_probe)
 	add_test(NAME portability.native_user_settings COMMAND frontierx_native_user_settings_probe)
+	add_test(NAME portability.native_user_defaults COMMAND frontierx_native_user_defaults_probe)
 	add_test(NAME portability.encoded_handle COMMAND frontierx_encoded_handle_probe)
 	add_test(NAME portability.dacom_runtime COMMAND frontierx_dacom_runtime_probe)
 	add_test(NAME portability.dacom_interface COMMAND frontierx_dacom_interface_probe)
@@ -437,8 +550,12 @@ if(BUILD_TESTING)
 		set_tests_properties(portability.sdl3_window PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 		add_test(NAME portability.legacy_input COMMAND frontierx_legacy_input_probe)
 		set_tests_properties(portability.legacy_input PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+		add_test(NAME portability.native_window_manager COMMAND frontierx_native_window_manager_probe)
+		set_tests_properties(portability.native_window_manager PROPERTIES
+			ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 		add_test(NAME portability.native_shell COMMAND ${Python3_EXECUTABLE}
 			${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/test_native_shell.py
-			$<TARGET_FILE:frontierx_native_shell>)
+			$<TARGET_FILE:frontierx_native_shell>
+			$<TARGET_FILE:frontierx_event_system_module>)
 	endif()
 endif()

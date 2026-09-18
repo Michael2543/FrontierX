@@ -81,6 +81,15 @@ bool Translate(const SDL_Event & source, WindowEvent & destination)
         return false;
     }
 }
+
+bool AcceptEvent(SdlWindow & window, const SDL_Event & source, WindowEvent & event)
+{
+    WindowEvent translated;
+    if (!Translate(source, translated)) return false;
+    if (translated.window_id != 0 && translated.window_id != window.WindowId()) return false;
+    event = std::move(translated);
+    return true;
+}
 }
 
 SdlWindow::~SdlWindow()
@@ -130,20 +139,105 @@ bool SdlWindow::StartTextInput(std::string & error)
     return true;
 }
 
+bool SdlWindow::Configure(int width, int height, bool fullscreen, bool resizable,
+                          bool always_on_top, bool show, bool center, std::string & error)
+{
+    error.clear();
+    auto * window = static_cast<SDL_Window *>(window_);
+    if (!window || width <= 0 || height <= 0)
+    {
+        error = "invalid SDL window configuration";
+        return false;
+    }
+    if (!SDL_SetWindowResizable(window, resizable) ||
+        !SDL_SetWindowAlwaysOnTop(window, always_on_top) ||
+        !SDL_SetWindowFullscreen(window, fullscreen))
+    {
+        error = SDL_GetError();
+        return false;
+    }
+    if (!fullscreen && !SDL_SetWindowSize(window, width, height))
+    {
+        error = SDL_GetError();
+        return false;
+    }
+    if (center && !SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED))
+    {
+        error = SDL_GetError();
+        return false;
+    }
+    if (show && !SDL_ShowWindow(window))
+    {
+        error = SDL_GetError();
+        return false;
+    }
+    return true;
+}
+
 bool SdlWindow::PollEvent(WindowEvent & event)
 {
     SDL_Event source{};
     while (SDL_PollEvent(&source))
     {
-        WindowEvent translated;
-        if (!Translate(source, translated)) continue;
-        if (translated.window_id == 0 || translated.window_id == WindowId())
-        {
-            event = std::move(translated);
-            return true;
-        }
+        if (AcceptEvent(*this, source, event)) return true;
     }
     return false;
+}
+
+bool SdlWindow::WaitEvent(WindowEvent & event, std::string & error)
+{
+    error.clear();
+    if (!window_)
+    {
+        error = "SDL window is not open";
+        return false;
+    }
+    SDL_Event source{};
+    while (SDL_WaitEvent(&source))
+        if (AcceptEvent(*this, source, event)) return true;
+    error = SDL_GetError();
+    return false;
+}
+
+bool SdlWindow::WindowArea(int & x, int & y, int & width, int & height) const
+{
+    auto * window = static_cast<SDL_Window *>(window_);
+    if (!window || !SDL_GetWindowPosition(window, &x, &y) ||
+        !SDL_GetWindowSize(window, &width, &height)) return false;
+    int top = 0;
+    int left = 0;
+    int bottom = 0;
+    int right = 0;
+    if (SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right))
+    {
+        x -= left;
+        y -= top;
+        width += left + right;
+        height += top + bottom;
+    }
+    return true;
+}
+
+bool SdlWindow::ClientArea(int & x, int & y, int & width, int & height) const
+{
+    auto * window = static_cast<SDL_Window *>(window_);
+    return window && SDL_GetWindowPosition(window, &x, &y) &&
+        SDL_GetWindowSize(window, &width, &height);
+}
+
+void SdlWindow::SetCursorPosition(int x, int y)
+{
+    if (window_) SDL_WarpMouseInWindow(static_cast<SDL_Window *>(window_),
+                                      static_cast<float>(x), static_cast<float>(y));
+}
+
+void SdlWindow::CursorPosition(int & x, int & y) const
+{
+    float float_x = 0.0F;
+    float float_y = 0.0F;
+    SDL_GetMouseState(&float_x, &float_y);
+    x = static_cast<int>(float_x);
+    y = static_cast<int>(float_y);
 }
 
 std::uint32_t SdlWindow::WindowId() const
@@ -155,6 +249,11 @@ std::string SdlWindow::VideoDriverName() const
 {
     const char * driver = video_initialized_ ? SDL_GetCurrentVideoDriver() : nullptr;
     return driver ? driver : "";
+}
+
+bool SdlWindow::IsOpen() const
+{
+    return window_ != nullptr;
 }
 
 void SdlWindow::Close()
@@ -169,5 +268,11 @@ void SdlWindow::Close()
         SDL_QuitSubSystem(SDL_INIT_VIDEO);
         video_initialized_ = false;
     }
+}
+
+std::string CurrentSdlVideoDriverName()
+{
+    const char * driver = SDL_GetCurrentVideoDriver();
+    return driver ? driver : "";
 }
 }

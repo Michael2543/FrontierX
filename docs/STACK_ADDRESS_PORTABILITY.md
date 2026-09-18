@@ -56,7 +56,7 @@ integer casts in all three migrated headers. After this change, the lexical inve
 - 442 inline-assembly matches in 19 files, down from 448 in 22 files; and
 - five high-confidence pointer/address truncations in four App files, down from 11 in seven files.
 
-Both complete GCC and Clang presets now pass all 24 CTests on Linux x86_64. These are compile and
+Both complete GCC and Clang presets now pass all 28 CTests on Linux x86_64. These are compile and
 synthetic runtime results; the production headers are not yet part of a Linux game target.
 
 ## Remaining gates

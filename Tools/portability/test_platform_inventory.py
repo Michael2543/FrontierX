@@ -217,6 +217,24 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('#include "DACOM.H"', component)
         self.assertIn('Base::_GetEntriesIn()', component)
         self.assertIn('this->className', component)
+        self.assertIn('DAComponentInner<DAComponentAggregate<Base> > innerComponent;', component)
+        self.assertNotIn('DAComponentInner<Base> innerComponent;', component)
+
+    def test_window_manager_public_contract_has_a_pointer_width_native_path(self):
+        root = Path(__file__).resolve().parents[2]
+        interface = strip_comments(
+            (root / 'Code/Libs/Include/WindowManager.h').read_text(
+                encoding='utf-8', errors='replace'))
+
+        self.assertNotIn('#error Windows.h required for this to compile!', interface)
+        self.assertIn('#include "DACOM.H"', interface)
+        self.assertIn('#include "FrontierX/LegacyMessage.h"', interface)
+        self.assertIn('using HWND = FrontierX::LegacyWindowToken;', interface)
+        self.assertIn('using WPARAM = FrontierX::LegacyWParam;', interface)
+        self.assertIn('using LPARAM = FrontierX::LegacyLParam;', interface)
+        self.assertIn('using LONG = std::int32_t;', interface)
+        self.assertIn('typedef void (DACOM_CDECL * WMEXITCB)', interface)
+        self.assertIn('typedef LRESULT (COMAPI * WNDPROC)', interface)
 
     def test_profile_parser_uses_pointer_width_handles_and_shared_callbacks(self):
         root = Path(__file__).resolve().parents[2]
@@ -261,7 +279,7 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('BufferTooSmall', adapter)
         self.assertIn('return false;', adapter)
 
-    def test_native_user_settings_owner_is_connected_to_headless_startup(self):
+    def test_native_user_settings_owner_is_shared_by_startup_processes(self):
         root = Path(__file__).resolve().parents[2]
         owner = strip_comments(
             (root / 'Code/Libs/Src/Platform/NativeUserSettingsOwner.cpp').read_text(
@@ -269,12 +287,41 @@ class PlatformInventoryTests(unittest.TestCase):
         headless = strip_comments(
             (root / 'Code/Launcher/Headless.cpp').read_text(
                 encoding='utf-8', errors='replace'))
+        shell = strip_comments(
+            (root / 'Code/Launcher/NativeShell.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        startup = strip_comments(
+            (root / 'Code/Libs/Src/Platform/StartupPreferences.cpp').read_text(
+                encoding='utf-8', errors='replace'))
 
         self.assertIn('LoadNativeUserSettingsAtPrefix', owner)
         self.assertIn('store.RemovePrefix(prefix)', owner)
         self.assertIn('StoreNativeUserSettingsAtPrefix', owner)
-        self.assertIn('NativeUserSettingsOwner userSettings', headless)
-        self.assertIn('NativeUserSettingsSourceName(userSettings.Source())', headless)
+        self.assertIn('loaded.userSettings.Load(loaded.store', startup)
+        self.assertIn('result = std::move(loaded)', startup)
+        self.assertIn('LoadStartupPreferences(', headless)
+        self.assertIn('LoadStartupPreferences(', shell)
+        self.assertIn('preferences.userSettings.Source()', headless)
+        self.assertIn('preferences.userSettings.Source()', shell)
+
+    def test_native_user_defaults_implements_the_real_interface_without_raw_struct_storage(self):
+        root = Path(__file__).resolve().parents[2]
+        owner = strip_comments(
+            (root / 'Code/Libs/Src/Platform/NativeUserDefaults.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        shell = strip_comments(
+            (root / 'Code/Launcher/NativeShell.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+
+        self.assertIn('class NativeUserDefaults : public IUserDefaults', owner)
+        self.assertIn('owner.Store(store', owner)
+        self.assertIn('LegacyPreferenceValues values', owner)
+        self.assertIn('CopyFromLegacy(user_defaults_, settings)', owner)
+        self.assertIn('BOOL32 UbiEula() override { return FALSE; }', owner)
+        self.assertNotIn('SetBinary("User Defaults", &user_defaults_', owner)
+        self.assertIn('RegisterNativeUserDefaults(', shell)
+        self.assertIn('DACOMDESC defaultsDescriptor("IUserDefaults")', shell)
+        self.assertIn('userDefaults.Get()->StoreDefaults()', shell)
 
     def test_production_event_system_has_a_portable_owner_path(self):
         root = Path(__file__).resolve().parents[2]
@@ -322,6 +369,12 @@ class PlatformInventoryTests(unittest.TestCase):
         module_contract = strip_comments(
             (root / 'Code/Libs/Include/FrontierX/NativeComponentModule.h').read_text(
                 encoding='utf-8', errors='replace'))
+        event_owner = strip_comments(
+            (root / 'Code/Libs/Src/DAHOTKEY/EventSys.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        event_module = strip_comments(
+            (root / 'Code/Libs/Src/Platform/EventSystemModule.cpp').read_text(
+                encoding='utf-8', errors='replace'))
 
         self.assertIn('DynamicLibrary(const DynamicLibrary &) = delete', interface)
         self.assertIn('DynamicLibrary(DynamicLibrary && other) noexcept', interface)
@@ -331,7 +384,15 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('FrontierXRegisterComponents', module_contract)
         self.assertIn('FrontierXCanUnloadComponents', module_contract)
         self.assertIn('RemoveRegistrations(position->id)', manager)
-        self.assertIn('position->canUnload() == FALSE', manager)
+        self.assertIn('return loaded.canUnload() != FALSE', manager)
+        self.assertIn('libraries_.back().library.Abandon()', manager)
+        self.assertIn('document.Lines("Libraries")', manager)
+        self.assertIn('baseDirectory / libraryPath', manager)
+        self.assertIn('rollbackSucceeded', manager)
+        self.assertIn('module_instance_count++', event_owner)
+        self.assertIn('module_instance_count--', event_owner)
+        self.assertIn('FrontierXRegisterComponents', event_module)
+        self.assertIn('FrontierXEventSystemModuleCanUnload', event_module)
         self.assertLess(manager.index('RemoveRegistrations(position->id)'),
                         manager.index('position->library.Close(error)'))
 
@@ -379,10 +440,19 @@ class PlatformInventoryTests(unittest.TestCase):
                 encoding='utf-8', errors='replace'))
         cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
 
-        self.assertIn('NativeComponentManager manager', shell)
-        self.assertIn('RegisterTheEventSystem(&manager)', shell)
-        self.assertIn('SdlWindow window', shell)
-        self.assertIn('SdlEventPump pump(window, *eventSystem.Get())', shell)
+        self.assertIn('ICOManager * manager = DACOM_Acquire()', shell)
+        self.assertIn('manager->SetINIConfig(configName.c_str())', shell)
+        self.assertIn('RegisterTheEventSystem(manager)', shell)
+        self.assertLess(shell.index('RegisterTheEventSystem(manager)'),
+                        shell.index('manager->SetINIConfig(configName.c_str())'))
+        self.assertIn('RegisterNativeWindowManager(manager)', shell)
+        self.assertLess(shell.index('RegisterNativeWindowManager(manager)'),
+                        shell.index('manager->SetINIConfig(configName.c_str())'))
+        self.assertIn('AGGDESC windowDescriptor("IWindowManager", "WindowManager")', shell)
+        self.assertIn('windowManager.Get()->SetCallback(ShellWindowCallback)', shell)
+        self.assertIn('windowManager.Get()->ServeMessageQueue(WMF_BACKGROUND)', shell)
+        self.assertNotIn('SdlWindow window', shell)
+        self.assertNotIn('SdlEventPump pump', shell)
         self.assertIn('SleepForMilliseconds(1)', shell)
         self.assertIn('LoadConfiguredDataRoot', shell)
         self.assertIn('ResolveStartupDataRoot', shell)
@@ -391,6 +461,68 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('ProfileDocument config', startup)
         self.assertIn('Platform::InspectDataRoot(result.path)', startup)
         self.assertIn('add_executable(frontierx_native_shell', cmake)
+
+    def test_native_dacom_acquire_owns_one_manager_and_production_profiles(self):
+        root = Path(__file__).resolve().parents[2]
+        bootstrap = strip_comments(
+            (root / 'Code/Libs/Src/Platform/NativeDacomBootstrap.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        probe = strip_comments(
+            (root / 'Tools/portability/native_dacom_bootstrap_probe.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+
+        self.assertIn('extern "C" ICOManager * DACOM_CDECL DACOM_Acquire()', bootstrap)
+        self.assertIn('static NativeDacomOwner owner', bootstrap)
+        self.assertIn('RegisterProfileParsers(&manager)', bootstrap)
+        self.assertIn('first == second', probe)
+        self.assertIn('enumeration.profile == 1 && enumeration.profile2 == 1', probe)
+        self.assertIn('first->CreateInstance(&descriptor', probe)
+
+    def test_native_heap_owns_the_process_local_iheap_contract(self):
+        root = Path(__file__).resolve().parents[2]
+        header = (root / 'Code/Libs/Include/HeapObj.h').read_text(
+            encoding='utf-8', errors='replace')
+        implementation = strip_comments(
+            (root / 'Code/Libs/Src/Platform/NativeHeap.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        bootstrap = strip_comments(
+            (root / 'Code/Libs/Src/Platform/NativeDacomBootstrap.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        probe = strip_comments(
+            (root / 'Tools/portability/native_heap_probe.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+
+        self.assertIn('#include "DACOM.H"', header)
+        self.assertNotIn('__stdcall', header)
+        self.assertNotIn('__cdecl', header)
+        self.assertIn('class NativeHeap final : public IHeap', implementation)
+        self.assertIn('std::map<void *, Block', implementation)
+        self.assertIn('if (position == blocks_.end()) return FALSE', implementation)
+        self.assertIn('RegisterNativeHeap', bootstrap)
+        self.assertLess(bootstrap.index('RegisterNativeHeap(&manager)'),
+                        bootstrap.index('RegisterProfileParsers(&manager)'))
+        self.assertIn('InitializeDAHeap(long heap_size', bootstrap)
+        self.assertIn('InitializeDAHeap(4096, 1024', probe)
+        self.assertIn('native heap accepted a foreign pointer', probe)
+
+    def test_native_window_manager_owns_the_sdl_window_contract(self):
+        root = Path(__file__).resolve().parents[2]
+        owner = strip_comments(
+            (root / 'Code/Libs/Src/Platform/NativeWindowManager.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        probe = strip_comments(
+            (root / 'Tools/portability/native_window_manager_probe.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+
+        self.assertIn('public IWindowManager', owner)
+        self.assertIn('SdlWindow window_', owner)
+        self.assertIn('void ServeMessageQueue(U32 flags) override', owner)
+        self.assertIn('window_callback_(', owner)
+        self.assertIn('CloseVetoed(close_callbacks_.pClientList)', owner)
+        self.assertIn('RegisterNativeWindowManager', owner)
+        self.assertIn('WMF_WAIT | WMF_BACKGROUND', probe)
+        self.assertIn('prevent-multiple startup contract changed', probe)
+        self.assertIn('close veto did not suppress', probe)
 
 
 if __name__ == '__main__':

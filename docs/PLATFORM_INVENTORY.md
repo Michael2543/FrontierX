@@ -20,7 +20,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s Tools/portability -p 'test_platform_inventory.py' -v
 ```
 
-The current 2026-09-18 run scanned 1,250 C and C++ source/header files beneath `Code/App/Src`,
+The current 2026-09-18 run scanned 1,260 C and C++ source/header files beneath `Code/App/Src`,
 `Code/Libs/Src`, and `Code/Libs/Include`. It excludes paths named `Tools`, `Viewer`, `Obsolete`,
 `Samples`, `Example`, or `Examples`. Comments are removed before matching, while strings and
 preprocessor includes are retained. The synthetic test covers category detection, comment
@@ -115,14 +115,14 @@ profile, and cross-module ABI ownership makes those calls higher risk than their
 The measured next steps are:
 
 1. Complete the production profile/configuration boundary by adapting the tested settings owners
-   to a live native `IUserDefaults` component and its immediate/shutdown save points; the shared
+   from the tested live native `IUserDefaults` component into a real game-startup owner; the shared
    DACOM callback traversal still requires native Windows comparison and registry behavior must
    stay intact.
 2. Validate the completed IFF/UTF/SharedUTF token and serialized-context migrations on native
    Windows while keeping small runtime tokens distinct from native OS handles and serialized data.
 3. Validate the migrated DACOM runtime-offset, connection-token, native-manager and native
-   `EventSystem` contracts on Windows, then adapt a production ELF module and add profile-bootstrap
-   and heap policies. The x86 automation dispatch is a separate Viewer-tool boundary, not a manager
+   `EventSystem` contracts on Windows, then adapt the next production ELF module and add game-global
+   acquisition and heap policies. The x86 automation dispatch is a separate Viewer-tool boundary, not a manager
    prerequisite.
 4. Validate the completed runtime-context and hotkey-message migrations across the affected native
    Windows modules, then continue classifying general casts and implicit pointer-width boundaries.
