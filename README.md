@@ -44,7 +44,7 @@ Linux-port bootstrap and project instructions are community modifications by Mic
 
 ## Current status
 
-Status snapshot: **2026-09-18**. Windows runtime evidence was last verified on **2026-08-30**.
+Status snapshot: **2026-09-19**. Windows runtime evidence was last verified on **2026-08-30**.
 
 | Area | Status |
 |---|---|
@@ -55,9 +55,11 @@ Status snapshot: **2026-09-18**. Windows runtime evidence was last verified on *
 | Native preference store | **Working in headless and shell startup** with XDG path, fixed-width schema, real `IUserDefaults`, immediate value/MRU writes and shutdown persistence; game/UI integration pending |
 | Native production event-system owner | **Working statically and as a configured ELF component** with factory, connection, queue, liveness-gated unload and SDL shell/pump tests; game-loop integration remains pending |
 | Native production profile-parser owner | **Working as a statically linked DACOM service target** with real factories, buffer/file parsing and callback tests; native manager reuses the owning raw-line parser for bootstrap |
-| Native DACOM manager | **Working through process-global `DACOM_Acquire`** with a process-local `IHeap`, production profile factories, static/adapted ELF factories, priority, transactional `[Libraries]` configuration and liveness-gated unload; cross-ELF heap ownership pending |
+| Native DACOM manager | **Working through process-global `DACOM_Acquire`** with a native `IHeap`, production profile factories, static/adapted ELF factories, priority, transactional `[Libraries]` configuration and liveness-gated unload; EventSystem cross-ELF heap ownership proven, broader modules pending |
 | Native ELF loader boundary | **Working against synthetic and production EventSystem shared objects** with local eager lookup, explicit DACOM registration and safe-unload contract; broader component/campaign ABI integration pending |
+| Production hotkey event owner | **Working in an isolated target and optional shell pipeline** with a read-only UTF adapter, both checked-in source tables, real EventSystem round trip, keyboard/mouse/joystick state tests and shared-heap ownership; packaging, SDL joystick and Windows parity pending |
 | Native startup shell | **Working for synthetic lifecycle checks** with data-root validation, configured component bootstrap, real settings/event/window services and SDL pumping; game/renderer startup pending |
+| Native rendering backend probe | **Working as an isolated SDL GPU/Vulkan experiment** with generated SPIR-V, vertex/texture upload, sampling, depth, resize-safe present and bounded pixel readback under GCC and Clang; real game data, Windows comparison, renderer integration and backend selection pending |
 | VS2022 Win32 build | **Working** — Debug and Final rebuild successfully |
 | Retail campaign DLLs | **Working** — all 18 build, verify, and deploy together |
 | Startup and mission loading | **Working**, with repeated-launch soak still required |
@@ -74,7 +76,7 @@ Status snapshot: **2026-09-18**. Windows runtime evidence was last verified on *
 | Refinery/shipyard transient materials | **Open** — some active construction meshes sample wrong textures |
 | Remaining retail schema differences | **Approximately 11**, down from 37 |
 | UI parity | **Partial** — several layout and information-panel differences remain |
-| Modern renderer/codebase | **Not started as the primary line of work** |
+| Modern renderer/codebase | **Prototype only** — an SDL-free vertex/topology/index submission contract and isolated SDL GPU/Vulkan path work; production `IRenderPipeline` mapping, Windows comparison and backend selection remain open |
 
 Mission 1 currently reaches and survives combat, advances to the Fabricator, constructs the HQ and
 other available orbital structures, builds ships, and survives later combat waves. The immediate
@@ -108,10 +110,10 @@ development source disagrees with shipped data.
 ## Requirements
 
 The Linux targets require Linux x86_64, CMake 3.25 or newer, Ninja, and either GCC or Clang. The
-checked-in presets also require `pkg-config` and SDL3 3.4.16 or a compatible SDL3 package because
-they set `FRONTIERX_BUILD_SDL3=ON`. A core/headless configure can explicitly leave that option off.
-None of these targets require retail media or a graphics SDK because they do not build or run the
-game.
+checked-in presets also require `pkg-config`, SDL3 3.4.16 or a compatible SDL3 package, and `glslc`
+because they enable the SDL3 platform and isolated GPU probe. A core/headless configure can leave
+both SDL3 options off; a window-only build can leave `FRONTIERX_BUILD_SDL3_GPU=OFF`. None of these
+targets requires retail media or builds/runs the game.
 
 The supported game build requires:
 
@@ -158,7 +160,8 @@ cmake --build --preset linux-clang-debug
 ctest --preset linux-clang-debug
 ```
 
-Both sequences passed twenty-eight CTests on Linux x86_64 on 2026-09-18. They do not build `Conquest.exe`,
+The authoritative dated matrix result is recorded in [docs/BUILD_GRAPH.md](docs/BUILD_GRAPH.md).
+These sequences do not build `Conquest.exe`,
 the complete engine-module graph, campaign modules, or a native Linux game executable. The modal UI frame clock
 and progress-animation clock and sleep now use the portable contract, but the owning `Trim` module
 still requires Windows validation. The vendored TinyXML snapshot has unresolved exact-version
@@ -174,7 +177,7 @@ serialized-call contexts, but native Windows validation remains pending; see
 The public DACOM templates now use pointer-width runtime offsets and deterministic non-pointer
 connection tokens while retaining their `U32` public handle ABI. A native manager hosts the
 production `EventSystem` owner and the synthetic-tested ELF module contract; explicit
-configuration-driven loading, process-global acquisition and the process-local native `IHeap` are wired to the native shell, while cross-ELF heap ownership and native Windows
+configuration-driven loading, process-global acquisition and the native `IHeap` are wired to the native shell. The production EventSystem ELF allocates and frees through that host heap with hidden C++ symbols; broader module ownership and native Windows
 ABI/runtime checks remain open. The real public `DACOM.H`/`TComponent.h` interface-map and
 connection-point template layer also executes in a dedicated GCC/Clang probe. The public
 `IWindowManager` contract now compiles with pointer-width native window/message tokens and
@@ -510,8 +513,8 @@ read-only inventory does not evaluate MSBuild or replace native Windows ABI vali
 
 ## Profile buffer core (2026-09-13)
 
-The Linux presets build `frontierx_profile_buffer_probe`; both GCC and Clang pass the complete
-twenty-eight-test matrix. `FrontierX/ProfileBuffer.h` owns section marking, line/section navigation,
+The Linux presets build `frontierx_profile_buffer_probe`; its focused GCC and Clang checks pass.
+`FrontierX/ProfileBuffer.h` owns section marking, line/section navigation,
 key lookup/copying, and section/key callback traversal shared with the production DACOM parser.
 Runtime section offsets now use the pointer-width encoded-handle contract instead of `U32`
 decoding. This remains an internal borrowed-buffer contract with sentinel padding, not a complete
@@ -521,8 +524,8 @@ comparison and ABI checks remain required; see
 
 ### Owning native profile reader (2026-09-13)
 
-The existing GCC and Clang presets build `frontierx_profile_document_probe` and pass twenty-eight
-CTests. `FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
+The existing GCC and Clang presets build and execute `frontierx_profile_document_probe`.
+`FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
 and key lookup through the shared profile-buffer core. Native startup configuration currently
 accepts ASCII without NUL bytes, up to 1 MiB, with locale-independent ASCII case folding.
 This policy is limited to the new reader; Windows DACOM comparison behavior is unchanged.
@@ -533,14 +536,14 @@ registers both real factories through `NativeComponentManager`, creates the aggr
 `IProfileParser` and `IProfileParser2`, and covers buffer/file loading, callbacks, duplicate
 sections, case-insensitive lookup and transactional failures. Windows retains its existing file
 branch. Native `SetINIConfig` now uses shared raw-line parsing for an explicit `[Libraries]` list;
-cross-ELF heap ownership and native Windows parity remain open; the process-local native heap is
+broader cross-ELF heap ownership and native Windows parity remain open; the native heap is
 documented in [docs/NATIVE_HEAP.md](docs/NATIVE_HEAP.md);
 see [the production parser evidence](docs/PROFILE_CALLBACK_PORTABILITY.md).
 
 ## Native headless startup check (2026-09-13)
 
-The GCC and Clang presets build `frontierx_headless` and pass twenty-eight CTests; the headless CTest
-contains ten process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
+The GCC and Clang presets build `frontierx_headless`; its focused process test contains ten
+scenarios. Python 3 is required when BUILD_TESTING is enabled.
 The following help command was executed:
 
 ```text
@@ -579,8 +582,8 @@ free-entry offset. Fields are decoded as little-endian fixed-width words; native
 mapped onto disk bytes. Invalid metadata returns exit code 5. Omitting the option leaves this check
 unperformed. Success does not validate directory entries, names, payloads or GenData archetypes.
 
-Both preset builds passed twenty-eight CTests; the headless suite now has ten process scenarios,
-including synthetic UTF header mutations and missing/truncated metadata. No retail files were read.
+The focused headless suite covers synthetic UTF header mutations and missing/truncated metadata.
+No retail files were read.
 The format evidence is the source declarations in DOSFile/BaseUTF.h, header validation in
 UTFDMan.cpp and the GenData.cpp loadTypesData caller. The UTF inspector is not yet the DOSFile
 backend replacement. Its summary is diagnostic only and does not certify a compatible installation.
@@ -595,20 +598,20 @@ the header's first free-entry offset is absolute; its subsequent dwNext links ar
 Synthetic tests include a valid free chain and a cyclic one. Unreachable slots and free payload-space
 lists are not certified; payload contents/decompression and archetype schemas remain unchecked.
 
-GCC and Clang passed all twenty-eight CTests, including ten headless process scenarios with synthetic
-UTF trees, invalid links, names and payload ranges. No retail installation was inspected. This
+GCC and Clang passed the focused headless scenarios with synthetic UTF trees, invalid links, names
+and payload ranges. No retail installation was inspected. This
 extends the read-only inspector; it does not yet replace the Windows DOSFile implementation.
 
 The headless checker now accepts `--metadata FILE --entry VIRTUAL_PATH` to read a bounded UTF
-entry into memory and report its byte count and diagnostic checksum (2026-09-13). Both presets
-passed twenty-eight CTests. No schema or retail compatibility is implied; see the UTF entry-reading
+entry into memory and report its byte count and diagnostic checksum (2026-09-13). Both preset
+builds passed the focused check. No schema or retail compatibility is implied; see the UTF entry-reading
 section of the port-readiness plan for limits and outstanding work.
 
 The Linux presets also build the isolated `frontierx_sdl3_platform` library and
 `frontierx_sdl3_window_probe` against the locally installed SDL3 3.4.16 system package. The
 backend keeps SDL types out of its public event values and translates resize, focus, close,
 keyboard, owned UTF-8 text, mouse motion/button/wheel and quit events. GCC and Clang pass the
-complete twenty-eight-test matrix with a hidden window and injected events under
+focused hidden-window and injected-event checks under
 `SDL_VIDEODRIVER=dummy`.
 
 A real-display smoke test was also executed on 2026-09-16:
@@ -621,6 +624,14 @@ It opened a visible window through SDL's Wayland backend, pumped and translated 
 then closed cleanly. This does not start the game, prove Windows-message input parity, render a
 frame, read retail data or approve SDL3 for distribution. A separate synthetic probe now connects
 compatibility records to the production `IEventSystem`; the visible smoke does not.
+
+The presets build a reusable SDL GPU owner and `frontierx_sdl3_gpu_probe`. Original GLSL is compiled
+offline to out-of-tree SPIR-V with `glslc`; the probe and native shell can feed the same repository
+scene from production `PrimitiveBuilder` through registered native `IRenderPrimitive`. Visible GCC,
+Clang and focused sanitizer shell runs used Wayland/Vulkan, presented the nine-vertex textured/depth
+fixture and produced the same bounded 64-by-64 structural readback. This is synthetic backend and
+integration evidence, not a selected game renderer, D3D9 state adapter or Windows comparison. See
+[the renderer-backend prototype record](docs/RENDERER_BACKEND_PROTOTYPE.md).
 
 `SdlLegacyInputAdapter` now converts the measured input surface into owning compatibility records:
 numeric message IDs, a pointer-width window token, `wParam` and `lParam`. Tests cover virtual keys,
@@ -652,12 +663,24 @@ native DACOM module registration, registration attribution, balanced repeated lo
 liveness-gated reverse unload through the native manager. Its evidence is a synthetic ELF fixture;
 it is not yet a production component or campaign loader.
 
+The production DAHOTKEY hotkey-event processor now builds as `frontierx_hotkey_event`. Its real
+factory loads synthetic and both checked-in source hotkey tables through the public `IFileSystem`
+contract and a bounded read-only native UTF adapter. The probe executes keyboard, mouse and
+joystick matching plus a complete EventSystem input/queued-symbol round trip. The native shell can
+compose the same path with explicit `--hotkeys FILE` and now advances the production EventSystem
+owner after every window batch. The loader bounds fixed-width counts, record strides and text slots
+and returns every aggregate allocation to the shared heap on success and failure. Installed
+resource selection, an SDL joystick source and native Windows parity remain open; see
+[the hotkey-event portability record](docs/HOTKEY_EVENT_PORTABILITY.md).
+
 `frontierx_native_shell` is the first executable to compose shared native configuration/data-root
 selection, the native component
 manager, production event-system owner, SDL window/text input, platform timing and complete event
 pump in one lifecycle. Its normal mode opens a visible window until close/quit; bounded
-`--smoke-ms ... --hidden` mode supports deterministic process tests. It still does not construct
-the game or renderer, and empty synthetic directories are not retail compatibility evidence. See
+`--smoke-ms ... --hidden` mode supports deterministic process tests. When the GPU option is built,
+explicit `--render-smoke VERTEX_SPV FRAGMENT_SPV` owns the tested Vulkan lifecycle and renders the
+shared fixture. It still does not construct the game renderer, and empty synthetic directories are
+not retail compatibility evidence. See
 [the native startup-shell contract](docs/NATIVE_SHELL.md).
 
 ### Portable scalar math core

@@ -164,7 +164,8 @@ typedef float           SINGLE;
 
 		inline const PersistTransform & zero(void)
 		{
-			memset(this, 0, sizeof(*this));
+			m.zero();
+			v.zero();
 			return *this;
 		}
 

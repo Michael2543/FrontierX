@@ -1,5 +1,6 @@
 #include "EventSys.h"
 #include "FrontierX/NativeComponentManager.h"
+#include "HeapObj.h"
 #include "IConnection.h"
 #include "SYSTEM.H"
 
@@ -60,6 +61,12 @@ BOOL32 DACOM_CDECL CaptureRegistration(IComponentFactory * factory, const C8 *,
     return enumeration.stopAfterFirst && enumeration.factories.size() == 1 ? FALSE : TRUE;
 }
 
+BOOL32 COMAPI CountHeapBlock(IHeap *, void *, U32, void * context)
+{
+    ++*static_cast<U32 *>(context);
+    return TRUE;
+}
+
 struct ProbeCallback final : IEventCallback
 {
     GENRESULT QueryInterface(const C8 * interfaceName, void ** instance) override
@@ -99,6 +106,10 @@ int main()
 {
     try
     {
+        Require(HEAP_Acquire() != nullptr, "native shared heap acquisition failed");
+        U32 heapBlocksBeforeEvent = 0;
+        Require(HEAP->EnumerateBlocks(CountHeapBlock, &heapBlocksBeforeEvent) == TRUE,
+            "native shared heap baseline enumeration failed");
         FrontierX::NativeComponentManager manager;
         RejectingFactory rejectingFactory;
         RejectingFactory equalPriorityFactory;
@@ -132,6 +143,10 @@ int main()
         void * rawAggregate = nullptr;
         Require(manager.CreateInstance(&descriptor, &rawAggregate) == GR_OK && rawAggregate,
             "event-system aggregate creation failed");
+        U32 heapBlocksWithEvent = 0;
+        Require(HEAP->EnumerateBlocks(CountHeapBlock, &heapBlocksWithEvent) == TRUE &&
+                heapBlocksWithEvent > heapBlocksBeforeEvent,
+            "static production event aggregate did not use the shared heap");
         Require(rejectingFactory.createCalls == 1 && equalPriorityFactory.createCalls == 1,
             "manager did not continue after higher/equal-priority factories rejected creation");
         auto * aggregate = static_cast<IAggregateComponent *>(rawAggregate);
@@ -190,6 +205,10 @@ int main()
         system->Release();
         eventSystem->Release();
         aggregate->Release();
+        U32 heapBlocksAfterEvent = 0;
+        Require(HEAP->EnumerateBlocks(CountHeapBlock, &heapBlocksAfterEvent) == TRUE &&
+                heapBlocksAfterEvent == heapBlocksBeforeEvent,
+            "static production event owner did not return shared-heap allocations");
 
         Require(manager.UnregisterComponent(&equalPriorityFactory, "IEventSystem") == GR_OK &&
             equalPriorityFactory.references == 0 &&

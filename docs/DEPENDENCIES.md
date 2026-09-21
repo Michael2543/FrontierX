@@ -38,12 +38,12 @@ mismatched closing tags.
 
 | Field | Verified record |
 |---|---|
-| Purpose | Native Linux window lifetime and event/input backend prototype |
+| Purpose | Native Linux window/input services and isolated GPU/Vulkan rendering prototype |
 | Upstream | [libsdl.org](https://www.libsdl.org/) and `github.com/libsdl-org/SDL` |
 | Local version | 3.4.16, reported by `/usr/lib/pkgconfig/sdl3.pc` and `libSDL3.so.0.4.16` |
 | License | SDL's permissive zlib license; the local package license text was not added to this repository |
 | Acquisition | Existing system installation; no source or binary was fetched or vendored by FrontierX |
-| Linux build role | Optional (`FRONTIERX_BUILD_SDL3`) private backend dependency of `frontierx_sdl3_platform` and direct test dependency of `frontierx_sdl3_window_probe`; enabled by the checked-in presets |
+| Linux build role | Optional (`FRONTIERX_BUILD_SDL3`) private platform dependency plus direct window and GPU probe dependency; `FRONTIERX_BUILD_SDL3_GPU` enables the rendering probe; both are enabled by the checked-in presets |
 | Distribution status | Not approved for FrontierX distribution; system-package provenance and license notice packaging still require review |
 
 Compile and automated-check evidence on 2026-09-16: CMake `PkgConfig` found SDL3 3.4.16; GCC and
@@ -51,7 +51,31 @@ Clang linked the backend and probes; CTest created a hidden window, verified inj
 focus, keyboard, copied UTF-8 text, mouse and quit events, and checked the isolated legacy-input
 compatibility records using the dummy video backend. A separate runtime smoke opened a visible
 window, pumped events and closed through the local Wayland driver. This does not establish native
-Windows input parity, renderer integration, package portability or retail compatibility.
+Windows input parity, production renderer integration, package portability or retail compatibility.
+
+Runtime evidence on 2026-09-19 additionally covers SDL GPU's Vulkan device, swapchain, SPIR-V
+shaders, graphics pipeline, staged vertex/U16-index/texture upload, indexed drawing, sampling, depth test/write, twelve frame
+submissions/presents, resize-driven depth-target recreation and ordered shutdown in both GCC and
+Clang builds. A fenced 64-by-64 download structurally validates clear/background/foreground regions
+and produced the same local diagnostic checksum in both builds. This is an isolated synthetic
+prototype, not a selected production backend or game-rendering result. See
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
+
+## shaderc `glslc`
+
+| Field | Verified record |
+|---|---|
+| Purpose | Offline compilation of the isolated GPU probe's original GLSL shaders to SPIR-V |
+| Upstream | [github.com/google/shaderc](https://github.com/google/shaderc) |
+| Local version | 2026.3 (`shaderc` Arch package 2026.3-1) |
+| License | Apache-2.0 according to local package metadata; no shaderc code or binary is copied into FrontierX |
+| Acquisition | Existing system installation; no source or binary was fetched or vendored by FrontierX |
+| Linux build role | Build-time executable found only when `FRONTIERX_BUILD_SDL3_GPU=ON`; generated SPIR-V stays in the out-of-tree build directory |
+| Distribution status | Not a runtime dependency; reproducible toolchain pinning and any build-environment notice obligations remain open before release |
+
+The checked-in presets enable the GPU probe and therefore require `glslc`. A core/headless or
+window-only configuration can leave `FRONTIERX_BUILD_SDL3_GPU=OFF`. The tool is never linked to the
+probe and generated shader binaries are not checked into source control.
 
 ## POSIX dynamic loader
 

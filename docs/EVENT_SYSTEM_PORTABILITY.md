@@ -8,9 +8,9 @@ the production `EventSystem` class, its aggregate factory, inbound interface map
 `IEventCallback` connection point, queue, synchronous dispatch and `Peek` implementation.
 
 This slice establishes a real engine-service closure above the previously isolated
-`FrontierX::EventQueue` characterization core. It does not link the complete DAHOTKEY module, the
-game or a cross-ELF heap owner. Static, SDL-pump and configured ELF owners now exercise it; the
-process-local native `IHeap` does not by itself prove module-boundary ownership.
+`FrontierX::EventQueue` characterization core. It does not link the complete DAHOTKEY module or the
+game. Static, SDL-pump and configured ELF owners now exercise it, and the configured production ELF
+is the first owner proven to allocate and release through the host's native `IHeap`.
 
 ## Source-reviewed contract
 
@@ -42,6 +42,12 @@ The class-specific allocation macro now declares standard in-class `operator new
 `DA_HEAP_CALLOC` branch was also completed so non-DA-heap builds have a valid zeroing allocation
 expression.
 
+Both native production targets now define `DA_HEAP_ENABLED`. The static target links the native
+heap owner and its probe enumerates tracked blocks before creation, while the aggregate/queue live,
+and after final release. The dynamic target resolves the same heap from its exporting host. The
+disabled macro branch remains a valid header contract for consumers that do not opt in; it is no
+longer the native EventSystem's allocation family.
+
 Queue nodes are created by `DA_HEAP_MALLOC`. Their three destruction loops previously used C++
 `delete`, which mismatched `malloc` in the portable configuration and bypassed the selected DA heap
 in heap-enabled builds. `DA_HEAP_FREE` now pairs with the selected allocator in both configurations.
@@ -69,6 +75,11 @@ the real registration and aggregate factory path. It verifies:
 - completed-batch `Peek` behavior and retirement on an empty update; and
 - immediate subscriber delivery through `Send`.
 
+The probe also acquires the native heap, proves that static aggregate creation adds tracked blocks,
+and proves final aggregate destruction returns the block count to its exact baseline. The SDL
+legacy-input integration performs its production EventSystem work with the same heap-enabled static
+target.
+
 The same production source also builds as `frontierx_event_system_module`, the first real ELF
 consumer of the native module contract. A two-function adapter registers the existing factory and
 reports whether the module-local EventSystem instance count is zero. Constructor/destructor
@@ -76,7 +87,15 @@ accounting is enabled only for that ELF target, so the supported Windows and nat
 retain their existing path. The manager probe configures this module through `[Libraries]`, runs
 its queue, rejects unload while its aggregate lives, and unloads after final release. The native
 shell process suite loads the same production ELF; configured equal-priority factories precede
-the static fallback.
+the static fallback. That process initializes the shared heap before component configuration.
+Aggregate and queue-node allocations are visible in the host heap and final release restores its
+exact prior capacity before unload.
+
+The shell also contains the same production source as a static fallback. An ELF version script
+therefore limits the module's global definitions to its registration and liveness C entry points;
+all C++ EventSystem symbols, vtables, RTTI and sanitizer ODR indicators are local. The module keeps
+one undefined global `HEAP` reference that eager loading resolves from the explicitly exporting
+host. This prevents C++ symbol preemption and the duplicate-RTTI failure found by AddressSanitizer.
 
 The SDL legacy-input probe additionally creates this owner through `NativeComponentManager` and
 uses `DispatchLegacyInputToEventSystem` to deliver resize plus paired immediate-Unicode/character
@@ -112,9 +131,12 @@ This evidence does not establish a native game event loop. The following work re
 - connect the proven SDL batch pump to the native application owner and isolate or adapt the
   Windows-specific `IWindowManager` lifecycle without posting temporary pointers;
 - define the native application owner and update cadence without changing simulation ordering;
-- compile the remaining DAHOTKEY hotkey recorder and persistence paths;
-- adapt the next dependency-ordered production component and establish a general cross-module heap
-  policy; the separate Viewer-only automation dispatch still needs isolation;
+- compose the now-native production hotkey-event processor between the SDL compatibility stream
+  and this event owner; its direct service probe is documented in
+  [HOTKEY_EVENT_PORTABILITY.md](HOTKEY_EVENT_PORTABILITY.md), while the recorder remains unported;
+- adapt the next dependency-ordered production component and reproduce the EventSystem's explicit
+  cross-module heap and symbol-visibility evidence; the separate Viewer-only automation dispatch
+  still needs isolation;
 - compare callback mutation, aggregation, heap ownership and shutdown behavior with fresh native
   Windows Debug and Final builds; and
 - run the required Windows ABI and cross-module checks before accepting parity.

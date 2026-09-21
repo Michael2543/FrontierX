@@ -3,6 +3,7 @@
 #include "FrontierX/NativeComponentManager.h"
 #include "FrontierX/SdlEventPump.h"
 #include "FrontierX/SdlWindow.h"
+#include "HeapObj.h"
 #include "IConnection.h"
 
 #include <SDL3/SDL.h>
@@ -108,6 +109,7 @@ int main()
 {
     try
     {
+        Require(HEAP_Acquire() != nullptr, "native shared heap acquisition failed");
         int contextValue = 0;
         const auto legacyParameter = FrontierX::LegacyLParamFromPointer(&contextValue);
         Require(FrontierX::PointerFromLegacyLParam<int>(legacyParameter) == &contextValue,

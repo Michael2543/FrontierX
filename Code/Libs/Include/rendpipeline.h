@@ -11,7 +11,7 @@
 
 //
 
-#include "dacom.h"
+#include "DACOM.H"
 #include "pixel.h"
 #include "3dmath.h"
 #include "matrix4.h"

@@ -9,6 +9,7 @@ import unittest
 
 EXECUTABLE = str(Path(sys.argv.pop(1)).resolve())
 EVENT_MODULE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else ''
+HOTKEY_TABLE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else ''
 
 
 class NativeShellTests(unittest.TestCase):
@@ -87,11 +88,38 @@ class NativeShellTests(unittest.TestCase):
     def test_usage_contract(self):
         result = self.run_shell('--help')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('does not start or render the game', result.stdout)
+        self.assertIn('optional render smoke draws a repository fixture', result.stdout)
         for arguments in [
                 ('--hidden',), ('--smoke-ms', '0'), ('--smoke-ms', '60001'),
-                ('--smoke-ms', 'bad'), ('--data-root',), ('--preferences',), ('--unknown',)]:
+                ('--smoke-ms', 'bad'), ('--data-root',), ('--preferences',),
+                ('--hotkeys',), ('--render-smoke',),
+                ('--render-smoke', 'vertex.spv'),
+                ('--render-smoke', 'vertex.spv', '--hidden'), ('--unknown',)]:
             self.assertEqual(self.run_shell(*arguments).returncode, 1, arguments)
+
+    def test_render_smoke_rejects_missing_shaders_before_gpu_startup(self):
+        result = self.run_shell(
+            '--data-root', self.data,
+            '--render-smoke', 'missing.vert.spv', 'missing.frag.spv',
+            '--smoke-ms', '1', '--hidden')
+        self.assertEqual(result.returncode, 7)
+        self.assertIn('Native render initialization failed: could not open shader', result.stderr)
+        self.assertNotIn(str(self.root), result.stdout + result.stderr)
+
+    @unittest.skipUnless(HOTKEY_TABLE, 'production hotkey table path not supplied')
+    def test_production_hotkey_pipeline(self):
+        result = self.run_shell('--data-root', self.data, '--hotkeys', HOTKEY_TABLE,
+                                '--smoke-ms', '1', '--hidden')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Native hotkey table loaded and event pipeline connected', result.stdout)
+        self.assertNotIn(HOTKEY_TABLE, result.stdout + result.stderr)
+
+        missing = self.root / 'missing-hotkeys.utf'
+        result = self.run_shell('--data-root', self.data, '--hotkeys', missing,
+                                '--smoke-ms', '1', '--hidden')
+        self.assertEqual(result.returncode, 6)
+        self.assertIn('Native hotkey table error:', result.stderr)
+        self.assertNotIn(str(missing), result.stdout + result.stderr)
 
     def test_preferences_owner_and_failures(self):
         preferences = self.root / 'preferences.dat'

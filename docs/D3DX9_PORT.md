@@ -62,6 +62,13 @@ The existing Windows project still links D3DX9 because its renderer sources use 
 5. **Particle vertex/color values:** replace explicit D3DX storage types with renderer-neutral
    values at the vertex boundary; verify byte layout before changing any GPU declaration.
 
-The first render vertical slice is not complete until at least one real mesh reaches a native
-window through the selected backend with measured image output. Removing names alone is not a
-rendering milestone.
+An isolated SDL GPU/Vulkan prototype now creates a device and pipeline, uploads synthetic colored/UV
+geometry plus a texture, samples with depth test/write enabled, presents twelve frames and recreates
+its depth target after an observed resize under both GCC and Clang. A 64-by-64 GPU download
+structurally validates clear, background and foreground regions; see
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md). This validates a candidate
+submission surface, including its checked exact-RPVertex-FVF mapping and U16-indexed draw, not any
+D3DX replacement or backend selection. The first render vertical slice
+is not complete until at least one real mesh and texture reaches a native window through a mapped
+renderer boundary with measured image output, depth/blend behavior, resizing and Windows comparison.
+Removing names alone is not a rendering milestone.

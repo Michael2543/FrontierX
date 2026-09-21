@@ -1,6 +1,6 @@
 # FrontierX Project Charter
 
-Status: bootstrap implementation, 2026-09-11
+Status: incremental native bring-up, 2026-09-20
 
 ## Mission
 
@@ -47,9 +47,9 @@ not broaden the first Linux bring-up.
 3. **Create a platform boundary.** Move windowing, input, timing, configuration, filesystem, dynamic
    loading, threading, and diagnostics behind portable interfaces. Do not spread Linux, X11,
    Wayland, or Win32 calls through game logic.
-4. **Bring up one rendering path.** Preserve the current D3D9-facing renderer initially and prove a
-   maintained native D3D9-to-Vulkan route with a small vertical slice before adopting it. Replace
-   unsupported D3DX9 facilities explicitly.
+4. **Bring up one rendering path.** Preserve the current D3D9-facing contracts and connect one real
+   production draw caller to the proven native submission surface before selecting a backend.
+   Compare a representative scene with Windows and replace unsupported D3DX9 facilities explicitly.
 5. **Port content services.** Address audio and video after startup, data loading, input, and basic
    rendering are measurable. Network transport comes after deterministic single-player behavior.
 6. **Package last.** Release packaging starts only after license, dependency provenance, retail-data
@@ -65,8 +65,9 @@ platform, renderer, ABI, and gameplay changes in one step.
 | Primary target | Linux x86_64, native ELF | Accepted goal |
 | Windows | VS2022 Win32 restoration build | Regression baseline |
 | Build | CMake presets with Ninja; preserve existing MSBuild path | Isolated probes, platform services, a configured production EventSystem ELF module, production event/profile owners and native lifecycle shell build; game graph planned |
+| Hotkey input | Existing DAHOTKEY event processor behind legacy-message and `IFileSystem` contracts | Production factory, read-only UTF adapter, checked-in source tables and optional shell/EventSystem composition work natively; packaging, SDL joystick, recorder and Windows parity remain open |
 | Window/input/time | SDL3 plus standard C++ behind a FrontierX platform boundary | A native SDL-backed DACOM `IWindowManager` owns the shell window, callback pump, focus/cursor state and close-veto lifecycle; application cadence, Windows parity, renderer and game integration remain |
-| Graphics | Keep D3D9-facing code for bring-up; evaluate a maintained native Vulkan translation path | Prototype required |
+| Graphics | Keep D3D9-facing code for bring-up; evaluate maintained native Vulkan paths | The native shell can explicitly select the SDL GPU lifecycle and send the repository scene from production `PrimitiveBuilder` through registered `IRenderPrimitive` to Vulkan presentation/readback; U16 validation is also covered. Windows oracle, state/material mapping, backend selection and game rendering remain open |
 | D3DX9 | Inventory and replace effects, texture helpers, and math dependencies | Required |
 | Audio | Portable backend, selected after dependency and behavior evaluation | Undecided |
 | Video | FFmpeg-based replacement for legacy movie playback | Planned, later phase |
@@ -200,8 +201,8 @@ read-only inventory does not evaluate MSBuild or replace native Windows ABI vali
 
 ## Profile buffer core (2026-09-13)
 
-The Linux presets build `frontierx_profile_buffer_probe`; both GCC and Clang pass the complete
-twenty-eight-test matrix. `FrontierX/ProfileBuffer.h` owns section marking, line/section navigation,
+The Linux presets build `frontierx_profile_buffer_probe`; its registered checks pass with both GCC
+and Clang. `FrontierX/ProfileBuffer.h` owns section marking, line/section navigation,
 key lookup/copying, and section/key callback traversal shared with the production DACOM parser.
 Runtime section offsets now use the pointer-width encoded-handle contract instead of `U32`
 decoding. This remains an internal borrowed-buffer contract with sentinel padding, not a complete
@@ -211,8 +212,8 @@ comparison and ABI checks remain required; see
 
 ### Owning native profile reader (2026-09-13)
 
-The existing GCC and Clang presets build `frontierx_profile_document_probe` and pass twenty-eight
-CTests. `FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
+The existing GCC and Clang presets build and execute `frontierx_profile_document_probe`.
+`FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
 and key lookup through the shared profile-buffer core. Native startup configuration currently
 accepts ASCII without NUL bytes, up to 1 MiB, with locale-independent ASCII case folding.
 This policy is limited to the new reader; Windows DACOM comparison behavior is unchanged.
@@ -224,24 +225,30 @@ initialization no longer transports sizes through invalid enum values, and the a
 GCC/Clang plus sanitizer execution through the native component manager. The owning document is
 now a focused target whose raw-line view drives bounded transactional native `[Libraries]`
 configuration. A native process-global `DACOM_Acquire` now owns this manager and registers both
-production profile factories once. It also registers the process-local native `IHeap`; cross-ELF
-allocation ownership, writable INI behavior and Windows parity remain open; see
+production profile factories once. It also registers the native `IHeap`; the EventSystem proves
+one cross-ELF owner while further owners, writable INI behavior and Windows parity remain open; see
 [PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
 
-### Native process-local heap bootstrap (2026-09-18)
+### Native heap and first cross-ELF owner (2026-09-19)
 
 `frontierx_native_heap` implements the unchanged `IHeap` interface with synchronized tracked native
 allocations. The global manager registers it before other factories; `InitializeDAHeap`,
 `HEAP_Acquire`, `SetDefaultHeapMsg` and `HEAP` execute through that owner. GCC, Clang and focused
 sanitizers cover allocation, zero fill, reallocation, metadata, enumeration, foreign-pointer
-rejection and repeated initialization. Configured capacity is diagnostic, private COMHeap
-pass-through slots are unsupported, and cross-ELF ownership is not claimed. See
+rejection and repeated initialization. The production EventSystem ELF uses this same host heap for
+its aggregate and queue nodes, restores exact accounting before unload, and hides every C++/RTTI
+definition behind a two-entry-point version script. Configured capacity is diagnostic, private
+COMHeap pass-through slots are unsupported, and further modules require owner-specific proof. See
 [NATIVE_HEAP.md](NATIVE_HEAP.md).
+
+The static EventSystem fallback also compiles with DA-heap allocation enabled. Its probe observes
+tracked aggregate/queue blocks and exact baseline restoration, so configured and fallback owners
+no longer select different allocation families.
 
 ## Native headless startup check (2026-09-13)
 
-The GCC and Clang presets build `frontierx_headless` and pass twenty-eight CTests; the headless CTest
-contains ten process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
+The GCC and Clang presets build `frontierx_headless`; its registered process check executes ten
+scenarios. Python 3 is required when BUILD_TESTING is enabled.
 The following help command was executed:
 
 ```text
@@ -271,8 +278,8 @@ free-entry offset. Fields are decoded as little-endian fixed-width words; native
 mapped onto disk bytes. Invalid metadata returns exit code 5. Omitting the option leaves this check
 unperformed. Success does not validate directory entries, names, payloads or GenData archetypes.
 
-Both preset builds passed twenty-eight CTests; the headless suite now has ten process scenarios,
-including synthetic UTF header mutations and missing/truncated metadata. No retail files were read.
+The headless process check passes under both compiler presets, including synthetic UTF header
+mutations and missing/truncated metadata. No retail files were read.
 The format evidence is the source declarations in DOSFile/BaseUTF.h, header validation in
 UTFDMan.cpp and the GenData.cpp loadTypesData caller. The UTF inspector is not yet the DOSFile
 backend replacement. Its summary is diagnostic only and does not certify a compatible installation.
@@ -287,13 +294,13 @@ the header's first free-entry offset is absolute; its subsequent dwNext links ar
 Synthetic tests include a valid free chain and a cyclic one. Unreachable slots and free payload-space
 lists are not certified; payload contents/decompression and archetype schemas remain unchecked.
 
-GCC and Clang passed all twenty-eight CTests, including ten headless process scenarios with synthetic
-UTF trees, invalid links, names and payload ranges. No retail installation was inspected. This
+The GCC and Clang headless process checks pass with synthetic UTF trees, invalid links, names and
+payload ranges. No retail installation was inspected. This
 extends the read-only inspector; it does not yet replace the Windows DOSFile implementation.
 
 The headless checker now accepts `--metadata FILE --entry VIRTUAL_PATH` to read a bounded UTF
-entry into memory and report its byte count and diagnostic checksum (2026-09-13). Both presets
-passed twenty-eight CTests. Synthetic coverage includes a nested `dir/file` entry, exact case-sensitive
+entry into memory and report its byte count and diagnostic checksum (2026-09-13). The focused
+process scenarios pass under both presets and include a nested `dir/file` entry, exact case-sensitive
 lookup and rejection of malformed virtual separators. No schema or retail compatibility is
 implied; see the UTF entry-reading
 section of the port-readiness plan for limits and outstanding work.

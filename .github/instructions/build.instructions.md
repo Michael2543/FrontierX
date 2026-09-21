@@ -16,6 +16,11 @@ applyTo:
 - Add CMake and Ninja support incrementally alongside the supported VS2022 Win32 build.
 - Start with a small target whose sources and dependencies are understood; do not generate one
   monolithic target for the entire legacy tree as the first change.
+- Prefer compiling or exercising the next production owner over adding another isolated target.
+- Add a new probe only for a named integration blocker, a compatibility/ABI contract that cannot
+  yet run in its production closure, or a relevant regression. Identify its production owner, real
+  caller, falsifiable hypothesis and the decision its result will change. Prefer extending an
+  existing probe, and do not let probe code become a parallel product implementation.
 - Use target-scoped sources, include directories, compile definitions, options, and link libraries.
 - Do not add machine-specific absolute paths, local retail-install paths, or checked-in SDK files.
 - Keep build products outside source directories and update `.gitignore` for new output roots.
@@ -44,4 +49,9 @@ applyTo:
 - Preserve an available Windows validation path while adding Linux targets.
 - A generated build system is not complete until configure and compile commands succeed in a clean
   build directory.
-- Document only commands that were actually run, including required host platform and prerequisites.
+- Document only commands that were actually run, including target, configuration, compiler/host,
+  executed versus skipped runtime paths and relevant observable results.
+- Record focused results with the owning component. Keep rolling repository-wide test totals in the
+  central build/status document only; do not duplicate them across component reports.
+- List Windows, retail, hardware, ABI and image-comparison checks that remain unperformed. A skipped
+  GPU test is environment information, not successful runtime evidence.

@@ -9,29 +9,29 @@ namespace FrontierX
 {
 namespace
 {
-constexpr std::uint32_t vkBack = 0x08;
-constexpr std::uint32_t vkTab = 0x09;
-constexpr std::uint32_t vkReturn = 0x0d;
-constexpr std::uint32_t vkShift = 0x10;
-constexpr std::uint32_t vkControl = 0x11;
-constexpr std::uint32_t vkMenu = 0x12;
-constexpr std::uint32_t vkPause = 0x13;
-constexpr std::uint32_t vkCapital = 0x14;
-constexpr std::uint32_t vkEscape = 0x1b;
-constexpr std::uint32_t vkSpace = 0x20;
-constexpr std::uint32_t vkPrior = 0x21;
-constexpr std::uint32_t vkNext = 0x22;
-constexpr std::uint32_t vkEnd = 0x23;
-constexpr std::uint32_t vkHome = 0x24;
-constexpr std::uint32_t vkLeft = 0x25;
-constexpr std::uint32_t vkUp = 0x26;
-constexpr std::uint32_t vkRight = 0x27;
-constexpr std::uint32_t vkDown = 0x28;
-constexpr std::uint32_t vkInsert = 0x2d;
-constexpr std::uint32_t vkDelete = 0x2e;
-constexpr std::uint32_t vkF10 = 0x79;
-constexpr std::uint32_t vkNumLock = 0x90;
-constexpr std::uint32_t vkScroll = 0x91;
+constexpr auto vkBack = LegacyVirtualKey::Back;
+constexpr auto vkTab = LegacyVirtualKey::Tab;
+constexpr auto vkReturn = LegacyVirtualKey::Return;
+constexpr auto vkShift = LegacyVirtualKey::Shift;
+constexpr auto vkControl = LegacyVirtualKey::Control;
+constexpr auto vkMenu = LegacyVirtualKey::Menu;
+constexpr auto vkPause = LegacyVirtualKey::Pause;
+constexpr auto vkCapital = LegacyVirtualKey::Capital;
+constexpr auto vkEscape = LegacyVirtualKey::Escape;
+constexpr auto vkSpace = LegacyVirtualKey::Space;
+constexpr auto vkPrior = LegacyVirtualKey::Prior;
+constexpr auto vkNext = LegacyVirtualKey::Next;
+constexpr auto vkEnd = LegacyVirtualKey::End;
+constexpr auto vkHome = LegacyVirtualKey::Home;
+constexpr auto vkLeft = LegacyVirtualKey::Left;
+constexpr auto vkUp = LegacyVirtualKey::Up;
+constexpr auto vkRight = LegacyVirtualKey::Right;
+constexpr auto vkDown = LegacyVirtualKey::Down;
+constexpr auto vkInsert = LegacyVirtualKey::Insert;
+constexpr auto vkDelete = LegacyVirtualKey::Delete;
+constexpr auto vkF10 = LegacyVirtualKey::F10;
+constexpr auto vkNumLock = LegacyVirtualKey::NumLock;
+constexpr auto vkScroll = LegacyVirtualKey::Scroll;
 
 LegacyInputEvent WindowMessage(std::uint32_t message, std::uint32_t window,
                                std::uintptr_t wparam = 0, std::intptr_t lparam = 0)
@@ -208,6 +208,11 @@ std::intptr_t KeyLParam(const KeyEvent & key, bool released)
     std::uint32_t result = 1 | (ScanCode(key.physical_key) << 16);
     if (ExtendedKey(key.physical_key)) result |= 1u << 24;
     if (key.modifiers & static_cast<std::uint16_t>(SDL_KMOD_ALT)) result |= 1u << 29;
+    const bool toggle_active =
+        (key.logical_key == SDLK_CAPSLOCK && (key.modifiers & SDL_KMOD_CAPS)) ||
+        (key.logical_key == SDLK_NUMLOCKCLEAR && (key.modifiers & SDL_KMOD_NUM)) ||
+        (key.logical_key == SDLK_SCROLLLOCK && (key.modifiers & SDL_KMOD_SCROLL));
+    if (toggle_active) result |= LegacyKeyToggleBit;
     if (key.repeat || released) result |= 1u << 30;
     if (released) result |= 1u << 31;
     return static_cast<std::intptr_t>(result);

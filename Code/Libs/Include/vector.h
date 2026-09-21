@@ -6,16 +6,19 @@
 #define VECTOR_H
 
 #ifndef US_TYPEDEFS
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 #endif
 
 #ifndef PERSISTMATH_H__
-#include "persistmath.h"
+#include "PersistMath.h"
 #endif
 
 #ifndef _INC_MATH
 #include <math.h>
 #endif
+
+SINGLE Sqrt(SINGLE x);
+SINGLE InvSqrt(SINGLE x);
 
 #if defined(_DEBUG_VECTORS)
 	#include <assert.h>
@@ -240,7 +243,7 @@ public:
 		return scale_by_reciprocal(s);
 	}
 
-	inline const bool operator == (const Vector & v)
+	inline bool operator == (const Vector & v)
 	{
 		return (x == v.x && y == v.y && z == v.z);
 	}

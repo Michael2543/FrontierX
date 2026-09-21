@@ -309,7 +309,7 @@ cmake --build --preset linux-clang-debug
 ctest --preset linux-clang-debug
 ```
 
-Both presets pass all twenty-eight CTests. The preference probe additionally covers legacy binary/string
+The focused preference checks pass in both presets. The preference probe additionally covers legacy binary/string
 type checks, exact counts, short buffers, deletion, four-entry MRU shifting, lookup, compaction,
 duplicate removal and the historical removal return value. Focused GCC builds using
 AddressSanitizer and UndefinedBehaviorSanitizer also passed with leak detection disabled because

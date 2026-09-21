@@ -1,8 +1,12 @@
 #include "EventSys.h"
 #include "DACOM.H"
+#include "HeapObj.h"
+#include "HKEvent.h"
+#include "IConnection.h"
 #include "FrontierX/DataRoot.h"
 #include "FrontierX/LegacyInput.h"
 #include "FrontierX/NativeUserDefaults.h"
+#include "FrontierX/NativeUtfFileSystem.h"
 #include "FrontierX/NativeWindowManager.h"
 #include "FrontierX/PlatformTime.h"
 #include "FrontierX/SdlWindow.h"
@@ -12,11 +16,19 @@
 #include "UserDefaults.h"
 #include "WindowManager.h"
 
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+#include "FrontierX/NativeRenderPrimitive.h"
+#include "FrontierX/RenderSmokeScene.h"
+#include "FrontierX/SdlGpuRenderer.h"
+#include "IRenderPrimitive.h"
+#endif
+
 #include <charconv>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -49,15 +61,50 @@ class InterfaceOwner
 {
 public:
     InterfaceOwner() = default;
-    ~InterfaceOwner() { if (value_) value_->Release(); }
+    ~InterfaceOwner() { Reset(); }
     InterfaceOwner(const InterfaceOwner &) = delete;
     InterfaceOwner & operator=(const InterfaceOwner &) = delete;
 
     Interface ** Receive() { return &value_; }
     Interface * Get() const { return value_; }
+    void Reset()
+    {
+        if (value_) value_->Release();
+        value_ = nullptr;
+    }
 
 private:
     Interface * value_ = nullptr;
+};
+
+class ConnectionOwner
+{
+public:
+    ~ConnectionOwner() { Disconnect(); }
+    ConnectionOwner(const ConnectionOwner &) = delete;
+    ConnectionOwner & operator=(const ConnectionOwner &) = delete;
+    ConnectionOwner() = default;
+
+    bool Connect(IDAConnectionPoint * point, IDAComponent * component)
+    {
+        if (!point || !component || point_) return false;
+        U32 token = 0;
+        if (point->Advise(component, &token) != GR_OK || token == 0) return false;
+        point_ = point;
+        token_ = token;
+        return true;
+    }
+
+    void Disconnect()
+    {
+        if (point_ && token_) point_->Unadvise(token_);
+        point_ = nullptr;
+        token_ = 0;
+    }
+
+private:
+    IDAConnectionPoint * point_ = nullptr;
+    U32 token_ = 0;
 };
 
 struct Options
@@ -65,6 +112,9 @@ struct Options
     std::filesystem::path configPath;
     std::filesystem::path dataRoot;
     std::filesystem::path preferencesPath;
+    std::filesystem::path hotkeysPath;
+    std::filesystem::path vertexShaderPath;
+    std::filesystem::path fragmentShaderPath;
     std::uint32_t smokeMilliseconds = 0;
     bool hidden = false;
 };
@@ -89,9 +139,11 @@ Options ParseOptions(int argc, char ** argv)
         if (option == "--help" && argc == 2)
         {
             std::cout << "Usage: frontierx_native_shell [--config FILE] [--preferences FILE] "
-                         "[--data-root DIRECTORY] "
+                         "[--data-root DIRECTORY] [--hotkeys FILE] "
+                         "[--render-smoke VERTEX_SPV FRAGMENT_SPV] "
                          "[--smoke-ms MILLISECONDS [--hidden]]\n"
-                         "Opens the native startup shell; it does not start or render the game.\n";
+                         "Opens the native startup shell; the optional render smoke draws a "
+                         "repository fixture, not the game.\n";
             std::exit(0);
         }
         if (option == "--hidden")
@@ -100,11 +152,24 @@ Options ParseOptions(int argc, char ** argv)
             options.hidden = true;
             continue;
         }
-        if ((option != "--config" && option != "--preferences" &&
+        if (option == "--render-smoke")
+        {
+            if (!options.vertexShaderPath.empty() || !options.fragmentShaderPath.empty())
+                throw std::invalid_argument("duplicate option: --render-smoke");
+            if (index + 2 >= argc || !argv[index + 1][0] || !argv[index + 2][0] ||
+                std::string(argv[index + 1]).rfind("--", 0) == 0 ||
+                std::string(argv[index + 2]).rfind("--", 0) == 0)
+                throw std::invalid_argument(
+                    "--render-smoke requires vertex and fragment SPIR-V files");
+            options.vertexShaderPath = argv[++index];
+            options.fragmentShaderPath = argv[++index];
+            continue;
+        }
+        if ((option != "--config" && option != "--preferences" && option != "--hotkeys" &&
              option != "--data-root" && option != "--smoke-ms") ||
             index + 1 == argc)
             throw std::invalid_argument(
-                "expected --config, --preferences, --data-root, --smoke-ms or --hidden");
+                "expected --config, --preferences, --data-root, --hotkeys, --smoke-ms or --hidden");
         const char * value = argv[++index];
         if (!value[0] || std::string(value).rfind("--", 0) == 0)
             throw std::invalid_argument("missing option value");
@@ -119,6 +184,12 @@ Options ParseOptions(int argc, char ** argv)
             if (!options.preferencesPath.empty())
                 throw std::invalid_argument("duplicate option: --preferences");
             options.preferencesPath = value;
+        }
+        else if (option == "--hotkeys")
+        {
+            if (!options.hotkeysPath.empty())
+                throw std::invalid_argument("duplicate option: --hotkeys");
+            options.hotkeysPath = value;
         }
         else if (option == "--data-root")
         {
@@ -206,10 +277,28 @@ int Run(int argc, char ** argv)
         std::cerr << "Native component-manager acquisition failed\n";
         return 3;
     }
+    if (InitializeDAHeap(0x10000, 0x4000,
+            DAHEAPFLAG_MULTITHREADED | DAHEAPFLAG_GROWHEAP |
+            DAHEAPFLAG_NOMSGS) == FALSE)
+    {
+        std::cerr << "Native shared-heap initialization failed\n";
+        return 3;
+    }
     RegisterTheEventSystem(manager);
+    RegisterHotkeyEventServer(manager);
     FrontierX::RegisterNativeUserDefaults(
         manager, preferences.selection.path, preferences);
     FrontierX::RegisterNativeWindowManager(manager);
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    if (!options.vertexShaderPath.empty())
+        FrontierX::RegisterNativeRenderPrimitive(manager);
+#else
+    if (!options.vertexShaderPath.empty())
+    {
+        std::cerr << "Native render smoke is unavailable in this build\n";
+        return 7;
+    }
+#endif
     if (!options.configPath.empty())
     {
         const std::string configName = options.configPath.string();
@@ -231,12 +320,61 @@ int Run(int argc, char ** argv)
         return 3;
     }
     InterfaceOwner<IEventSystem> eventSystem;
+    InterfaceOwner<ISystemComponent> eventSystemOwner;
+    InterfaceOwner<IEventCallback> eventSystemCallback;
     if (aggregate.Get()->QueryInterface(IID_IEventSystem,
         reinterpret_cast<void **>(eventSystem.Receive())) != GR_OK || !eventSystem.Get() ||
+        aggregate.Get()->QueryInterface(IID_ISystemComponent,
+            reinterpret_cast<void **>(eventSystemOwner.Receive())) != GR_OK ||
+        !eventSystemOwner.Get() ||
+        aggregate.Get()->QueryInterface(IID_IEventCallback,
+            reinterpret_cast<void **>(eventSystemCallback.Receive())) != GR_OK ||
+        !eventSystemCallback.Get() ||
         aggregate.Get()->Initialize() != GR_OK || eventSystem.Get()->Initialize(0) != GR_OK)
     {
         std::cerr << "Native event-system initialization failed\n";
         return 3;
+    }
+
+    InterfaceOwner<IFileSystem> hotkeyFile;
+    InterfaceOwner<IAggregateComponent> hotkeyAggregate;
+    InterfaceOwner<IHotkeyEvent> hotkey;
+    InterfaceOwner<IEventCallback> hotkeyInput;
+    InterfaceOwner<IDAConnectionPoint> rawEventPoint;
+    InterfaceOwner<IDAConnectionPoint> hotkeyEventPoint;
+    ConnectionOwner rawEventConnection;
+    ConnectionOwner hotkeyEventConnection;
+    if (!options.hotkeysPath.empty())
+    {
+        std::string hotkeyError;
+        if (!FrontierX::OpenNativeUtfFileSystem(
+                options.hotkeysPath, hotkeyFile.Receive(), hotkeyError))
+        {
+            std::cerr << "Native hotkey table error: " << hotkeyError << '\n';
+            return 6;
+        }
+        HKEVENTDESC hotkeyDescriptor;
+        hotkeyDescriptor.file = hotkeyFile.Get();
+        hotkeyDescriptor.hotkeyMessage = 0x10000U;
+        if (manager->CreateInstance(&hotkeyDescriptor,
+                reinterpret_cast<void **>(hotkeyAggregate.Receive())) != GR_OK ||
+            !hotkeyAggregate.Get() ||
+            hotkeyAggregate.Get()->QueryInterface(IID_IHotkeyEvent,
+                reinterpret_cast<void **>(hotkey.Receive())) != GR_OK || !hotkey.Get() ||
+            hotkeyAggregate.Get()->QueryInterface(IID_IEventCallback,
+                reinterpret_cast<void **>(hotkeyInput.Receive())) != GR_OK || !hotkeyInput.Get() ||
+            hotkeyAggregate.Get()->Initialize() != GR_OK ||
+            eventSystem.Get()->QueryOutgoingInterface(
+                "IEventCallback", rawEventPoint.Receive()) != GR_OK || !rawEventPoint.Get() ||
+            hotkey.Get()->QueryOutgoingInterface(
+                "IEventCallback", hotkeyEventPoint.Receive()) != GR_OK || !hotkeyEventPoint.Get() ||
+            !rawEventConnection.Connect(rawEventPoint.Get(), hotkeyInput.Get()) ||
+            !hotkeyEventConnection.Connect(hotkeyEventPoint.Get(), eventSystemCallback.Get()))
+        {
+            std::cerr << "Native hotkey service initialization failed\n";
+            return 6;
+        }
+        std::cout << "Native hotkey table loaded and event pipeline connected\n";
     }
 
     DACOMDESC defaultsDescriptor("IUserDefaults");
@@ -269,7 +407,9 @@ int Run(int argc, char ** argv)
     shellEventSystem = eventSystem.Get();
     shellCloseRequested = false;
     windowManager.Get()->SetCallback(ShellWindowCallback);
-    const U32 windowFlags = WMF_CENTER | (options.hidden ? 0U : WMF_SHOW);
+    // Wayland compositors own top-level placement, so the portable shell does not
+    // make successful startup depend on the legacy centering request.
+    const U32 windowFlags = options.hidden ? 0U : WMF_SHOW;
     if (!windowManager.Get()->SetWindowPos(800, 600, windowFlags))
     {
         windowManager.Get()->SetCallback(nullptr);
@@ -287,10 +427,74 @@ int Run(int argc, char ** argv)
     }
     std::cout << "Native shell opened; video driver: " << driver << '\n';
 
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    FrontierX::SdlGpuRenderer renderer;
+    InterfaceOwner<IRenderPrimitive> renderPrimitive;
+    std::uint32_t presentedFrames = 0U;
+    if (!options.vertexShaderPath.empty())
+    {
+        const HWND token = windowManager.Get()->GetWindowHandle();
+        if (!token || token > std::numeric_limits<std::uint32_t>::max())
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native render smoke received an invalid SDL window token\n";
+            return 7;
+        }
+        const FrontierX::SdlGpuTextureView texture{
+            FrontierX::RenderSmokeTextureRgba.data(),
+            FrontierX::RenderSmokeTextureWidth,
+            FrontierX::RenderSmokeTextureHeight,
+            FrontierX::RenderSmokeTextureRgba.size()};
+        std::string renderError;
+        if (!renderer.Initialize(static_cast<std::uint32_t>(token),
+                options.vertexShaderPath.string().c_str(),
+                options.fragmentShaderPath.string().c_str(), texture, renderError))
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native render initialization failed: " << renderError << '\n';
+            return 7;
+        }
+        FrontierX::NativeRenderPrimitiveDesc renderDescriptor(
+            FrontierX::SdlGpuRenderer::SubmissionCallback, &renderer);
+        if (manager->CreateInstance(&renderDescriptor,
+                reinterpret_cast<void **>(renderPrimitive.Receive())) != GR_OK ||
+            !renderPrimitive.Get() ||
+            FrontierX::SubmitRenderSmokeScene(renderPrimitive.Get()) != GR_OK ||
+            renderer.VertexCount() != FrontierX::RenderSmokeVertexCount ||
+            renderer.IndexCount() != 0U)
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native render-scene submission failed\n";
+            return 7;
+        }
+        std::cout << "Native render smoke initialized; backend: "
+                  << renderer.DriverName() << "; source: production PrimitiveBuilder\n";
+    }
+#endif
+
     const std::uint32_t started = FrontierX::Platform::MonotonicMilliseconds();
     while (!shellCloseRequested)
     {
         windowManager.Get()->ServeMessageQueue(WMF_BACKGROUND);
+        eventSystemOwner.Get()->Update();
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+        if (!options.vertexShaderPath.empty() && !shellCloseRequested)
+        {
+            bool presented = false;
+            std::string renderError;
+            if (!renderer.Present(presented, renderError))
+            {
+                windowManager.Get()->SetCallback(nullptr);
+                shellEventSystem = nullptr;
+                std::cerr << "Native render presentation failed: " << renderError << '\n';
+                return 7;
+            }
+            if (presented) ++presentedFrames;
+        }
+#endif
         if (!shellCloseRequested && options.smokeMilliseconds)
         {
             const std::uint32_t elapsed =
@@ -301,12 +505,37 @@ int Run(int argc, char ** argv)
     }
     windowManager.Get()->SetCallback(nullptr);
     shellEventSystem = nullptr;
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    if (!options.vertexShaderPath.empty())
+    {
+        FrontierX::SdlGpuReadback readback;
+        std::string renderError;
+        if (!presentedFrames || !renderer.Readback64(readback, renderError) ||
+            !readback.structureValid)
+        {
+            std::cerr << "Native render readback failed: " << renderError << '\n';
+            return 7;
+        }
+        std::cout << "Native render smoke passed; presented-frames: " << presentedFrames
+                  << "; vertices: " << renderer.VertexCount()
+                  << "; changed-pixels: " << readback.changedPixels
+                  << "; pixel-checksum: " << readback.checksum << '\n';
+        renderPrimitive.Reset();
+        renderer.Shutdown();
+    }
+#endif
+    hotkeyEventConnection.Disconnect();
+    rawEventConnection.Disconnect();
     if (userDefaults.Get()->StoreDefaults() == FALSE)
     {
         std::cerr << "Native preference save failed\n";
         return 5;
     }
-    std::cout << "Native shell closed cleanly; game startup and rendering were not attempted\n";
+    if (options.vertexShaderPath.empty())
+        std::cout << "Native shell closed cleanly; game startup and rendering were not attempted\n";
+    else
+        std::cout << "Native shell closed cleanly; repository render fixture completed; "
+                     "game startup was not attempted\n";
     return 0;
 }
 }

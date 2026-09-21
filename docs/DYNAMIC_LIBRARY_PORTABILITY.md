@@ -48,6 +48,13 @@ The symbol names have C linkage, but the registration parameter is the existing 
 interface. The contract is therefore limited to modules built for the same compiler/toolchain ABI;
 it is not a stable C ABI and is not suitable for retail campaign DLLs.
 
+The production EventSystem ELF applies `EventSystemModule.map`. Its only global definitions are the
+two contract symbols above; implementation functions, vtables, RTTI and sanitizer ODR indicators
+are local. This prevents the module's C++ definitions from preempting or colliding with the native
+shell's statically linked fallback. Undefined host services such as `HEAP` remain resolvable at
+eager load. The native shell and dynamic-library probe explicitly export host symbols rather than
+changing the loader to `RTLD_GLOBAL`.
+
 `AddLibrary` uses local eager loading, requires both symbols, attributes every registration made
 during the registration call to a unique module ID, and rolls back those registrations if the call
 fails, throws, or succeeds without registering a factory. The manager rejects recursive module
@@ -105,13 +112,19 @@ adapter. `frontierx_dynamic_library_probe` verifies:
 - a configured removal plus shutdown/reconfiguration preserve reference balance;
 - the configured production module creates and initializes the real event aggregate;
 - its production queue accepts, updates and exposes a message through `Peek`; and
+- aggregate and queue-node allocations reduce the host heap's reported capacity, final release
+  restores it exactly, and the ELF can then unload;
+- the module exports only its two C entry points while its C++ EventSystem/RTTI symbols remain
+  local; and
 - a live production instance prevents unload until all queried interfaces and the aggregate are
   released.
 
 GCC and Clang build and pass the registered test with strict warnings. A focused Clang build of the
-fixture, loader, manager and probe also passes AddressSanitizer and UndefinedBehaviorSanitizer with
+fixture, loader, manager, production module, shell and probes also passes AddressSanitizer and
+UndefinedBehaviorSanitizer with
 leak detection disabled because LeakSanitizer cannot operate under this environment's process
-tracing.
+tracing. Sanitizer execution specifically covers the static-fallback plus dynamic-module process;
+it originally detected the duplicate EventSystem RTTI boundary that the version script now fixes.
 
 Reproduce the registered checks:
 
@@ -131,8 +144,8 @@ ctest --test-dir out/build/linux-clang-debug -R portability.dynamic_library --ou
   instance-count pattern generalizes to factories with callbacks, threads or background owners.
 - Connect the configured manager to the native game's global `DACOM_Acquire` bootstrap and decide
   whether any deterministic, case-sensitive search path beyond config-relative paths is needed.
-- Select and validate cross-module heap/allocation ownership before returning production objects
-  across ELF boundaries.
+- Repeat the proven host-heap and hidden-C++-symbol contract for each additional production ELF;
+  the EventSystem result is not a general allocator or compiler-ABI guarantee.
 - Exercise dependency order, a failing multi-registration module, close failure and concurrent-use
   rejection before broadening the loader.
 - Compare reference balancing, registration failure and shutdown behavior with fresh native

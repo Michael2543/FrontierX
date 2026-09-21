@@ -123,7 +123,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s Tools/portability -p 'test_platform_inventory.py' -v
 ```
 
-Both complete preset builds passed all 28 CTests on Linux x86_64 on 2026-09-18. A focused GCC
+The listed DACOM runtime/interface checks passed in both Linux presets on 2026-09-19. A focused GCC
 build with AddressSanitizer and UndefinedBehaviorSanitizer also passed after leak detection was
 disabled because LeakSanitizer cannot operate under this environment's process tracing. The
 production regression test rejects reintroduced pointer-to-legacy-integer casts in the six
@@ -151,9 +151,8 @@ Before this migration can be accepted as a complete DACOM integration:
 - run the parameterized native-Windows ABI and layout checks against fresh PE binaries;
 - add native Windows behavioral tests for interface lookup, cross-module callback/heap ownership,
   and both connection-point implementations;
-- validate the new process-local native heap across a production ELF allocation boundary, then
-  compile another game- or renderer-owned component beyond the configured production EventSystem
-  ELF and static native window owner;
+- reproduce the EventSystem ELF's proven host-heap allocation and hidden-C++-symbol boundary for
+  another game- or renderer-owned component beyond the static native window owner;
 - continue normalizing exact-case include spellings in each selected owner closure without creating
   case-colliding files that are unsafe on Windows filesystems;
 - replace or isolate the x86-only automation method-call assembly before porting the four legacy

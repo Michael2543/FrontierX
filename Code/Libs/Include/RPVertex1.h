@@ -7,8 +7,16 @@
 #ifndef __RPVertex_h__
 #define __RPVertex_h__
 
+#include "da_d3dtypes.h"
+#include "vector.h"
+
+#if defined(_MSC_VER)
 #pragma warning( push )
 #pragma warning( disable : 4201 )		// disable WARNING: nonstandard extension used : nameless struct/union
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 
 
 //
@@ -30,6 +38,10 @@ typedef struct RPVertex1
 
 //
 
-#pragma warning( pop ) 
+#if defined(_MSC_VER)
+#pragma warning( pop )
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #endif // EOF

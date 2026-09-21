@@ -6,13 +6,82 @@
 
 //
 
+#include "TYPEDEFS.H"
+
+#if defined(_WIN32)
 #include <d3d9.h>
 #include <d3dx9.h>
-//#include <d3d9types.h>
+#else
+// Public renderer interfaces use these stable D3D9 values and opaque resource types. Native
+// backends translate them at the renderer boundary and do not expose Direct3D implementation APIs.
+typedef unsigned int UINT;
+static_assert(sizeof(UINT) == 4U, "legacy Direct3D UINT must remain 32-bit");
 
-//
+enum D3DPRIMITIVETYPE
+{
+	D3DPT_POINTLIST = 1,
+	D3DPT_LINELIST = 2,
+	D3DPT_LINESTRIP = 3,
+	D3DPT_TRIANGLELIST = 4,
+	D3DPT_TRIANGLESTRIP = 5,
+	D3DPT_TRIANGLEFAN = 6,
+	D3DPT_FORCE_DWORD = 0x7fffffff
+};
 
-#include "typedefs.h"
+enum D3DBLEND
+{
+	D3DBLEND_ZERO = 1,
+	D3DBLEND_ONE = 2,
+	D3DBLEND_SRCCOLOR = 3,
+	D3DBLEND_INVSRCCOLOR = 4,
+	D3DBLEND_SRCALPHA = 5,
+	D3DBLEND_INVSRCALPHA = 6,
+	D3DBLEND_DESTALPHA = 7,
+	D3DBLEND_INVDESTALPHA = 8,
+	D3DBLEND_DESTCOLOR = 9,
+	D3DBLEND_INVDESTCOLOR = 10,
+	D3DBLEND_SRCALPHASAT = 11,
+	D3DBLEND_BOTHSRCALPHA = 12,
+	D3DBLEND_BOTHINVSRCALPHA = 13,
+	D3DBLEND_BLENDFACTOR = 14,
+	D3DBLEND_INVBLENDFACTOR = 15,
+	D3DBLEND_FORCE_DWORD = 0x7fffffff
+};
+
+enum D3DRENDERSTATETYPE
+{
+	D3DRS_BLENDOPALPHA = 209,
+	D3DRS_FORCE_DWORD = 0x7fffffff
+};
+
+enum D3DTEXTURESTAGESTATETYPE
+{
+	D3DTSS_CONSTANT = 32,
+	D3DTSS_FORCE_DWORD = 0x7fffffff
+};
+
+enum D3DSAMPLERSTATETYPE
+{
+	D3DSAMP_FORCE_DWORD = 0x7fffffff
+};
+
+enum D3DSTATEBLOCKTYPE
+{
+	D3DSBT_ALL = 1,
+	D3DSBT_PIXELSTATE = 2,
+	D3DSBT_VERTEXSTATE = 3,
+	D3DSBT_FORCE_DWORD = 0x7fffffff
+};
+
+struct D3DLIGHT9;
+struct D3DMATERIAL9;
+struct IDirect3DIndexBuffer9;
+struct IDirect3DVertexDeclaration9;
+
+#define D3DFVF_XYZ 0x002U
+#define D3DFVF_DIFFUSE 0x040U
+#define D3DFVF_TEX1 0x100U
+#endif
 
 //
 
@@ -92,4 +161,3 @@ const U32 D3DTSS_MAX_STATE			= D3DTSS_CONSTANT + 1;
 const U32 D3DTSS_NUM_STAGES			=4;
 
 #endif /* _DA_D3DTYPES_H_ */
-

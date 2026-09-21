@@ -29,21 +29,24 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
-#ifndef _WINDOWS_
-#error Windows.h required for this to compile!
+#if !defined(_WIN32)
+#include "FrontierX/LegacyFileTypes.h"
 #endif
+
+#include <cstddef>
+#include <cstring>
 
 //--------------------------------------------------------------------------//
 //-----------------------------IFileSystem Interface------------------------//
 //--------------------------------------------------------------------------//
 
 typedef struct IFileSystem *LPFILESYSTEM;
-typedef long (__stdcall IFileSystem::*DAFILE_SERIAL_PROC) (void *lpContext);
+typedef LONG (COMAPI IFileSystem::*DAFILE_SERIAL_PROC) (void *lpContext);
 
-#define SERIALMETHOD(method)        LONG __stdcall method (void *lpContext=0)
+#define SERIALMETHOD(method)        LONG COMAPI method (void *lpContext=0)
 
 //---------------------
 // Use DAFILEINFO structure on call to CreateInstance

@@ -269,7 +269,7 @@ BOOL32 SetSymbolNumber (DAHOTKEY hotkey, U32 num);
 //----------------------------------------------------------------------------
 //
 #ifndef DACOM_H
-#include <DACOM.h>
+#include "DACOM.H"
 #endif
 
 #define HKEVENT_VERSION 0x101
@@ -413,7 +413,7 @@ struct IHotkeyRecorder : public IDAComponent
 
 	DEFMETHOD_(BOOL32,SetEmpty) (DAHOTKEY hotkey) = 0;
 
-	DEFMETHOD_(U32,ConvertToString) (DAHOTKEY hotkey, C8 * buffer, U32 maxBytes) = 0;;
+	DEFMETHOD_(U32,ConvertToString) (DAHOTKEY hotkey, C8 * buffer, U32 maxBytes) = 0;
 
 	DEFMETHOD_(U32,GetModifiers) (DAHOTKEY hotkey) = 0;
 

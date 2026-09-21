@@ -1,5 +1,17 @@
 #ifndef HOTKEY_H
 #define HOTKEY_H
+
+#include "TYPEDEFS.H"
+
+#include <cstring>
+
+#ifndef DACOM_FASTCALL
+#if defined(_MSC_VER)
+#define DACOM_FASTCALL __fastcall
+#else
+#define DACOM_FASTCALL
+#endif
+#endif
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                                HotKey.h                                  //
@@ -36,64 +48,67 @@ struct DAHOTKEY_STRUCT
 
 	int init (void)
 	{
-	 	memset(this, 0, sizeof(*this));
+		std::memset(this, 0, sizeof(*this));
 		return (bValid = 1);
 	}
 
 	int operator == (DAHOTKEY_STRUCT & key)
 	{
-		return (memcmp(this, &key, sizeof(*this))==0);
+		return (std::memcmp(this, &key, sizeof(*this))==0);
 	}
 
-	DWORD getModifiers (void)
+	U32 getModifiers (void)
 	{
-	 	DWORD result;
+		U32 result;
 
-		result = ((DWORD *)this)[0];		// mods take up first 32 bits of field
+		result = ((U32 *)this)[0];		// mods take up first 32 bits of field
 		return result;
 	}
 
-	void setModifiers (DWORD dwMods)
+	void setModifiers (U32 dwMods)
 	{
-		DWORD * ptr = (DWORD *)this;
+		U32 * ptr = (U32 *)this;
 
 		*ptr = dwMods;						// mods take up first 32 bits of field
 	}
 
-	S32 __fastcall compare (DAHOTKEY_STRUCT & rec);
+	S32 DACOM_FASTCALL compare (DAHOTKEY_STRUCT & rec);
 
 	BOOL32 operator > (DAHOTKEY_STRUCT & rec)
 	{
-	 	return (compare(rec) > 0);
+		return (compare(rec) > 0);
 	}
 
 	BOOL32 operator < (DAHOTKEY_STRUCT & rec)
 	{
-	 	return (compare(rec) < 0);
+		return (compare(rec) < 0);
 	}
 };			
 
 struct KB_MODIFIERS
 {
-	BYTE bLeftShift:1;
-	BYTE bRightShift:1;
-	BYTE bLeftControl:1;
-	BYTE bRightControl:1;
-	BYTE bLeftAlt:1;
-	BYTE bRightAlt:1;
+	U8 bLeftShift:1;
+	U8 bRightShift:1;
+	U8 bLeftControl:1;
+	U8 bRightControl:1;
+	U8 bLeftAlt:1;
+	U8 bRightAlt:1;
 
 	void reset (void)
 	{
-	 	memset(this, 0, sizeof(*this));
+		std::memset(this, 0, sizeof(*this));
 	}
 
 	int isEmpty (void)
 	{
-	 	return (((BYTE *)this)[0] == 0);
+		return (((U8 *)this)[0] == 0);
 	}
 };
 
 
 #pragma pack ( pop )
+
+static_assert(sizeof(DAHOTKEY_STRUCT) == 8, "retail hotkey record layout changed");
+static_assert(sizeof(KB_MODIFIERS) == 1, "hotkey modifier layout changed");
 
 #endif

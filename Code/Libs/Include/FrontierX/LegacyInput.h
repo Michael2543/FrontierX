@@ -44,6 +44,41 @@ constexpr std::uintptr_t Control = 0x0008;
 constexpr std::uintptr_t Middle = 0x0010;
 }
 
+namespace LegacyVirtualKey
+{
+constexpr std::uint32_t Back = 0x08;
+constexpr std::uint32_t Tab = 0x09;
+constexpr std::uint32_t Return = 0x0d;
+constexpr std::uint32_t Shift = 0x10;
+constexpr std::uint32_t Control = 0x11;
+constexpr std::uint32_t Menu = 0x12;
+constexpr std::uint32_t Pause = 0x13;
+constexpr std::uint32_t Capital = 0x14;
+constexpr std::uint32_t Escape = 0x1b;
+constexpr std::uint32_t Space = 0x20;
+constexpr std::uint32_t Prior = 0x21;
+constexpr std::uint32_t Next = 0x22;
+constexpr std::uint32_t End = 0x23;
+constexpr std::uint32_t Home = 0x24;
+constexpr std::uint32_t Left = 0x25;
+constexpr std::uint32_t Up = 0x26;
+constexpr std::uint32_t Right = 0x27;
+constexpr std::uint32_t Down = 0x28;
+constexpr std::uint32_t Insert = 0x2d;
+constexpr std::uint32_t Delete = 0x2e;
+constexpr std::uint32_t LeftShift = 0xa0;
+constexpr std::uint32_t RightShift = 0xa1;
+constexpr std::uint32_t LeftControl = 0xa2;
+constexpr std::uint32_t RightControl = 0xa3;
+constexpr std::uint32_t LeftMenu = 0xa4;
+constexpr std::uint32_t RightMenu = 0xa5;
+constexpr std::uint32_t F10 = 0x79;
+constexpr std::uint32_t NumLock = 0x90;
+constexpr std::uint32_t Scroll = 0x91;
+}
+
+inline constexpr std::uint32_t LegacyKeyToggleBit = 1U << 25;
+
 struct LegacyWindowMessage
 {
     LegacyWindowToken window = 0;

@@ -1,129 +1,203 @@
 # FrontierX: Instructions for AI Coding Agents
 
-This is the canonical project-wide instruction file for Codex and GitHub Copilot. Keep global
-rules here and path-specific Copilot guidance in `.github/instructions/`; do not duplicate these
-rules in `.github/copilot-instructions.md`.
+This is the canonical project-wide instruction file for Codex and GitHub Copilot. Keep durable
+project rules here and path-specific guidance in `.github/instructions/`. Detailed implementation
+status and validation history belong in the linked project documents, not in this file.
 
-## What This Project Is
+## Project and authoritative references
 
 FrontierX is a non-commercial native Linux x86_64 port of *Conquest: Frontier Wars*. It preserves
-the original C and C++ engine, shipped gameplay, retail data compatibility, and deterministic
-simulation behavior while replacing legacy Windows platform dependencies incrementally.
+the original C and C++ engine, shipped gameplay, retail-data compatibility and deterministic
+simulation while incrementally replacing legacy Windows dependencies.
 
-This repository starts from Revan67's `ConquestFWR` Windows 11 retail-restoration work. The source
-release is a CQ2 development snapshot, not the exact retail source, so the upstream restoration's
-layout, object-ID, campaign-ABI, renderer, and gameplay repairs are part of the required baseline.
+The source starts from Revan67's `ConquestFWR` Windows retail-restoration work. The released source
+is a CQ2 development snapshot rather than the exact retail source, so the upstream layout,
+object-ID, campaign-ABI, renderer and gameplay repairs are part of the required baseline.
 
-Read [docs/PROJECT.md](docs/PROJECT.md) for the project charter and architecture status. Read
-[LEGAL.md](LEGAL.md) before adding dependencies, assets, binaries, reverse-engineering findings,
-or release tooling. Use [HANDOFF.md](HANDOFF.md) and [RETAIL_TEST_MATRIX.md](RETAIL_TEST_MATRIX.md)
-as the current restoration evidence base.
+Read the smallest relevant authoritative document before changing code:
 
-## Current Reality
+- [docs/PROJECT.md](docs/PROJECT.md): project charter, architecture and concise current status.
+- [docs/PORT_READINESS.md](docs/PORT_READINESS.md): milestones, blockers and ordered work queue.
+- [docs/BUILD_GRAPH.md](docs/BUILD_GRAPH.md): measured build graph and native target boundaries.
+- [HANDOFF.md](HANDOFF.md) and [RETAIL_TEST_MATRIX.md](RETAIL_TEST_MATRIX.md): Windows restoration
+  state and retail-runtime evidence.
+- [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md): dependency provenance and release gates.
+- Focused documents under `docs/`: component contracts, commands, evidence and unresolved checks.
+- [LEGAL.md](LEGAL.md) and `Conquest Source License.txt`: controlling legal and distribution rules.
 
-- The supported build is VS2022 Win32 on Windows 10/11.
-- There is no working Linux game build or Linux package. The CMake graph builds isolated probes,
-  platform libraries, a headless data checker, and a native startup/window shell; none builds or
-  runs the game.
-- Linux x86_64 ELF is the first port target. macOS, ARM64, and multiplayer portability are later.
-- CMake with Ninja and SDL3 are intended directions, not implemented facts.
-- The native D3D9-to-Vulkan approach is unresolved. The archived `misyltoad/dxvk-native` project
-  is a reference, not an approved dependency.
-- Missing retail media must come from a lawfully obtained installation and must not enter this
+## Current reality
+
+- VS2022 Win32 on Windows 10/11 remains the supported game build and regression baseline.
+- The Linux CMake/Ninja graph is implemented for isolated libraries and checks, platform services,
+  a headless data checker and a native startup/window shell. It does not yet build or run the game.
+- SDL3 is implemented at the native platform boundary: an SDL-backed `IWindowManager` owns the
+  shell window/event lifecycle, and an isolated SDL GPU/Vulkan prototype exercises indexed drawing,
+  texture sampling, depth, resize, presentation and readback. Neither result is a production game
+  renderer or proof of retail compatibility.
+- Selected production owners including profile parsing, the event system, native user defaults and
+  hotkey processing compile and execute in native checks. Their exact status and remaining gates are
+  recorded in the focused documents linked from `docs/PROJECT.md` and `docs/PORT_READINESS.md`.
+- A production `PrimitiveBuilder` draw reaches Vulkan presentation and bounded readback through a
+  registered native `IRenderPrimitive` and the portable submission contract. The native shell can
+  explicitly select that lifecycle and render the repository smoke scene. State/material mapping,
+  Windows comparison, backend selection and a native game scene remain open.
+- Linux x86_64 ELF is the first port target. macOS, ARM64 and multiplayer portability are later.
+- Missing retail media must come from a lawfully obtained installation and must never enter this
   repository.
 
-Never report a planned capability as implemented. State whether evidence came from source review,
-compilation, an automated check, or a runtime test.
+Never report a plan, source inspection or synthetic check as an implemented game capability. Label
+evidence as source review, compilation, automated execution, synthetic runtime, Windows runtime or
+retail runtime.
 
-## Ordered Priorities
+## Ordered priorities
 
 1. Preserve and measure the restored retail/Win32 baseline.
-2. Inventory platform, compiler, pointer-width, ABI, D3DX9, and build-graph blockers.
-3. Introduce a portable build graph alongside the existing Visual Studio build.
-4. Establish narrow platform interfaces before replacing platform implementations.
-5. Bring up startup, data loading, an SDL3 window/event loop, and one rendering vertical slice.
-6. Port audio and video after basic rendering is measurable; port networking last.
-7. Package only after dependency provenance and retail-data separation are automated.
+2. Inventory platform, compiler, pointer-width, ABI, D3DX9 and build-graph blockers.
+3. Extend the portable build graph alongside the Visual Studio build.
+4. Establish focused platform interfaces before replacing implementations.
+5. Connect startup, data loading, SDL3 window/input and one production rendering vertical slice.
+6. Reach a deterministic playable single-player slice.
+7. Port audio and video; port networking last.
+8. Package only after dependency provenance and retail-data separation are automated.
 
 Do not combine several priorities into a repository-wide rewrite. Prefer the smallest change that
-produces a falsifiable build, layout, ABI, or runtime result.
+advances a production owner and produces a falsifiable build, layout, ABI or runtime result.
 
-## Non-Negotiable Invariants
+## Current rendering milestone
+
+The active milestone is the **first native scene through a production render boundary**. Its Linux
+geometry/presentation slice now runs in the native shell; complete it incrementally through the
+existing `IRenderPipeline`/`IRenderPrimitive` ownership model rather than creating a parallel API.
+
+The milestone is accepted only when all of the following are evidenced:
+
+1. At least one real production draw caller reaches the native backend through an adapter at the
+   existing renderer boundary. Direct and U16-indexed RPVertex-shaped submissions are covered;
+   unsupported FVF/topology/state combinations fail explicitly.
+2. A representative scene uses a repository-owned fixture or lawfully supplied external data to
+   draw inspectable geometry, a texture and material state in the SDL3 window. No retail asset is
+   copied into the repository.
+3. Depth, alpha blending, texture sampling, resize-dependent targets, presentation and teardown
+   have bounded automated or capture evidence. Resource ownership survives repeated scene runs.
+4. GCC and Clang build and execute the slice on Linux x86_64; focused sanitizers cover CPU-side
+   ownership and bounds. A skip caused by an unavailable GPU is not runtime evidence.
+5. The same representative input is captured on the supported Windows path and compared under a
+   documented tolerance. Native Windows Debug/Final rebuilds and relevant ABI/layout checks pass.
+6. The focused renderer document records commands, observed output, data provenance, known gaps and
+   whether the evidence is compilation, synthetic runtime, Windows runtime or retail runtime.
+
+Do not select a production backend or claim the rendering milestone from the isolated GPU probe
+alone. Continue replacing D3DX9 facilities explicitly and keep the supported D3D9 path viable.
+
+## Non-negotiable invariants
 
 1. **Retail behavior is authoritative.** CQ2-only behavior is not an improvement when it conflicts
    with shipped data or observed retail behavior.
-2. **Keep the Windows baseline viable.** Portable work must coexist with the supported VS2022
-   Win32 path until an explicitly documented decision changes that policy.
-3. **Isolate platform code.** Do not add Win32, Linux, X11, Wayland, Cocoa, or Vulkan calls to game
-   logic. Put platform implementations behind focused interfaces in a dedicated platform/backend
-   area consistent with the existing library organization.
-4. **Separate storage from runtime.** Persistent file, save, map, schema, campaign, and network
-   layouts retain fixed widths and exact packing. Native pointers and handles use pointer-sized
-   representations or handle tables, never serialized 32-bit fields.
+2. **Keep the Windows baseline viable.** Portable work must coexist with the VS2022 Win32 path
+   until an explicitly documented decision changes that policy.
+3. **Isolate platform code.** Do not add Win32, Linux, X11, Wayland, Cocoa or Vulkan calls to game
+   logic. Keep implementations behind focused interfaces in the owning platform/backend area.
+4. **Separate storage from runtime.** Disk, save, map, schema, campaign and network layouts retain
+   fixed widths and exact packing. Native pointers and handles use pointer-sized representations or
+   typed handle tables and never leak into serialized 32-bit fields.
 5. **Protect ABI-linked modules.** Changes shared by `Conquest`, `Mission`, `Trim`, `Globals`,
-   `ZBatcher`, and campaign modules require all affected modules and ABI/layout checks.
+   `ZBatcher` or campaign modules require all affected builds and ABI/layout checks.
 6. **Preserve determinism.** Platform work must not change simulation order, RNG consumption,
-   floating-point behavior, container iteration order, timing semantics, or serialized bytes.
-7. **No symptom patches.** Find the owning code path and fix the root cause. Keep unrelated retail
-   restoration work in separate changes.
-8. **Reference, do not transplant.** Study GeneralsX and other ports for patterns. Do not copy code
-   unless provenance and license compatibility are documented and the implementation fits this
-   engine.
+   floating-point behavior, container iteration order, timing semantics or serialized bytes.
+7. **Fix owners, not symptoms.** Identify the owning path and keep unrelated restoration work in a
+   separate change.
+8. **Reference, do not transplant.** Do not copy code from GeneralsX or another project unless
+   provenance and license compatibility are documented and the implementation fits this engine.
 
-## Architecture Direction
+## Architecture direction
 
 | Layer | Direction | Rule |
 |---|---|---|
-| Build | CMake presets and Ninja | Add incrementally; preserve MSBuild until parity is measured |
-| Platform | SDL3 plus standard C/C++ | No direct OS calls in simulation or game-object code |
-| Graphics | Existing D3D9-facing renderer, then a proven native Vulkan path | Prototype before standardizing; replace D3DX9 explicitly |
+| Build | CMake presets and Ninja | Extend incrementally; preserve MSBuild until parity is measured |
+| Platform | Existing SDL3 boundary plus standard C/C++ | No direct OS calls in simulation/game objects |
+| Graphics | Existing D3D9-facing contracts adapted to a proven native path | Connect a production slice before selecting the backend; replace D3DX9 explicitly |
 | Audio | Portable backend to be selected | Match behavior before improving features |
 | Video | FFmpeg-based replacement, later | Never distribute legacy Bink binaries |
 | Network | Portable sockets, last | Preserve packet layout and deterministic semantics |
 
 Do not invent a generic abstraction before identifying at least two concrete consumers or an
-existing engine boundary. Prefer adapters around existing interfaces such as `IRenderPipeline`
-over invasive game-logic changes.
+existing engine boundary. Prefer adapters around established interfaces over invasive game-logic
+changes.
 
-## Compatibility and 64-Bit Rules
+## Compatibility and 64-bit rules
 
-- Treat `long`, `DWORD`, pointer casts, pointer-sized callbacks, varargs, bitfields, and packed
-  structures as audit points; Windows and LP64 Linux differ.
-- Do not store pointers or COM-style interface addresses in `U32` handles. Use `uintptr_t`, native
-  pointers, or an explicit typed handle table according to ownership and ABI needs.
-- Do not globally widen `U32`, `S32`, IDs, offsets, or serialized handles.
-- Surround intentional packed layouts with scoped packing and compile-time size, offset, and
-  end-of-structure checks.
-- Keep disk/wire schema types separate from convenient 64-bit runtime types.
-- Preserve exact filename and include-path case. Linux case sensitivity is part of correctness.
+- Audit `long`, `DWORD`, pointer casts, callbacks, varargs, bitfields and packed structures; Win32
+  and LP64 Linux differ.
+- Never store pointers or COM-style addresses in `U32` handles. Use native pointers,
+  `std::uintptr_t` or an explicit typed handle table according to ownership and ABI needs.
+- Do not globally widen `U32`, `S32`, IDs, offsets or serialized handles.
+- Scope intentional packing and assert size, offsets and final-field extent.
+- Keep disk/wire schema values separate from convenient runtime types.
+- Preserve exact filename and include-path case.
 - Do not enable fast-math or FMA contraction without cross-build determinism evidence.
-- Do not import GeneralsX-specific `WWMath` names; FrontierX needs evidence-based math policy for
-  this engine.
+- Do not import GeneralsX-specific `WWMath` names or policy.
 
-## Working Method
+## Working method
 
 Before editing:
 
-1. Start from the failing behavior, target, symbol, or nearest owner.
-2. Read only the relevant surrounding implementation and one nearby test or caller.
+1. Start from the failing behavior, target, symbol or nearest production owner.
+2. Read the relevant implementation and at least one real caller or adjacent test.
 3. State a falsifiable local hypothesis and the cheapest check that could disprove it.
-4. Check whether the touched type crosses a persistent-format or module ABI boundary.
+4. Determine whether each touched type crosses persistent-format or module-ABI boundaries.
 
 After editing:
 
-1. Run the narrowest executable validation immediately.
-2. If no Linux target exists for the touched code, run available static/layout/tool checks and say
-   what could not be run.
+1. Run the narrowest executable validation immediately, then the affected preset/configuration.
+2. If the affected production code has no Linux target, run the strongest available compile,
+   layout or source check and state what remains unexecuted.
 3. Keep generated files and logs out of source control.
-4. Update documentation when architecture, commands, current status, or compatibility contracts
-   change. Update `MODIFICATIONS.md` for material changes before distribution.
+4. Update architecture/status documentation only when its contract or current state changed.
+5. Update `MODIFICATIONS.md` for material changes before distribution.
 
-Never hide a failed check by weakening assertions, removing validation, or catching and ignoring
-the error.
+Never hide a failure by weakening assertions, removing validation or swallowing the error.
 
-## Build and Test
+## Rules for probes and regression checks
 
-Existing Windows baseline entry points:
+A new probe is justified only when it does at least one of these:
+
+- disproves a named integration blocker on the path to a production owner;
+- characterizes a compatibility/ABI contract that cannot yet execute in its production closure; or
+- permanently protects a relevant regression in code that is already integrated or being
+  integrated.
+
+Before adding one, document in its focused status section or nearby test description:
+
+- the concrete blocker or regression;
+- the production owner and real caller it represents;
+- the falsifiable behavior being checked;
+- why an existing test cannot cover it; and
+- which integration decision changes when it passes or fails.
+
+Prefer extending an existing probe. Do not add a probe merely to raise coverage, demonstrate an
+unconnected helper, or make a planned architecture look implemented. A probe must not become a
+parallel product implementation. Register deterministic checks with CTest; keep host-dependent
+smokes explicit, and never count a skipped runtime as execution evidence.
+
+## Validation records
+
+For every material change, record validation in the relevant focused document. Keep the entry tied
+to the change rather than repeating a repository-wide test count. Include:
+
+- exact target/configuration and host/compiler that were built;
+- exact automated checks and runtime paths that actually executed;
+- whether inputs were synthetic, repository-owned, lawfully external or retail;
+- observable result or invariant, not only “tests passed”;
+- sanitizer, layout, ABI or image-comparison evidence when relevant; and
+- explicitly unperformed Windows, retail, hardware or cross-module checks.
+
+Do not copy rolling CTest totals into every document; they become stale when unrelated tests are
+added. Use the full preset result only in the central build/status document, and use focused target
+results in component documents.
+
+## Build entry points
+
+Supported Windows baseline commands:
 
 ```text
 build-debug.cmd
@@ -132,15 +206,10 @@ Build-Conquest.ps1 -Configuration Debug -NoDeploy
 Build-Conquest.ps1 -Configuration Final -NoDeploy
 ```
 
-These require Windows, VS2022, Python 3, and the June 2010 DirectX SDK. Do not attempt to present
-them as native Linux commands. Full rebuilds are required; incremental legacy builds can reuse
-stale intermediates.
+They require native Windows, VS2022, Python 3 and the June 2010 DirectX SDK. Full rebuilds are
+required; do not present these as Linux commands or emulate the ABI checks through Wine/containers.
 
-No native Linux game build exists yet. The CMake graph contains isolated layout, TinyXML, platform
-timing, profile, data-root, UTF/headless and optional SDL3 window/input targets plus a native startup
-shell that composes data-root, production event-system and SDL lifecycle owners. The checked-in
-Linux presets enable SDL3 and therefore require its `pkg-config` module. Its verified GCC commands
-are:
+Linux GCC commands:
 
 ```text
 cmake --preset linux-gcc-debug
@@ -148,376 +217,68 @@ cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```
 
-Use `linux-clang-debug` in all three commands for the Clang check. Both presets configured, built,
-and passed twenty-eight CTests on Linux x86_64 on 2026-09-18. A separate SDL-disabled configure built the
-headless target without probing SDL3. These commands do not build or run the game and do not replace
-the required Windows regression path.
+Use `linux-clang-debug` for the corresponding Clang sequence. The checked-in presets currently
+enable SDL3 and the isolated SDL GPU target and therefore require SDL3's `pkg-config` module and
+`glslc`. These commands build the documented native graph, not the game. For the latest measured
+targets and results, use [docs/BUILD_GRAPH.md](docs/BUILD_GRAPH.md).
 
-Use `Tools/abicheck`, schema readers, compile-time layout assertions, and
-`RETAIL_TEST_MATRIX.md` where relevant. Runtime claims require an actual run against a legitimate
-retail installation.
+Use `Tools/abicheck`, schema readers, compile-time layout assertions and
+`RETAIL_TEST_MATRIX.md` where relevant. ABI scripts require native Windows, VS2022 `dumpbin` and PE
+binaries and must not be added to Linux CTest.
 
-The ABI scripts require native Windows, VS2022 `dumpbin`, and PE binaries. They reject non-Windows
-hosts by design. Do not run them through Docker, Podman, Wine, or Linux PowerShell, and do not add
-them to the Linux CMake/CTest graph.
+## Legal and distribution
 
-## Legal and Distribution
-
-The controlling file is `Conquest Source License.txt`; never edit or replace it. The entire
-derivative remains under its exact non-commercial, revocable terms. Do not add a second project
-license or imply OSI-open-source status.
+The controlling file is `Conquest Source License.txt`; never edit, replace or supplement it with a
+second project license. The derivative remains under its exact non-commercial, revocable terms.
 
 Before conveying source or binaries:
 
-- preserve the full controlling license and required notices;
-- keep `MODIFICATIONS.md` dated and attributed for material changes;
-- verify every dependency's source, license, and redistribution compatibility;
-- exclude retail media, SDK redistributables, reverse-engineering dumps, and unapproved binaries;
-- exclude `binkw32.dll` and `Conquest_Frontier_Wars_Manual.pdf` unless documented permission is
-  obtained; and
-- do not request or accept payments, donations, expenses, or consideration for the Program,
-  distribution, warranty, or support.
+- preserve the complete controlling license and required notices;
+- keep `MODIFICATIONS.md` dated and attributed;
+- verify dependency source, version, license and redistribution compatibility;
+- exclude retail media, SDK redistributables, reverse-engineering dumps and unapproved binaries;
+- exclude `binkw32.dll` and `Conquest_Frontier_Wars_Manual.pdf` without documented permission; and
+- never request or accept payment, donations, expenses or consideration for the Program,
+  distribution, warranty or support.
 
-Keep raw retail binaries, disassembly databases, decompiler output, traces, and dumps outside the
+Keep raw retail binaries, disassembly databases, decompiler output, traces and dumps outside the
 repository. Commit only independently written interoperability facts and implementations permitted
 by `LEGAL.md`.
 
-## Source Control and Attribution
+## Source control
 
 - `upstream` is `https://github.com/Revan67/ConquestFWR.git`.
-- The local `main` history is intended to remain free of unresolved third-party files. Do not merge
-  or publish upstream history blindly; review provenance and use a filtered import or reviewed
-  patches when necessary.
-- Never commit, push, create branches, rewrite history, or publish releases unless the user asks.
-- Do not discard user changes or ignored diagnostic artifacts.
-- Use Conventional Commit subjects in imperative form: `<type>(optional-scope): description`.
-- Keep code, comments, commit messages, and repository documentation in English.
+- Do not merge or publish upstream history blindly; review provenance and use a filtered import or
+  reviewed patches when needed.
+- Never commit, push, create branches, rewrite history or publish releases unless the user asks.
+- Preserve unrelated user changes and ignored diagnostic artifacts.
+- Use Conventional Commit subjects: `<type>(optional-scope): description`.
+- Keep code, comments, commit messages and repository documentation in English.
 - Use Git history and `MODIFICATIONS.md` for attribution; do not add mandatory inline author tags.
 
-## Key Paths
+## Key entry points
 
-- `Code/App/Src/Conquest.cpp`: Win32 entry point and application startup
-- `Code/App/Src/System.cpp`: render/system configuration and runtime integration
-- `Code/App/Src/UserDefaults.cpp`: Windows registry-backed settings
-- `Code/Libs/Src/RenderPipeline/DirectDraw/D3D/Direct3D_pipe.cpp`: active D3D9 renderer
-- `Code/App/Src/Scripts/`: retail campaign modules
-- `Tools/abicheck/`: cross-module ABI checks
-- `Tools/portability/layout_probe.cpp`: first native Linux type-width probe
-- `Tools/portability/tinyxml_probe.cpp`: first linked portable-library behavior test
-- `Tools/portability/data_root_probe.cpp`: exact-case startup data-directory inspector
-- `CMakePresets.json`: Linux x86_64 GCC and Clang probe presets
-- `docs/DEPENDENCIES.md`: native-build dependency provenance and release blockers
-- `Tools/read_gendata.py`: retail schema inspection
-- `HANDOFF.md`: detailed restoration state and unresolved defects
-- `RETAIL_TEST_MATRIX.md`: runtime acceptance evidence
-- `LEGAL.md`: compliance and interoperability policy
-- `MODIFICATIONS.md`: required prominent modification notice
+- `Code/App/Src/Conquest.cpp`: Win32 application entry and startup ownership.
+- `Code/App/Src/System.cpp`: renderer/system configuration and runtime integration.
+- `Code/App/Src/UserDefaults.cpp`: supported Windows registry settings owner.
+- `Code/Libs/Include/rendpipeline.h` and `IRenderPrimitive.h`: existing renderer boundaries.
+- `Code/Libs/Src/RenderPipeline/DirectDraw/D3D/Direct3D_pipe.cpp`: active D3D9 renderer.
+- `Code/Launcher/NativeShell.cpp`: current native process composition root.
+- `Code/App/Src/Scripts/`: retail campaign modules.
+- `CMakeLists.txt` and `CMakePresets.json`: incremental native build graph.
+- `Tools/portability/`: focused native checks and inventories.
+- `Tools/abicheck/`: native-Windows cross-module ABI checks.
 
-## Scoped Instructions for Codex and GitHub Copilot
+## Scoped instructions
 
-Codex and GitHub Copilot must read and apply these files when their paths match.
-The legal/release instructions apply repository-wide; their individual requirements remain
-conditional on the action being performed.
+Read and apply these files when their paths match. Legal/release rules are repository-wide but
+their individual requirements remain conditional on the action being performed.
 
 | File | Scope |
 |---|---|
 | `.github/instructions/cpp-conventions.instructions.md` | C and C++ source/header changes |
-| `.github/instructions/build.instructions.md` | CMake, project, and build tooling changes |
+| `.github/instructions/build.instructions.md` | CMake, project and build tooling changes |
 | `.github/instructions/docs.instructions.md` | Markdown documentation changes |
-| `.github/instructions/legal-release.instructions.md` | All paths; action-specific dependency, asset, interoperability, and release rules |
+| `.github/instructions/legal-release.instructions.md` | All paths; action-specific legal/release rules |
 
-Keep this table synchronized when scoped instruction files are added, removed, or renamed.
-
-## Port readiness follow-up
-
-See [Linux port readiness](docs/PORT_READINESS.md) for the first proposed layout-probe milestone,
-initial blocker inventory, ABI tool parameters and pending validation. The layout probe and isolated
-TinyXML library now build with GCC and Clang; no native game target exists. The ABI scripts are
-parameterized and statically checked, but still require native Windows execution with `dumpbin`.
-
-## Build declaration inventory
-
-Run `python3 Tools/portability/build_inventory.py` from the repository root to inspect the
-supported Windows entry points without invoking Windows tools. See [build graph evidence](docs/BUILD_GRAPH.md)
-for scope, test commands, measured dependencies and production profile-parser evidence. This
-read-only inventory does not evaluate MSBuild or replace native Windows ABI validation.
-
-## Profile buffer core (2026-09-13)
-
-The Linux presets build `frontierx_profile_buffer_probe`; both GCC and Clang pass the complete
-twenty-eight-test matrix. `FrontierX/ProfileBuffer.h` owns section marking, line/section navigation,
-key lookup/copying, and section/key callback traversal shared with the production DACOM parser.
-Runtime section offsets now use the pointer-width encoded-handle contract instead of `U32`
-decoding. This remains an internal borrowed-buffer contract with sentinel padding, not a complete
-portable DACOM implementation or game target. Native Windows Debug/Final rebuilds, callback
-comparison and ABI checks remain required; see `docs/PROFILE_CALLBACK_PORTABILITY.md`.
-
-### Owning native profile reader (2026-09-13)
-
-The existing GCC and Clang presets build `frontierx_profile_document_probe` and pass twenty-eight
-CTests. `FrontierX/ProfileDocument.h` provides owning text/file loading, ordered section names
-and key lookup through the shared profile-buffer core. Native startup configuration currently
-accepts ASCII without NUL bytes, up to 1 MiB, with locale-independent ASCII case folding.
-This policy is limited to the new reader; Windows DACOM comparison behavior is unchanged.
-No native game startup or retail-configuration compatibility is claimed by the synthetic tests.
-
-### Production native profile parser (2026-09-18)
-
-`frontierx_profile_parser` compiles the real DACOM `ProfileParser.cpp` factories, aggregates and
-both parser interfaces. Its non-Windows read path uses bounded fixed-width sizing and transactional
-standard-library file I/O; Windows retains the existing Win32 branch. `Initialize2` now uses a
-typed buffer initializer instead of encoding a length in an out-of-range enum value. The real
-service passes buffer/file, callback, duplicate, handle, failure-retention, GCC/Clang and focused
-sanitizer checks through `NativeComponentManager`. Native `SetINIConfig` separately reuses the
-owning document's raw-line traversal for transactional `[Libraries]` loading. Application-global
-bootstrap now includes the process-local native `IHeap`; cross-ELF heap ownership and Windows
-behavioral/ABI validation remain open; see
-`docs/PROFILE_CALLBACK_PORTABILITY.md`.
-
-### Native process-local heap bootstrap (2026-09-18)
-
-`frontierx_native_heap` implements the unchanged `IHeap` vtable through synchronized tracked native
-allocations. Process-global `DACOM_Acquire` registers it before the profile factories, and the public
-`InitializeDAHeap`, `HEAP_Acquire`, `SetDefaultHeapMsg` and `HEAP` paths use that owner. GCC, Clang
-and focused sanitizers cover allocation, zero fill, reallocation, metadata, enumeration,
-foreign-pointer rejection and repeated initialization. Configured capacity is diagnostic; private
-COMHeap pass-through methods, legacy debug/arena behavior, cross-ELF allocation ownership and
-native Windows comparison remain open. See `docs/NATIVE_HEAP.md`.
-
-## Native headless startup check (2026-09-13)
-
-The GCC and Clang presets build `frontierx_headless` and pass twenty-eight CTests; the headless CTest
-contains ten process-level scenarios. Python 3 is required when BUILD_TESTING is enabled.
-The following help command was executed:
-
-```text
-out/build/linux-gcc-debug/frontierx_headless --help
-```
-
-The executable accepts `--data-root DIRECTORY`, optional `--config FILE`, and optional
-`--preferences FILE`. The config is new native configuration, not retail Conquest.ini: use
-`[FrontierX]` and `DataRoot=path` with a final LF newline. Relative config paths resolve against
-the config file's directory. Data-root selection order is CLI, `FRONTIERX_DATA_ROOT`, explicit
-config, then `Data` relative to the working directory. An explicitly supplied invalid
-configuration always fails, even when another path overrides it. ASCII/control-character
-restrictions of the native reader apply; paths are not silently trimmed.
-
-Preference selection is an explicit CLI path, then an absolute `XDG_CONFIG_HOME`, then
-`$HOME/.config/frontierx/preferences.dat`. Relative XDG and HOME values are ignored. A missing
-default file represents first-run empty preferences; a missing explicit file, invalid format, I/O
-failure, or unavailable base directory returns exit code 6. Diagnostics report source, status and
-entry count without printing the resolved path.
-
-Exit codes: 0 means checks passed (or help), 1 invalid arguments, 2 invalid configuration,
-3 unusable required data directories, 4 unexpected startup-check failure, 5 invalid UTF metadata
-or entry, and 6 unusable preferences. Optional media directories and a missing default preference
-file do not fail. Reports are deterministic and do not print the user's absolute installation or
-settings path. No media contents, campaign, renderer or game startup are validated. Synthetic
-process tests cover data/config precedence, relative configuration paths, XDG/default/explicit
-preference selection, valid and invalid preference files, malformed options/configuration, missing
-roots, case mismatches, optional media, and UTF metadata/entry validation.
-
-### UTF metadata header check (2026-09-13)
-
-`frontierx_headless` additionally accepts `--metadata FILE`, an explicit path resolved from the
-working directory. After directory checks, it reads only the 56-byte UTF 1.01 header and validates
-signature, version, 44-byte directory stride, aligned directory size, metadata ranges, overlap and
-free-entry offset. Fields are decoded as little-endian fixed-width words; native structs are never
-mapped onto disk bytes. Invalid metadata returns exit code 5. Omitting the option leaves this check
-unperformed. Success does not validate directory entries, names, payloads or GenData archetypes.
-
-Both preset builds passed twenty-eight CTests; the headless suite now has ten process scenarios,
-including synthetic UTF header mutations and missing/truncated metadata. No retail files were read.
-The format evidence is the source declarations in DOSFile/BaseUTF.h, header validation in
-UTFDMan.cpp and the GenData.cpp loadTypesData caller. The UTF inspector is not yet the DOSFile
-backend replacement. Its summary is diagnostic only and does not certify a compatible installation.
-
-### UTF directory validation (2026-09-13)
-
-The metadata check now reads directory and used-name tables (combined limit 64 MiB), walks the
-reachable tree iteratively, rejects repeated/cyclic/misaligned links, validates NUL-terminated
-name references and bounds file allocation/used extents against the container size. The free-entry
-chain is checked separately. Source review of UTFDMan.cpp corrected the earlier assumption:
-the header's first free-entry offset is absolute; its subsequent dwNext links are directory-relative.
-Synthetic tests include a valid free chain and a cyclic one. Unreachable slots and free payload-space
-lists are not certified; payload contents/decompression and archetype schemas remain unchecked.
-
-GCC and Clang passed all twenty-eight CTests, including ten headless process scenarios with synthetic
-UTF trees, invalid links, names and payload ranges. No retail installation was inspected. This
-extends the read-only inspector; it does not yet replace the Windows DOSFile implementation.
-
-The headless checker now accepts `--metadata FILE --entry VIRTUAL_PATH` to read a bounded UTF
-entry into memory and report its byte count and diagnostic checksum (2026-09-13). Both presets
-passed twenty-eight CTests. No schema or retail compatibility is implied; see the UTF entry-reading
-section of the port-readiness plan for limits and outstanding work.
-
-### SDL3 window and input backend probe (2026-09-16)
-
-The Linux presets now build the isolated `frontierx_sdl3_platform` library and
-`frontierx_sdl3_window_probe` through the installed SDL3 3.4.16 `pkg-config` module. The backend
-owns window/video lifetime and translates resize, focus, close, keyboard, owned UTF-8 text, mouse
-motion/button/wheel and quit events into SDL-free FrontierX values. An isolated compatibility
-adapter produces the numeric message, pointer-width window token, `wParam` and `lParam` contract
-read by current controls and hotkey code, with synchronous parameter lifetime. GCC and Clang passed
-the full twenty-eight-test CTest matrix with the SDL dummy video backend. A separate responsive visible-window
-runtime smoke opened, pumped and closed through Wayland. The adapter is not connected to the game;
-an isolated event-pump owner drains injected SDL batches synchronously through the production
-`EventSystem` to a real DACOM subscriber. A native `IWindowManager` factory now owns SDL window and
-callback-pump lifecycle for the native shell; application-loop cadence, Windows input parity,
-renderer integration and distribution approval remain open.
-
-The real public `IWindowManager` header now has a non-Windows declaration path compiled by the
-DACOM interface probe. Native `HWND`, `WPARAM`, `LPARAM` and `LRESULT` compatibility values are
-pointer-width, while `LONG` and `UINT` remain explicit 32-bit scalars; Windows continues to use the
-platform definitions and calling conventions. `RegisterNativeWindowManager` now registers a
-separate SDL-backed DACOM factory. Its dummy-driver probe covers startup, sizing, cursor/focus,
-wait/background pumping, close veto, quit, multiple-instance rejection and teardown, and the native
-shell consumes that component instead of owning `SdlWindow` directly. See
-`docs/WINDOW_MANAGER_PORTABILITY.md`.
-
-### Native startup shell (2026-09-18)
-
-`frontierx_native_shell` is the first integrated Linux process owner. It shares native configuration,
-data-root precedence and transactional preference loading with the headless checker, validates the exact-case required directory
-structure, applies an optional explicit `[Libraries]` list, creates and initializes the production
-`EventSystem`, native `IUserDefaults` and SDL-backed `IWindowManager` through
-`NativeComponentManager`, persists fixed-width settings, pumps through the
-window component until close/quit or a bounded
-smoke deadline, and tears those owners down in dependency order. GCC and Clang pass the synthetic
-process suite under the dummy video driver; focused AddressSanitizer/UndefinedBehaviorSanitizer
-coverage also passes. This shell does not load the game, retail metadata, a campaign or a renderer,
-and empty synthetic directories do not prove retail compatibility. See `docs/NATIVE_SHELL.md`.
-
-### Platform touchpoint inventory (2026-09-16)
-
-`Tools/portability/platform_inventory.py` provides a deterministic lexical audit of production
-C/C++ sources grouped by category, file, and owning subsystem. Its 1,260-file run and limitations
-are documented in `docs/PLATFORM_INVENTORY.md`; the synthetic inventory test is part of the full
-CTest matrix. Counts are source-review candidates, not compile errors or runtime evidence. Use the
-machine-readable output to select narrow owner closures; do not use aggregate counts to justify a
-repository-wide rewrite. The current run scans 1,260 files; both the measured true object/address
-truncation and legacy-width DOSFile handle-index categories are now zero.
-IFF, UTF, and SharedUTF use the pointer-width token contract and explicit serialized-call contexts.
-The public DACOM templates use pointer-width runtime offsets and non-pointer connection tokens.
-Both migrations still require native Windows compile, ABI and behavioral validation; the production
-`EventSystem` is the first real native DACOM service owner, while the manager/loader remains open.
-
-### Native preference storage (2026-09-16)
-
-`FrontierX/PreferenceStore.h` and the platform library implement the bounded `FXSET001` native
-settings container for typed strings and binary values. It has deterministic fixed-width
-little-endian serialization, transactional validation and same-directory temporary-file
-replacement. The probe covers missing files, exact round trips, stable bytes, invalid inputs,
-corruption, truncation and trailing data; GCC and Clang pass the full twenty-eight-test matrix. This is
-not the raw `USER_DEFAULTS` registry blob. `LegacyPreferenceValues` now reproduces the typed
-binary/string, deletion, short-buffer and four-entry MRU value semantics over that store, and the
-real `IUserDefaults` header compiles through the public DACOM probe without changing its MSVC ABI.
-`NativeUserSettings` defines 25 required fixed-width version-1 entries and 31 explicit flag bits;
-`NativeUserSettingsOwner` now applies player/global precedence, hex-encoded player namespaces,
-missing-player reset with hardware-cursor preservation, invalid-player cleanup/global fallback and
-transactional dual stores. Shared `StartupPreferences` loading executes this owner for headless and
-shell startup at the documented XDG path and reports only redacted sources. A native DACOM
-`IUserDefaults` component maps every field and flag into the runtime-only legacy struct, provides
-immediate transactional named-value/MRU writes, creates the selected parent directory and stores the
-fixed-width global/player schema at shell shutdown. Native game-startup selection, portable file
-dialogs/editors/install metadata/EULA, fsync/concurrent-write policy and Windows regression remain
-open. Do not silently change the supported Windows registry behavior.
-
-### Portable event queue core (2026-09-16)
-
-`frontierx_platform` includes an independently owned `EventQueue` matching the source-reviewed
-`IEventSystem` `Post`/`Update`/`Peek` batch semantics. The production DAHOTKEY `EventSystem` now
-also builds as a native target: its real aggregate factory, inbound/outbound DACOM maps, connection
-point, direct `Send`, callback-time posts and `Peek` lifecycle pass under GCC, Clang and focused
-sanitizers. `NativeComponentManager` hosts it through the real `ICOManager` interface and preserves
-static-factory priority, fallback, enumeration, reference and shutdown behavior. Queue
-allocation/free pairing and null-owner member-offset UB were corrected. Raw
-parameters remain non-owning native pointers and are never serialized. An isolated SDL pump owns
-batch draining and synchronous dispatch. The native shell now pumps through a real SDL-backed
-`IWindowManager`; application-loop cadence integration, the remaining Hotkey module, cross-ELF heap ownership and native Windows
-regression remain open. The x86 automation dispatch is used by four legacy Viewer headers, not by
-normal DACOM component creation.
-
-### Native dynamic-library boundary (2026-09-17)
-
-`frontierx_dynamic_library` wraps Linux `dlopen`/`dlsym`/`dlclose` in a move-only local, eager-load
-owner. `NativeComponentManager` requires explicit C-named registration/liveness entry points,
-attributes module registrations, balances repeated exact-path loads, unregisters before close and
-refuses unload while the module reports live objects. A CMake-built synthetic ELF fixture verifies
-these paths plus missing symbols, ownership transfer and idempotent close. The production
-`EventSystem` now also builds as an ELF component with instance-counted unload gating and is loaded
-through `[Libraries]` by both the manager probe and native shell. No Win32 loader call is replaced.
-Process-global `DACOM_Acquire` now owns this manager and registers both production profile
-factories once. A process-local native `IHeap` is registered first and supplies tracked allocation,
-metadata, enumeration and the public `InitializeDAHeap`/`HEAP_Acquire` path. It does not yet prove
-general cross-module heap ownership. Native
-Windows comparison remain; campaigns still need a separate C export and ABI policy. See
-`docs/DYNAMIC_LIBRARY_PORTABILITY.md`.
-
-### Portable scalar math core (2026-09-16)
-
-The Linux presets build `frontierx_math` and pass twenty-eight CTests with FMA contraction disabled for
-that target. The core covers the scalar `I3DMathEngine` operation surface with ABI-neutral values
-and fixed-width inverse-square-root bit handling. Source review proved that 402 of 441 remaining assembly
-candidates belong to the separate historical K62/3DNow provider, not scalar `x86math.cpp`.
-`Build-Conquest.ps1` reaches the `MathLib` DACOM accessor but does not build or verify
-`x86Math.dll`; do not claim a complete provider path. A DACOM adapter, native Windows numerical
-oracle, floating-point-environment policy and Win32 build/deploy repair remain required. See
-`docs/MATH_BACKEND.md`.
-
-### Portable mesh ray geometry (2026-09-16)
-
-`MeshInstance::ComputeHitTest` now uses `FrontierX/RayGeometry.h` instead of
-`D3DXBoxBoundProbe`, `D3DXIntersectTri`, and layout-casting engine vertices to D3DX types. The
-header-only boundary is compiled by both the existing MeshManager project and a native probe; the
-Linux presets pass twenty-eight CTests. The remaining D3DX9 inventory is 155 lexical matches in eight
-production files and is classified in `docs/D3DX9_PORT.md`. Native Windows comparison remains
-required for boundary tolerances and near-degenerate inputs before accepting parity.
-
-### DACOM runtime pointer-width helpers (2026-09-17)
-
-`FrontierX/DacomRuntime.h` and `frontierx_dacom_runtime_probe` characterize pointer-width
-interface/member offsets, multiple-inheritance adjustment and deterministic 32-bit connection
-tokens. The public DACOM templates no longer truncate component, connection-node or static-property
-addresses through `U32`; the established `IDAConnectionPoint` handle ABI remains `U32`, but handles
-are now non-pointer tokens. The production inventory reports no remaining measured pointer/address
-casts and none in the migrated public DACOM headers. GCC and Clang pass the complete twenty-eight-test
-matrix; focused AddressSanitizer/UndefinedBehaviorSanitizer execution also passes.
-
-`frontierx_dacom_interface_probe` now compiles the real public `DACOM.H` and `TComponent.h` path,
-instantiates `IDAComponent` query/reference behavior, a `DAComponent` inbound map, and the production
-connection-container/point templates, and the real public `IWindowManager` declaration, and passes
-under GCC, Clang and focused sanitizers. It covers
-lookup, owner recovery, subscription enumeration, removal, and deterministic token reuse. Non-MSVC
-export/calling-convention decoration is empty; the existing Win32 decoration remains. Selected
-direct includes use exact on-disk case.
-
-This is not a complete Linux DACOM target. A static native manager now hosts the production
-`EventSystem`, plus a process-local native `IHeap`, but cross-ELF heap ownership, further owner include/platform boundaries
-and native Windows validation remain open. The 32-bit MSVC automation dispatcher is referenced by
-four legacy Viewer headers, not by normal DACOM component creation. Debug/Final rebuilds plus ABI/layout
-and connection behavior checks remain required. See
-`docs/DACOM_RUNTIME_PORTABILITY.md`.
-
-### Pointer-width stack-local debug guards (2026-09-17)
-
-Six `_DEBUG` guards in `MGroupRef.h`, `MPart.h`, and `Objwatch.h` now use
-`FrontierX/StackAddress.h` instead of reading x86 `esp` and truncating `this` to `U32`. The helper
-uses `std::uintptr_t`, supports either stack-growth direction, and retains the strict 8,196-byte
-limit and existing assertions. No object or persistent layout changed. GCC, Clang and focused
-sanitizer probes pass; the complete presets pass twenty-eight CTests. Native Windows Debug/Final and
-owning-module validation remain required. See `docs/STACK_ADDRESS_PORTABILITY.md`.
-
-### Pointer-width runtime contexts and callbacks (2026-09-17)
-
-`FrontierX/ParticleContext.h` carries the process-local `EffectInstance*` through
-`IParticleInstance`, `ParticleSystem`, and `IGamePositionCallback` without widening unrelated
-numeric effect or persistent IDs. DumpView uses a static RichEdit callback with `DWORD_PTR`;
-DirectShow notification data uses `LONG_PTR`. `FrontierX/LegacyMessage.h` supplies pointer-width
-window, `wParam`, and `lParam` types shared by DAHOTKEY and the SDL compatibility adapter, including
-the synchronous joystick pointer payload. The measured production pointer/address-cast category is
-now zero, as is the encoded DOSFile-handle category. GCC and Clang pass twenty-eight CTests.
-
-These are source and isolated-probe results. The affected Conquest, Trim, DAHOTKEY and
-ParticleEffect interfaces still require native Windows Debug/Final rebuilds, ABI/vtable checks and
-behavioral regression. See `docs/RUNTIME_CONTEXT_PORTABILITY.md`.
+Keep this table synchronized when scoped instruction files are added, removed or renamed.

@@ -170,10 +170,12 @@ GENRESULT Notify (U32 message, void *param)
 //-------------------------------------------------------------------------------------
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include "DACOM.H"
 #endif
 
 #include "FrontierX/LegacyMessage.h"
+
+#include <cstring>
 
 
 #define IID_IEventMessageFilter MAKE_IID("IEventMessageFilter",1)
@@ -253,7 +255,7 @@ struct DACOM_NO_VTABLE IHotkeyEvent : public IAggregateComponent
 
 	DEFMETHOD_(BOOL32,GetHotkeyState) (U32 hotkey) = 0;
 
-    virtual void __cdecl SystemMessage ( FrontierX::LegacyWindowToken hwnd,
+    virtual void DACOM_CDECL SystemMessage ( FrontierX::LegacyWindowToken hwnd,
                                          FrontierX::LegacyMessageId message,
                                          FrontierX::LegacyWParam wParam,
                                          FrontierX::LegacyLParam lParam,
@@ -265,6 +267,8 @@ struct DACOM_NO_VTABLE IHotkeyEvent : public IAggregateComponent
 
 	DEFMETHOD_(BOOL32,IsAnyHotkeyPressed) (void) = 0;
 };
+
+void RegisterHotkeyEventServer(ICOManager * manager);
 
 
 

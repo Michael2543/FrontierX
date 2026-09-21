@@ -16,20 +16,103 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmsystem.h>
-#include <stdlib.h>
+#else
+#include "FrontierX/LegacyInput.h"
+#include "FrontierX/LegacyJoystick.h"
+#endif
+
+#include <cstdlib>
+#include <cstdint>
+#include <cstring>
+#include <limits>
 
 #include "HKEvent.h"
-#include "HotKey.h"
-#include "HKeyRec.h"
+#include "Hotkey.h"
+#include "HkeyRec.h"
 #include "EventSys.h"
-#include "FileSys.h"
+#include "Filesys.h"
 #include "TComponent.h"
 #include "TConnContainer.h"
 #include "TConnPoint.h"
 #include "da_heap_utility.h"
+
+#if !defined(_WIN32)
+using BYTE = U8;
+using BOOL = BOOL32;
+using HWND = FrontierX::LegacyWindowToken;
+using UINT = FrontierX::LegacyMessageId;
+using WPARAM = FrontierX::LegacyWParam;
+using LPARAM = FrontierX::LegacyLParam;
+using LRESULT = std::intptr_t;
+using JOYINFOEX = FrontierX::LegacyJoystickState;
+
+inline constexpr U32 VK_SHIFT = FrontierX::LegacyVirtualKey::Shift;
+inline constexpr U32 VK_CONTROL = FrontierX::LegacyVirtualKey::Control;
+inline constexpr U32 VK_MENU = FrontierX::LegacyVirtualKey::Menu;
+inline constexpr U32 VK_CAPITAL = FrontierX::LegacyVirtualKey::Capital;
+inline constexpr U32 VK_NUMLOCK = FrontierX::LegacyVirtualKey::NumLock;
+inline constexpr U32 VK_SCROLL = FrontierX::LegacyVirtualKey::Scroll;
+inline constexpr U32 VK_LSHIFT = FrontierX::LegacyVirtualKey::LeftShift;
+inline constexpr U32 VK_RSHIFT = FrontierX::LegacyVirtualKey::RightShift;
+inline constexpr U32 VK_LCONTROL = FrontierX::LegacyVirtualKey::LeftControl;
+inline constexpr U32 VK_RCONTROL = FrontierX::LegacyVirtualKey::RightControl;
+inline constexpr U32 VK_LMENU = FrontierX::LegacyVirtualKey::LeftMenu;
+inline constexpr U32 VK_RMENU = FrontierX::LegacyVirtualKey::RightMenu;
+
+inline constexpr U32 WM_USER = 0x0400U;
+inline constexpr U32 WM_SETFOCUS = FrontierX::LegacyMessage::SetFocus;
+inline constexpr U32 WM_ACTIVATE = 0x0006U;
+inline constexpr U32 WM_ACTIVATEAPP = FrontierX::LegacyMessage::ActivateApp;
+inline constexpr U32 WM_KEYDOWN = FrontierX::LegacyMessage::KeyDown;
+inline constexpr U32 WM_KEYUP = FrontierX::LegacyMessage::KeyUp;
+inline constexpr U32 WM_SYSKEYDOWN = FrontierX::LegacyMessage::SystemKeyDown;
+inline constexpr U32 WM_SYSKEYUP = FrontierX::LegacyMessage::SystemKeyUp;
+inline constexpr U32 WM_MOUSEMOVE = FrontierX::LegacyMessage::MouseMove;
+inline constexpr U32 WM_LBUTTONDOWN = FrontierX::LegacyMessage::LeftButtonDown;
+inline constexpr U32 WM_LBUTTONUP = FrontierX::LegacyMessage::LeftButtonUp;
+inline constexpr U32 WM_RBUTTONDOWN = FrontierX::LegacyMessage::RightButtonDown;
+inline constexpr U32 WM_RBUTTONUP = FrontierX::LegacyMessage::RightButtonUp;
+inline constexpr U32 WM_MBUTTONDOWN = FrontierX::LegacyMessage::MiddleButtonDown;
+inline constexpr U32 WM_MBUTTONUP = FrontierX::LegacyMessage::MiddleButtonUp;
+
+inline constexpr U32 MK_LBUTTON = FrontierX::LegacyMouseMask::Left;
+inline constexpr U32 MK_RBUTTON = FrontierX::LegacyMouseMask::Right;
+inline constexpr U32 MK_MBUTTON = FrontierX::LegacyMouseMask::Middle;
+
+inline constexpr U32 JOY_POVCENTERED = FrontierX::LegacyJoystickPov::Centered;
+inline constexpr U32 JOY_POVFORWARD = FrontierX::LegacyJoystickPov::Forward;
+inline constexpr U32 JOY_POVRIGHT = FrontierX::LegacyJoystickPov::Right;
+inline constexpr U32 JOY_POVBACKWARD = FrontierX::LegacyJoystickPov::Backward;
+inline constexpr U32 JOY_POVLEFT = FrontierX::LegacyJoystickPov::Left;
+inline constexpr U32 JOY_RETURNX = FrontierX::LegacyJoystickFlag::ReturnX;
+inline constexpr U32 JOY_RETURNY = FrontierX::LegacyJoystickFlag::ReturnY;
+inline constexpr U32 JOY_RETURNPOV = FrontierX::LegacyJoystickFlag::ReturnPov;
+inline constexpr U32 JOY_RETURNBUTTONS = FrontierX::LegacyJoystickFlag::ReturnButtons;
+inline constexpr U32 JOY_RETURNRAWDATA = FrontierX::LegacyJoystickFlag::ReturnRawData;
+inline constexpr U32 JOY_RETURNPOVCTS = FrontierX::LegacyJoystickFlag::ReturnPovContinuous;
+
+inline constexpr U32 JOY_BUTTON1 = FrontierX::LegacyJoystickButton(1);
+inline constexpr U32 JOY_BUTTON2 = FrontierX::LegacyJoystickButton(2);
+inline constexpr U32 JOY_BUTTON3 = FrontierX::LegacyJoystickButton(3);
+inline constexpr U32 JOY_BUTTON4 = FrontierX::LegacyJoystickButton(4);
+inline constexpr U32 JOY_BUTTON5 = FrontierX::LegacyJoystickButton(5);
+inline constexpr U32 JOY_BUTTON6 = FrontierX::LegacyJoystickButton(6);
+inline constexpr U32 JOY_BUTTON7 = FrontierX::LegacyJoystickButton(7);
+inline constexpr U32 JOY_BUTTON8 = FrontierX::LegacyJoystickButton(8);
+inline constexpr U32 JOY_BUTTON9 = FrontierX::LegacyJoystickButton(9);
+inline constexpr U32 JOY_BUTTON10 = FrontierX::LegacyJoystickButton(10);
+inline constexpr U32 JOY_BUTTON11 = FrontierX::LegacyJoystickButton(11);
+inline constexpr U32 JOY_BUTTON12 = FrontierX::LegacyJoystickButton(12);
+inline constexpr U32 JOY_BUTTON13 = FrontierX::LegacyJoystickButton(13);
+inline constexpr U32 JOY_BUTTON14 = FrontierX::LegacyJoystickButton(14);
+
+inline constexpr U32 MM_JOY1BUTTONDOWN = 0x03b5U;
+inline constexpr U32 MM_JOY1BUTTONUP = 0x03b7U;
+#endif
 
 
 static char interface_name[] = "IHotkeyEvent";
@@ -37,13 +120,19 @@ static char interface_name[] = "IHotkeyEvent";
 
 //--------------------------------------------------------------------------//
 //
+#if defined(_MSC_VER)
 #pragma warning(disable: 4200)		// zero length array
+#endif
 
 struct KTEXT
 {
 	U32 numStrings;
 	U32 sizeOfString;
+#if defined(_MSC_VER)
 	char strings[];
+#else
+	char strings[1];
+#endif
 
 	char * GetText (U32 index)
 	{
@@ -66,7 +155,7 @@ struct KTEXT
 	  	src = getText(startIndex+numToRemove);
 		dst = getText(startIndex);
 
-		memcpy(dst, src, getText(numStrings) - src);
+		std::memmove(dst, src, getText(numStrings) - src);
 		numStrings -= numToRemove;
 	}
 
@@ -80,7 +169,7 @@ struct KTEXT
 		dst = getText(index);
 	  	src = dst + sizeOfString;
 
-		memcpy(dst, src, strings + (numStrings * sizeOfString) - src);
+		std::memmove(dst, src, strings + (numStrings * sizeOfString) - src);
 		numStrings--;
 	}
 
@@ -97,7 +186,7 @@ private:
 
 //--------------------------------------------------------------------------//
 //
-static int __fastcall BitsSet (DWORD dwNumber)		// return number of bits set in number
+static int DACOM_FASTCALL BitsSet (DWORD dwNumber)		// return number of bits set in number
 {
 	int result=0;
 	DWORD i=1;
@@ -221,7 +310,7 @@ struct DACOM_NO_VTABLE HotkeyEvent : public IHotkeyEvent,
 
 	DEFMETHOD(Disable) (void);
 
-    virtual void __cdecl SystemMessage ( FrontierX::LegacyWindowToken hwnd,
+    virtual void DACOM_CDECL SystemMessage ( FrontierX::LegacyWindowToken hwnd,
                                          FrontierX::LegacyMessageId message,
                                          FrontierX::LegacyWParam wParam,
                                          FrontierX::LegacyLParam lParam,
@@ -257,11 +346,11 @@ struct DACOM_NO_VTABLE HotkeyEvent : public IHotkeyEvent,
 
 	BOOL32 UpdateMouse (DWORD dwMouseButtons);
 
-	static DWORD __fastcall ConvertToModifier (DWORD dwVirtKey);
+	static DWORD DACOM_FASTCALL ConvertToModifier (DWORD dwVirtKey);
 
-	static BOOL32 __fastcall IsAModifier (DWORD dwVirtKey, DWORD dwKeyMods);
+	static BOOL32 DACOM_FASTCALL IsAModifier (DWORD dwVirtKey, DWORD dwKeyMods);
 	
-	static BOOL32 __fastcall IsAMatch (DWORD dwVirtKey, DWORD dwMatchKey, DWORD dwKeyMods);
+	static BOOL32 DACOM_FASTCALL IsAMatch (DWORD dwVirtKey, DWORD dwMatchKey, DWORD dwKeyMods);
 
 	BOOL32 AddPressedEvent (DWORD dwHotkey);
 
@@ -288,18 +377,33 @@ struct DACOM_NO_VTABLE HotkeyEvent : public IHotkeyEvent,
 //---------------------------HotkeyEvent Methods----------------------------//
 //--------------------------------------------------------------------------//
 //																			//
-HotkeyEvent::HotkeyEvent (void) : messageFilter(0), eventCallback(1)
+HotkeyEvent::HotkeyEvent (void) :
+	bEnabled(1),
+	dwJoyMessage(0),
+	dwHotkeyMessage(0),
+	dwPrevJoyButtons(0),
+	dwPrevMouseButtons(0),
+	dwPrevPOV(JOY_POVCENTERED),
+	dwPrevDIR(0),
+	kbMods{},
+	dwCurrentModifiers(0),
+	vkey_state{},
+	pKeyData(nullptr),
+	pKeyText(nullptr),
+	dwNumKeys(0),
+	dwSizeOfKey(0),
+	bFilterMessage(0),
+	messageFilter(0),
+	eventCallback(1)
 {
-	bEnabled=1;
-	dwPrevPOV = JOY_POVCENTERED;
 }
 //--------------------------------------------------------------------------//
 //
 HotkeyEvent::~HotkeyEvent (void)
 {
-	free(pKeyData);
+	DA_HEAP_FREE(HEAP, pKeyData);
 	pKeyData = 0;
-	free(pKeyText);
+	DA_HEAP_FREE(HEAP, pKeyText);
 	pKeyText = 0;
 }
 //--------------------------------------------------------------------------//
@@ -384,19 +488,23 @@ void HotkeyEvent::UpdateModifiers (void)
 void HotkeyEvent::initKeyState (void)
 {
 	DWORD i;
+#if defined(_WIN32)
 	BYTE buffer[256];
+#endif
 
 	kbMods.reset();
 	memset(vkey_state, 0, sizeof(vkey_state));
 	dwCurrentModifiers=0;
 	for (i=0; i < dwNumKeys; i++)
 		pKeyData[i].bPressed=0;
+#if defined(_WIN32)
 	if (GetKeyboardState(buffer))
 	{
 		vkey_state[VK_NUMLOCK >> 3] |= ((buffer[VK_NUMLOCK] & 0x81) != 0) << (VK_NUMLOCK & 7);
 		vkey_state[VK_SCROLL >> 3] |= ((buffer[VK_SCROLL] & 0x81) != 0) << (VK_SCROLL & 7);
 		vkey_state[VK_CAPITAL >> 3] |= ((buffer[VK_CAPITAL] & 0x81) != 0) << (VK_CAPITAL & 7);
 	}
+#endif
 }
 //----------------------------------------------------------------------------
 //
@@ -414,6 +522,9 @@ inline void HotkeyEvent::ClearVkeyState (DWORD dwVirtKey)
 //
 BOOL32 HotkeyEvent::GetVkeyState (U32 dwVirtKey)
 {
+	if (dwVirtKey > HKR_VKEY_LAST)
+		return 0;
+
 	BOOL32 result = (vkey_state[dwVirtKey >> 3] >> (dwVirtKey & 7));
 
 	return result & 1;
@@ -486,6 +597,8 @@ void HotkeyEvent::SystemMessage (FrontierX::LegacyWindowToken hwnd,
 	FrontierX::LegacyMessageId message, FrontierX::LegacyWParam wParam,
 	FrontierX::LegacyLParam lParam, S32 unused1, S32 unused2)
 {
+	(void)unused1;
+	(void)unused2;
 	if (PreMessageFilter(&hwnd, &message, &wParam, &lParam) != GR_OK)
 		return;
 
@@ -495,6 +608,8 @@ void HotkeyEvent::SystemMessage (FrontierX::LegacyWindowToken hwnd,
 	{
 		JOYINFOEX *joy = FrontierX::PointerFromLegacyLParam<JOYINFOEX>(lParam);
 		DWORD dwJoyDIR = 0, dwPOV=JOY_POVCENTERED, dwButtons=0;
+		if (joy == nullptr)
+			return;
 
 		if (joy->dwFlags & JOY_RETURNBUTTONS)
 			dwButtons = joy->dwButtons;
@@ -536,7 +651,7 @@ void HotkeyEvent::SystemMessage (FrontierX::LegacyWindowToken hwnd,
 		UpdateJoystick(dwButtons, dwPOV, dwJoyDIR);
 	}
 	else
-		WndCallback(reinterpret_cast<HWND>(hwnd), message,
+		WndCallback(static_cast<HWND>(hwnd), message,
 			static_cast<WPARAM>(wParam), static_cast<LPARAM>(lParam));
 
 	if (bFilterMessage == 0)
@@ -549,7 +664,8 @@ U32 HotkeyEvent::GetHotkeyText (U32 hotkey, C8 *outBuffer, U32 bufferSize)
 	C8 * src;
 	U32 result = 0;
 
-	if (bufferSize && (src = pKeyText->GetText(hotkey)) != 0)
+	if (pKeyText && hotkey > 0 && hotkey <= pKeyText->numStrings && bufferSize &&
+		(src = pKeyText->GetText(hotkey)) != 0)
 	{
 		result = strlen(src);
 		if (bufferSize < result+1)
@@ -574,10 +690,16 @@ GENRESULT HotkeyEvent::Notify (U32 message, void *param)
 	else
 	if (message < WM_USER)
 	{
+		if (param == nullptr)
+			return GR_INVALID_PARMS;
+#if defined(_WIN32)
 		MSG *msg = (MSG *) param;
-
 		SystemMessage(FrontierX::LegacyWindowTokenFromPointer(msg->hwnd),
 			msg->message, msg->wParam, msg->lParam);
+#else
+		auto *msg = static_cast<FrontierX::LegacyWindowMessage *>(param);
+		SystemMessage(msg->window, msg->message, msg->wparam, msg->lparam);
+#endif
 	}
 
 	return GR_OK;
@@ -586,6 +708,7 @@ GENRESULT HotkeyEvent::Notify (U32 message, void *param)
 //
 LRESULT HotkeyEvent::WndCallback (HWND _hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	(void)_hwnd;
 	switch (message)
 	{
 		case MM_JOY1BUTTONDOWN:
@@ -656,11 +779,15 @@ LRESULT HotkeyEvent::WndCallback (HWND _hwnd, UINT message, WPARAM wParam, LPARA
 				case VK_NUMLOCK:
 					if (((((unsigned)lParam)>>31)^1) == 0)		// if key release
 					{
-						if (GetKeyState(wParam) & 1)		// is it toggled?
+#if defined(_WIN32)
+						if (GetKeyState(static_cast<int>(wParam)) & 1)		// is it toggled?
+#else
+						if ((static_cast<U32>(lParam) & FrontierX::LegacyKeyToggleBit) != 0)
+#endif
 							break;		// do not process this message
 					}
 
-					// fall through intentional
+					[[fallthrough]];
 
 				default:
 					UpdateModifiers();
@@ -1232,7 +1359,8 @@ void HotkeyEvent::SendEvent (U32 eventNum)
 
 	while (pNode)
 	{
-		pNode->client->Notify(dwHotkeyMessage, (void *)eventNum);
+		pNode->client->Notify(dwHotkeyMessage,
+			reinterpret_cast<void *>(static_cast<std::uintptr_t>(eventNum)));
 		pNode = pNode->pNext;
 	}
 }
@@ -1240,6 +1368,9 @@ void HotkeyEvent::SendEvent (U32 eventNum)
 //
 static void NormalizeKeyText (KTEXT & keyText, DAHOTKEY hotkeys)
 {
+	if (keyText.numStrings < 2)
+		return;
+
 	U32 i=0;
 	DAHOTKEY compare = hotkeys++;
 
@@ -1271,7 +1402,7 @@ static void NormalizeKeyText (KTEXT & keyText, DAHOTKEY hotkeys)
 //--------------------------------------------------------------------------//
 // perform bubble sort
 // 
-static BOOL32 __fastcall BubbleSortHotKeyList (DAHOTKEY lpKeyData, DWORD dwNum)
+static BOOL32 DACOM_FASTCALL BubbleSortHotKeyList (DAHOTKEY lpKeyData, DWORD dwNum)
 {
 	DWORD i=0;
 	BOOL32 result=0;
@@ -1296,17 +1427,24 @@ static BOOL32 __fastcall BubbleSortHotKeyList (DAHOTKEY lpKeyData, DWORD dwNum)
 }
 //--------------------------------------------------------------------------//
 //
+static BOOL32 ReadExact (IFileSystem * file, HANDLE handle, void * buffer, DWORD size)
+{
+	DWORD bytesRead = 0;
+	return file->ReadFile(handle, buffer, size, &bytesRead, nullptr) && bytesRead == size;
+}
+//--------------------------------------------------------------------------//
+//
 GENRESULT HotkeyEvent::init (HKEVENTDESC *lpDesc)
 {
 	GENRESULT result = GR_OK;
-	HANDLE hFile1;
+	HANDLE hFile1 = INVALID_HANDLE_VALUE;
 	DAFILEDESC desc = "Version";
-	DWORD dwBytesRead, dwVersion, dwAddedMemory, dwKeyTextSize;
+	DWORD dwVersion = 0, dwAddedMemory = 0, dwKeyTextSize = 0, binarySize = 0;
 	DWORD dwSortKeys;
+	constexpr DWORD binaryHeaderSize = sizeof(U32) * 2U;
+	constexpr DWORD textHeaderSize = sizeof(U32) * 2U;
 
-	hFile1 = INVALID_HANDLE_VALUE;
-
-	if (lpDesc->file == 0)
+	if (lpDesc == nullptr || lpDesc->file == nullptr)
 	{
 		result = GR_INVALID_PARMS;
 		goto Done;
@@ -1320,14 +1458,16 @@ GENRESULT HotkeyEvent::init (HKEVENTDESC *lpDesc)
 		goto Done;
 	}
 
-	lpDesc->file->ReadFile(hFile1, &dwVersion, sizeof(dwVersion), &dwBytesRead, 0);
-	if (dwBytesRead != sizeof(dwVersion) || dwVersion != HKEVENT_VERSION)
+	if (lpDesc->file->GetFileSize(hFile1) != sizeof(dwVersion) ||
+		!ReadExact(lpDesc->file, hFile1, &dwVersion, sizeof(dwVersion)) ||
+		dwVersion != HKEVENT_VERSION)
 	{
 		result = GR_GENERIC;
 		goto Done;
 	}
 
 	lpDesc->file->CloseHandle(hFile1);
+	hFile1 = INVALID_HANDLE_VALUE;
 
 	desc.lpFileName = "Binary data";
 	if ((hFile1 = lpDesc->file->OpenChild(&desc)) == INVALID_HANDLE_VALUE)
@@ -1338,21 +1478,42 @@ GENRESULT HotkeyEvent::init (HKEVENTDESC *lpDesc)
 
 	// find out how much memory to allocate for the instance
 
-	lpDesc->file->ReadFile(hFile1, &dwNumKeys, sizeof(dwNumKeys), &dwBytesRead, 0);
-	lpDesc->file->ReadFile(hFile1, &dwSizeOfKey, sizeof(dwSizeOfKey), &dwBytesRead, 0);
-
-	dwAddedMemory = (dwNumKeys * dwSizeOfKey);
-
-	pKeyData = (DAHOTKEY) DA_HEAP_MALLOC( HEAP, dwAddedMemory, "Hotkey data" );
-
-	lpDesc->file->ReadFile(hFile1, pKeyData, dwAddedMemory, &dwBytesRead, 0);
-	if (dwBytesRead != dwAddedMemory)
+	binarySize = lpDesc->file->GetFileSize(hFile1);
+	if (binarySize < binaryHeaderSize ||
+		!ReadExact(lpDesc->file, hFile1, &dwNumKeys, sizeof(dwNumKeys)) ||
+		!ReadExact(lpDesc->file, hFile1, &dwSizeOfKey, sizeof(dwSizeOfKey)) ||
+		dwSizeOfKey != sizeof(DAHOTKEY_STRUCT) ||
+		dwNumKeys > (std::numeric_limits<DWORD>::max() - binaryHeaderSize) /
+			dwSizeOfKey)
 	{
 		result = GR_GENERIC;
 		goto Done;
 	}
 
+	dwAddedMemory = dwNumKeys * dwSizeOfKey;
+	if (binarySize != binaryHeaderSize + dwAddedMemory)
+	{
+		result = GR_GENERIC;
+		goto Done;
+	}
+
+	if (dwAddedMemory != 0)
+	{
+		pKeyData = static_cast<DAHOTKEY>(DA_HEAP_MALLOC(HEAP, dwAddedMemory, "Hotkey data"));
+		if (pKeyData == nullptr)
+		{
+			result = GR_OUT_OF_MEMORY;
+			goto Done;
+		}
+		if (!ReadExact(lpDesc->file, hFile1, pKeyData, dwAddedMemory))
+		{
+			result = GR_GENERIC;
+			goto Done;
+		}
+	}
+
 	lpDesc->file->CloseHandle(hFile1);
+	hFile1 = INVALID_HANDLE_VALUE;
 	// get the size of key text
 	
 	desc.lpFileName = "Keyboard text";
@@ -1363,12 +1524,37 @@ GENRESULT HotkeyEvent::init (HKEVENTDESC *lpDesc)
 	}
 
 	dwKeyTextSize = lpDesc->file->GetFileSize(hFile1);
-	if ((pKeyText = (KTEXT *) DA_HEAP_MALLOC( HEAP, dwKeyTextSize, "Hotkey Text" ) ) == 0)
+	if (dwKeyTextSize < textHeaderSize)
 	{
 		result = GR_GENERIC;
 		goto Done;
 	}
-	lpDesc->file->ReadFile(hFile1, pKeyText, dwKeyTextSize, &dwBytesRead, 0);
+	if ((pKeyText = static_cast<KTEXT *>(DA_HEAP_MALLOC(HEAP, dwKeyTextSize,
+		"Hotkey Text"))) == nullptr)
+	{
+		result = GR_OUT_OF_MEMORY;
+		goto Done;
+	}
+	if (!ReadExact(lpDesc->file, hFile1, pKeyText, dwKeyTextSize) ||
+		pKeyText->numStrings != dwNumKeys ||
+		(pKeyText->numStrings != 0 &&
+			(pKeyText->sizeOfString == 0 || pKeyText->numStrings >
+				(std::numeric_limits<DWORD>::max() - textHeaderSize) /
+				pKeyText->sizeOfString)) ||
+		dwKeyTextSize != textHeaderSize + pKeyText->numStrings * pKeyText->sizeOfString)
+	{
+		result = GR_GENERIC;
+		goto Done;
+	}
+	for (DWORD index = 0; index < pKeyText->numStrings; ++index)
+	{
+		const char * text = pKeyText->strings + index * pKeyText->sizeOfString;
+		if (std::memchr(text, '\0', pKeyText->sizeOfString) == nullptr)
+		{
+			result = GR_GENERIC;
+			goto Done;
+		}
+	}
 
 	// done with the file
 	lpDesc->file->CloseHandle(hFile1);
@@ -1388,7 +1574,8 @@ GENRESULT HotkeyEvent::init (HKEVENTDESC *lpDesc)
 	dwHotkeyMessage = lpDesc->hotkeyMessage;
 
 Done:
-	lpDesc->file->CloseHandle(hFile1);
+	if (hFile1 != INVALID_HANDLE_VALUE)
+		lpDesc->file->CloseHandle(hFile1);
 	
 	return result;
 }

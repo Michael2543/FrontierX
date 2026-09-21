@@ -7,6 +7,14 @@ This build-declaration view is complemented by the 2026-09-16 lexical
 pointer-width, graphics, audio, and video candidates by source owner. Neither inventory evaluates
 MSBuild imports or establishes a native game target.
 
+Native matrix status, 2026-09-20: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets completed.
+Their CTest presets each discovered 31 tests, executed 30 successfully and skipped only
+`portability.sdl3_gpu` because this sandbox exposed no graphical/GPU runtime. The focused render
+submission test executed in both matrices; the skipped GPU test is not runtime evidence. No
+Windows, retail or native game execution was performed in this matrix. Separate visible GCC,
+Clang and Clang ASan/UBSan shell runs exercised the shared scene through Wayland/Vulkan and are
+recorded in the focused renderer and shell documents.
+
 ## Reproduce
 
 From the repository root, using Python 3 (standard library only):
@@ -74,9 +82,8 @@ Before extracting it:
    adapter and require native Windows regression/ABI validation before accepting that integration.
 
 No replacement parser, generic configuration framework, math-policy change or new dependency was
-introduced. The current GCC and Clang matrices pass twenty-eight CTests; focused profile buffer,
-document, and public callback paths also pass AddressSanitizer and UndefinedBehaviorSanitizer.
-Detailed contracts and remaining gates are in
+introduced. Focused profile buffer, document, and public callback paths pass AddressSanitizer and
+UndefinedBehaviorSanitizer. Detailed contracts and remaining gates are in
 [PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
 
 ## IFF build-edge evidence
@@ -114,6 +121,39 @@ foreign-window filtering plus ordered resize, Unicode and quit delivery. See
 [SDL_EVENT_PUMP.md](SDL_EVENT_PUMP.md) and
 [PORT_READINESS.md](PORT_READINESS.md) for evidence.
 
+## Parallel renderer-candidate slice: SDL GPU
+
+`frontierx_render_submission` is an SDL-free interface target containing the first validated
+position/BGRA8/UV submission shape, topology and optional U16-index view. Its standalone probe tests
+layout, bounds and primitive counts; a Direct3D-free adapter maps the stable primitive values and
+exact `D3DFVF_RPVERTEX` byte shape into caller-owned typed storage. The SDL GPU probe is its first
+backend consumer. The production `PrimitiveBuilder` now expands the fixture to a direct triangle
+list, crosses the registered `frontierx_native_render_primitive` adapter and supplies the exact data
+uploaded, presented and read back by SDL GPU in the same process. The same owner validates the
+equivalent U16-index submission, while the CPU probe additionally covers `RPVertex` layout, quad
+expansion, callback failure propagation and explicit triangle-fan rejection. The GPU lifecycle is
+owned by `frontierx_sdl3_gpu_renderer`; the native shell can select it explicitly and submit the
+shared `frontierx_render_smoke_scene` through the same component-manager boundary. `RenderBatcher`,
+state handling and vertex-buffer draws remain unconnected. See
+[RENDER_SUBMISSION_PORTABILITY.md](RENDER_SUBMISSION_PORTABILITY.md).
+
+The optional `frontierx_sdl3_gpu_probe` target is gated by `FRONTIERX_BUILD_SDL3_GPU`, requires the
+existing SDL3 option, and has no dependency on the game, D3D9 renderer or retail data. CMake invokes
+the system `glslc` to compile two repository-owned GLSL test shaders into the
+out-of-tree generated directory; the backend has no direct Vulkan-loader dependency. It creates SDL's Vulkan device and
+window swapchain, builds a graphics pipeline, uploads seven vertices, nine U16 indices and a 2-by-2 texture,
+samples with depth test/write enabled, submits/presents twelve frames and recreates the depth target
+after an observed swapchain resize. It also renders to a bounded 64-by-64 target, waits on a GPU
+fence, downloads the pixels and validates clear/background/foreground structure. GCC and Clang
+visible probe and integrated-shell runtime checks passed on 2026-09-20 with 2,496 changed pixels and
+the same diagnostic checksum per shared scene on the local Vulkan driver.
+
+This edge proves the local device/upload/draw/present lifecycle and its explicit shell composition,
+not a selected game backend or legacy state/material integration. Its registered test uses a transient non-focusable window and skip return code 77 when
+a host has no graphical/GPU runtime; runtime-capable shader, pipeline, upload, or submission
+failures remain failures. See
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
+
 The public `WindowManager.h` declaration now compiles as part of the existing
 `frontierx_dacom_interface_probe` under GCC and Clang. The non-Windows branch uses the shared
 pointer-width legacy-message types and explicit 32-bit compatibility scalars.
@@ -140,7 +180,8 @@ current FIFO dispatch batch, while `Peek` exposes the last completed batch. The 
 now also builds as `frontierx_event_system`; its real aggregate factory, DACOM maps, connection
 point, direct send and queue execute through `frontierx_event_system_probe`. That probe uses the
 real `ICOManager` interface provided by `frontierx_dacom_core`, including priority/fallback,
-enumeration, references and shutdown. Cross-ELF heap ownership, the full
+enumeration, references and shutdown. The EventSystem ELF has a measured shared-heap closure;
+broader owner-specific heap evidence, the full
 Hotkey module and native Windows validation remain open. See
 [EVENT_SYSTEM_PORTABILITY.md](EVENT_SYSTEM_PORTABILITY.md) and
 [DACOM_MANAGER_PORTABILITY.md](DACOM_MANAGER_PORTABILITY.md).
@@ -165,12 +206,13 @@ and an explicit ELF component-module loader. The dynamic path and configuration-
 and the production EventSystem ELF module. `frontierx_native_dacom_bootstrap` now supplies the real
 process-global `DACOM_Acquire` symbol, registers both production profile factories once and owns the
 manager used by the shell. Its registered process-local `IHeap` supplies the public bootstrap and
-tracked allocation contract; cross-ELF ownership and legacy COMHeap behavior remain open. The explicit DACOM
+tracked allocation contract. The EventSystem ELF now uses that exact owner across `dlopen`; broader
+module ownership and legacy COMHeap behavior remain open. The explicit DACOM
 project still owns the supported Windows DLL loading and profile integration. The separate 32-bit MSVC automation dispatch is referenced only by four
 legacy Viewer tool headers, not by component creation. The public `DACOM.H`, `TComponent.h`, and connection-point template layer now has a real GCC/Clang
 executable probe, including an instantiated `DAComponent` map and connection container. It executes
 point lookup, owner recovery, subscription enumeration, removal, and deterministic token reuse.
-The next graph step is a production ELF heap-ownership closure followed by another game- or renderer-owned component,
+The next graph step is another game- or renderer-owned component with the same ELF heap/symbol proof,
 native Windows rebuild and ABI/layout evidence. See
 [DACOM_RUNTIME_PORTABILITY.md](DACOM_RUNTIME_PORTABILITY.md).
 
@@ -179,14 +221,32 @@ factories and aggregate execute through the native manager, including typed buff
 transactional file initialization. The owning `ProfileDocument` is now a focused reusable target;
 the manager uses its raw-line traversal for bounded file/string `[Libraries]` configuration rather
 than aggregating the service parser. The global bootstrap registers both production factories;
-writable INI behavior and a cross-module heap remain open. See
+writable INI behavior and cross-module proof for further owners remain open. See
 [PROFILE_CALLBACK_PORTABILITY.md](PROFILE_CALLBACK_PORTABILITY.md).
 
 `frontierx_native_heap` implements the unchanged `IHeap` surface for process-local native startup,
 and `frontierx_native_dacom_bootstrap` registers it before the profile factories. Its probe covers
 public initialization, allocation/reallocation, metadata, enumeration, foreign-pointer rejection
-and repeated initialization. Descriptor capacity is diagnostic, private COMHeap pass-through slots
-are unsupported, and no cross-ELF ownership claim is made. See [NATIVE_HEAP.md](NATIVE_HEAP.md).
+and repeated initialization. The production EventSystem ELF additionally proves aggregate and
+queue-node ownership through the host heap, exact final accounting and unload. Descriptor capacity
+is diagnostic, private COMHeap pass-through slots are unsupported, and further owners need their
+own proof. See [NATIVE_HEAP.md](NATIVE_HEAP.md).
+
+Both native EventSystem targets compile with `DA_HEAP_ENABLED`. The static library has an explicit
+transitive dependency on `frontierx_native_heap`; its production probe and SDL integration acquire
+that owner before factory creation and verify final block-count balance. The ELF imports the host's
+exported `HEAP` instead of embedding a second allocator.
+
+`frontierx_hotkey_event` now compiles the production `HKEvent.cpp` service with the same native
+heap. `frontierx_hotkey_event_probe` registers its real factory, supplies fixed-width data through
+the public `IFileSystem` vtable and executes keyboard, mouse, joystick, callback, malformed-input
+and exact allocation-balance paths. `NativeUtfFileSystem` provides the bounded read-only adapter
+used to parse both checked-in source hotkey tables. The probe also connects raw EventSystem input
+to the hotkey service and its translated output back through the production queue. The native shell
+offers this composition through explicit `--hotkeys FILE` and advances `ISystemComponent::Update`
+after each window batch. This does not add `HkeyRec.cpp`, installed-resource policy, a complete
+DOSFile/UTF owner or a game target. See
+[HOTKEY_EVENT_PORTABILITY.md](HOTKEY_EVENT_PORTABILITY.md).
 
 `frontierx_dynamic_library` supplies a move-only Linux ELF handle with local eager symbol
 resolution. `NativeComponentManager` now layers explicit C-named registration and liveness entry

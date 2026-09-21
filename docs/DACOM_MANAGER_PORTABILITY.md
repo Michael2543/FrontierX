@@ -110,8 +110,9 @@ but it is not the next game-startup manager dependency.
 The move-only local ELF owner and native module contract are documented in
 [DYNAMIC_LIBRARY_PORTABILITY.md](DYNAMIC_LIBRARY_PORTABILITY.md). The process-local heap contract
 and its explicit differences from COMHeap are documented in [NATIVE_HEAP.md](NATIVE_HEAP.md). The
-remaining dynamic-manager blockers are further dependency-ordered production modules, Windows
-path/search behavior in `DACOM.CPP`, cross-ELF allocation ownership, and the unimplemented legacy
+production EventSystem ELF now proves host-heap allocation/release with a hidden C++ implementation
+surface. Remaining dynamic-manager blockers are further dependency-ordered production modules,
+Windows path/search behavior in `DACOM.CPP`, owner-specific cross-ELF allocation evidence, and the unimplemented legacy
 behavior in `HeapPass.asm` and the Win32 virtual-memory/locking provider.
 
 ## Remaining acceptance gates
@@ -120,8 +121,8 @@ behavior in `HeapPass.asm` and the Win32 virtual-memory/locking provider.
   allocation ownership rather than assuming the EventSystem's instance counter is universal.
 - Connect additional native game-startup owners through the tested global manager without changing
   the supported Windows INI behavior or ordering.
-- Validate allocation and destruction through a production ELF boundary; the process-local native
-  heap is neither the legacy COMHeap implementation nor cross-module ownership proof.
+- Repeat the EventSystem's allocation/destruction and hidden-symbol proof for the next production
+  ELF; one owner does not make the native heap equivalent to legacy COMHeap or prove every module.
 - Add tests for duplicate registration of the same factory/name, mutation during enumeration,
   allocation failure and shutdown after multiple real factories before widening use.
 - Compile the actual `DACOM.CPP` owner or replace it with an explicitly approved native owner that

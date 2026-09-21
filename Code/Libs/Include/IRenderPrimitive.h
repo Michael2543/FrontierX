@@ -5,7 +5,13 @@
 #ifndef IRenderPrimitive_H
 #define IRenderPrimitive_H
 
-#include "rendpipeline.h"
+#include "DACOM.H"
+#include "da_d3dtypes.h"
+
+class Matrix4;
+class Transform;
+
+typedef U32 IRP_VERTEXBUFFERHANDLE;
 
 //
 

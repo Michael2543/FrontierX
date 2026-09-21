@@ -1,6 +1,6 @@
 # Native Platform Touchpoint Inventory
 
-Status: lexical source inventory measured on 2026-09-17
+Status: lexical source inventory measured on 2026-09-19
 
 This document measures where the current production-oriented C and C++ source tree depends on
 Windows APIs, compiler extensions, legacy-width assumptions, and legacy media APIs. It is a
@@ -20,7 +20,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s Tools/portability -p 'test_platform_inventory.py' -v
 ```
 
-The current 2026-09-18 run scanned 1,260 C and C++ source/header files beneath `Code/App/Src`,
+The current 2026-09-19 run scanned 1,266 C and C++ source/header files beneath `Code/App/Src`,
 `Code/Libs/Src`, and `Code/Libs/Include`. It excludes paths named `Tools`, `Viewer`, `Obsolete`,
 `Samples`, `Example`, or `Examples`. Comments are removed before matching, while strings and
 preprocessor includes are retained. The synthetic test covers category detection, comment
@@ -38,11 +38,11 @@ exhaustive list of every Windows symbol.
 | Category | Occurrences | Files | Largest measured owners |
 |---|---:|---:|---|
 | D3D9 surface | 4,568 | 161 | App 2,245/88; RenderPipeline 568/11; Shading 556/17 |
-| Win32 API | 2,061 | 255 | App 1,195/160; DOSFile 270/8; MaterialManager 188/5 |
-| Legacy integer casts | 1,295 | 224 | App 848/146; ParticleEffect 136/23; public library includes 63/6 |
-| MSVC extensions | 1,379 | 297 | App 946/182; public library includes 160/37; DOSFile 39/7 |
+| Win32 API | 2,073 | 257 | App 1,195/160; DOSFile 270/8; MaterialManager 188/5 |
+| Legacy integer casts | 1,318 | 230 | App 848/146; ParticleEffect 136/23; public library includes 64/7 |
+| MSVC extensions | 1,342 | 292 | App 946/182; public library includes 127/32; DOSFile 39/7 |
 | Inline assembly | 441 | 18 | x86Math 402/2; App 27/7 |
-| Native `long` | 389 | 95 | EngComps 95/5; public library includes 92/33; App 59/24 |
+| Native `long` | 394 | 94 | EngComps 95/5; public library includes 90/31; App 59/24 |
 | D3DX9 helpers | 155 | 8 | MeshManager 60/1; App 65/1; ParticleEffect 17/3 |
 | DirectSound/WinMM | 162 | 16 | SoundManager 70/2; Voice 40/4; App 31/6 |
 | Direct Windows headers | 150 | 139 | App 26/24; EngComps 24/24; RenderPipeline 14/14 |

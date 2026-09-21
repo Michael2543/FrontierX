@@ -23,8 +23,8 @@ verify that:
 - the callback declarations use the existing portable DACOM calling-convention macros.
 
 `frontierx_native_window_manager_probe` additionally creates the real factory through the native
-manager and exercises the component under `SDL_VIDEODRIVER=dummy`. The complete GCC and Clang
-preset matrices each pass twenty-eight CTests. The source contract is also checked by
+manager and exercises the component under `SDL_VIDEODRIVER=dummy`. The focused target executes
+successfully in the GCC and Clang presets. The source contract is also checked by
 `test_platform_inventory.py`. These checks do not establish MSVC ABI parity; native Windows Debug
 and Final rebuilds remain required.
 

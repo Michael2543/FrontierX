@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.25)
 project(FrontierX LANGUAGES CXX)
 
 option(FRONTIERX_BUILD_SDL3 "Build the isolated SDL3 window/input backend and probe" OFF)
+option(FRONTIERX_BUILD_SDL3_GPU "Build the isolated SDL3 GPU rendering probe" OFF)
+
+if(FRONTIERX_BUILD_SDL3_GPU AND NOT FRONTIERX_BUILD_SDL3)
+	message(FATAL_ERROR "FRONTIERX_BUILD_SDL3_GPU requires FRONTIERX_BUILD_SDL3")
+endif()
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	message(FATAL_ERROR "The initial FrontierX CMake target supports Linux only")
@@ -84,6 +89,7 @@ add_library(frontierx_platform STATIC
 	Code/Libs/Include/FrontierX/LegacyPreferenceValues.h
 	Code/Libs/Include/FrontierX/NativeUserSettings.h
 	Code/Libs/Include/FrontierX/NativeUserSettingsOwner.h
+	Code/Libs/Include/FrontierX/NativeUtfFileSystem.h
 	Code/Libs/Include/FrontierX/PlatformTime.h
 	Code/Libs/Include/FrontierX/PreferenceStore.h
 	Code/Libs/Include/FrontierX/SettingsPath.h
@@ -94,6 +100,7 @@ add_library(frontierx_platform STATIC
 	Code/Libs/Src/Platform/LegacyPreferenceValues.cpp
 	Code/Libs/Src/Platform/NativeUserSettings.cpp
 	Code/Libs/Src/Platform/NativeUserSettingsOwner.cpp
+	Code/Libs/Src/Platform/NativeUtfFileSystem.cpp
 	Code/Libs/Src/Platform/PreferenceStore.cpp
 	Code/Libs/Src/Platform/SettingsPath.cpp
 	Code/Libs/Src/Platform/StartupDataRoot.cpp
@@ -223,9 +230,10 @@ add_executable(frontierx_dynamic_library_probe
 target_link_libraries(frontierx_dacom_core
 	PUBLIC frontierx_dynamic_library frontierx_profile_document)
 target_link_libraries(frontierx_dynamic_library_probe
-	PRIVATE frontierx_dynamic_library frontierx_dacom_core)
+	PRIVATE frontierx_dynamic_library frontierx_dacom_core frontierx_native_dacom_bootstrap)
 target_compile_features(frontierx_dynamic_library_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_dynamic_library_probe)
+set_property(TARGET frontierx_dynamic_library_probe PROPERTY ENABLE_EXPORTS ON)
 add_dependencies(frontierx_dynamic_library_probe frontierx_dynamic_library_fixture)
 
 add_library(frontierx_event_system STATIC
@@ -237,6 +245,8 @@ target_include_directories(frontierx_event_system
 		${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
 )
 
+target_link_libraries(frontierx_event_system PUBLIC frontierx_native_heap)
+target_compile_definitions(frontierx_event_system PRIVATE DA_HEAP_ENABLED=1)
 target_compile_features(frontierx_event_system PUBLIC cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_event_system)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -251,10 +261,16 @@ add_library(frontierx_event_system_module SHARED
 	Code/Libs/Src/DAHOTKEY/EventSys.cpp
 	Code/Libs/Src/Platform/EventSystemModule.cpp
 )
+set(frontierx_event_system_module_exports
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Src/Platform/EventSystemModule.map)
+set_property(TARGET frontierx_event_system_module APPEND PROPERTY
+	LINK_DEPENDS ${frontierx_event_system_module_exports})
+target_link_options(frontierx_event_system_module PRIVATE
+	"LINKER:--version-script=${frontierx_event_system_module_exports}")
 target_include_directories(frontierx_event_system_module
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
 target_compile_definitions(frontierx_event_system_module
-	PRIVATE FRONTIERX_EVENT_SYSTEM_MODULE=1)
+	PRIVATE FRONTIERX_EVENT_SYSTEM_MODULE=1 DA_HEAP_ENABLED=1)
 target_compile_features(frontierx_event_system_module PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_event_system_module)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -277,6 +293,39 @@ target_link_libraries(frontierx_event_system_probe
 )
 target_compile_features(frontierx_event_system_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_event_system_probe)
+
+add_library(frontierx_hotkey_event STATIC
+	Code/Libs/Src/DAHOTKEY/HKEvent.cpp
+)
+target_include_directories(frontierx_hotkey_event
+	PUBLIC
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
+	PRIVATE
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Src/DAHOTKEY)
+target_link_libraries(frontierx_hotkey_event PUBLIC frontierx_native_heap)
+target_compile_definitions(frontierx_hotkey_event PRIVATE DA_HEAP_ENABLED=1)
+target_compile_features(frontierx_hotkey_event PUBLIC cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_hotkey_event)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_hotkey_event PRIVATE -Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_hotkey_event PRIVATE
+		-Wno-delete-non-abstract-non-virtual-dtor
+		-Wno-delete-abstract-non-virtual-dtor)
+endif()
+
+add_executable(frontierx_hotkey_event_probe
+	Tools/portability/hotkey_event_probe.cpp
+)
+target_link_libraries(frontierx_hotkey_event_probe
+	PRIVATE
+		frontierx_dacom_core
+		frontierx_event_system
+		frontierx_hotkey_event
+		frontierx_platform
+)
+target_compile_features(frontierx_hotkey_event_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_hotkey_event_probe)
 
 add_library(frontierx_profile_parser STATIC
 	Code/Libs/Src/DACOM/ProfileParser.cpp
@@ -425,6 +474,40 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 frontierx_enable_strict_warnings(frontierx_ray_geometry_probe)
 
+add_library(frontierx_render_submission INTERFACE)
+target_include_directories(frontierx_render_submission INTERFACE
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_compile_features(frontierx_render_submission INTERFACE cxx_std_17)
+add_library(frontierx_native_render_primitive STATIC
+	Code/Libs/Include/FrontierX/NativeRenderPrimitive.h
+	Code/Libs/Src/Platform/NativeRenderPrimitive.cpp)
+target_include_directories(frontierx_native_render_primitive PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_link_libraries(frontierx_native_render_primitive
+	PUBLIC frontierx_dacom_core frontierx_render_submission)
+target_compile_features(frontierx_native_render_primitive PUBLIC cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_render_primitive)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_native_render_primitive PRIVATE
+		-Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_native_render_primitive PRIVATE
+		-Wno-delete-non-abstract-non-virtual-dtor
+		-Wno-delete-abstract-non-virtual-dtor)
+endif()
+add_executable(frontierx_render_submission_probe
+	Tools/portability/render_submission_probe.cpp)
+target_link_libraries(frontierx_render_submission_probe
+	PRIVATE frontierx_native_render_primitive)
+frontierx_enable_strict_warnings(frontierx_render_submission_probe)
+
+add_library(frontierx_render_smoke_scene STATIC
+	Code/Libs/Include/FrontierX/RenderSmokeScene.h
+	Code/Libs/Src/Platform/RenderSmokeScene.cpp)
+target_include_directories(frontierx_render_smoke_scene PUBLIC Code/Libs/Include)
+target_compile_features(frontierx_render_smoke_scene PUBLIC cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_render_smoke_scene)
+
 # The production DACOM adapter and this probe share the same inline parser core.
 add_library(frontierx_profile_buffer INTERFACE)
 target_include_directories(frontierx_profile_buffer INTERFACE
@@ -479,6 +562,7 @@ if(FRONTIERX_BUILD_SDL3)
 		PRIVATE
 			frontierx_dacom_core
 			frontierx_event_system
+			frontierx_hotkey_event
 			frontierx_native_dacom_bootstrap
 			frontierx_native_user_defaults
 			frontierx_native_window_manager
@@ -486,10 +570,69 @@ if(FRONTIERX_BUILD_SDL3)
 			PkgConfig::SDL3)
 	target_compile_features(frontierx_native_shell PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_native_shell)
+	set_property(TARGET frontierx_native_shell PROPERTY ENABLE_EXPORTS ON)
 	add_executable(frontierx_sdl3_window_probe Tools/portability/sdl3_window_probe.cpp)
 	target_link_libraries(frontierx_sdl3_window_probe PRIVATE frontierx_sdl3_platform PkgConfig::SDL3)
 	target_compile_features(frontierx_sdl3_window_probe PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_sdl3_window_probe)
+	if(FRONTIERX_BUILD_SDL3_GPU)
+		find_program(FRONTIERX_GLSLC_EXECUTABLE NAMES glslc REQUIRED)
+		add_library(frontierx_sdl3_gpu_renderer STATIC
+			Code/Libs/Include/FrontierX/SdlGpuRenderer.h
+			Code/Libs/Src/Platform/SdlGpuRenderer.cpp)
+		target_include_directories(frontierx_sdl3_gpu_renderer PUBLIC Code/Libs/Include)
+		target_link_libraries(frontierx_sdl3_gpu_renderer
+			PUBLIC frontierx_render_submission PRIVATE PkgConfig::SDL3)
+		target_compile_features(frontierx_sdl3_gpu_renderer PUBLIC cxx_std_17)
+		frontierx_enable_strict_warnings(frontierx_sdl3_gpu_renderer)
+		target_link_libraries(frontierx_native_shell PRIVATE
+			frontierx_native_render_primitive
+			frontierx_render_smoke_scene
+			frontierx_sdl3_gpu_renderer)
+		target_compile_definitions(frontierx_native_shell PRIVATE
+			FRONTIERX_HAS_SDL_GPU_RENDERER=1)
+		set(FRONTIERX_GPU_SHADER_SOURCE_DIR
+			${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/shaders)
+		set(FRONTIERX_GPU_SHADER_BINARY_DIR
+			${CMAKE_CURRENT_BINARY_DIR}/generated/shaders)
+		set(FRONTIERX_GPU_VERTEX_SHADER
+			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe.vert.spv)
+		set(FRONTIERX_GPU_FRAGMENT_SHADER
+			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe.frag.spv)
+		add_custom_command(
+			OUTPUT ${FRONTIERX_GPU_VERTEX_SHADER}
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${FRONTIERX_GPU_SHADER_BINARY_DIR}
+			COMMAND ${FRONTIERX_GLSLC_EXECUTABLE}
+				--target-env=vulkan1.0
+				-fshader-stage=vert
+				-o ${FRONTIERX_GPU_VERTEX_SHADER}
+				${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe.vert
+			DEPENDS ${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe.vert
+			VERBATIM)
+		add_custom_command(
+			OUTPUT ${FRONTIERX_GPU_FRAGMENT_SHADER}
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${FRONTIERX_GPU_SHADER_BINARY_DIR}
+			COMMAND ${FRONTIERX_GLSLC_EXECUTABLE}
+				--target-env=vulkan1.0
+				-fshader-stage=frag
+				-o ${FRONTIERX_GPU_FRAGMENT_SHADER}
+				${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe.frag
+			DEPENDS ${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe.frag
+			VERBATIM)
+		add_custom_target(frontierx_sdl3_gpu_shaders DEPENDS
+			${FRONTIERX_GPU_VERTEX_SHADER}
+			${FRONTIERX_GPU_FRAGMENT_SHADER})
+		add_executable(frontierx_sdl3_gpu_probe Tools/portability/sdl3_gpu_probe.cpp)
+		add_dependencies(frontierx_sdl3_gpu_probe frontierx_sdl3_gpu_shaders)
+		target_link_libraries(frontierx_sdl3_gpu_probe
+			PRIVATE
+				frontierx_native_render_primitive
+				frontierx_render_smoke_scene
+				frontierx_sdl3_gpu_renderer
+				PkgConfig::SDL3)
+		target_compile_features(frontierx_sdl3_gpu_probe PRIVATE cxx_std_17)
+		frontierx_enable_strict_warnings(frontierx_sdl3_gpu_probe)
+	endif()
 	add_executable(frontierx_legacy_input_probe Tools/portability/legacy_input_probe.cpp)
 	target_link_libraries(frontierx_legacy_input_probe
 		PRIVATE
@@ -532,6 +675,9 @@ if(BUILD_TESTING)
 		$<TARGET_FILE:frontierx_dynamic_library_fixture>
 		$<TARGET_FILE:frontierx_event_system_module>)
 	add_test(NAME portability.event_system COMMAND frontierx_event_system_probe)
+	add_test(NAME portability.hotkey_event COMMAND frontierx_hotkey_event_probe
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Hotkeys.utf
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/DBHotkeys.utf)
 	add_test(NAME portability.profile_parser COMMAND frontierx_profile_parser_probe)
 	add_test(NAME portability.native_dacom_bootstrap COMMAND frontierx_native_dacom_bootstrap_probe)
 	add_test(NAME portability.native_heap COMMAND frontierx_native_heap_probe)
@@ -545,6 +691,7 @@ if(BUILD_TESTING)
 	add_test(NAME portability.particle_context COMMAND frontierx_particle_context_probe)
 	add_test(NAME portability.math_core COMMAND frontierx_math_core_probe)
 	add_test(NAME portability.ray_geometry COMMAND frontierx_ray_geometry_probe)
+	add_test(NAME portability.render_submission COMMAND frontierx_render_submission_probe)
 	if(TARGET frontierx_sdl3_window_probe)
 		add_test(NAME portability.sdl3_window COMMAND frontierx_sdl3_window_probe)
 		set_tests_properties(portability.sdl3_window PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")
@@ -556,6 +703,14 @@ if(BUILD_TESTING)
 		add_test(NAME portability.native_shell COMMAND ${Python3_EXECUTABLE}
 			${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/test_native_shell.py
 			$<TARGET_FILE:frontierx_native_shell>
-			$<TARGET_FILE:frontierx_event_system_module>)
+			$<TARGET_FILE:frontierx_event_system_module>
+			${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Hotkeys.utf)
+	endif()
+	if(TARGET frontierx_sdl3_gpu_probe)
+		add_test(NAME portability.sdl3_gpu COMMAND frontierx_sdl3_gpu_probe
+			${FRONTIERX_GPU_VERTEX_SHADER}
+			${FRONTIERX_GPU_FRAGMENT_SHADER}
+			--visible)
+		set_tests_properties(portability.sdl3_gpu PROPERTIES SKIP_RETURN_CODE 77)
 	endif()
 endif()

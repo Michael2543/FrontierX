@@ -19,10 +19,11 @@
 
 //
 
-#include "heapobj.h"
+#include "HeapObj.h"
 
 //
 
+#if defined(_WIN32)
 inline void da_heap_set_message( HINSTANCE hInstance )
 {
 	S32 dwLen;
@@ -40,6 +41,11 @@ inline void da_heap_set_message( HINSTANCE hInstance )
 
 	SetDefaultHeapMsg( buffer+dwLen );
 }
+#else
+inline void da_heap_set_message( void * )
+{
+}
+#endif
 
 //
 
@@ -47,7 +53,7 @@ inline void da_heap_set_message( HINSTANCE hInstance )
 
 //
 
-static int __stdcall da_heap_mark_allocated_cb( struct IHeap *heap, void *ptr, U32 ptr_flags, void * )
+static int COMAPI da_heap_mark_allocated_cb( struct IHeap *heap, void *ptr, U32 ptr_flags, void * )
 {
 	heap->SetBlockOwner( ptr, 0xFFFFFFFF );
 
@@ -65,7 +71,7 @@ inline void da_heap_mark_allocted( IHeap *heap )
 
 //
 
-static int __stdcall da_heap_print_allocated_cb( struct IHeap *heap, void *ptr, U32 ptr_flags, void * )
+static int COMAPI da_heap_print_allocated_cb( struct IHeap *heap, void *ptr, U32 ptr_flags, void * )
 {
 	if( !(ptr_flags & DAHEAPFLAG_ALLOCATED_BLOCK) ) {
 		return 1;

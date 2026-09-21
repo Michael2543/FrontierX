@@ -331,6 +331,10 @@ class PlatformInventoryTests(unittest.TestCase):
         heap = strip_comments(
             (root / 'Code/Libs/Include/da_heap_utility.h').read_text(
                 encoding='utf-8', errors='replace'))
+        probe = strip_comments(
+            (root / 'Tools/portability/event_system_probe.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
 
         self.assertNotIn('#include <windows.h>', source)
         self.assertIn('#include "SYSTEM.H"', source)
@@ -338,6 +342,13 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertEqual(source.count('DA_HEAP_FREE(HEAP,'), 3)
         self.assertIn('#define DA_HEAP_FREE( heap, ptr )', heap)
         self.assertIn('calloc( 1, (size) )', heap)
+        self.assertIn('target_compile_definitions(frontierx_event_system PRIVATE '
+                      'DA_HEAP_ENABLED=1)', cmake)
+        self.assertIn('target_link_libraries(frontierx_event_system PUBLIC '
+                      'frontierx_native_heap)', cmake)
+        self.assertIn('HEAP_Acquire()', probe)
+        self.assertIn('static production event owner did not return shared-heap allocations',
+                      probe)
 
     def test_native_component_manager_hosts_the_production_event_owner(self):
         root = Path(__file__).resolve().parents[2]
@@ -354,6 +365,66 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('NativeComponentManager manager', probe)
         self.assertIn('RegisterTheEventSystem(&manager)', probe)
         self.assertNotIn('ProbeManager', probe)
+
+    def test_production_hotkey_event_uses_portable_file_input_and_shared_heap(self):
+        root = Path(__file__).resolve().parents[2]
+        source = strip_comments(
+            (root / 'Code/Libs/Src/DAHOTKEY/HKEvent.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        file_types = strip_comments(
+            (root / 'Code/Libs/Include/FrontierX/LegacyFileTypes.h').read_text(
+                encoding='utf-8', errors='replace'))
+        probe = strip_comments(
+            (root / 'Tools/portability/hotkey_event_probe.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
+
+        self.assertIn('#include "FrontierX/LegacyInput.h"', source)
+        self.assertIn('#include "FrontierX/LegacyJoystick.h"', source)
+        self.assertIn('dwSizeOfKey != sizeof(DAHOTKEY_STRUCT)', source)
+        self.assertIn('std::numeric_limits<DWORD>::max()', source)
+        self.assertIn('std::memchr(text', source)
+        self.assertEqual(source.count('std::memmove(dst, src,'), 2)
+        self.assertIn('DA_HEAP_FREE(HEAP, pKeyData)', source)
+        self.assertNotIn('free(pKeyData)', source)
+        self.assertIn('using HANDLE = void *', file_types)
+        self.assertIn('using LONG = std::int32_t', file_types)
+        self.assertIn('RegisterHotkeyEventServer(&manager)', probe)
+        self.assertIn('invalid hotkey record stride was accepted', probe)
+        self.assertIn('production hotkey aggregate did not return shared-heap allocations', probe)
+        self.assertIn('target_compile_definitions(frontierx_hotkey_event PRIVATE '
+                      'DA_HEAP_ENABLED=1)', cmake)
+        self.assertIn('add_test(NAME portability.hotkey_event', cmake)
+
+    def test_native_utf_file_system_hosts_checked_in_hotkey_tables(self):
+        root = Path(__file__).resolve().parents[2]
+        adapter = strip_comments(
+            (root / 'Code/Libs/Src/Platform/NativeUtfFileSystem.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        probe = strip_comments(
+            (root / 'Tools/portability/hotkey_event_probe.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        shell = strip_comments(
+            (root / 'Code/Launcher/NativeShell.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
+
+        self.assertIn('class NativeUtfFileSystem final : public IFileSystem', adapter)
+        self.assertIn('ReadUtfEntry(path_, descriptor->lpFileName', adapter)
+        self.assertIn('TryDecodeOffsetHandleIndex(handle, FirstChildHandle', adapter)
+        self.assertIn('descriptor->dwDesiredAccess != GENERIC_READ', adapter)
+        self.assertIn('WriteFile(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED)', adapter)
+        self.assertIn('ValidateRealArchive(manager, argv[1])', probe)
+        self.assertIn('ValidateRealArchive(manager, argv[2])', probe)
+        self.assertIn('eventSystem->Send(keyMessage.message, &keyMessage)', probe)
+        self.assertIn('eventOwner->Update()', probe)
+        self.assertIn('RegisterHotkeyEventServer(manager)', shell)
+        self.assertIn('OpenNativeUtfFileSystem(', shell)
+        self.assertIn('rawEventConnection.Connect(rawEventPoint.Get(), hotkeyInput.Get())', shell)
+        self.assertIn('hotkeyEventConnection.Connect(hotkeyEventPoint.Get()', shell)
+        self.assertIn('~ConnectionOwner() { Disconnect(); }', shell)
+        self.assertIn('eventSystemOwner.Get()->Update()', shell)
+        self.assertIn('Code/App/Src/Hotkeys.utf', cmake)
 
     def test_native_dynamic_library_boundary_is_local_and_move_only(self):
         root = Path(__file__).resolve().parents[2]
@@ -375,6 +446,15 @@ class PlatformInventoryTests(unittest.TestCase):
         event_module = strip_comments(
             (root / 'Code/Libs/Src/Platform/EventSystemModule.cpp').read_text(
                 encoding='utf-8', errors='replace'))
+        event_exports = (root / 'Code/Libs/Src/Platform/EventSystemModule.map').read_text(
+            encoding='utf-8', errors='replace')
+        probe = strip_comments(
+            (root / 'Tools/portability/dynamic_library_probe.cpp').read_text(
+                encoding='utf-8', errors='replace'))
+        heap_utility = strip_comments(
+            (root / 'Code/Libs/Include/da_heap_utility.h').read_text(
+                encoding='utf-8', errors='replace'))
+        cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
 
         self.assertIn('DynamicLibrary(const DynamicLibrary &) = delete', interface)
         self.assertIn('DynamicLibrary(DynamicLibrary && other) noexcept', interface)
@@ -393,6 +473,19 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('module_instance_count--', event_owner)
         self.assertIn('FrontierXRegisterComponents', event_module)
         self.assertIn('FrontierXEventSystemModuleCanUnload', event_module)
+        self.assertIn('FrontierXRegisterComponents;', event_exports)
+        self.assertIn('FrontierXCanUnloadComponents;', event_exports)
+        self.assertIn('local:', event_exports)
+        self.assertIn('--version-script=${frontierx_event_system_module_exports}', cmake)
+        self.assertIn('#include "HeapObj.h"', heap_utility)
+        self.assertIn('FRONTIERX_EVENT_SYSTEM_MODULE=1 DA_HEAP_ENABLED=1', cmake)
+        self.assertIn('frontierx_dynamic_library_probe PROPERTY ENABLE_EXPORTS ON', cmake)
+        self.assertIn('frontierx_native_shell PROPERTY ENABLE_EXPORTS ON', cmake)
+        self.assertIn('InitializeDAHeap(1024 * 1024', probe)
+        self.assertIn('availableBeforeEvent', probe)
+        self.assertIn('FrontierXEventSystemModuleCanUnload', probe)
+        self.assertIn('exposed an internal implementation symbol', probe)
+        self.assertIn('did not return all shared-heap allocations', probe)
         self.assertLess(manager.index('RemoveRegistrations(position->id)'),
                         manager.index('position->library.Close(error)'))
 
@@ -441,8 +534,12 @@ class PlatformInventoryTests(unittest.TestCase):
         cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
 
         self.assertIn('ICOManager * manager = DACOM_Acquire()', shell)
+        self.assertIn('InitializeDAHeap(0x10000, 0x4000', shell)
         self.assertIn('manager->SetINIConfig(configName.c_str())', shell)
         self.assertIn('RegisterTheEventSystem(manager)', shell)
+        self.assertIn('RegisterHotkeyEventServer(manager)', shell)
+        self.assertLess(shell.index('InitializeDAHeap(0x10000, 0x4000'),
+                        shell.index('RegisterTheEventSystem(manager)'))
         self.assertLess(shell.index('RegisterTheEventSystem(manager)'),
                         shell.index('manager->SetINIConfig(configName.c_str())'))
         self.assertIn('RegisterNativeWindowManager(manager)', shell)
@@ -451,6 +548,7 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('AGGDESC windowDescriptor("IWindowManager", "WindowManager")', shell)
         self.assertIn('windowManager.Get()->SetCallback(ShellWindowCallback)', shell)
         self.assertIn('windowManager.Get()->ServeMessageQueue(WMF_BACKGROUND)', shell)
+        self.assertIn('eventSystemOwner.Get()->Update()', shell)
         self.assertNotIn('SdlWindow window', shell)
         self.assertNotIn('SdlEventPump pump', shell)
         self.assertIn('SleepForMilliseconds(1)', shell)

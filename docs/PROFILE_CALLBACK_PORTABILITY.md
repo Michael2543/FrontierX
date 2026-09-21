@@ -6,8 +6,9 @@ This document records the portable callback slice shared by the production DACOM
 and the native startup configuration reader. It is source-review, compilation, synthetic-execution,
 and sanitizer evidence. The production parser now builds as a native static DACOM service. The
 native manager also loads the production EventSystem ELF and is owned by the process-global
-`DACOM_Acquire` bootstrap. A process-local native `IHeap` now exists, but cross-ELF allocation
-ownership and a native game owner do not.
+`DACOM_Acquire` bootstrap. A native `IHeap` now exists and the EventSystem ELF proves one
+cross-image owner, but the profile service itself has no dynamic-module proof and no native game
+owner exists.
 
 ## Owning path
 
@@ -120,8 +121,8 @@ section/key lookup, line and key enumeration, native file loading, writable empt
 missing-file failure and transactional state retention. GCC and Clang strict-warning builds pass, as does the combined
 AddressSanitizer/UndefinedBehaviorSanitizer run.
 
-The complete preset matrices now contain 28 CTests; later service-integration tests were added,
-while this slice expands existing probes rather than adding a new executable.
+This slice expands the existing profile probes rather than adding another executable; the focused
+GCC, Clang and sanitizer executions above are its component evidence.
 
 ## Reproduction
 

@@ -1,6 +1,7 @@
 #include "FrontierX/DynamicLibrary.h"
 #include "FrontierX/NativeComponentManager.h"
 #include "EventSys.h"
+#include "HeapObj.h"
 #include "SYSTEM.H"
 
 #include <chrono>
@@ -50,6 +51,10 @@ int main(int argc, char ** argv)
     try
     {
         Require(argc == 3, "expected the fixture and production event-module paths");
+        Require(InitializeDAHeap(1024 * 1024, 64 * 1024,
+                    DAHEAPFLAG_MULTITHREADED | DAHEAPFLAG_GROWHEAP |
+                    DAHEAPFLAG_NOMSGS) == TRUE && HEAP,
+            "native shared heap initialization failed");
         std::string error;
         FrontierX::DynamicLibrary library;
         Require(!library.Open(nullptr, error) && !error.empty() && !library.IsOpen(),
@@ -85,6 +90,18 @@ int main(int argc, char ** argv)
         Require(assigned.Close(error) && error.empty() && !assigned.IsOpen(),
             "explicit library close failed");
         Require(assigned.Close(error) && error.empty(), "repeated close was not idempotent");
+
+        FrontierX::DynamicLibrary productionBoundary;
+        Require(productionBoundary.Open(argv[2], error) && error.empty(),
+            "production event module did not open for export-boundary validation");
+        Require(productionBoundary.Symbol("FrontierXRegisterComponents", error) && error.empty() &&
+                productionBoundary.Symbol("FrontierXCanUnloadComponents", error) && error.empty(),
+            "production event module omitted a required public C entry point");
+        Require(productionBoundary.Symbol("FrontierXEventSystemModuleCanUnload", error) ==
+                    nullptr && !error.empty(),
+            "production event module exposed an internal implementation symbol");
+        Require(productionBoundary.Close(error) && error.empty(),
+            "production event module did not close after export-boundary validation");
 
         FrontierX::NativeComponentManager manager;
         Require(manager.AddLibrary(nullptr) == GR_INVALID_PARMS,
@@ -196,10 +213,13 @@ int main(int argc, char ** argv)
         Require(productionManager.SetINIConfig(productionConfiguration.c_str(),
             DACOM_INI_STRING) == GR_OK && productionManager.RegisteredCount() == 1,
             "production event-system ELF module did not configure");
+        const U32 availableBeforeEvent = HEAP->GetAvailableMemory();
         AGGDESC eventDescriptor("IEventSystem", "EventSystem");
         void * rawEventAggregate = nullptr;
         Require(productionManager.CreateInstance(&eventDescriptor, &rawEventAggregate) == GR_OK &&
             rawEventAggregate, "production ELF factory did not create the event aggregate");
+        Require(HEAP->GetAvailableMemory() < availableBeforeEvent,
+            "production ELF event aggregate did not allocate through the shared heap");
         auto * eventAggregate = static_cast<IAggregateComponent *>(rawEventAggregate);
         IEventSystem * dynamicEventSystem = nullptr;
         ISystemComponent * dynamicSystem = nullptr;
@@ -215,6 +235,8 @@ int main(int argc, char ** argv)
             "production ELF module unloaded while its event instance was alive");
         Require(dynamicEventSystem->Post(91, reinterpret_cast<void *>(0x91)) == GR_OK,
             "production ELF event instance did not accept a message");
+        Require(HEAP->GetAvailableMemory() < availableBeforeEvent,
+            "production ELF event queue escaped shared-heap accounting");
         dynamicSystem->Update();
         U32 dynamicMessage = 0;
         void * dynamicParameter = nullptr;
@@ -224,6 +246,8 @@ int main(int argc, char ** argv)
         dynamicSystem->Release();
         dynamicEventSystem->Release();
         eventAggregate->Release();
+        Require(HEAP->GetAvailableMemory() == availableBeforeEvent,
+            "production ELF event aggregate did not return all shared-heap allocations");
         Require(productionManager.RemoveLibrary(argv[2]) == GR_OK &&
             productionManager.RegisteredCount() == 0,
             "production event-system ELF module did not unload after final release");
