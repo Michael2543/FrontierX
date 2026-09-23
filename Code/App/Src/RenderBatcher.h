@@ -1,6 +1,15 @@
 #ifndef RENDERBATCHER_H
 #define RENDERBATCHER_H
 
+#include "TYPEDEFS.H"
+#include "da_d3dtypes.h"
+#include "RPVertex1.h"
+#include "STDDAT.H"
+#include "3dmath.h"
+#include "rendpipeline.h"
+#include "IRenderPrimitive.h"
+#include "BMPoolJr.h"
+
 const U32 RPR_OPAQUE_POOL_SIZE_DEFAULT		= 512*1024;
 const U32 RPR_TRANSLUCENT_POOL_SIZE_DEFAULT	= 64*1024;
 

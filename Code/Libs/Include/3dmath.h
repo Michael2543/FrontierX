@@ -154,7 +154,7 @@ struct I3DMathEngine : public IDAComponent
 //
 // the following method is implemented in the static lib MathLib.lib, in the x86math workspace:
 
-I3DMathEngine * __stdcall __MATH_ENGINE (void);
+I3DMathEngine * COMAPI __MATH_ENGINE (void);
 
 //
 
@@ -169,7 +169,7 @@ inline I3DMathEngine * MATH_ENGINE (void)
 
 //
 
-inline void __stdcall MATH_ENGINE_Uninitialize(void)
+inline void COMAPI MATH_ENGINE_Uninitialize(void)
 {
 	math_engine = (I3DMathEngine*)0;
 }

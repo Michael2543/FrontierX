@@ -7,6 +7,7 @@
 #include <cstdint>
 
 struct IRenderPrimitive;
+struct IRenderPipeline;
 
 namespace FrontierX
 {
@@ -21,8 +22,11 @@ inline constexpr std::array<std::uint8_t, 16> RenderSmokeTextureRgba = {{
 }};
 
 // Submits the deterministic repository-owned triangle-and-quad fixture through
-// the production PrimitiveBuilder and IRenderPrimitive interface.
+// the production PrimitiveBuilder and either established renderer boundary.
+GENRESULT ConfigureRenderSmokeState(IRenderPrimitive * primitive);
 GENRESULT SubmitRenderSmokeScene(IRenderPrimitive * primitive);
+GENRESULT ConfigureRenderSmokeState(IRenderPipeline * pipeline);
+GENRESULT SubmitRenderSmokeScene(IRenderPipeline * pipeline);
 }
 
 #endif

@@ -12,7 +12,14 @@
 #endif
 
 #ifndef PERSISTMATH_H__
-#include "persistmath.h"
+#include "PersistMath.h"
+#endif
+
+// GCC and Clang reject the non-trivial Vector member in the anonymous union
+// below; use the header's own ANONYMOUS_ILLEGAL fallback paths for those
+// compilers. MSVC behavior remains unchanged.
+#if defined(__GNUC__) || defined(__clang__)
+#define ANONYMOUS_ILLEGAL
 #endif
 
 #pragma warning (disable : 4201)   // non-standard extension (nameless struct/union)

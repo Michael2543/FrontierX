@@ -7,13 +7,30 @@
 #ifndef Options_Utility_h
 #define Options_Utility_h
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <cstring>
+#include <cstdlib>
+#endif
 
 #include "IProfileParser.h"
-#include "Vector.h"
+#include "vector.h"
 #include "TSmartPointer.h"
-#include "fdump.h"
-#include "tempstr.h"
+#include "FDump.h"
+#include "TempStr.h"
+
+#if !defined(_WIN32)
+#define stricmp strcasecmp
+
+// Legacy helpers that came from <windows.h> in the original build.
+#ifndef SUCCEEDED
+#define SUCCEEDED(result) (((GENRESULT)(result)) >= 0)
+#endif
+#ifndef FAILED
+#define FAILED(result) (((GENRESULT)(result)) < 0)
+#endif
+#endif
 
 //
 

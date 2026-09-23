@@ -1,7 +1,7 @@
 # Native Startup Shell
 
 Status: integrated startup/window lifecycle plus explicit repository render-smoke path implemented,
-2026-09-20.
+2026-09-21.
 
 ## Scope
 
@@ -33,8 +33,8 @@ game logic:
   queued symbol output;
 - the real `IWindowManager` aggregate owns SDL video/window, text-input and callback-pump lifetime;
 - an optional `SdlGpuRenderer` owns device, window claim, pipeline, GPU resources, presentation,
-  bounded readback and teardown while a registered native `IRenderPrimitive` receives the shared
-  scene from production `PrimitiveBuilder`;
+  bounded readback and teardown while production `PrimitiveBuilder` submits the shared scene through
+  the real native `IRenderPipeline` vtable and registered `IRenderPrimitive`;
 - the shell callback forwards compatibility records synchronously to `IEventSystem` without a
   parallel direct SDL dispatch path; and
 - the real EventSystem system owner advances once after each window batch; and
@@ -68,8 +68,9 @@ the ordinary invocation opens a visible 800 by 600 window and runs until close o
 
 `--render-smoke` is available when `FRONTIERX_BUILD_SDL3_GPU` is enabled. It requires explicit
 vertex and fragment SPIR-V paths, initializes `SdlGpuRenderer` against the window owned by
-`IWindowManager`, obtains native `IRenderPrimitive` from the process component manager and submits
-the shared triangle-and-quad fixture through `PrimitiveBuilder`. The shell presents until
+`IWindowManager`, obtains native `IRenderPrimitive` from the process component manager, wraps it in
+the implemented `IRenderPipeline` adapter and submits the shared triangle-and-quad fixture through
+the production pipeline constructor of `PrimitiveBuilder`. The shell presents until
 close/deadline, performs a bounded 64-by-64 structural readback, reports counts and a diagnostic
 checksum, and tears the renderer down before the window. It never loads a retail asset. Missing or
 invalid shaders and GPU/presentation/readback failures return exit code 7. The shell does not request
@@ -151,13 +152,16 @@ cmake --build --preset linux-clang-debug --target frontierx_native_shell
 ctest --test-dir out/build/linux-clang-debug -R portability.native_shell --output-on-failure
 ```
 
-On 2026-09-20, separate non-sandboxed visible executions used the GCC and Clang preset binaries,
+On 2026-09-21, separate non-sandboxed visible executions used the GCC and Clang preset binaries,
 the same generated shaders, a synthetic empty directory tree and `--smoke-ms 250`. Both reported
 `video driver: wayland`, `backend: vulkan`, 17 presented frames, nine vertices, 2,496 changed pixels
-and checksum `3246152458680859569`. A focused Clang AddressSanitizer/UndefinedBehaviorSanitizer build
-executed the same integrated shell path with the same pixel result; leak detection was disabled in
-the host's graphics-driver/`ptrace` environment. This is synthetic Linux runtime evidence, not a
-Windows or retail run.
+and checksum `7951318278861886233` after configuring depth plus source-alpha blending through
+`IRenderPipeline` and the native `IRenderPrimitive` state callback. Both current shells identify
+their source as `production PrimitiveBuilder via IRenderPipeline`. Focused
+AddressSanitizer/UndefinedBehaviorSanitizer CPU checks cover pipeline inheritance, production-builder
+dispatch, state validation and rollback; the earlier sanitized visible shell run predates the
+alpha-state fixture and is not claimed as current image evidence. This is synthetic Linux runtime
+evidence, not a Windows or retail run.
 
 ## Remaining gates
 
@@ -172,7 +176,9 @@ data compatibility merely because empty required directories exist. The next int
   order;
 - establish game application update/render cadence and focus/background behavior without changing
   simulation order or timing;
-- connect representative legacy render/material/blend state through existing renderer ownership;
+- compile and execute the actual production `RenderBatcher` closure against the native pipeline;
+- connect texture-stage and material state beyond the representative depth/blend state now routed
+  through existing renderer ownership;
 - exercise a lawful retail installation without recording its files or private path; and
 - pass native Windows Debug/Final builds plus affected ABI and behavior comparisons.
 

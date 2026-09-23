@@ -9,7 +9,7 @@
 // helpers to determine size of flexible vertex format buffers.
 //
 
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 
 static U32 FVF_POSITION_SIZE[8] = { 0,3*4,4*4,0,0,0,0,0 };
 

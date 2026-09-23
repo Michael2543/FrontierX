@@ -22,8 +22,13 @@
 // Include files
 //
 
+#if defined(_WIN32)
 #ifndef _WINDOWS_
 #error Windows.h required for this to compile!
+#endif
+#else
+#include <cstdarg>
+#include <cstdio>
 #endif
 
 //
@@ -60,7 +65,11 @@ public:
 
 	void set (char *fmt, va_list args)
 	{
+#if defined(_WIN32)
 		wvsprintf (buffer, fmt, args);
+#else
+		vsnprintf (buffer, sizeof(buffer), fmt, args);
+#endif
 	}
 
 	operator char * (void) { return buffer; }

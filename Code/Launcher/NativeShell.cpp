@@ -457,11 +457,20 @@ int Run(int argc, char ** argv)
             return 7;
         }
         FrontierX::NativeRenderPrimitiveDesc renderDescriptor(
-            FrontierX::SdlGpuRenderer::SubmissionCallback, &renderer);
+            FrontierX::SdlGpuRenderer::SubmissionCallback, &renderer, nullptr,
+            FrontierX::SdlGpuRenderer::RenderStateCallback);
         if (manager->CreateInstance(&renderDescriptor,
                 reinterpret_cast<void **>(renderPrimitive.Receive())) != GR_OK ||
-            !renderPrimitive.Get() ||
-            FrontierX::SubmitRenderSmokeScene(renderPrimitive.Get()) != GR_OK ||
+            !renderPrimitive.Get())
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native render-scene owner creation failed\n";
+            return 7;
+        }
+        FrontierX::NativeRenderPipeline renderPipeline(renderPrimitive.Get());
+        if (FrontierX::ConfigureRenderSmokeState(&renderPipeline) != GR_OK ||
+            FrontierX::SubmitRenderSmokeScene(&renderPipeline) != GR_OK ||
             renderer.VertexCount() != FrontierX::RenderSmokeVertexCount ||
             renderer.IndexCount() != 0U)
         {
@@ -471,7 +480,8 @@ int Run(int argc, char ** argv)
             return 7;
         }
         std::cout << "Native render smoke initialized; backend: "
-                  << renderer.DriverName() << "; source: production PrimitiveBuilder\n";
+                  << renderer.DriverName()
+                  << "; source: production PrimitiveBuilder via IRenderPipeline\n";
     }
 #endif
 

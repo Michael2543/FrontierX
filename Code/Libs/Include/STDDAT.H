@@ -17,11 +17,13 @@
 #ifndef STDDAT_H
 #define STDDAT_H
 
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 
 //for realloc ()
 #include <stdlib.h>
-#include <malloc.h>	
+#if defined(_WIN32)
+#include <malloc.h>
+#endif
 #include <string.h>
 
 //
@@ -712,7 +714,7 @@ public:
 		// Initialize hash table
 		//
 		
-		for (i=0; i < hash_size; i++)
+		for (S32 i=0; i < hash_size; i++)
 		{
 			hash_table[i] = NULL;
 		}

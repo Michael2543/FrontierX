@@ -95,15 +95,17 @@
 // Include files
 //
 
-#ifndef US_TYPEDEFS
-#include "TYPEDEFS.H"
-#endif
+#include "DACOM.H"
 
 #undef DXDEC
-#ifdef BUILD_DACOM
-  #define DXDEC __declspec(dllexport)
+#if defined(IS_WIN32)
+  #ifdef BUILD_DACOM
+    #define DXDEC __declspec(dllexport)
+  #else
+    #define DXDEC __declspec(dllimport)
+  #endif
 #else
-  #define DXDEC __declspec(dllimport)
+  #define DXDEC
 #endif
 
 // These macros are here so that macro definitions are refer to the severity levels by name, while
@@ -189,7 +191,7 @@ struct ErrorCode
 //
 // Non-zero return value means "retry operation"
 //
-typedef int (__cdecl * DA_ERROR_HANDLER) (ErrorCode code, const C8 *fmt, ...);
+typedef int (DACOM_CDECL * DA_ERROR_HANDLER) (ErrorCode code, const C8 *fmt, ...);
 
 extern "C" 
 {

@@ -375,9 +375,17 @@ and now uploads the direct output of `PrimitiveBuilder` in the same process. The
 `SdlGpuRenderer` owns device, swapchain, pipeline, GPU resources, presentation, readback and
 teardown; the native shell can select it with `--render-smoke` and obtains `IRenderPrimitive` from
 the process component manager. Visible GCC, Clang and focused sanitizer shell runs reproduced the
-same 2,496 changed pixels and local checksum. This proves one real production draw caller through
-the existing boundary in the integrated startup/window lifecycle; it does not provide a game
-renderer, production indexed caller, state/material mapping or vertex-buffer draws. See
+same 2,496 changed pixels and local checksum. On 2026-09-21 the owner gained transactional set/get
+for six source-reviewed depth/blend states, and the SDL owner mapped them into a replaceable graphics
+pipeline. Visible GCC and Clang probe and shell runs agreed on checksum `7951318278861886233` for
+the new non-opaque fixture. The public `IRenderPipeline` declaration is now Linux-includable with
+fixed-width DirectDraw/Win32 declaration types, and `NativeRenderPipeline` implements its real
+vtable. The production `PrimitiveBuilder` pipeline constructor is active on Linux; deterministic
+execution and the visible probe/shell runs cross `PrimitiveBuilder -> IRenderPipeline ->
+IRenderPrimitive -> SdlGpuRenderer`. Unimplemented pipeline slots return `GR_NOT_IMPLEMENTED`.
+This proves one real production draw caller and representative depth/source-alpha state through the
+existing pipeline boundary in the integrated startup/window lifecycle; it does not provide a game
+renderer. The ZBatcher declarative header closure now compiles on Linux under both compilers (see RENDER_BATCHER_PORTABILITY.md); behavior on the App-side `.cpp`, RPVERTEX2 GPU and texture-stage/material mapping remain open. See
 [RENDER_SUBMISSION_PORTABILITY.md](RENDER_SUBMISSION_PORTABILITY.md).
 
 Exit criteria:
@@ -470,7 +478,7 @@ Exit criteria:
 | Production game startup owner remains Windows-bound | Headless and shell initialization, shared profile callbacks, native preferences and data-root checks pass | Compile and connect the first real game-startup owner without changing Windows registry behavior | 3 |
 | Linux path case and asset lookup are unmeasured | Known platform difference | Scan, then exercise external data discovery on a case-sensitive filesystem | 3 |
 | SDL3 integration is locally prototyped but not approved for distribution | System package, neutral backend, production-event batch pump, native DACOM `IWindowManager`, shell integration and Wayland smoke | Connect real application cadence, compare Windows behavior, and review provenance/notice packaging | 4 |
-| Native rendering path is undecided | The shell-selected SDL GPU owner presents the shared `PrimitiveBuilder` scene through registered `IRenderPrimitive`; U16 validation, resize, readback and teardown are covered | Connect representative existing render state/blend ownership and then perform the Windows capture comparison | 5 |
+| Native rendering path is undecided | The shell-selected SDL GPU owner presents the shared production `PrimitiveBuilder` scene through the real `IRenderPipeline` vtable and registered `IRenderPrimitive`; U16 validation, transactional depth/blend state, resize, readback and teardown are covered. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers with non-pointer tokens and create/lock/unlock/destroy lifetime, then routes direct/indexed slices through the registered owner under GCC, Clang and ASan/UBSan | Compile and execute the actual `RenderBatcher` closure against this owner, then add RPVERTEX2 GPU and texture-stage/material mapping before the Windows capture comparison | 5 |
 | D3DX9 replacement remains incomplete | 155 lexical matches in eight files after production ray-geometry replacement | Characterize and replace shared renderer matrices/tangents, effects and cubemap decoding | 5 |
 | Campaign DLL model may not map directly to ELF | Native DACOM ELF registration/unload passes a synthetic module test; campaign ABI remains Windows-only and separate | Define and test one campaign C export/ABI strategy | 6 |
 | Audio backend is undecided | Architecture direction | Inventory semantics and prototype selected candidate | 7 |
@@ -492,11 +500,13 @@ Exit criteria:
 5. Adapt the isolated scalar math core to `I3DMathEngine` after capturing Windows provider-loading
    and numerical-oracle evidence. The files containing 402 of 441 measured assembly matches belong
    to the separate historical K62/3DNow provider and are not first-target requirements.
-6. Connect the checked exact-RPVertex-FVF and primitive-value adapter to representative
-   `IRenderPipeline` behavior; add the managed vertex-buffer path, explicit blend coverage and
-   Windows capture comparison before selecting a direct adapter or another
-   maintained translation route. Continue the classified D3DX9 matrix/tangent, effect and cubemap
-   work alongside that evidence, not as a name-only rewrite.
+6. Compile and execute the actual `RenderBatcher` closure through the now-portable public
+   `IRenderPipeline` and checked native create/lock/unlock/destroy resource owner. Then add an SDL
+   GPU consumer for the validated direct and indexed
+   `D3DFVF_RPVERTEX2` paths followed by texture-stage/material mapping and Windows capture
+   comparison before selecting a direct
+   adapter or another maintained translation route. Continue the classified D3DX9 matrix/tangent,
+   effect and cubemap work alongside that evidence, not as a name-only rewrite.
 7. Validate the unchanged Windows rebuild and parameterized ABI checks on native Windows before
    accepting Milestone 1; do not emulate this check on Linux.
 

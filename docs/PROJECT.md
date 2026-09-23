@@ -1,6 +1,6 @@
 # FrontierX Project Charter
 
-Status: incremental native bring-up, 2026-09-20
+Status: incremental native bring-up, 2026-09-21
 
 ## Mission
 
@@ -67,7 +67,7 @@ platform, renderer, ABI, and gameplay changes in one step.
 | Build | CMake presets with Ninja; preserve existing MSBuild path | Isolated probes, platform services, a configured production EventSystem ELF module, production event/profile owners and native lifecycle shell build; game graph planned |
 | Hotkey input | Existing DAHOTKEY event processor behind legacy-message and `IFileSystem` contracts | Production factory, read-only UTF adapter, checked-in source tables and optional shell/EventSystem composition work natively; packaging, SDL joystick, recorder and Windows parity remain open |
 | Window/input/time | SDL3 plus standard C++ behind a FrontierX platform boundary | A native SDL-backed DACOM `IWindowManager` owns the shell window, callback pump, focus/cursor state and close-veto lifecycle; application cadence, Windows parity, renderer and game integration remain |
-| Graphics | Keep D3D9-facing code for bring-up; evaluate maintained native Vulkan paths | The native shell can explicitly select the SDL GPU lifecycle and send the repository scene from production `PrimitiveBuilder` through registered `IRenderPrimitive` to Vulkan presentation/readback; U16 validation is also covered. Windows oracle, state/material mapping, backend selection and game rendering remain open |
+| Graphics | Keep D3D9-facing code for bring-up; evaluate maintained native Vulkan paths | The native shell can explicitly select the SDL GPU lifecycle and send the repository scene from production `PrimitiveBuilder` through a native implementation of the real `IRenderPipeline` vtable and registered `IRenderPrimitive` to Vulkan presentation/readback. The adapter owns checked RPVertex/RPVERTEX2 CPU buffers through create/lock/unlock/destroy, routes direct/indexed draws into the registered owner and supports six transactional depth/blend states; unsupported pipeline slots fail explicitly. Actual `RenderBatcher` execution, RPVERTEX2 GPU, texture-stage/material mapping, Windows oracle, backend selection and game rendering remain open |
 | D3DX9 | Inventory and replace effects, texture helpers, and math dependencies | Required |
 | Audio | Portable backend, selected after dependency and behavior evaluation | Undecided |
 | Video | FFmpeg-based replacement for legacy movie playback | Planned, later phase |

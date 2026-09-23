@@ -13,8 +13,15 @@
 
 #include "DACOM.H"
 #include "pixel.h"
+#if defined(_WIN32)
 #include "3dmath.h"
 #include "matrix4.h"
+#else
+#include "FrontierX/LegacyWindowTypes.h"
+class Matrix4;
+class Transform;
+class Vector;
+#endif
 #include "da_d3dtypes.h"
 #include "IProfileParser.h"
 
@@ -22,7 +29,9 @@
 
 //
 
+#if defined(_MSC_VER)
 #pragma warning( disable: 4201 )	// unnamed struct is a non-standard extension
+#endif
 
 //
 

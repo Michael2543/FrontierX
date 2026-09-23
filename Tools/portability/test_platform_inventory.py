@@ -225,14 +225,19 @@ class PlatformInventoryTests(unittest.TestCase):
         interface = strip_comments(
             (root / 'Code/Libs/Include/WindowManager.h').read_text(
                 encoding='utf-8', errors='replace'))
+        native_types = strip_comments(
+            (root / 'Code/Libs/Include/FrontierX/LegacyWindowTypes.h').read_text(
+                encoding='utf-8', errors='replace'))
 
         self.assertNotIn('#error Windows.h required for this to compile!', interface)
         self.assertIn('#include "DACOM.H"', interface)
-        self.assertIn('#include "FrontierX/LegacyMessage.h"', interface)
-        self.assertIn('using HWND = FrontierX::LegacyWindowToken;', interface)
-        self.assertIn('using WPARAM = FrontierX::LegacyWParam;', interface)
-        self.assertIn('using LPARAM = FrontierX::LegacyLParam;', interface)
-        self.assertIn('using LONG = std::int32_t;', interface)
+        self.assertIn('#include "FrontierX/LegacyWindowTypes.h"', interface)
+        self.assertIn('#include "FrontierX/LegacyMessage.h"', native_types)
+        self.assertIn('using HWND = FrontierX::LegacyWindowToken;', native_types)
+        self.assertIn('using WPARAM = FrontierX::LegacyWParam;', native_types)
+        self.assertIn('using LPARAM = FrontierX::LegacyLParam;', native_types)
+        self.assertIn('using LONG = std::int32_t;', native_types)
+        self.assertIn('static_assert(sizeof(RECT) == 16U', native_types)
         self.assertIn('typedef void (DACOM_CDECL * WMEXITCB)', interface)
         self.assertIn('typedef LRESULT (COMAPI * WNDPROC)', interface)
 

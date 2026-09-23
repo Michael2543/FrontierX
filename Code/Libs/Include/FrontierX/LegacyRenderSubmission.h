@@ -22,7 +22,11 @@ constexpr std::uint32_t kTriangleFan = 6U;
 constexpr std::uint32_t kFvfXyz = 0x002U;
 constexpr std::uint32_t kFvfDiffuse = 0x040U;
 constexpr std::uint32_t kFvfTex1 = 0x100U;
+constexpr std::uint32_t kFvfTex2 = 0x200U;
 constexpr std::uint32_t kRpVertexFvf = kFvfXyz | kFvfDiffuse | kFvfTex1;
+constexpr std::uint32_t kRpVertex2Fvf = kFvfXyz | kFvfDiffuse | kFvfTex2;
+static_assert(kRpVertexFvf == 0x142U, "unexpected RPVertex FVF value");
+static_assert(kRpVertex2Fvf == 0x242U, "unexpected Vertex2 FVF value");
 } // namespace LegacyD3d9
 
 enum class LegacySubmissionStatus : std::uint8_t
@@ -116,6 +120,56 @@ inline LegacySubmissionStatus AdaptLegacyRpVertexSubmission(
     std::memmove(destination,
                  input.vertices,
                  input.vertexCount * sizeof(RenderVertexP3DiffuseT2));
+    output = candidate;
+    return LegacySubmissionStatus::Ok;
+}
+
+inline LegacySubmissionStatus AdaptLegacyRpVertex2Submission(
+    const LegacySubmissionInput &input,
+    RenderVertexP3DiffuseT4 *destination,
+    std::size_t destinationCapacity,
+    RenderSubmissionView2 &output) noexcept
+{
+    output = {PrimitiveTopology::PointList, nullptr, 0U, nullptr, 0U};
+
+    PrimitiveTopology topology = PrimitiveTopology::PointList;
+    if (!MapLegacyPrimitiveTopology(input.primitiveType, topology))
+    {
+        return LegacySubmissionStatus::UnsupportedPrimitiveType;
+    }
+    if (input.vertexFormat != LegacyD3d9::kRpVertex2Fvf)
+    {
+        return LegacySubmissionStatus::UnsupportedVertexFormat;
+    }
+    if (topology == PrimitiveTopology::PointList && input.indexCount != 0U)
+    {
+        return LegacySubmissionStatus::UnsupportedIndexedPointList;
+    }
+    if (input.vertices == nullptr || input.vertexCount == 0U || destination == nullptr ||
+        (input.indices == nullptr) != (input.indexCount == 0U))
+    {
+        return LegacySubmissionStatus::InvalidInput;
+    }
+    if (destinationCapacity < input.vertexCount)
+    {
+        return LegacySubmissionStatus::InsufficientDestination;
+    }
+
+    const RenderSubmissionView2 candidate{
+        topology,
+        destination,
+        input.vertexCount,
+        input.indices,
+        input.indexCount,
+    };
+    if (!candidate.IsValid())
+    {
+        return LegacySubmissionStatus::InvalidInput;
+    }
+
+    std::memmove(destination,
+                 input.vertices,
+                 input.vertexCount * sizeof(RenderVertexP3DiffuseT4));
     output = candidate;
     return LegacySubmissionStatus::Ok;
 }

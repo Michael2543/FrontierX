@@ -19,6 +19,32 @@ struct RenderVertexP3DiffuseT2
     float v;
 };
 
+struct RenderVertexP3DiffuseT4
+{
+    float x;
+    float y;
+    float z;
+    std::uint32_t diffuseBgra;
+    float u;
+    float v;
+    float u2;
+    float v2;
+};
+
+static_assert(std::is_standard_layout<RenderVertexP3DiffuseT4>::value,
+              "extended render vertex must remain standard layout");
+static_assert(sizeof(RenderVertexP3DiffuseT4) == 32U,
+              "unexpected extended render vertex size");
+static_assert(offsetof(RenderVertexP3DiffuseT4, diffuseBgra) == 12U,
+              "unexpected extended diffuse offset");
+static_assert(offsetof(RenderVertexP3DiffuseT4, u) == 16U,
+              "unexpected first extended texture offset");
+static_assert(offsetof(RenderVertexP3DiffuseT4, u2) == 24U,
+              "unexpected extended texture coordinate offset");
+static_assert(offsetof(RenderVertexP3DiffuseT4, v2) + sizeof(float) ==
+                  sizeof(RenderVertexP3DiffuseT4),
+              "unexpected extended render vertex tail padding");
+
 static_assert(std::is_standard_layout<RenderVertexP3DiffuseT2>::value,
               "render vertex must remain standard layout");
 static_assert(sizeof(RenderVertexP3DiffuseT2) == 24U, "unexpected render vertex size");
@@ -49,6 +75,46 @@ enum class PrimitiveTopology : std::uint8_t
     TriangleStrip,
 };
 
+inline bool AreRenderElementsValid(PrimitiveTopology topology,
+                                   std::size_t vertexCount,
+                                   const std::uint16_t *indices,
+                                   std::size_t indexCount) noexcept
+{
+    if (vertexCount == 0U ||
+        vertexCount > std::numeric_limits<std::uint32_t>::max() ||
+        indexCount > std::numeric_limits<std::uint32_t>::max())
+    {
+        return false;
+    }
+    if ((indices == nullptr) != (indexCount == 0U))
+    {
+        return false;
+    }
+    for (std::size_t index = 0U; index < indexCount; ++index)
+    {
+        if (indices[index] >= vertexCount)
+        {
+            return false;
+        }
+    }
+
+    const std::size_t elementCount = indexCount == 0U ? vertexCount : indexCount;
+    switch (topology)
+    {
+    case PrimitiveTopology::PointList:
+        return true;
+    case PrimitiveTopology::LineList:
+        return elementCount >= 2U && (elementCount % 2U) == 0U;
+    case PrimitiveTopology::LineStrip:
+        return elementCount >= 2U;
+    case PrimitiveTopology::TriangleList:
+        return elementCount >= 3U && (elementCount % 3U) == 0U;
+    case PrimitiveTopology::TriangleStrip:
+        return elementCount >= 3U;
+    }
+    return false;
+}
+
 struct RenderSubmissionView
 {
     PrimitiveTopology topology;
@@ -59,39 +125,8 @@ struct RenderSubmissionView
 
     bool IsValid() const noexcept
     {
-        if (vertices == nullptr || vertexCount == 0U ||
-            vertexCount > std::numeric_limits<std::uint32_t>::max() ||
-            indexCount > std::numeric_limits<std::uint32_t>::max())
-        {
-            return false;
-        }
-        if ((indices == nullptr) != (indexCount == 0U))
-        {
-            return false;
-        }
-        for (std::size_t index = 0U; index < indexCount; ++index)
-        {
-            if (indices[index] >= vertexCount)
-            {
-                return false;
-            }
-        }
-
-        const std::size_t elementCount = indexCount == 0U ? vertexCount : indexCount;
-        switch (topology)
-        {
-        case PrimitiveTopology::PointList:
-            return true;
-        case PrimitiveTopology::LineList:
-            return elementCount >= 2U && (elementCount % 2U) == 0U;
-        case PrimitiveTopology::LineStrip:
-            return elementCount >= 2U;
-        case PrimitiveTopology::TriangleList:
-            return elementCount >= 3U && (elementCount % 3U) == 0U;
-        case PrimitiveTopology::TriangleStrip:
-            return elementCount >= 3U;
-        }
-        return false;
+        return vertices != nullptr &&
+               AreRenderElementsValid(topology, vertexCount, indices, indexCount);
     }
 
     std::size_t PrimitiveCount() const noexcept
@@ -115,6 +150,21 @@ struct RenderSubmissionView
             return elementCount - 2U;
         }
         return 0U;
+    }
+};
+
+struct RenderSubmissionView2
+{
+    PrimitiveTopology topology;
+    const RenderVertexP3DiffuseT4 *vertices;
+    std::size_t vertexCount;
+    const std::uint16_t *indices;
+    std::size_t indexCount;
+
+    bool IsValid() const noexcept
+    {
+        return vertices != nullptr &&
+               AreRenderElementsValid(topology, vertexCount, indices, indexCount);
     }
 };
 } // namespace FrontierX

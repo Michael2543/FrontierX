@@ -1,6 +1,6 @@
 # SDL3 GPU Renderer-Backend Prototype
 
-Status snapshot: **2026-09-20**. This document records a focused backend experiment. It does not
+Status snapshot: **2026-09-21**. This document records a focused backend experiment. It does not
 select the production renderer, connect the game renderer, or claim a native Linux game build.
 
 ## Question and falsifiable check
@@ -16,25 +16,27 @@ that must:
 4. accept the fixture through native `IRenderPrimitive`, validate both its seven-vertex/nine-U16
    representation and the nine-vertex direct `PrimitiveBuilder` expansion, upload the builder
    output plus a 2-by-2 RGBA texture, then sample it in the fragment shader;
-5. use depth test/write, acquire real swapchain images, draw and present twelve frames, request a
-   window resize, and recreate the size-dependent depth target; and
+5. map the shared depth and alpha-blend snapshot into the graphics pipeline, acquire real swapchain
+   images, draw and present twelve frames, request a window resize, and recreate the size-dependent
+   depth target; and
 6. render the same pipeline into a bounded 64-by-64 offscreen target, wait on a GPU fence, download
    the pixels, validate clear/background/foreground structure, and release resources in dependency
    order.
 
 `frontierx_sdl3_gpu_probe` performs that check. The GPU lifecycle now lives in the reusable
 `SdlGpuRenderer` platform owner, and the native startup shell can explicitly select it; both paths
-submit the same repository-owned scene through the registered implementation of the existing
-`IRenderPrimitive` boundary. They remain separate from `IRenderPipeline`, `Direct3D_pipe.cpp`, game
-objects, simulation state and retail files. The checked-in shader sources are independent test inputs.
-Their generated SPIR-V files remain build outputs and are not stored in the repository.
+submit the same repository-owned scene through a native implementation of the existing
+`IRenderPipeline` vtable and the registered `IRenderPrimitive` boundary. They remain separate from
+`Direct3D_pipe.cpp`, game objects, simulation state and retail files. The checked-in shader sources
+are independent test inputs. Their generated SPIR-V files remain build outputs and are not stored
+in the repository.
 
-The production `PrimitiveBuilder` expands a repository-owned triangle plus quad into nine direct
-legacy `RPVertex` values. Those values cross the native `IRenderPrimitive`, are checked and copied
-into the SDL-free 24-byte position/BGRA8/UV contract, and are uploaded by the probe in the same
-process. The owner also validates the equivalent seven-vertex/nine-U16-index submission before the
-direct builder result is rendered. Layout, topology and bounds are tested by the existing focused
-target; see
+The production `PrimitiveBuilder` pipeline constructor expands a repository-owned triangle plus
+quad into nine direct legacy `RPVertex` values. Those values cross `IRenderPipeline`, the native
+`IRenderPrimitive`, and the SDL-free checked/copying 24-byte position/BGRA8/UV contract before the
+probe uploads them. The owner also validates the equivalent seven-vertex/nine-U16-index submission
+before the direct builder result is rendered. Layout, topology and bounds are tested by the existing
+focused target; see
 [RENDER_SUBMISSION_PORTABILITY.md](RENDER_SUBMISSION_PORTABILITY.md).
 
 ## Candidate assessment
@@ -79,6 +81,28 @@ not linked or copied into FrontierX outputs. Its package provenance and any repr
 redistribution implications are still recorded as release gates rather than inferred from local
 availability.
 
+## Depth and blend pipeline mapping
+
+The native `IRenderPrimitive` owner retains an SDL-free `RenderStateSnapshot` and sends a complete
+candidate to `SdlGpuRenderer` after each supported legacy state change. The backend maps all eight
+`D3DCMPFUNC` values to their SDL compare operations and maps `ZERO`, `ONE`, source/destination color,
+inverse color, source/destination alpha, inverse alpha and source-alpha-saturate to the corresponding
+SDL blend factors. The same source and destination factors currently drive color and alpha with
+`ADD`; separate alpha factors and blend operations are outside this slice.
+
+SDL GPU state is part of an immutable graphics pipeline. `SetRenderState` therefore validates the
+whole snapshot, creates a candidate pipeline, waits for the current device to become idle, releases
+the previous pipeline and only then stores the new snapshot. If validation, pipeline creation or the
+idle wait fails, the candidate is released and the active pipeline remains installed. The native
+owner commits its matching snapshot only when the callback returns `GR_OK`, so legacy get/set state
+and the backend pipeline cannot diverge after a reported failure.
+
+The smoke state enables depth test/write with `LESSEQUAL` and enables
+`SRCALPHA`/`INVSRCALPHA`. Fixture alpha is 210 for the foreground triangle and 160 for the background
+quad. The vertex shader converts the packed BGRA input to RGBA, and the fragment shader multiplies
+the sampled texture by all four diffuse channels. This makes the visible/readback result sensitive
+to the newly connected alpha path while retaining the earlier depth-overlap check.
+
 ## Verification evidence
 
 The following configure and focused compile commands succeeded on Linux x86_64:
@@ -92,11 +116,13 @@ cmake --build --preset linux-clang-debug --target frontierx_sdl3_gpu_probe -j2
 ```
 
 Both generated shaders and compiled the probe with the project's strict warning policy. Separate
-visible runtime checks were executed on 2026-09-20 against the local graphical session with
+visible runtime checks were executed on 2026-09-21 against the local graphical session with
 `--require-runtime --visible`. Both binaries reported:
 
 ```text
-SDL3 GPU probe passed: driver=vulkan presented_frames=12 vertices=9 indices=0 source=primitivebuilder-native-irenderprimitive texture=2x2 resize=1270x1394->1261x1390 depth_recreations=2 changed_pixels=2496 pixel_checksum=3246152458680859569
+SDL3 GPU probe passed: driver=vulkan presented_frames=12 vertices=9 indices=0
+source=primitivebuilder-native-irenderpipeline texture=2x2 resize=2560x1440->2536x1390
+depth_recreations=2 changed_pixels=2496 pixel_checksum=7951318278861886233
 ```
 
 The visible commands used each preset's generated shaders:
@@ -121,19 +147,23 @@ frontierx_native_shell --smoke-ms 250 \
                  generated/shaders/sdl3_gpu_probe.frag.spv
 ```
 
-Both shell runs reported the Wayland video driver, Vulkan backend, 17 presented frames, nine direct
-vertices, 2,496 changed pixels and checksum `3246152458680859569`. The exact frame count is timing
-diagnostic, not an invariant. A focused Clang ASan/UBSan shell run produced the same pixel result.
+Both current shell runs reported the Wayland video driver, Vulkan backend, production
+`PrimitiveBuilder via IRenderPipeline`, 17 presented frames, nine direct vertices, 2,496 changed
+pixels and checksum `7951318278861886233`. The exact frame count and compositor-selected resize are
+diagnostic, not cross-host invariants. The earlier focused Clang ASan/UBSan shell run used the opaque
+fixture before this state slice; current sanitizer evidence covers the CPU state and pipeline owner.
 
 The central matrix result is recorded in [BUILD_GRAPH.md](BUILD_GRAPH.md); its sandbox GPU check
-skipped because no video device was exposed, so it is not counted as runtime evidence. A separate
+skipped because no video device was exposed, so it is not counted as runtime evidence. An earlier
 Clang 22.1.8 build with AddressSanitizer and UndefinedBehaviorSanitizer completed the visible
-registered-owner-to-readback path. Leak detection was disabled because LeakSanitizer cannot run in
-the local graphics-driver/`ptrace` environment. The shaders were unchanged from the SPIRV-Tools
-2026.3 validation recorded on 2026-09-19.
+registered-owner-to-readback path before diffuse alpha was enabled. The current state owner and
+vertex-buffer adapter passed focused ASan/UBSan CPU checks; no sanitized current-image claim is
+made. Leak detection was disabled because LeakSanitizer cannot run in the local graphics-driver/
+`ptrace` environment. The shaders were recompiled from the checked-in GLSL for both current presets.
 
-This is runtime evidence of device creation, shader/pipeline creation, vertex and texture upload,
-texture/sampler binding, depth test/write attachment, command submission, swapchain image
+This is runtime evidence of device creation, shader/pipeline creation and replacement, vertex and
+texture upload, texture/sampler binding, depth comparison/write and alpha blending, command
+submission, swapchain image
 acquisition, draw, presentation, compositor-observed resizing, depth-target recreation and ordered
 shutdown through SDL GPU. The bounded readback found 2,496 changed pixels out of 4,096 and separately
 required the clear corner, textured background geometry and depth-preserved foreground to differ.
@@ -152,20 +182,22 @@ upload, draw or submit failures are test failures. A required local validation c
   effect or UI.
 - The structural pixel readback is not a Windows image comparison and does not set cross-driver
   color/tolerance policy.
-- Stencil, blending, fullscreen behavior, device loss, shader variants, and long-running resource
-  churn are untested. Depth, sampling and resize paths now have API/runtime plus bounded pixel
-  evidence, but no retail or Windows oracle.
-- The native `IRenderPrimitive` geometry adapter and `PrimitiveBuilder` caller are production code,
-  and the shell selects the reusable SDL GPU lifecycle only for an explicit smoke request. There is
-  no SDL GPU `IRenderPipeline`, legacy D3D9 state/material adapter or game target.
+- Stencil, separate alpha blend factors/operations, fullscreen behavior, device loss, shader
+  variants, and long-running resource churn are untested. Depth, source-alpha blending, sampling and
+  resize paths now have API/runtime plus bounded pixel evidence, but no retail or Windows oracle.
+- The native `IRenderPipeline`/`IRenderPrimitive` geometry adapters and `PrimitiveBuilder` caller are
+  production-boundary code, and the shell selects the reusable SDL GPU lifecycle only for an
+  explicit smoke request. There is no actual `RenderBatcher`, complete legacy D3D9 state/material
+  adapter or game target.
 - The probe does not replace or modify the supported Win32 D3D9 renderer.
 - Neither SDL3 nor the shader toolchain is approved for FrontierX binary distribution by this test.
 
 ## Next acceptance slice
 
-The next renderer change should add explicit blend and representative existing state capture before
-the managed vertex-buffer boundary, without widening the geometry contract into a second pipeline.
-The repository-owned fixture must then be driven through the supported Windows path and compared
+The next renderer change should compile and execute the actual `RenderBatcher` closure against the
+new native `IRenderPipeline` create/lock/unlock/destroy owner, then add RPVERTEX2 GPU consumption and
+texture-stage/material mapping.
+The repository-owned fixture must also be driven through the supported Windows path and compared
 under a documented tolerance.
 Only after that evidence should the project decide between a direct adapter and another maintained
 D3D9-preserving route.

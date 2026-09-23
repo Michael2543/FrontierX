@@ -37,10 +37,15 @@ Read the smallest relevant authoritative document before changing code:
 - Selected production owners including profile parsing, the event system, native user defaults and
   hotkey processing compile and execute in native checks. Their exact status and remaining gates are
   recorded in the focused documents linked from `docs/PROJECT.md` and `docs/PORT_READINESS.md`.
-- A production `PrimitiveBuilder` draw reaches Vulkan presentation and bounded readback through a
-  registered native `IRenderPrimitive` and the portable submission contract. The native shell can
-  explicitly select that lifecycle and render the repository smoke scene. State/material mapping,
-  Windows comparison, backend selection and a native game scene remain open.
+- A production `PrimitiveBuilder` draw reaches Vulkan presentation and bounded readback through the
+  real `IRenderPipeline` vtable, a registered native `IRenderPrimitive` and the portable submission
+  contract. The native shell can explicitly select that lifecycle and render the repository smoke
+  scene. The native pipeline owns checked CPU vertex buffers through create/lock/unlock/destroy,
+  routes RPVertex/RPVERTEX2 direct and indexed draws into that registered owner, and forwards six
+  validated depth/blend states that rebuild the SDL graphics pipeline transactionally. Unsupported
+  legacy pipeline slots fail explicitly. Actual `RenderBatcher` integration, RPVERTEX2 GPU,
+  texture-stage/material mapping, Windows comparison, backend selection and a native game scene
+  remain open.
 - Linux x86_64 ELF is the first port target. macOS, ARM64 and multiplayer portability are later.
 - Missing retail media must come from a lawfully obtained installation and must never enter this
   repository.

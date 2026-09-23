@@ -8,12 +8,7 @@
 
 #include "IRenderPrimitive.h"
 #include "RPVertex1.h"
-
-#if defined(_WIN32)
 #include "rendpipeline.h"
-#else
-struct IRenderPipeline;
-#endif
 
 
 typedef enum {
@@ -35,15 +30,11 @@ template <class FVFVERTEXTYPE, U32 FVFVERTEXTYPEFLAGS>
 class TPrimitiveBuilder
 {
 public:
-#if defined(_WIN32)
 	TPrimitiveBuilder( IRenderPipeline *pipeline=NULL, UINT blocksize=128 );
-#endif
 	TPrimitiveBuilder( IRenderPrimitive *primitive, UINT blocksize=128 );
 	~TPrimitiveBuilder();
 
-#if defined(_WIN32)
 	void SetPipeline( IRenderPipeline *pipeline );
-#endif
 	void SetIRenderPrimitive( IRenderPrimitive *primitive );
 	void Begin( D3DPRIMITIVETYPE type );
 	void Begin( PBenum type );
@@ -67,9 +58,7 @@ public:
 	UINT current_vertex;
 	U32  fvf_vertex_flags;
 protected:
-#if defined(_WIN32)
 	IRenderPipeline *render_pipeline;
-#endif
 	IRenderPrimitive *render_primitive;
 	UINT block_size;
 	UINT num_vertex;

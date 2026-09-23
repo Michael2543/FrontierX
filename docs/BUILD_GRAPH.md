@@ -7,13 +7,13 @@ This build-declaration view is complemented by the 2026-09-16 lexical
 pointer-width, graphics, audio, and video candidates by source owner. Neither inventory evaluates
 MSBuild imports or establishes a native game target.
 
-Native matrix status, 2026-09-20: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets completed.
-Their CTest presets each discovered 31 tests, executed 30 successfully and skipped only
+Native matrix status, 2026-09-21: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets
+completed. Their CTest presets each discovered 32 tests, executed 31 successfully and skipped only
 `portability.sdl3_gpu` because this sandbox exposed no graphical/GPU runtime. The focused render
-submission test executed in both matrices; the skipped GPU test is not runtime evidence. No
-Windows, retail or native game execution was performed in this matrix. Separate visible GCC,
-Clang and Clang ASan/UBSan shell runs exercised the shared scene through Wayland/Vulkan and are
-recorded in the focused renderer and shell documents.
+submission and pipeline tests executed in both matrices; the skipped GPU test is not runtime
+evidence. No Windows, retail or native game execution was performed in this matrix. Separate
+required visible GCC and Clang probe and shell runs exercised the current shared scene through
+Wayland/Vulkan and are recorded in the focused renderer and shell documents.
 
 ## Reproduce
 
@@ -128,30 +128,34 @@ position/BGRA8/UV submission shape, topology and optional U16-index view. Its st
 layout, bounds and primitive counts; a Direct3D-free adapter maps the stable primitive values and
 exact `D3DFVF_RPVERTEX` byte shape into caller-owned typed storage. The SDL GPU probe is its first
 backend consumer. The production `PrimitiveBuilder` now expands the fixture to a direct triangle
-list, crosses the registered `frontierx_native_render_primitive` adapter and supplies the exact data
-uploaded, presented and read back by SDL GPU in the same process. The same owner validates the
+list, crosses the real `IRenderPipeline` vtable and registered
+`frontierx_native_render_primitive` adapter, and supplies the exact data uploaded, presented and
+read back by SDL GPU in the same process. The same owner validates the
 equivalent U16-index submission, while the CPU probe additionally covers `RPVertex` layout, quad
 expansion, callback failure propagation and explicit triangle-fan rejection. The GPU lifecycle is
 owned by `frontierx_sdl3_gpu_renderer`; the native shell can select it explicitly and submit the
-shared `frontierx_render_smoke_scene` through the same component-manager boundary. `RenderBatcher`,
-state handling and vertex-buffer draws remain unconnected. See
+shared `frontierx_render_smoke_scene` through the same boundaries. Six depth/blend states and
+checked CPU vertex-buffer draws are connected; the actual `RenderBatcher`, RPVERTEX2 GPU and
+texture-stage/material paths remain unconnected. See
 [RENDER_SUBMISSION_PORTABILITY.md](RENDER_SUBMISSION_PORTABILITY.md).
 
 The optional `frontierx_sdl3_gpu_probe` target is gated by `FRONTIERX_BUILD_SDL3_GPU`, requires the
 existing SDL3 option, and has no dependency on the game, D3D9 renderer or retail data. CMake invokes
 the system `glslc` to compile two repository-owned GLSL test shaders into the
-out-of-tree generated directory; the backend has no direct Vulkan-loader dependency. It creates SDL's Vulkan device and
-window swapchain, builds a graphics pipeline, uploads seven vertices, nine U16 indices and a 2-by-2 texture,
-samples with depth test/write enabled, submits/presents twelve frames and recreates the depth target
-after an observed swapchain resize. It also renders to a bounded 64-by-64 target, waits on a GPU
+out-of-tree generated directory; the backend has no direct Vulkan-loader dependency. It creates
+SDL's Vulkan device and window swapchain, builds a graphics pipeline, uploads seven vertices, nine
+U16 indices and a 2-by-2 texture, samples with depth test/write and source-alpha blending enabled,
+submits/presents twelve frames and recreates the depth target after an observed swapchain resize. It
+also renders to a bounded 64-by-64 target, waits on a GPU
 fence, downloads the pixels and validates clear/background/foreground structure. GCC and Clang
-visible probe and integrated-shell runtime checks passed on 2026-09-20 with 2,496 changed pixels and
-the same diagnostic checksum per shared scene on the local Vulkan driver.
+visible probe and integrated-shell runtime checks passed on 2026-09-21 with 2,496 changed pixels and
+diagnostic checksum `7951318278861886233` for the shared scene on the local Vulkan driver.
 
-This edge proves the local device/upload/draw/present lifecycle and its explicit shell composition,
-not a selected game backend or legacy state/material integration. Its registered test uses a transient non-focusable window and skip return code 77 when
-a host has no graphical/GPU runtime; runtime-capable shader, pipeline, upload, or submission
-failures remain failures. See
+This edge proves the local device/upload/draw/present lifecycle, representative depth/blend mapping
+and its explicit shell composition, not a selected game backend or complete state/material
+integration. Its registered test uses a transient non-focusable window and skip return code 77 when
+a host has no graphical/GPU runtime; runtime-capable shader, pipeline, upload, or submission failures
+remain failures. See
 [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
 
 The public `WindowManager.h` declaration now compiles as part of the existing
@@ -283,3 +287,51 @@ The required next graph evidence is therefore native Windows cross-module valida
 real Linux owner closure, not another isolated alias. The affected virtual interfaces, callbacks,
 and synchronous payload lifetimes are detailed in
 [RUNTIME_CONTEXT_PORTABILITY.md](RUNTIME_CONTEXT_PORTABILITY.md).
+
+## Native render-pipeline vertex-buffer follow-up
+
+The existing render-submission graph now includes `frontierx_native_render_pipeline` and the
+deterministic `frontierx_render_pipeline_probe` CTest. The public `rendpipeline.h` declaration is
+includable on Linux through fixed-width non-Windows declaration types, and the native owner derives
+from the real `IRenderPipeline` interface. A default adapter returns `GR_NOT_IMPLEMENTED` for every
+unported slot; implemented direct/state methods forward to the registered `IRenderPrimitive`. The
+CPU target also models the
+`RenderBatcher` lock/slice/draw pattern: its context-aware lookup obtains a caller-owned
+vertex-buffer view, and the same two draw entry points used by production inspect that view's FVF,
+validate the requested direct or U16-indexed slice, preserve slice-relative indices and forward
+portable RPVertex-shaped vertices through the already tested `IRenderPrimitive` boundary. The
+portable contract and adapter also handle direct and U16-indexed 32-byte
+`D3DFVF_RPVERTEX2` slices with validated list and line-strip topologies.
+
+`frontierx_native_render_primitive` now links that adapter and owns it when its native-only
+descriptor supplies a context-aware buffer lookup. Its existing `IRenderPrimitive`
+vertex-buffer methods therefore execute the same checked route instead of returning
+`GR_NOT_IMPLEMENTED`. The adapter now also owns CPU buffers through production-shaped
+create/lock/unlock/destroy methods. Nonzero monotonic `U32` tokens keep runtime addresses out of the
+legacy handle field; lock state gates draw and destruction. The registered-owner regression creates,
+fills and destroys one of these resources and routes its indexed draw through separate typed
+RPVertex/RPVERTEX2 callbacks. This proves native resource ownership, owner construction, vtable
+routing and shutdown. The regression additionally invokes the repository smoke scene through the
+production `PrimitiveBuilder(IRenderPipeline *)` constructor and real pipeline vtable. It does not
+execute the production game batcher.
+
+On 2026-09-21, `cmake --preset`, `cmake --build --preset ... -j2` and `ctest --preset`
+completed for both `linux-gcc-debug` (GCC 16.2.1) and `linux-clang-debug` (Clang 22.1.8)
+on Linux x86_64. Each full preset executed 31 passing tests and skipped `portability.sdl3_gpu`;
+the skip is not GPU runtime evidence. Both build presets now explicitly include the pipeline
+probe. A fresh Clang ASan/UBSan build also passed the two focused renderer CPU checks.
+Exact commands and remaining Windows/retail gates are in
+[RENDER_SUBMISSION_PORTABILITY.md](RENDER_SUBMISSION_PORTABILITY.md).
+
+The same registered owner now also links an SDL-free `RenderStateSnapshot` for six existing depth
+and alpha-blend values. `set_render_state` validates a complete candidate and commits it only after
+the backend callback succeeds; the focused submission regression covers set/get, unsupported and
+invalid values, callback propagation and rollback. The SDL GPU callback maps the snapshot into a
+replacement graphics pipeline, including all eight D3D9 depth comparisons and eleven directly
+mappable blend factors. On 2026-09-21 both full presets again executed 31 passing tests and skipped
+only the non-required GPU CTest. After the real pipeline vtable was connected, separate required
+visible GCC and Clang GPU-probe and native-shell runs used Vulkan and again agreed on 2,496 changed
+pixels with checksum `7951318278861886233`. Probe diagnostics identify
+`primitivebuilder-native-irenderpipeline`, and both shells report the production builder via
+`IRenderPipeline`. Those four runs are synthetic Linux hardware evidence; Windows, retail,
+RPVERTEX2 GPU and actual `RenderBatcher` evidence remain open.

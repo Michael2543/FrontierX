@@ -67,7 +67,8 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, std::string &
     FrontierX::NativeComponentManager manager;
     FrontierX::RegisterNativeRenderPrimitive(&manager);
     FrontierX::NativeRenderPrimitiveDesc descriptor(
-        FrontierX::SdlGpuRenderer::SubmissionCallback, &renderer);
+        FrontierX::SdlGpuRenderer::SubmissionCallback, &renderer, nullptr,
+        FrontierX::SdlGpuRenderer::RenderStateCallback);
     void * rawPrimitive = nullptr;
     if (manager.CreateInstance(&descriptor, &rawPrimitive) != GR_OK || !rawPrimitive)
     {
@@ -75,18 +76,27 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, std::string &
         return false;
     }
     auto * primitive = static_cast<IRenderPrimitive *>(rawPrimitive);
+    FrontierX::NativeRenderPipeline pipeline(primitive);
+    const GENRESULT stateResult = FrontierX::ConfigureRenderSmokeState(&pipeline);
     const GENRESULT indexedResult = primitive->draw_indexed_primitive(
         D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX,
         legacyVertices.data(), static_cast<int>(legacyVertices.size()),
         kIndices.data(), static_cast<int>(kIndices.size()), 0U);
+    const auto renderState = renderer.CurrentRenderState();
+    const bool stateValid = stateResult == GR_OK && renderState.depthEnabled == 1U &&
+        renderState.depthWriteEnabled == 1U &&
+        renderState.depthFunction == D3DCMP_LESSEQUAL &&
+        renderState.alphaBlendEnabled == 1U &&
+        renderState.sourceBlend == D3DBLEND_SRCALPHA &&
+        renderState.destinationBlend == D3DBLEND_INVSRCALPHA;
     const bool indexedValid = indexedResult == GR_OK &&
         renderer.VertexCount() == kVertices.size() && renderer.IndexCount() == kIndices.size();
-    const GENRESULT directResult = FrontierX::SubmitRenderSmokeScene(primitive);
+    const GENRESULT directResult = FrontierX::SubmitRenderSmokeScene(&pipeline);
     const bool directValid = renderer.VertexCount() == kIndices.size() &&
         renderer.IndexCount() == 0U && directResult == GR_OK;
     primitive->Release();
     const GENRESULT shutdownResult = manager.ShutDown();
-    if (!indexedValid || !directValid || shutdownResult != GR_OK)
+    if (!stateValid || !indexedValid || !directValid || shutdownResult != GR_OK)
     {
         error = renderer.LastError().empty()
             ? "native render submission failed" : renderer.LastError();
@@ -203,7 +213,7 @@ int main(int argc, char ** argv)
               << " presented_frames=" << presentedFrames
               << " vertices=" << renderer.VertexCount()
               << " indices=" << renderer.IndexCount()
-              << " source=primitivebuilder-native-irenderprimitive"
+              << " source=primitivebuilder-native-irenderpipeline"
               << " texture=2x2 resize=" << initialWidth << 'x' << initialHeight << "->"
               << renderer.DepthWidth() << 'x' << renderer.DepthHeight()
               << " depth_recreations=" << renderer.DepthRecreations()

@@ -206,19 +206,7 @@
 #endif
 
 #if !defined(_WIN32)
-#include "FrontierX/LegacyMessage.h"
-
-#include <cstdint>
-
-using HINSTANCE = void *;
-using HWND = FrontierX::LegacyWindowToken;
-using LONG = std::int32_t;
-using HRESULT = std::int32_t;
-using LRESULT = std::intptr_t;
-using HANDLE = void *;
-using UINT = std::uint32_t;
-using WPARAM = FrontierX::LegacyWParam;
-using LPARAM = FrontierX::LegacyLParam;
+#include "FrontierX/LegacyWindowTypes.h"
 #endif
 
 //-----------------------------

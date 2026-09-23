@@ -37,6 +37,7 @@ struct SdlGpuRenderer::Impl
     Uint32 depthRecreations = 0U;
     Uint32 vertexCount = 0U;
     Uint32 indexCount = 0U;
+    RenderStateSnapshot renderState{};
     bool windowClaimed = false;
 };
 
@@ -114,6 +115,109 @@ SDL_GPUShader * CreateShader(SDL_GPUDevice * device,
     info.stage = stage;
     info.num_samplers = samplerCount;
     return SDL_CreateGPUShader(device, &info);
+}
+
+bool MapDepthFunction(U32 value, SDL_GPUCompareOp & result)
+{
+    switch (value)
+    {
+    case D3DCMP_NEVER: result = SDL_GPU_COMPAREOP_NEVER; return true;
+    case D3DCMP_LESS: result = SDL_GPU_COMPAREOP_LESS; return true;
+    case D3DCMP_EQUAL: result = SDL_GPU_COMPAREOP_EQUAL; return true;
+    case D3DCMP_LESSEQUAL: result = SDL_GPU_COMPAREOP_LESS_OR_EQUAL; return true;
+    case D3DCMP_GREATER: result = SDL_GPU_COMPAREOP_GREATER; return true;
+    case D3DCMP_NOTEQUAL: result = SDL_GPU_COMPAREOP_NOT_EQUAL; return true;
+    case D3DCMP_GREATEREQUAL: result = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL; return true;
+    case D3DCMP_ALWAYS: result = SDL_GPU_COMPAREOP_ALWAYS; return true;
+    default: return false;
+    }
+}
+
+bool MapBlendFactor(U32 value, SDL_GPUBlendFactor & result)
+{
+    switch (value)
+    {
+    case D3DBLEND_ZERO: result = SDL_GPU_BLENDFACTOR_ZERO; return true;
+    case D3DBLEND_ONE: result = SDL_GPU_BLENDFACTOR_ONE; return true;
+    case D3DBLEND_SRCCOLOR: result = SDL_GPU_BLENDFACTOR_SRC_COLOR; return true;
+    case D3DBLEND_INVSRCCOLOR: result = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_COLOR; return true;
+    case D3DBLEND_SRCALPHA: result = SDL_GPU_BLENDFACTOR_SRC_ALPHA; return true;
+    case D3DBLEND_INVSRCALPHA:
+        result = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+        return true;
+    case D3DBLEND_DESTALPHA: result = SDL_GPU_BLENDFACTOR_DST_ALPHA; return true;
+    case D3DBLEND_INVDESTALPHA:
+        result = SDL_GPU_BLENDFACTOR_ONE_MINUS_DST_ALPHA;
+        return true;
+    case D3DBLEND_DESTCOLOR: result = SDL_GPU_BLENDFACTOR_DST_COLOR; return true;
+    case D3DBLEND_INVDESTCOLOR:
+        result = SDL_GPU_BLENDFACTOR_ONE_MINUS_DST_COLOR;
+        return true;
+    case D3DBLEND_SRCALPHASAT:
+        result = SDL_GPU_BLENDFACTOR_SRC_ALPHA_SATURATE;
+        return true;
+    default: return false;
+    }
+}
+
+SDL_GPUGraphicsPipeline * CreateGraphicsPipeline(
+    SDL_GPUDevice * device,
+    SDL_GPUShader * vertexShader,
+    SDL_GPUShader * fragmentShader,
+    SDL_GPUTextureFormat colorTargetFormat,
+    const RenderStateSnapshot & state)
+{
+    SDL_GPUCompareOp compare = SDL_GPU_COMPAREOP_INVALID;
+    SDL_GPUBlendFactor source = SDL_GPU_BLENDFACTOR_INVALID;
+    SDL_GPUBlendFactor destination = SDL_GPU_BLENDFACTOR_INVALID;
+    if (!MapDepthFunction(state.depthFunction, compare) ||
+        !MapBlendFactor(state.sourceBlend, source) ||
+        !MapBlendFactor(state.destinationBlend, destination))
+    {
+        return nullptr;
+    }
+    const SDL_GPUVertexBufferDescription bufferDescription{
+        0U, static_cast<Uint32>(sizeof(RenderVertexP3DiffuseT2)),
+        SDL_GPU_VERTEXINPUTRATE_VERTEX, 0U};
+    const std::array<SDL_GPUVertexAttribute, 3> attributes = {{
+        {0U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 0U},
+        {1U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM,
+         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseT2, diffuseBgra))},
+        {2U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseT2, u))},
+    }};
+    SDL_GPUColorTargetDescription colorTarget{};
+    colorTarget.format = colorTargetFormat;
+    colorTarget.blend_state.src_color_blendfactor = source;
+    colorTarget.blend_state.dst_color_blendfactor = destination;
+    colorTarget.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    colorTarget.blend_state.src_alpha_blendfactor = source;
+    colorTarget.blend_state.dst_alpha_blendfactor = destination;
+    colorTarget.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    colorTarget.blend_state.enable_blend = state.alphaBlendEnabled != 0U;
+    SDL_GPUGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.vertex_shader = vertexShader;
+    pipelineInfo.fragment_shader = fragmentShader;
+    pipelineInfo.vertex_input_state.vertex_buffer_descriptions = &bufferDescription;
+    pipelineInfo.vertex_input_state.num_vertex_buffers = 1U;
+    pipelineInfo.vertex_input_state.vertex_attributes = attributes.data();
+    pipelineInfo.vertex_input_state.num_vertex_attributes =
+        static_cast<Uint32>(attributes.size());
+    pipelineInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    pipelineInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+    pipelineInfo.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    pipelineInfo.rasterizer_state.enable_depth_clip = true;
+    pipelineInfo.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    pipelineInfo.depth_stencil_state.compare_op = compare;
+    pipelineInfo.depth_stencil_state.enable_depth_test = state.depthEnabled != 0U;
+    pipelineInfo.depth_stencil_state.enable_depth_write =
+        state.depthEnabled != 0U && state.depthWriteEnabled != 0U;
+    pipelineInfo.target_info.color_target_descriptions = &colorTarget;
+    pipelineInfo.target_info.num_color_targets = 1U;
+    pipelineInfo.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+    pipelineInfo.target_info.has_depth_stencil_target = true;
+    return SDL_CreateGPUGraphicsPipeline(device, &pipelineInfo);
 }
 
 bool PixelsDiffer(const std::uint8_t * left,
@@ -200,39 +304,9 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
         return false;
     }
 
-    const SDL_GPUVertexBufferDescription bufferDescription{
-        0U, static_cast<Uint32>(sizeof(RenderVertexP3DiffuseT2)),
-        SDL_GPU_VERTEXINPUTRATE_VERTEX, 0U};
-    const std::array<SDL_GPUVertexAttribute, 3> attributes = {{
-        {0U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 0U},
-        {1U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM,
-         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseT2, diffuseBgra))},
-        {2U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseT2, u))},
-    }};
-    const SDL_GPUColorTargetDescription colorTarget{impl_->colorTargetFormat, {}};
-    SDL_GPUGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.vertex_shader = impl_->vertexShader;
-    pipelineInfo.fragment_shader = impl_->fragmentShader;
-    pipelineInfo.vertex_input_state.vertex_buffer_descriptions = &bufferDescription;
-    pipelineInfo.vertex_input_state.num_vertex_buffers = 1U;
-    pipelineInfo.vertex_input_state.vertex_attributes = attributes.data();
-    pipelineInfo.vertex_input_state.num_vertex_attributes =
-        static_cast<Uint32>(attributes.size());
-    pipelineInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
-    pipelineInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-    pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
-    pipelineInfo.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
-    pipelineInfo.rasterizer_state.enable_depth_clip = true;
-    pipelineInfo.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
-    pipelineInfo.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
-    pipelineInfo.depth_stencil_state.enable_depth_test = true;
-    pipelineInfo.depth_stencil_state.enable_depth_write = true;
-    pipelineInfo.target_info.color_target_descriptions = &colorTarget;
-    pipelineInfo.target_info.num_color_targets = 1U;
-    pipelineInfo.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
-    pipelineInfo.target_info.has_depth_stencil_target = true;
-    impl_->pipeline = SDL_CreateGPUGraphicsPipeline(impl_->device, &pipelineInfo);
+    impl_->pipeline = CreateGraphicsPipeline(
+        impl_->device, impl_->vertexShader, impl_->fragmentShader,
+        impl_->colorTargetFormat, impl_->renderState);
     SDL_GPUSamplerCreateInfo samplerInfo{};
     samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
     samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
@@ -366,10 +440,49 @@ GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView & submission)
     return GR_OK;
 }
 
+GENRESULT SdlGpuRenderer::SetRenderState(const RenderStateSnapshot & state)
+{
+    if (!impl_->device || !IsRenderBoolean(state.depthEnabled) ||
+        !IsRenderBoolean(state.depthWriteEnabled) ||
+        !IsRenderBoolean(state.alphaBlendEnabled) ||
+        !IsRenderDepthFunction(state.depthFunction) ||
+        !IsRenderBlendFactor(state.sourceBlend) ||
+        !IsRenderBlendFactor(state.destinationBlend))
+    {
+        return GR_INVALID_PARMS;
+    }
+    SDL_GPUGraphicsPipeline * pipeline = CreateGraphicsPipeline(
+        impl_->device, impl_->vertexShader, impl_->fragmentShader,
+        impl_->colorTargetFormat, state);
+    if (!pipeline)
+    {
+        impl_->error = SDL_GetError();
+        return GR_GENERIC;
+    }
+    if (!SDL_WaitForGPUIdle(impl_->device))
+    {
+        impl_->error = SDL_GetError();
+        SDL_ReleaseGPUGraphicsPipeline(impl_->device, pipeline);
+        return GR_GENERIC;
+    }
+    if (impl_->pipeline)
+        SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->pipeline);
+    impl_->pipeline = pipeline;
+    impl_->renderState = state;
+    return GR_OK;
+}
+
 GENRESULT DACOM_CDECL SdlGpuRenderer::SubmissionCallback(
     void * context, const RenderSubmissionView & submission)
 {
     return context ? static_cast<SdlGpuRenderer *>(context)->Submit(submission) : GR_INVALID_PARMS;
+}
+
+GENRESULT DACOM_CDECL SdlGpuRenderer::RenderStateCallback(
+    void * context, const RenderStateSnapshot & state)
+{
+    return context ? static_cast<SdlGpuRenderer *>(context)->SetRenderState(state)
+                   : GR_INVALID_PARMS;
 }
 
 bool SdlGpuRenderer::Present(bool & presented, std::string & error)
@@ -600,4 +713,8 @@ std::uint32_t SdlGpuRenderer::DepthHeight() const { return impl_->depthHeight; }
 std::uint32_t SdlGpuRenderer::DepthRecreations() const { return impl_->depthRecreations; }
 std::uint32_t SdlGpuRenderer::VertexCount() const { return impl_->vertexCount; }
 std::uint32_t SdlGpuRenderer::IndexCount() const { return impl_->indexCount; }
+RenderStateSnapshot SdlGpuRenderer::CurrentRenderState() const
+{
+    return impl_->renderState;
+}
 }

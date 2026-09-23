@@ -495,11 +495,37 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		-Wno-delete-non-abstract-non-virtual-dtor
 		-Wno-delete-abstract-non-virtual-dtor)
 endif()
+add_library(frontierx_native_render_pipeline STATIC
+	Code/Libs/Include/FrontierX/NativeRenderPipeline.h
+	Code/Libs/Include/FrontierX/RenderPipelineAdapter.h
+	Code/Libs/Src/Platform/NativeRenderPipeline.cpp)
+target_include_directories(frontierx_native_render_pipeline PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_link_libraries(frontierx_native_render_pipeline
+	PUBLIC frontierx_dacom_core frontierx_render_submission)
+target_compile_features(frontierx_native_render_pipeline PUBLIC cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_render_pipeline)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_native_render_pipeline PRIVATE
+		-Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_native_render_pipeline PRIVATE
+		-Wno-delete-abstract-non-virtual-dtor
+		-Wno-delete-non-virtual-dtor)
+endif()
+target_link_libraries(frontierx_native_render_primitive
+	PUBLIC frontierx_native_render_pipeline)
 add_executable(frontierx_render_submission_probe
 	Tools/portability/render_submission_probe.cpp)
 target_link_libraries(frontierx_render_submission_probe
-	PRIVATE frontierx_native_render_primitive)
+	PRIVATE frontierx_native_render_pipeline frontierx_native_render_primitive)
 frontierx_enable_strict_warnings(frontierx_render_submission_probe)
+
+add_executable(frontierx_render_pipeline_probe
+	Tools/portability/render_pipeline_probe.cpp)
+target_link_libraries(frontierx_render_pipeline_probe
+	PRIVATE frontierx_native_render_pipeline)
+frontierx_enable_strict_warnings(frontierx_render_pipeline_probe)
 
 add_library(frontierx_render_smoke_scene STATIC
 	Code/Libs/Include/FrontierX/RenderSmokeScene.h
@@ -507,6 +533,33 @@ add_library(frontierx_render_smoke_scene STATIC
 target_include_directories(frontierx_render_smoke_scene PUBLIC Code/Libs/Include)
 target_compile_features(frontierx_render_smoke_scene PUBLIC cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_render_smoke_scene)
+target_link_libraries(frontierx_render_pipeline_probe
+	PRIVATE frontierx_render_smoke_scene)
+
+# The ZBatcher header is the declarative closure for the App-side RenderBatcher
+# owner; this probe guards that boundary on non-Windows toolchains.
+add_executable(frontierx_render_batcher_header_probe
+	Tools/portability/render_batcher_header_probe.cpp)
+target_include_directories(frontierx_render_batcher_header_probe
+	PRIVATE Code/App/Src Code/Libs/Include)
+target_compile_features(frontierx_render_batcher_header_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_render_batcher_header_probe)
+# Legacy math/graphics headers containing the batcher header chain carry
+# intentional static arrays and copy-style idiom; the following warnings are
+# sourced from those headers, not from the batcher interface boundary.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(FRONTIERX_RB_HEADER_WARNS
+        -Wno-unused-variable
+        -Wno-deprecated-copy
+        -Wno-pedantic
+        -Wno-extra
+        -Wno-unknown-pragmas)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        list(APPEND FRONTIERX_RB_HEADER_WARNS -Wno-template-id-cdtor)
+    endif()
+	target_compile_options(frontierx_render_batcher_header_probe
+		PRIVATE ${FRONTIERX_RB_HEADER_WARNS})
+endif()
 
 # The production DACOM adapter and this probe share the same inline parser core.
 add_library(frontierx_profile_buffer INTERFACE)
@@ -692,6 +745,8 @@ if(BUILD_TESTING)
 	add_test(NAME portability.math_core COMMAND frontierx_math_core_probe)
 	add_test(NAME portability.ray_geometry COMMAND frontierx_ray_geometry_probe)
 	add_test(NAME portability.render_submission COMMAND frontierx_render_submission_probe)
+	add_test(NAME portability.render_pipeline COMMAND frontierx_render_pipeline_probe)
+	add_test(NAME portability.render_batcher_header COMMAND frontierx_render_batcher_header_probe)
 	if(TARGET frontierx_sdl3_window_probe)
 		add_test(NAME portability.sdl3_window COMMAND frontierx_sdl3_window_probe)
 		set_tests_properties(portability.sdl3_window PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")

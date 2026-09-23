@@ -16,6 +16,11 @@
 // backends translate them at the renderer boundary and do not expose Direct3D implementation APIs.
 typedef unsigned int UINT;
 static_assert(sizeof(UINT) == 4U, "legacy Direct3D UINT must remain 32-bit");
+typedef float FLOAT;
+
+#ifndef CONST
+#define CONST const
+#endif
 
 enum D3DPRIMITIVETYPE
 {
@@ -50,8 +55,27 @@ enum D3DBLEND
 
 enum D3DRENDERSTATETYPE
 {
+	D3DRS_ZENABLE = 7,
+	D3DRS_ZWRITEENABLE = 14,
+	D3DRS_SRCBLEND = 19,
+	D3DRS_DESTBLEND = 20,
+	D3DRS_ZFUNC = 23,
+	D3DRS_ALPHABLENDENABLE = 27,
 	D3DRS_BLENDOPALPHA = 209,
 	D3DRS_FORCE_DWORD = 0x7fffffff
+};
+
+enum D3DCMPFUNC
+{
+	D3DCMP_NEVER = 1,
+	D3DCMP_LESS = 2,
+	D3DCMP_EQUAL = 3,
+	D3DCMP_LESSEQUAL = 4,
+	D3DCMP_GREATER = 5,
+	D3DCMP_NOTEQUAL = 6,
+	D3DCMP_GREATEREQUAL = 7,
+	D3DCMP_ALWAYS = 8,
+	D3DCMP_FORCE_DWORD = 0x7fffffff
 };
 
 enum D3DTEXTURESTAGESTATETYPE
@@ -75,6 +99,7 @@ enum D3DSTATEBLOCKTYPE
 
 struct D3DLIGHT9;
 struct D3DMATERIAL9;
+struct ID3DXEffect;
 struct IDirect3DIndexBuffer9;
 struct IDirect3DVertexDeclaration9;
 

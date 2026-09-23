@@ -36,6 +36,13 @@
 
 class Quaternion;	// Forward reference.
 
+class Matrix;
+class Vector;
+extern Matrix mul(const Matrix & m, const SINGLE s);
+extern Vector mul(const Matrix & m, const Vector & v);
+extern Vector transpose_mul(const Matrix & m, const Vector & v);
+extern Matrix mul(const Matrix & m1, const Matrix & m2);
+
 //
 // 3x3 Matrix class.
 //

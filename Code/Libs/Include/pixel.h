@@ -7,8 +7,92 @@
 
 //
 
-#include "typedefs.h"
+#include "TYPEDEFS.H"
+
+#if defined(_WIN32)
 #include <ddraw.h>
+#else
+// DirectDraw's public pixel-format value is a fixed eight-DWORD record.  Keep
+// the declaration available to renderer clients without importing DirectDraw.
+struct DDMULTISAMPLECAPS
+{
+	U16 wFlipMSTypes;
+	U16 wBltMSTypes;
+};
+
+struct DDPIXELFORMAT
+{
+	U32 dwSize;
+	U32 dwFlags;
+	U32 dwFourCC;
+	union
+	{
+		U32 dwRGBBitCount;
+		U32 dwYUVBitCount;
+		U32 dwZBufferBitDepth;
+		U32 dwAlphaBitDepth;
+		U32 dwLuminanceBitCount;
+		U32 dwBumpBitCount;
+		U32 dwPrivateFormatBitCount;
+	};
+	union
+	{
+		U32 dwRBitMask;
+		U32 dwYBitMask;
+		U32 dwStencilBitDepth;
+		U32 dwLuminanceBitMask;
+		U32 dwBumpDuBitMask;
+		U32 dwOperations;
+	};
+	union
+	{
+		U32 dwGBitMask;
+		U32 dwUBitMask;
+		U32 dwZBitMask;
+		U32 dwBumpDvBitMask;
+		DDMULTISAMPLECAPS MultiSampleCaps;
+	};
+	union
+	{
+		U32 dwBBitMask;
+		U32 dwVBitMask;
+		U32 dwStencilBitMask;
+		U32 dwBumpLuminanceBitMask;
+	};
+	union
+	{
+		U32 dwRGBAlphaBitMask;
+		U32 dwYUVAlphaBitMask;
+		U32 dwLuminanceAlphaBitMask;
+		U32 dwRGBZBitMask;
+		U32 dwYUVZBitMask;
+	};
+};
+
+static_assert(sizeof(DDPIXELFORMAT) == 32U,
+	"DirectDraw pixel format layout must remain eight 32-bit words");
+
+inline constexpr U32 DDPF_ALPHAPIXELS = 0x00000001U;
+inline constexpr U32 DDPF_ALPHA = 0x00000002U;
+inline constexpr U32 DDPF_FOURCC = 0x00000004U;
+inline constexpr U32 DDPF_PALETTEINDEXED8 = 0x00000020U;
+inline constexpr U32 DDPF_RGB = 0x00000040U;
+inline constexpr U32 DDPF_LUMINANCE = 0x00020000U;
+inline constexpr U32 DDPF_BUMPLUMINANCE = 0x00040000U;
+inline constexpr U32 DDPF_BUMPDUDV = 0x00080000U;
+
+#ifndef MAKEFOURCC
+#define MAKEFOURCC(ch0, ch1, ch2, ch3) \
+	(static_cast<U32>(static_cast<U8>(ch0)) | \
+	 (static_cast<U32>(static_cast<U8>(ch1)) << 8U) | \
+	 (static_cast<U32>(static_cast<U8>(ch2)) << 16U) | \
+	 (static_cast<U32>(static_cast<U8>(ch3)) << 24U))
+#endif
+#endif
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 //
 
@@ -51,7 +135,7 @@ typedef enum {
 
 typedef unsigned char	byte;
 typedef unsigned short	word;
-typedef unsigned long	dword;
+typedef U32			dword;
 
 //
 
@@ -286,7 +370,7 @@ struct PixelFormat
 
 	inline dword extract(char *src, byte r, byte g, byte b, byte a = 0) const
 	{
-		src; // bonk the 'src' : unreferenced formal parameter
+		(void)src;
 
 		dword result;
 		if (is_indexed())
@@ -540,22 +624,42 @@ struct PixelFormat
 				num_comps++;
 			}
 			
+			#if defined(_WIN32)
 			wsprintf( out, "Format_TRUE_%d_", num_comps );
+			#else
+			std::sprintf( out, "Format_TRUE_%d_", num_comps );
+			#endif
 		
 			if( get_r_mask() != 0 ) {
+				#if defined(_WIN32)
 				wsprintf( sz, "_%d", num_r_bits() );
+				#else
+				std::sprintf( sz, "_%u", static_cast<unsigned int>(num_r_bits()) );
+				#endif
 				strcat( out, sz );
 			}
 			if( get_g_mask() != 0 ) {
+				#if defined(_WIN32)
 				wsprintf( sz, "_%d", num_g_bits() );
+				#else
+				std::sprintf( sz, "_%u", static_cast<unsigned int>(num_g_bits()) );
+				#endif
 				strcat( out, sz );
 			}
 			if( get_b_mask() != 0 ) {
+				#if defined(_WIN32)
 				wsprintf( sz, "_%d", num_b_bits() );
+				#else
+				std::sprintf( sz, "_%u", static_cast<unsigned int>(num_b_bits()) );
+				#endif
 				strcat( out, sz );
 			}
 			if( get_a_mask() != 0 ) {
+				#if defined(_WIN32)
 				wsprintf( sz, "_%d", num_a_bits() );
+				#else
+				std::sprintf( sz, "_%u", static_cast<unsigned int>(num_a_bits()) );
+				#endif
 				strcat( out, sz );
 			}
 		}
@@ -645,7 +749,7 @@ struct PixelFormat
 												// casts that might otherwise happen if we just did init( U32 )
 												// which might conflict with init( PFenum )
 	{
-		bug_catcher;
+		(void)bug_catcher;
 		memset( &ddpf, 0, sizeof(ddpf) );
 		ddpf.dwFlags = DDPF_FOURCC;
 		ddpf.dwFourCC = fourcc;

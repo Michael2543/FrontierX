@@ -11,7 +11,6 @@
 //
 //
 //
-#if defined(_WIN32)
 template <class FVFVERTEXTYPE, U32 FVFVERTEXTYPEFLAGS>
 inline TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::TPrimitiveBuilder( IRenderPipeline *pipeline, UINT blocksize )
 {
@@ -32,7 +31,6 @@ inline TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::TPrimitiveBuilder( I
 
 	render_primitive = NULL;
 }
-#endif
 
 
 // --------------------------------------------------------------------------
@@ -56,10 +54,7 @@ inline TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::TPrimitiveBuilder( I
 	if( render_primitive ) {
 		render_primitive->AddRef();
 	}
-
-#if defined(_WIN32)
 	render_pipeline = NULL;
-#endif
 }
 
 
@@ -70,12 +65,10 @@ inline TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::TPrimitiveBuilder( I
 template <class FVFVERTEXTYPE, U32 FVFVERTEXTYPEFLAGS>
 inline TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::~TPrimitiveBuilder( )
 {
-#if defined(_WIN32)
 	if( render_pipeline ) {
 		render_pipeline->Release();
 		render_pipeline = NULL;
 	}
-#endif
 
 	if( render_primitive ) {
 		render_primitive->Release();
@@ -91,7 +84,6 @@ inline TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::~TPrimitiveBuilder( 
 //
 //
 //
-#if defined(_WIN32)
 template <class FVFVERTEXTYPE, U32 FVFVERTEXTYPEFLAGS>
 inline void TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::SetPipeline( IRenderPipeline *pipeline )
 {
@@ -104,7 +96,6 @@ inline void TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::SetPipeline( IR
 		render_pipeline->AddRef();
 	}
 }
-#endif
 
 
 // --------------------------------------------------------------------------
@@ -371,11 +362,9 @@ inline void TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::End( void )
 	if( render_primitive ) {
 		render_primitive->draw_primitive( type, fvf_vertex_flags, vertex_buffer, current_vertex, 0 );
 	}
-#if defined(_WIN32)
 	else if( render_pipeline ) {
 		render_pipeline->draw_primitive( type, fvf_vertex_flags, vertex_buffer, current_vertex, 0 );
 	}
-#endif
 }
 
 // --------------------------------------------------------------------------
@@ -385,15 +374,10 @@ inline void TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::End( void )
 template <class FVFVERTEXTYPE, U32 FVFVERTEXTYPEFLAGS>
 inline void TPrimitiveBuilder<FVFVERTEXTYPE,FVFVERTEXTYPEFLAGS>::Draw( D3DPRIMITIVETYPE _type )
 {
-#if !defined(_WIN32)
-	(void)_type;
-#endif
 	if( render_primitive ) {
 		render_primitive->draw_primitive( type, fvf_vertex_flags, vertex_buffer, current_vertex, 0 );
 	}
-#if defined(_WIN32)
 	else if( render_pipeline ) {
 		render_pipeline->draw_primitive( _type, fvf_vertex_flags, vertex_buffer, current_vertex, 0 );
 	}
-#endif
 }

@@ -2,6 +2,7 @@
 #define FRONTIERX_SDL_GPU_RENDERER_H
 
 #include "DACOM.H"
+#include "FrontierX/RenderState.h"
 #include "FrontierX/RenderSubmission.h"
 
 #include <cstddef>
@@ -40,12 +41,15 @@ public:
                     SdlGpuTextureView texture,
                     std::string & error);
     GENRESULT Submit(const RenderSubmissionView & submission);
+    GENRESULT SetRenderState(const RenderStateSnapshot & state);
     bool Present(bool & presented, std::string & error);
     bool Readback64(SdlGpuReadback & result, std::string & error);
     void Shutdown();
 
     static GENRESULT DACOM_CDECL SubmissionCallback(
         void * context, const RenderSubmissionView & submission);
+    static GENRESULT DACOM_CDECL RenderStateCallback(
+        void * context, const RenderStateSnapshot & state);
 
     const std::string & LastError() const;
     const char * DriverName() const;
@@ -54,6 +58,7 @@ public:
     std::uint32_t DepthRecreations() const;
     std::uint32_t VertexCount() const;
     std::uint32_t IndexCount() const;
+    RenderStateSnapshot CurrentRenderState() const;
 
 private:
     struct Impl;

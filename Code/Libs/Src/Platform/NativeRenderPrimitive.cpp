@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <new>
 #include <vector>
 
@@ -52,7 +53,21 @@ public:
             return GR_INVALID_PARMS;
         }
         callback_ = descriptor->callback;
+        callback2_ = descriptor->callback2;
+        stateCallback_ = descriptor->state;
         context_ = descriptor->context;
+        if (descriptor->lookup)
+        {
+            try
+            {
+                vertexPipeline_ = std::make_unique<NativeRenderPipeline>(
+                    descriptor->lookup, descriptor->lookupContext, this);
+            }
+            catch (const std::bad_alloc &)
+            {
+                return GR_OUT_OF_MEMORY;
+            }
+        }
         return GR_OK;
     }
 
@@ -79,13 +94,74 @@ public:
     GENRESULT COMAPI get_material(D3DMATERIAL9 *) override { return GR_NOT_IMPLEMENTED; }
     GENRESULT COMAPI begin_scene() override { return GR_NOT_IMPLEMENTED; }
     GENRESULT COMAPI end_scene() override { return GR_NOT_IMPLEMENTED; }
-    GENRESULT COMAPI set_render_state(D3DRENDERSTATETYPE, U32) override
+    GENRESULT COMAPI set_render_state(D3DRENDERSTATETYPE state, U32 value) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!stateCallback_)
+        {
+            return GR_NOT_IMPLEMENTED;
+        }
+        RenderStateSnapshot candidate = renderState_;
+        switch (state)
+        {
+        case D3DRS_ZENABLE:
+            if (!IsRenderBoolean(value)) return GR_INVALID_PARMS;
+            candidate.depthEnabled = value;
+            break;
+        case D3DRS_ZWRITEENABLE:
+            if (!IsRenderBoolean(value)) return GR_INVALID_PARMS;
+            candidate.depthWriteEnabled = value;
+            break;
+        case D3DRS_ZFUNC:
+            if (!IsRenderDepthFunction(value)) return GR_INVALID_PARMS;
+            candidate.depthFunction = value;
+            break;
+        case D3DRS_ALPHABLENDENABLE:
+            if (!IsRenderBoolean(value)) return GR_INVALID_PARMS;
+            candidate.alphaBlendEnabled = value;
+            break;
+        case D3DRS_SRCBLEND:
+            if (!IsRenderBlendFactor(value))
+                return value >= D3DBLEND_BOTHSRCALPHA &&
+                               value <= D3DBLEND_INVBLENDFACTOR
+                           ? GR_NOT_IMPLEMENTED
+                           : GR_INVALID_PARMS;
+            candidate.sourceBlend = value;
+            break;
+        case D3DRS_DESTBLEND:
+            if (!IsRenderBlendFactor(value))
+                return value >= D3DBLEND_BOTHSRCALPHA &&
+                               value <= D3DBLEND_INVBLENDFACTOR
+                           ? GR_NOT_IMPLEMENTED
+                           : GR_INVALID_PARMS;
+            candidate.destinationBlend = value;
+            break;
+        default:
+            return GR_NOT_IMPLEMENTED;
+        }
+        const GENRESULT result = stateCallback_(context_, candidate);
+        if (result == GR_OK)
+        {
+            renderState_ = candidate;
+        }
+        return result;
     }
-    GENRESULT COMAPI get_render_state(D3DRENDERSTATETYPE, U32 *) override
+    GENRESULT COMAPI get_render_state(D3DRENDERSTATETYPE state, U32 * value) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!stateCallback_ || !value)
+        {
+            return stateCallback_ ? GR_INVALID_PARMS : GR_NOT_IMPLEMENTED;
+        }
+        switch (state)
+        {
+        case D3DRS_ZENABLE: *value = renderState_.depthEnabled; break;
+        case D3DRS_ZWRITEENABLE: *value = renderState_.depthWriteEnabled; break;
+        case D3DRS_ZFUNC: *value = renderState_.depthFunction; break;
+        case D3DRS_ALPHABLENDENABLE: *value = renderState_.alphaBlendEnabled; break;
+        case D3DRS_SRCBLEND: *value = renderState_.sourceBlend; break;
+        case D3DRS_DESTBLEND: *value = renderState_.destinationBlend; break;
+        default: return GR_NOT_IMPLEMENTED;
+        }
+        return GR_OK;
     }
     GENRESULT COMAPI set_texture_stage_state(U32, D3DTEXTURESTAGESTATETYPE, U32) override
     {
@@ -134,23 +210,30 @@ public:
             primitiveType, vertexFormat, vertices, vertexCount, indices, indexCount);
     }
 
-    GENRESULT COMAPI draw_primitive_vb(D3DPRIMITIVETYPE,
-                                       IRP_VERTEXBUFFERHANDLE,
-                                       int,
-                                       int,
-                                       U32) override
+    GENRESULT COMAPI draw_primitive_vb(D3DPRIMITIVETYPE primitiveType,
+                                       IRP_VERTEXBUFFERHANDLE vertexBufferHandle,
+                                       int startVertex,
+                                       int vertexCount,
+                                       U32 flags) override
     {
-        return GR_NOT_IMPLEMENTED;
+        return vertexPipeline_
+                   ? vertexPipeline_->draw_primitive_vb(
+                         primitiveType, vertexBufferHandle, startVertex, vertexCount, flags)
+                   : GR_NOT_IMPLEMENTED;
     }
-    GENRESULT COMAPI draw_indexed_primitive_vb(D3DPRIMITIVETYPE,
-                                               IRP_VERTEXBUFFERHANDLE,
-                                               int,
-                                               int,
-                                               const U16 *,
-                                               int,
-                                               U32) override
+    GENRESULT COMAPI draw_indexed_primitive_vb(D3DPRIMITIVETYPE primitiveType,
+                                               IRP_VERTEXBUFFERHANDLE vertexBufferHandle,
+                                               int startVertex,
+                                               int vertexCount,
+                                               const U16 * indices,
+                                               int indexCount,
+                                               U32 flags) override
     {
-        return GR_NOT_IMPLEMENTED;
+        return vertexPipeline_
+                   ? vertexPipeline_->draw_indexed_primitive_vb(
+                         primitiveType, vertexBufferHandle, startVertex, vertexCount,
+                         indices, indexCount, flags)
+                   : GR_NOT_IMPLEMENTED;
     }
     GENRESULT COMAPI flush(U32) override { return GR_NOT_IMPLEMENTED; }
 
@@ -167,16 +250,6 @@ private:
             return GR_INVALID_PARMS;
         }
 
-        try
-        {
-            converted_.resize(static_cast<std::size_t>(vertexCount));
-        }
-        catch (const std::bad_alloc &)
-        {
-            return GR_OUT_OF_MEMORY;
-        }
-
-        RenderSubmissionView submission{};
         const LegacySubmissionInput input{
             static_cast<std::uint32_t>(primitiveType),
             vertexFormat,
@@ -185,6 +258,43 @@ private:
             indices,
             static_cast<std::size_t>(indexCount),
         };
+        if (vertexFormat == LegacyD3d9::kRpVertex2Fvf)
+        {
+            if (!callback2_)
+            {
+                return GR_NOT_IMPLEMENTED;
+            }
+            try
+            {
+                converted2_.resize(static_cast<std::size_t>(vertexCount));
+            }
+            catch (const std::bad_alloc &)
+            {
+                return GR_OUT_OF_MEMORY;
+            }
+            RenderSubmissionView2 submission{};
+            const LegacySubmissionStatus status = AdaptLegacyRpVertex2Submission(
+                input, converted2_.data(), converted2_.size(), submission);
+            if (status != LegacySubmissionStatus::Ok)
+            {
+                return StatusResult(status);
+            }
+            return callback2_(context_, submission);
+        }
+        if (vertexFormat != LegacyD3d9::kRpVertexFvf)
+        {
+            return GR_NOT_IMPLEMENTED;
+        }
+
+        try
+        {
+            converted_.resize(static_cast<std::size_t>(vertexCount));
+        }
+        catch (const std::bad_alloc &)
+        {
+            return GR_OUT_OF_MEMORY;
+        }
+        RenderSubmissionView submission{};
         const LegacySubmissionStatus status = AdaptLegacyRpVertexSubmission(
             input, converted_.data(), converted_.size(), submission);
         if (status != LegacySubmissionStatus::Ok)
@@ -195,8 +305,13 @@ private:
     }
 
     NativeRenderSubmissionCallback callback_ = nullptr;
+    NativeRenderSubmission2Callback callback2_ = nullptr;
+    NativeRenderStateCallback stateCallback_ = nullptr;
     void * context_ = nullptr;
+    RenderStateSnapshot renderState_{};
     std::vector<RenderVertexP3DiffuseT2> converted_;
+    std::vector<RenderVertexP3DiffuseT4> converted2_;
+    std::unique_ptr<NativeRenderPipeline> vertexPipeline_;
 };
 }
 
