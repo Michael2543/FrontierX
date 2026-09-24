@@ -1,4 +1,5 @@
 #include "EventSys.h"
+#include "FileSys_Utility.h"
 #include "Filesys.h"
 #include "FrontierX/LegacyInput.h"
 #include "FrontierX/LegacyJoystick.h"
@@ -191,6 +192,19 @@ struct MemoryFileSystem final : IFileSystem
     U32 references = 0;
 };
 
+void CheckMaterialStringReader()
+{
+    MemoryFileSystem files({{"T0_name", {'s', 'a', 'm', 'p', 'l', 'e'}}});
+    char name[4] = {'X', 'X', 'X', 'X'};
+    Require(read_string(&files, "T0_name", sizeof(name), name) == S_OK &&
+                std::strcmp(name, "sam") == 0,
+            "material string reader did not bound and terminate the name");
+    name[0] = 'X';
+    Require(read_string(&files, "T0_name", 0U, name) == E_FAIL && name[0] == 'X' &&
+                read_string(&files, "missing", sizeof(name), name) == E_FAIL,
+            "material string reader accepted invalid length or missing child");
+}
+
 std::vector<MemoryFileSystem::Child> ValidFiles()
 {
     std::vector<U8> version;
@@ -345,6 +359,7 @@ int main(int argc, char ** argv)
         Require(argc == 1 || argc == 3,
             "expected either no arguments or Hotkeys.utf and DBHotkeys.utf paths");
         Require(HEAP_Acquire() != nullptr, "native shared heap acquisition failed");
+        CheckMaterialStringReader();
         const U32 heapBaseline = HeapBlocks();
         FrontierX::NativeComponentManager manager;
         RegisterHotkeyEventServer(&manager);

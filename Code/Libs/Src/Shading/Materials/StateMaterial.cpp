@@ -7,11 +7,29 @@
 
 
 #include "Materials.h"
+#include "FrontierX/StateMaterialRegistration.h"
+
+#include <cstdlib>
+#include <limits>
+#include <new>
 
 
 //
 
 const char *CLSID_StateMaterial= "StateMaterial";
+
+namespace
+{
+U32 *GrowStateArray(U32 *values, U32 count, U32 wordsPerState)
+{
+	if (count == std::numeric_limits<U32>::max() ||
+		static_cast<std::size_t>(count + 1U) >
+			std::numeric_limits<std::size_t>::max() / (wordsPerState * sizeof(U32)))
+		return NULL;
+	return static_cast<U32 *>(std::realloc(values,
+		static_cast<std::size_t>(count + 1U) * wordsPerState * sizeof(U32)));
+}
+}
 
 //
 
@@ -84,6 +102,18 @@ protected:	// protected data
 
 DECLARE_MATERIAL( StateMaterial, IS_SIMPLE );
 
+bool FrontierX::RegisterNativeStateMaterial(ICOManager * manager)
+{
+	if (!manager) return false;
+	IComponentFactory *factory = new (std::nothrow)
+		DAComponentFactory<DAComponent<StateMaterial>, DACOMDESC>(CLSID_StateMaterial);
+	if (!factory) return false;
+	GENRESULT result = manager->RegisterComponent(factory, CLSID_StateMaterial,
+		DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+
 //
 
 
@@ -133,15 +163,15 @@ GENRESULT StateMaterial::cleanup( void )
 
 	material_name[0] = 0;
 
-	delete[] render_states;
+	std::free(render_states);
 	render_states = NULL;
 	num_render_states = 0;
 
-	delete[] texture_stage_states;
+	std::free(texture_stage_states);
 	texture_stage_states = NULL;
 	num_texture_stage_states = 0;
 
-	delete[] texture_stage_textures;
+	std::free(texture_stage_textures);
 	texture_stage_textures = NULL;
 	num_texture_stage_textures = 0;
 
@@ -226,7 +256,8 @@ GENRESULT StateMaterial::load_from_filesystem( IFileSystem *IFS )
 
 GENRESULT StateMaterial::verify( U32 max_num_passes, float max_detail_level ) 
 {
-	apply();
+	GENRESULT result = apply();
+	if (result != GR_OK) return result;
 	return render_primitive->verify_state();
 }
 
@@ -244,19 +275,22 @@ GENRESULT StateMaterial::apply( void )
 
 	if( render_states ) {
 		for( U32 s=0; s<num_render_states; s++ ) {
-			render_primitive->set_render_state( (D3DRENDERSTATETYPE)render_states[s*2+0], render_states[s*2+1] );
+			GENRESULT result = render_primitive->set_render_state( (D3DRENDERSTATETYPE)render_states[s*2+0], render_states[s*2+1] );
+			if (result != GR_OK) return result;
 		}
 	}
 
 	if( texture_stage_states ) {
 		for( U32 s=0; s<num_texture_stage_states; s++ ) {
-			render_primitive->set_texture_stage_state( texture_stage_states[s*3+0], (D3DTEXTURESTAGESTATETYPE)texture_stage_states[s*3+1], texture_stage_states[s*3+2] );
+			GENRESULT result = render_primitive->set_texture_stage_state( texture_stage_states[s*3+0], (D3DTEXTURESTAGESTATETYPE)texture_stage_states[s*3+1], texture_stage_states[s*3+2] );
+			if (result != GR_OK) return result;
 		}
 	}
 	
 	if( texture_stage_textures ) {
 		for( U32 s=0; s<num_texture_stage_textures; s++ ) {
-			render_primitive->set_texture_stage_texture( texture_stage_textures[s*2+0], texture_stage_textures[s*2+1] );
+			GENRESULT result = render_primitive->set_texture_stage_texture( texture_stage_textures[s*2+0], texture_stage_textures[s*2+1] );
+			if (result != GR_OK) return result;
 		}
 	}
 
@@ -267,6 +301,7 @@ GENRESULT StateMaterial::apply( void )
 
 GENRESULT StateMaterial::render( MaterialContext *context, D3DPRIMITIVETYPE PrimitiveType, VertexBufferDesc *Vertices, U32 StartVertex, U32 NumVertices, U16 *FaceIndices, U32 NumFaceIndices, U32 im_rf_flags ) 
 {
+	if (!context) return GR_INVALID_PARMS;
 	IRP_VERTEXBUFFERHANDLE vb;
 	void *vbmem;
 	U32 vertex_format;
@@ -275,8 +310,9 @@ GENRESULT StateMaterial::render( MaterialContext *context, D3DPRIMITIVETYPE Prim
 	if( context->vertex_buffer != IRP_INVALID_VB_HANDLE ) {
 		return render_primitive->draw_indexed_primitive_vb( PrimitiveType, context->vertex_buffer, StartVertex, NumVertices, FaceIndices, NumFaceIndices, 0 );
 	}
+	if (!Vertices) return GR_INVALID_PARMS;
 
-	if( SUCCEEDED( vbuffer_manager->acquire_vertex_buffer( Vertices->vertex_format, 
+	GENRESULT result = vbuffer_manager->acquire_vertex_buffer( Vertices->vertex_format,
 														   Vertices->num_vertices, 
 														   0, 
 														   DDLOCK_DISCARDCONTENTS|DDLOCK_WRITEONLY,
@@ -284,18 +320,16 @@ GENRESULT StateMaterial::render( MaterialContext *context, D3DPRIMITIVETYPE Prim
 														   &vb,
 														   &vbmem,
 														   &vertex_format,
-														   &num_verts ) ) ) {
-		
-		vbuffer_manager->copy_vertex_data( vbmem, vertex_format, Vertices );
-		
-		render_pipeline->unlock_vertex_buffer( vb );
-
-		render_primitive->draw_indexed_primitive_vb( PrimitiveType, vb, StartVertex, NumVertices, FaceIndices, NumFaceIndices, 0 );
-		
-		vbuffer_manager->release_vertex_buffer( vb );
-	}
-
-	return GR_OK;
+														   &num_verts );
+	if (result != GR_OK) return result;
+	result = vbuffer_manager->copy_vertex_data(vbmem, vertex_format, Vertices);
+	GENRESULT unlockResult = render_pipeline->unlock_vertex_buffer(vb);
+	if (result == GR_OK) result = unlockResult;
+	if (result == GR_OK)
+		result = render_primitive->draw_indexed_primitive_vb( PrimitiveType, vb,
+			StartVertex, NumVertices, FaceIndices, NumFaceIndices, 0 );
+	GENRESULT releaseResult = vbuffer_manager->release_vertex_buffer(vb);
+	return result == GR_OK ? releaseResult : result;
 }
 
 //
@@ -342,8 +376,9 @@ GENRESULT StateMaterial::set_render_state( D3DRENDERSTATETYPE state, U32 value )
 		}
 	}
 
-	render_states = (U32*)realloc( render_states, (num_render_states+1)*2*sizeof(U32) );
-	ASSERT( render_states );
+	U32 *new_states = GrowStateArray(render_states, num_render_states, 2U);
+	if (!new_states) return GR_OUT_OF_MEMORY;
+	render_states = new_states;
 
 	render_states[num_render_states*2 + 0] = (U32)state;
 	render_states[num_render_states*2 + 1] = (U32)value;
@@ -378,8 +413,9 @@ GENRESULT StateMaterial::set_texture_stage_state( U32 stage, D3DTEXTURESTAGESTAT
 		}
 	}
 
-	texture_stage_states = (U32*)realloc( texture_stage_states, (num_texture_stage_states+1)*3*sizeof(U32) );
-	ASSERT( texture_stage_states );
+	U32 *new_states = GrowStateArray(texture_stage_states, num_texture_stage_states, 3U);
+	if (!new_states) return GR_OUT_OF_MEMORY;
+	texture_stage_states = new_states;
 
 	texture_stage_states[num_texture_stage_states*3 + 0] = (U32)stage;
 	texture_stage_states[num_texture_stage_states*3 + 1] = (U32)state;
@@ -415,8 +451,9 @@ GENRESULT StateMaterial::set_texture_stage_texture( U32 stage, U32 irp_texture_i
 		}
 	}
 
-	texture_stage_textures = (U32*)realloc( texture_stage_textures, (num_texture_stage_textures+1)*2*sizeof(U32) );
-	ASSERT( texture_stage_textures );
+	U32 *new_textures = GrowStateArray(texture_stage_textures, num_texture_stage_textures, 2U);
+	if (!new_textures) return GR_OUT_OF_MEMORY;
+	texture_stage_textures = new_textures;
 
 	texture_stage_textures[num_texture_stage_textures*2 + 0] = (U32)stage;
 	texture_stage_textures[num_texture_stage_textures*2 + 1] = (U32)irp_texture_id;

@@ -17,13 +17,21 @@
 #include "WindowManager.h"
 
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+#include "CQImage.h"
+#include "DEffectOpts.h"
+#include "FDump.h"
 #include "FrontierX/NativeRenderPrimitive.h"
 #include "FrontierX/RenderSmokeScene.h"
 #include "FrontierX/SdlGpuRenderer.h"
+#include "GlobalFlagTypes.h"
 #include "IRenderPrimitive.h"
+#include "IVertexBufferManager.h"
+#include "RenderBatcherRegistration.h"
 #endif
 
 #include <charconv>
+#include <cstdarg>
+#include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
@@ -31,6 +39,49 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+GlobalFlags CQFLAGS = {};
+GlobalRenderFlags CQRENDERFLAGS = {};
+GlobalEffectsOptions CQEFFECTS = {};
+IRenderPipeline *PIPE = nullptr;
+IVertexBufferManager *VB_MANAGER = nullptr;
+
+namespace
+{
+int DACOM_CDECL ShellRenderDiagnostic(ErrorCode, const C8 * format, ...)
+{
+    va_list arguments;
+    va_start(arguments, format);
+    const int result = std::vfprintf(stderr, format, arguments);
+    va_end(arguments);
+    return result;
+}
+}
+
+extern "C"
+{
+DA_ERROR_HANDLER FDUMP = ShellRenderDiagnostic;
+}
+
+bool ICQImage::Assert(const char * expression, void * file, unsigned line)
+{
+    std::fprintf(stderr, "Native render assertion: %s (%s:%u)\n",
+        expression, static_cast<const char *>(file), line);
+    std::abort();
+}
+
+bool DACOM_CDECL ICQImage::Bomb(const char * expression, ...)
+{
+    std::fputs("Native render fatal diagnostic: ", stderr);
+    va_list arguments;
+    va_start(arguments, expression);
+    std::vfprintf(stderr, expression, arguments);
+    va_end(arguments);
+    std::fputc('\n', stderr);
+    std::abort();
+}
+#endif
 
 namespace
 {
@@ -431,6 +482,7 @@ int Run(int argc, char ** argv)
     FrontierX::SdlGpuRenderer renderer;
     InterfaceOwner<IRenderPrimitive> renderPrimitive;
     std::uint32_t presentedFrames = 0U;
+    FrontierX::SdlGpuReadback directReadback;
     if (!options.vertexShaderPath.empty())
     {
         const HWND token = windowManager.Get()->GetWindowHandle();
@@ -458,7 +510,9 @@ int Run(int argc, char ** argv)
         }
         FrontierX::NativeRenderPrimitiveDesc renderDescriptor(
             FrontierX::SdlGpuRenderer::SubmissionCallback, &renderer, nullptr,
-            FrontierX::SdlGpuRenderer::RenderStateCallback);
+            FrontierX::SdlGpuRenderer::RenderStateCallback,
+            nullptr, nullptr, FrontierX::SdlGpuRenderer::TextureStageCallback,
+            FrontierX::SdlGpuRenderer::TextureBindCallback);
         if (manager->CreateInstance(&renderDescriptor,
                 reinterpret_cast<void **>(renderPrimitive.Receive())) != GR_OK ||
             !renderPrimitive.Get())
@@ -468,20 +522,84 @@ int Run(int argc, char ** argv)
             std::cerr << "Native render-scene owner creation failed\n";
             return 7;
         }
-        FrontierX::NativeRenderPipeline renderPipeline(renderPrimitive.Get());
-        if (FrontierX::ConfigureRenderSmokeState(&renderPipeline) != GR_OK ||
-            FrontierX::SubmitRenderSmokeScene(&renderPipeline) != GR_OK ||
+        FrontierX::NativeRenderPipeline renderPipeline(renderPrimitive.Get(),
+            {&renderer, FrontierX::SdlGpuRenderer::TextureLookupCallback,
+             FrontierX::SdlGpuRenderer::TextureCreateCallback,
+             FrontierX::SdlGpuRenderer::TextureUploadCallback,
+             FrontierX::SdlGpuRenderer::TextureDestroyCallback});
+        PIPE = &renderPipeline;
+        CQFLAGS.b3DEnabled = -1;
+        RegisterTheRenderBatcher(manager);
+        AGGDESC batchDescriptor("IRenderPrimitive");
+        InterfaceOwner<IRenderPrimitive> renderBatcher;
+        if (manager->CreateInstance(&batchDescriptor,
+                reinterpret_cast<void **>(renderBatcher.Receive())) != GR_OK ||
+            !renderBatcher.Get())
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native render-batcher creation failed\n";
+            return 7;
+        }
+        InterfaceOwner<IAggregateComponent> batchAggregate;
+        if (renderBatcher.Get()->QueryInterface(IID_IAggregateComponent,
+                reinterpret_cast<void **>(batchAggregate.Receive())) != GR_OK ||
+            !batchAggregate.Get() || batchAggregate.Get()->Initialize() != GR_OK)
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native render-batcher initialization failed\n";
+            return 7;
+        }
+        batchAggregate.Reset();
+        if (FrontierX::ConfigureRenderSmokeState(renderBatcher.Get()) != GR_OK ||
+            renderBatcher.Get()->set_texture_stage_texture(
+                0U, renderer.FixtureTextureHandle()) != GR_OK ||
+            renderBatcher.Get()->set_texture_stage_texture(1U, 0U) != GR_OK ||
+            FrontierX::SubmitRenderSmokeScene(renderBatcher.Get()) != GR_OK ||
             renderer.VertexCount() != FrontierX::RenderSmokeVertexCount ||
-            renderer.IndexCount() != 0U)
+            renderer.IndexCount() != 0U ||
+            !renderer.Readback64(directReadback, renderError) ||
+            !directReadback.structureValid)
         {
             windowManager.Get()->SetCallback(nullptr);
             shellEventSystem = nullptr;
             std::cerr << "Native render-scene submission failed\n";
             return 7;
         }
+        const PixelFormat rgbaFormat(PF_RGBA8);
+        U32 alternateHandle = 0U;
+        FrontierX::SdlGpuReadback alternateReadback;
+        FrontierX::SdlGpuReadback reboundReadback;
+        if (renderPipeline.create_texture(2, 2, rgbaFormat, 0, 0U,
+                alternateHandle) != GR_OK ||
+            renderPipeline.set_texture_level_data(alternateHandle, 0, 2, 2, 8,
+                rgbaFormat, FrontierX::RenderSmokeAlternateTextureRgba.data(),
+                nullptr, nullptr) != GR_OK ||
+            renderBatcher.Get()->set_texture_stage_texture(0U, alternateHandle) != GR_OK ||
+            !renderer.Readback64(alternateReadback, renderError) ||
+            alternateReadback.changedPixels != directReadback.changedPixels ||
+            alternateReadback.checksum == directReadback.checksum ||
+            renderBatcher.Get()->set_texture_stage_texture(
+                0U, renderer.FixtureTextureHandle()) != GR_OK ||
+            !renderer.Readback64(reboundReadback, renderError) ||
+            reboundReadback.checksum != directReadback.checksum ||
+            renderPipeline.destroy_texture(alternateHandle) != GR_OK ||
+            FrontierX::SubmitIndexedRenderSmokeScene(renderBatcher.Get()) != GR_OK ||
+            renderer.VertexCount() != FrontierX::RenderSmokeIndexedVertexCount ||
+            renderer.IndexCount() != FrontierX::RenderSmokeIndexCount)
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native render-scene submission failed\n";
+            return 7;
+        }
+        renderBatcher.Reset();
+        PIPE = nullptr;
         std::cout << "Native render smoke initialized; backend: "
                   << renderer.DriverName()
-                  << "; source: production PrimitiveBuilder via IRenderPipeline\n";
+                  << "; source: PrimitiveBuilder and indexed fixture via production "
+                     "RenderBatcher and IRenderPipeline\n";
     }
 #endif
 
@@ -524,6 +642,12 @@ int Run(int argc, char ** argv)
             !readback.structureValid)
         {
             std::cerr << "Native render readback failed: " << renderError << '\n';
+            return 7;
+        }
+        if (readback.changedPixels != directReadback.changedPixels ||
+            readback.checksum != directReadback.checksum)
+        {
+            std::cerr << "Native direct and indexed fixture readbacks differ\n";
             return 7;
         }
         std::cout << "Native render smoke passed; presented-frames: " << presentedFrames

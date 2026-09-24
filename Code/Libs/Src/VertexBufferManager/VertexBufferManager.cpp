@@ -4,33 +4,55 @@
 // TODO: add static vertex buffers
 //
 
+#if defined(_MSC_VER)
 #pragma warning( disable: 4018 4100 4201 4512 4530 4663 4688 4710 4786 )
+#endif
 
 //
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <limits>
 #include <list>
 #include <map>
 
 //
 
-#include "DACOM.h"
-#include "FDUMP.h"
-#include "Tempstr.h"
+#include "DACOM.H"
+#include "FDump.h"
+#if defined(_WIN32)
+#include "TempStr.h"
 #include "TSmartPointer.h"
+#include "IProfileParser_Utility.h"
+#endif
 #include "da_heap_utility.h"
 #include "TComponent.h"
-#include "IProfileParser_Utility.h"
 #include "IVertexBufferManager.h"
+#if !defined(_WIN32)
+#include "FrontierX/VertexBufferManagerRegistration.h"
+#endif
 
 //
 
 #define CLSID_VertexBufferManager "VertexBufferManager"
 
+#if defined(_WIN32)
+enum { kProfileBufferSize = 260 };
+#endif
+
 //
 
 void copy_vertex_buffer_desc( void *dst_buffer, U32 dst_vertex_format, VertexBufferDesc *vb_desc );
+
+static bool vb_failed(GENRESULT result)
+{
+	return result < 0;
+}
 
 //
 
@@ -152,25 +174,43 @@ GENRESULT COMAPI VertexBufferManager::initialize( const char *profile_name )
 {
 	ASSERT( system_services );
 
+#if defined(_WIN32)
 	ICOManager *DACOM;
-	char vbsection[MAX_PATH], vbdesc[MAX_PATH];
+	char vbsection[kProfileBufferSize], vbdesc[kProfileBufferSize];
 	char *p;
 	COMPTR<IProfileParser> parser;
 	U32 line;
 	HANDLE vb;
+#else
+	(void)profile_name;
+#endif
 
-	cleanup();
+	if( vb_failed( cleanup() ) ) {
+		return GR_GENERIC;
+	}
 
+#if defined(_WIN32)
 	DACOM = DACOM_Acquire();
+#endif
 
-	if( FAILED( system_services->QueryInterface( IID_IRenderPipeline, (void**)&render_pipeline ) ) ) {
+	if( vb_failed( system_services->QueryInterface( IID_IRenderPipeline, (void**)&render_pipeline ) ) ) {
 		return GR_GENERIC;
 	}
 	render_pipeline->Release();		// artificial reference
 
+#if !defined(_WIN32)
+	U32 tnl = 0;
+	force_vbs_in_system_mem =
+		vb_failed( render_pipeline->query_device_ability( RP_A_DEVICE_GEOMETRY, &tnl ) ) || !tnl;
+	vertex_count_granularity = 128;
+	vertex_count_min = 64;
+	vertex_count_max = 128;
+	return GR_OK;
+#else
+
 	// Read profile
 	//
-	if( FAILED( DACOM->QueryInterface( IID_IProfileParser, parser ) ) ) {
+	if( vb_failed( DACOM->QueryInterface( IID_IProfileParser, parser ) ) ) {
 		return GR_GENERIC;
 	}
 
@@ -180,7 +220,7 @@ GENRESULT COMAPI VertexBufferManager::initialize( const char *profile_name )
 
 	U32 tnl = 0;
 
-	if( FAILED( render_pipeline->query_device_ability( RP_A_DEVICE_GEOMETRY, &tnl ) ) ) {
+	if( vb_failed( render_pipeline->query_device_ability( RP_A_DEVICE_GEOMETRY, &tnl ) ) ) {
 		tnl = 0;
 	}
 	
@@ -195,7 +235,7 @@ GENRESULT COMAPI VertexBufferManager::initialize( const char *profile_name )
 	opt_get_u32( DACOM, parser, profile_name, "VertexCountMin", 64, &vertex_count_min );
 	opt_get_u32( DACOM, parser, profile_name, "VertexCountMax", 128, &vertex_count_max );
 
-	opt_get_string( DACOM, parser, profile_name, "PreAllocate", "VertexBuffers", vbsection, MAX_PATH );
+	opt_get_string( DACOM, parser, profile_name, "PreAllocate", "VertexBuffers", vbsection, kProfileBufferSize );
 	
 	for( p=vbsection; *p && *p != ' ' && *p != '\t' && *p != ';'; p++ );
 	*p = 0;
@@ -206,11 +246,11 @@ GENRESULT COMAPI VertexBufferManager::initialize( const char *profile_name )
 
 	line = 0;
 	
-	while( parser->ReadProfileLine( vb, line++, vbdesc, MAX_PATH ) ) {
+	while( parser->ReadProfileLine( vb, line++, vbdesc, kProfileBufferSize ) ) {
 		
 		char *tok;
 		U32 count, num_verts, vertex_format, flags;
-		char vertex_format_string[MAX_PATH], flags_string[MAX_PATH];
+		char vertex_format_string[kProfileBufferSize], flags_string[kProfileBufferSize];
 
 		// TODO: check for comments
 
@@ -311,7 +351,7 @@ GENRESULT COMAPI VertexBufferManager::initialize( const char *profile_name )
 		for( U32 c=0; c<count; c++ ) {
 			// actually create the buffer
 			//
-			if( FAILED( add_vertex_buffer( vertex_format, num_verts, flags ) ) ) {
+			if( vb_failed( add_vertex_buffer( vertex_format, num_verts, flags ) ) ) {
 				GENERAL_WARNING( TEMPSTR( "Unable to add vertex buffer in line %d of profile [%s]", line, vbsection ) );
 			}
 		}
@@ -320,13 +360,16 @@ GENRESULT COMAPI VertexBufferManager::initialize( const char *profile_name )
 	parser->CloseSection( vb );
 
 	return GR_OK; 
+#endif
 }
 
 //
 
 GENRESULT COMAPI VertexBufferManager::cleanup( void ) 
 {
-	remove_all_vertex_buffers();
+	if( vb_failed( remove_all_vertex_buffers() ) ) {
+		return GR_GENERIC;
+	}
 
 	render_pipeline = NULL;
 	
@@ -340,13 +383,16 @@ GENRESULT COMAPI VertexBufferManager::cleanup( void )
 
 GENRESULT VertexBufferManager::add_vertex_buffer( U32 vertex_format, U32 num_verts, U32 irp_vbf_flags ) 
 {
+	if( !render_pipeline || !num_verts || num_verts > static_cast<U32>(std::numeric_limits<int>::max()) ) {
+		return GR_INVALID_PARMS;
+	}
 	IVBM_VERTEXBUFFER vb;
 
 	if( force_vbs_in_system_mem ) {
 		irp_vbf_flags |= IRP_VBF_SYSTEM ;
 	}
 
-	if( FAILED( render_pipeline->create_vertex_buffer( vertex_format, num_verts, irp_vbf_flags, &vb.handle ) ) ) {
+	if( vb_failed( render_pipeline->create_vertex_buffer( vertex_format, num_verts, irp_vbf_flags, &vb.handle ) ) ) {
 		return GR_GENERIC;
 	}
 
@@ -364,12 +410,17 @@ GENRESULT VertexBufferManager::add_vertex_buffer( U32 vertex_format, U32 num_ver
 
 GENRESULT VertexBufferManager::remove_all_vertex_buffers( void ) 
 {
+	if( !render_pipeline && !managed_vbs.empty() ) {
+		return GR_GENERIC;
+	}
 	vertex_buffer_map::iterator vb ;
 
 	while( (vb = managed_vbs.begin()) != managed_vbs.end() ) {
 		
-		render_pipeline->destroy_vertex_buffer( vb->second.handle );
-		
+		if( vb_failed( render_pipeline->destroy_vertex_buffer( vb->second.handle ) ) ) {
+			return GR_GENERIC;
+		}
+		available_vbs.remove( &vb->second );
 		managed_vbs.erase( vb );
 	}
 
@@ -382,6 +433,10 @@ GENRESULT VertexBufferManager::remove_all_vertex_buffers( void )
 
 GENRESULT VertexBufferManager::acquire_vertex_buffer( U32 vertex_format, U32 num_verts, U32 irp_vbf_flags, U32 irp_lock_flags, U32 ivbm_avbf_flags, IRP_VERTEXBUFFERHANDLE *out_vbhandle, void **out_vbmemptr, U32 *out_vertex_format, U32 *out_num_verts ) 
 {
+	if( !render_pipeline || !out_vbhandle || !out_vertex_format || !out_num_verts ||
+		!vertex_count_granularity || num_verts > static_cast<U32>(std::numeric_limits<int>::max()) ) {
+		return GR_INVALID_PARMS;
+	}
 	vertex_buffer_list::iterator beg = available_vbs.begin();
 	vertex_buffer_list::iterator end = available_vbs.end();
 	vertex_buffer_list::iterator avb;
@@ -397,19 +452,18 @@ GENRESULT VertexBufferManager::acquire_vertex_buffer( U32 vertex_format, U32 num
 
 		vb = *avb;
 
-		// TODO: support _EXACT
-		
 		vf_items_match = ((vb->vertex_format & ~(D3DFVF_TEXCOUNT_MASK)) & vf_items);
 		vf_uv_match = (vb->vertex_format & D3DFVF_TEXCOUNT_MASK) == vf_uv;		
 	
 		if(    ((vb->irp_vbf_flags & irp_vbf_flags) == irp_vbf_flags) 
+			&& (!(ivbm_avbf_flags & IVBM_AVBF_EXACT) || vb->vertex_format == vertex_format)
 			&& (vf_items_match == vf_items) 
 			&& vf_uv_match 
-			&& (vb->num_verts > num_verts) ) {
+			&& (vb->num_verts >= num_verts) ) {
 			
 			if( out_vbmemptr ) {
 
-				if( FAILED( render_pipeline->lock_vertex_buffer( vb->handle, irp_lock_flags, &vbmemptr, &vbnum_verts ) ) ) {
+				if( vb_failed( render_pipeline->lock_vertex_buffer( vb->handle, irp_lock_flags, &vbmemptr, &vbnum_verts ) ) ) {
 					continue;
 				}
 
@@ -439,23 +493,32 @@ GENRESULT VertexBufferManager::acquire_vertex_buffer( U32 vertex_format, U32 num
 	IVBM_VERTEXBUFFER new_vb;
 
 	vbnum_verts  = (num_verts / vertex_count_granularity) * vertex_count_granularity;
-	vbnum_verts += (num_verts % vertex_count_granularity)? vertex_count_granularity : 0;
+	if( num_verts % vertex_count_granularity ) {
+		if( vbnum_verts > std::numeric_limits<U32>::max() - vertex_count_granularity ) {
+			return GR_INVALID_PARMS;
+		}
+		vbnum_verts += vertex_count_granularity;
+	}
 	
 	if( vbnum_verts < vertex_count_min ) {
 		vbnum_verts = vertex_count_min;
+	}
+	if( vbnum_verts > static_cast<U32>(std::numeric_limits<int>::max()) ) {
+		return GR_INVALID_PARMS;
 	}
 
 	if( force_vbs_in_system_mem ) {
 		irp_vbf_flags |= IRP_VBF_SYSTEM ;
 	}
 
-	if( FAILED( render_pipeline->create_vertex_buffer( vertex_format, vbnum_verts, irp_vbf_flags, &new_vb.handle ) ) ) {
+	if( vb_failed( render_pipeline->create_vertex_buffer( vertex_format, vbnum_verts, irp_vbf_flags, &new_vb.handle ) ) ) {
 		return GR_GENERIC;
 	}
 
 	if( out_vbmemptr ) {
 
-		if( FAILED( render_pipeline->lock_vertex_buffer( new_vb.handle, irp_lock_flags, &vbmemptr, &vbnum_verts ) ) ) {
+		if( vb_failed( render_pipeline->lock_vertex_buffer( new_vb.handle, irp_lock_flags, &vbmemptr, &vbnum_verts ) ) ) {
+			render_pipeline->destroy_vertex_buffer( new_vb.handle );
 			return GR_GENERIC;
 		}
 		*out_vbmemptr = vbmemptr;
@@ -475,7 +538,12 @@ GENRESULT VertexBufferManager::acquire_vertex_buffer( U32 vertex_format, U32 num
 
 GENRESULT VertexBufferManager::release_vertex_buffer( IRP_VERTEXBUFFERHANDLE vbhandle ) 
 {
-	available_vbs.push_back( &managed_vbs[vbhandle] );
+	vertex_buffer_map::iterator vb = managed_vbs.find( vbhandle );
+	if( vb == managed_vbs.end() ||
+		std::find( available_vbs.begin(), available_vbs.end(), &vb->second ) != available_vbs.end() ) {
+		return GR_INVALID_PARMS;
+	}
+	available_vbs.push_back( &vb->second );
 	return GR_OK;
 }
 
@@ -489,6 +557,19 @@ GENRESULT VertexBufferManager::copy_vertex_data( void *dst_buffer, U32 dst_verte
 
 //
 
+#if !defined(_WIN32)
+void RegisterTheVertexBufferManager(ICOManager * manager)
+{
+	if (!manager) return;
+	IComponentFactory * factory =
+		new DAComponentFactory<DAComponent<VertexBufferManager>, AGGDESC>(CLSID_VertexBufferManager);
+	if (!factory) return;
+	manager->RegisterComponent(factory, CLSID_VertexBufferManager);
+	factory->Release();
+}
+#endif
+
+#if defined(_WIN32)
 // linker bug
 void main (void)
 {
@@ -527,5 +608,4 @@ BOOL COMAPI DllMain (HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 }
 
 // EO
-
-
+#endif

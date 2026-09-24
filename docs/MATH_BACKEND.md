@@ -77,3 +77,39 @@ preset matrices. These are synthetic numerical checks, not gameplay or determini
 
 Until those gates pass, the repository has a tested native math core, not a wired native game math
 provider and not a determinism-equivalent Linux game.
+
+## Production MathLib accessor closure (2026-09-23)
+
+The supported `RenderBatcher.cpp` object refers to `__MATH_ENGINE()` through
+inline methods in `3dmath.h`. The real `Code/Libs/Src/x86Math/MathLib.cpp`
+accessor is now a native static target. It retains the existing DACOM
+`DA3DMATHDESC` lookup, gates its Windows header to Windows, spells its include
+with the on-disk case and uses the existing `COMAPI` calling-convention macro.
+On a failed lookup it returns a null pointer instead of an uninitialized local.
+This change does not register an `I3DMathEngine` provider or change numerical
+operations.
+
+The new `frontierx_math_accessor_probe` checks a named integration blocker:
+whether this real accessor can be linked into the native renderer closure and
+reports an absent provider deterministically. Its real caller is the
+production `RenderBatcher` math-header path. The existing `frontierx_math_core_probe`
+cannot check DACOM lookup because it tests only ABI-neutral numerical values.
+If the accessor returned a non-null pointer without a registered provider,
+the next integration would have an invalid ownership assumption; a null result
+confirms that a provider must be registered before math-dependent batching can
+run.
+
+Executed on Linux x86_64 with GCC 16.2.1 and Clang 22.1.8:
+
+```text
+cmake --build --preset linux-gcc-debug --target frontierx_math_accessor_probe -j2
+ctest --preset linux-gcc-debug -R '^portability.math_accessor$' --output-on-failure
+cmake --build --preset linux-clang-debug --target frontierx_math_accessor_probe -j2
+ctest --preset linux-clang-debug -R '^portability.math_accessor$' --output-on-failure
+```
+
+Both focused checks passed two absent-provider lookups. Inputs were the
+repository-owned native component bootstrap with no math provider; this is
+synthetic runtime evidence for the accessor's failure path. A provider-backed
+lookup, mathematical execution through `I3DMathEngine`, Windows Debug/Final
+rebuilds, cross-module ABI and numerical comparison with retail remain open.

@@ -13,10 +13,10 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
-#include "Pixel.h"
+#include "pixel.h"
 
 #define IID_ITManager MAKE_IID("ITManager",1)
 
@@ -41,21 +41,21 @@ struct DACOM_NO_VTABLE ITManager : public IDAComponent
 		struct IRenderPipeline * PIPE;
 	};
 
-	virtual U32 __stdcall CreateTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name) = 0;
+	virtual U32 COMAPI CreateTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name) = 0;
 
-	virtual U32 __stdcall CreateTextureFromFile (const char *fileName, IComponentFactory *parentFile, DA::FILETYPE type, const PixelFormat &format) = 0;
+	virtual U32 COMAPI CreateTextureFromFile (const char *fileName, IComponentFactory *parentFile, DA::FILETYPE type, const PixelFormat &format) = 0;
 
-	virtual U32 __stdcall AddTextureRef (U32 textureID) = 0;		// returns new ref count
+	virtual U32 COMAPI AddTextureRef (U32 textureID) = 0;		// returns new ref count
 
-	virtual U32 __stdcall ReleaseTextureRef (U32 textureID) = 0;	// returns new ref count
+	virtual U32 COMAPI ReleaseTextureRef (U32 textureID) = 0;	// returns new ref count
 
-	virtual void __stdcall Flush (void) = 0;
+	virtual void COMAPI Flush (void) = 0;
 
-	virtual U32 __stdcall GetFirstTexture() = 0;
+	virtual U32 COMAPI GetFirstTexture() = 0;
 
-	virtual U32 __stdcall GetNextTexture(U32 textureID) = 0;
+	virtual U32 COMAPI GetNextTexture(U32 textureID) = 0;
 
-	virtual U32 __stdcall GetPrevTexture(U32 textureID) = 0;
+	virtual U32 COMAPI GetPrevTexture(U32 textureID) = 0;
 
 	virtual void Initialize(InitInfo & info) = 0;
 
@@ -64,9 +64,9 @@ struct DACOM_NO_VTABLE ITManager : public IDAComponent
 	//
 	
 	// use a texture from special drawAgent cache, or create a new texture
-	virtual U32 __stdcall CreateDrawAgentTexture (U32 resolution, bool bAlpha) = 0;
+	virtual U32 COMAPI CreateDrawAgentTexture (U32 resolution, bool bAlpha) = 0;
 
-	virtual void __stdcall ReleaseDrawAgentTexture (U32 textureID) = 0;
+	virtual void COMAPI ReleaseDrawAgentTexture (U32 textureID) = 0;
 };
 
 

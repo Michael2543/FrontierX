@@ -15,7 +15,7 @@
 
 
 #ifndef PRIMITIVEBUILDER_H
-#include <RPUL\PrimitiveBuilder.h>
+#include <RPUL/PrimitiveBuilder.h>
 #endif
 
 #ifndef CQTRACE_H
@@ -23,7 +23,9 @@
 #endif
 
 #undef MYVERTEXEXTERN
-#ifdef BUILD_TRIM
+#if !defined(_WIN32)
+#define MYVERTEXEXTERN
+#elif defined(BUILD_TRIM)
 #define MYVERTEXEXTERN __declspec(dllexport)
 #else
 #define MYVERTEXEXTERN __declspec(dllimport)

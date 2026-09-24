@@ -13,12 +13,15 @@
 */
 //--------------------------------------------------------------------------//
 
-#ifndef DACOM_H
-#include <DACOM.h>
+#include "FDump.h"
+#if !defined(_WIN32)
+#include "FrontierX/LegacyWindowTypes.h"
 #endif
 
 #undef CQIMEXTERN
-#ifdef BUILD_TRIM
+#if !defined(_WIN32)
+#define CQIMEXTERN
+#elif defined(BUILD_TRIM)
 #define CQIMEXTERN __declspec(dllexport)
 #else
 #define CQIMEXTERN __declspec(dllimport)
@@ -39,15 +42,15 @@ struct DACOM_NO_VTABLE ICQImage : IDAComponent
 
 	virtual void SetMessagesEnabled(bool bSetting) = 0;
 
-CQIMEXTERN static bool __stdcall Assert (const char *exp, void *file, unsigned line);
+CQIMEXTERN static bool COMAPI Assert (const char *exp, void *file, unsigned line);
 
-CQIMEXTERN static bool __cdecl Bomb (const char *exp, ...);
+CQIMEXTERN static bool DACOM_CDECL Bomb (const char *exp, ...);
 
-CQIMEXTERN static bool __cdecl Error (const char *exp, ...);
+CQIMEXTERN static bool DACOM_CDECL Error (const char *exp, ...);
 
-CQIMEXTERN static int __stdcall Exception (struct _EXCEPTION_POINTERS * exceptionInfo);
+CQIMEXTERN static int COMAPI Exception (struct _EXCEPTION_POINTERS * exceptionInfo);
 
-CQIMEXTERN static int __cdecl STANDARD_DUMP (ErrorCode code, const C8 *fmt, ...);
+CQIMEXTERN static int DACOM_CDECL STANDARD_DUMP (ErrorCode code, const C8 *fmt, ...);
 
 };
 //--------------------------------------------------------------------------//

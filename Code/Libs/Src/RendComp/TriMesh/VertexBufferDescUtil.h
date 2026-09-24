@@ -19,8 +19,8 @@ static void CopyVertexBufferItemDesc( const VertexBufferItemDesc & src, VertexBu
 
 	if( src.indices )
 	{
-		dest.indices = new unsigned long[ idx_cnt ];
-		memcpy(dest.indices, src.indices, idx_cnt * sizeof(unsigned long));
+		dest.indices = new U32[ idx_cnt ];
+		memcpy(dest.indices, src.indices, idx_cnt * sizeof(U32));
 	}
 	else
 	{

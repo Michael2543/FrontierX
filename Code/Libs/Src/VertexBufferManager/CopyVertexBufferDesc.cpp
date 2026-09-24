@@ -10,16 +10,15 @@
 
 //
 
-#include "DACOM.h"
-#include "FDUMP.h"
+#include "DACOM.H"
+#include "FDump.h"
 #include "FVF.h"
 #include "rendpipeline.h"
+#include "3dmath.h"
 
 //
 
 #include "VertexBufferDesc.h"
-
-#include <d3dx9.h>
 
 //
 
@@ -414,15 +413,15 @@ void cvbd_i_uv0_c0_n_p( void *dst_buffer, U32, VertexBufferDesc *src_buffer )
 
 	for( U32 v=0; v<src_buffer->num_vertices; v++ ) {
 	
-		memcpy( dst, ((char*)src_buffer->Ps.data) + (*src_Pi * src_P_stride), 3 * sizeof(Vector) );
-		dst += 3 * sizeof(Vector) ;
+		memcpy( dst, ((char*)src_buffer->Ps.data) + (*src_Pi * src_P_stride), sizeof(Vector) );
+		dst += sizeof(Vector) ;
 		src_Pi++;
 
 		if( src_N ) {
-			memcpy( dst, ((char*)src_buffer->Ns.data) + (*src_Ni * src_N_stride), 3 * sizeof(Vector) );
+			memcpy( dst, ((char*)src_buffer->Ns.data) + (*src_Ni * src_N_stride), sizeof(Vector) );
 			src_Ni++;
 		}
-		dst += 3 * sizeof(Vector);
+		dst += sizeof(Vector);
 
 		if( src_C0 ) {
 			memcpy( dst, ((char*)src_buffer->C0s.data) + (*src_C0i * src_C0_stride), sizeof(U32) );

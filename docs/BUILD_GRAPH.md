@@ -7,13 +7,30 @@ This build-declaration view is complemented by the 2026-09-16 lexical
 pointer-width, graphics, audio, and video candidates by source owner. Neither inventory evaluates
 MSBuild imports or establishes a native game target.
 
-Native matrix status, 2026-09-21: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets
-completed. Their CTest presets each discovered 32 tests, executed 31 successfully and skipped only
+Native matrix status, 2026-09-24: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets
+completed. Their CTest presets each discovered 38 tests, executed 37 successfully and skipped only
 `portability.sdl3_gpu` because this sandbox exposed no graphical/GPU runtime. The focused render
 submission and pipeline tests executed in both matrices; the skipped GPU test is not runtime
 evidence. No Windows, retail or native game execution was performed in this matrix. Separate
 required visible GCC and Clang probe and shell runs exercised the current shared scene through
-Wayland/Vulkan and are recorded in the focused renderer and shell documents.
+Wayland/Vulkan. The 2026-09-23 visible shell runs additionally traversed the production App-side
+`RenderBatcher` direct and U16-indexed branches under GCC, Clang and focused Clang ASan/UBSan; their separate GPU
+evidence is recorded in the focused batcher, renderer and shell documents. The separate indexed
+RPVERTEX2 GPU probe was also executed visibly under GCC, Clang and focused
+Clang ASan/UBSan, with distinct readbacks for its two second-UV inputs. The current visible probe
+also preserved the last scene after a rejected oversize upload and reproduced its readback across
+two renderer initialization cycles. The latest visible probe and shell additionally bind two
+repository RGBA8 textures by runtime `U32` handle through the existing renderer boundary and the
+production batcher, observe different images and recover the original readback. The preset CTest
+GPU entry still skips in the command sandbox.
+The new `frontierx_state_material_probe` compiles and executes production
+`StateMaterial` through its DACOM factory and a cached indexed native draw in
+both presets. Its focused CPU and sanitizer evidence is in
+[STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md). Separate
+visible GCC, Clang and focused sanitizer Vulkan runs checked its material-driven
+indexed draw and the native texture-copy slot with equal alternate/copy readback
+checksums; see [STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md) and
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
 
 ## Reproduce
 
@@ -157,6 +174,14 @@ integration. Its registered test uses a transient non-focusable window and skip 
 a host has no graphical/GPU runtime; runtime-capable shader, pipeline, upload, or submission failures
 remain failures. See
 [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
+
+The supported App-side `RenderBatcher.cpp` compiles as
+`frontierx_render_batcher_object` under both GCC and Clang. A focused linked
+process executes its direct and U16-indexed draw branches against the native CPU submission
+owner; the shell visibly presents an indexed fixture through that same batcher and observes bounded
+GPU readback. Queued pool batching, production global/diagnostic ownership, texture/material
+mapping and Windows comparison remain open. See
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md).
 
 The public `WindowManager.h` declaration now compiles as part of the existing
 `frontierx_dacom_interface_probe` under GCC and Clang. The non-Windows branch uses the shared
@@ -335,3 +360,28 @@ pixels with checksum `7951318278861886233`. Probe diagnostics identify
 `primitivebuilder-native-irenderpipeline`, and both shells report the production builder via
 `IRenderPipeline`. Those four runs are synthetic Linux hardware evidence; Windows, retail,
 RPVERTEX2 GPU and actual `RenderBatcher` evidence remain open.
+
+On 2026-09-23 the existing `frontierx_render_batcher_header_probe` gained a second
+translation unit for the production `MyVertex.h`/`CQTrace.h`/`CQImage.h` include
+order and the 32-byte `Vertex2` stride. The original `FDump.h`-first unit remains
+separate because combining these orders triggers `CQTrace.h`'s duplicate error-kind
+guard. GCC and Clang configured, built and executed this target and their full
+presets. Neither translation unit compiles the App-side `RenderBatcher.cpp` object;
+the exact remaining errors and validation limits are in
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md).
+
+The graph now also builds the real App-side `BMPoolJr.cpp` in
+`frontierx_bmpooljr_probe`, registered as `portability.bmpooljr`. Its synthetic
+arena ownership, growth, bounds and teardown checks execute under both
+compiler presets, with a separate Clang ASan/UBSan run. It remains an isolated
+production owner; the full ZBatcher translation unit and game graph are not
+linked. Focused commands and limitations are in
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md).
+
+The existing `frontierx_render_batcher_header_probe` also compiles the real
+`CopyVertexBufferDesc.cpp` owner and executes its equal-format AOS and indexed
+PN/color/UV copies on
+repository-owned synthetic vertices. GCC and Clang built and ran that path,
+and a focused Clang ASan/UBSan execution passed. The broader vertex-buffer
+manager and App-side ZBatcher objects remain outside the native graph; the
+focused document records the exact commands and open branches.

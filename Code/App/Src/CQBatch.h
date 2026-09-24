@@ -1,6 +1,9 @@
 #ifndef CQBATCH_H
 #define CQBATCH_H
 
+#include "TYPEDEFS.H"
+#include "IRenderPrimitive.h"
+
 #define CQ_RPRSTATE(n) ((RPRSTATE)(RPR_MAX_STATE+n))
 
 #define EXTRA_STATES 1
@@ -23,7 +26,7 @@ struct BATCHDESC
 
 struct ICQBatch : IDAComponent
 {
-	virtual unsigned __int64 GetTicks () = 0;
+	virtual U64 GetTicks () = 0;
 
 	virtual void ClearTicks () = 0;
 

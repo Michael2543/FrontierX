@@ -8,10 +8,17 @@
 
 //
 
-#include "Engine.h"
+#if defined(_WIN32)
+#include "ENGINE.H"
+#else
+#include "TYPEDEFS.H"
+typedef S32 INSTANCE_INDEX;
+#endif
 #include "VertexBufferDesc.h"
 #include "IRenderPrimitive.h"
 #include "rendpipeline.h"
+
+struct IFileSystem;
 
 //
 
@@ -161,4 +168,3 @@ struct IMaterial : public IDAComponent
 
 
 #endif // EOF
-

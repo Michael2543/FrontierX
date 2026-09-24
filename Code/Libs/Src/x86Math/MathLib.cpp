@@ -10,20 +10,24 @@
 */
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
 
-#include "3DMath.h"
+#include "3dmath.h"
 
 
 
 
-I3DMathEngine * __stdcall __MATH_ENGINE (void)
+I3DMathEngine * COMAPI __MATH_ENGINE (void)
 {
 	DA3DMATHDESC math_info;
-	I3DMathEngine * math_engine;
+	I3DMathEngine * math_engine = NULL;
 
-	DACOM_Acquire()->CreateInstance(&math_info, (void **) &math_engine);
+	ICOManager *manager = DACOM_Acquire();
+	if (manager != NULL)
+		manager->CreateInstance(&math_info, (void **) &math_engine);
 
 	return math_engine;
 }

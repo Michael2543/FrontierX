@@ -55,6 +55,8 @@ public:
         callback_ = descriptor->callback;
         callback2_ = descriptor->callback2;
         stateCallback_ = descriptor->state;
+        textureStageCallback_ = descriptor->textureStage;
+        textureBindCallback_ = descriptor->textureBind;
         context_ = descriptor->context;
         if (descriptor->lookup)
         {
@@ -163,13 +165,76 @@ public:
         }
         return GR_OK;
     }
-    GENRESULT COMAPI set_texture_stage_state(U32, D3DTEXTURESTAGESTATETYPE, U32) override
+    GENRESULT COMAPI set_texture_stage_state(
+        U32 stage, D3DTEXTURESTAGESTATETYPE state, U32 value) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!textureStageCallback_) return GR_NOT_IMPLEMENTED;
+        if (stage == 1U)
+        {
+            return (state == D3DTSS_COLOROP || state == D3DTSS_ALPHAOP) &&
+                           value == D3DTOP_DISABLE
+                       ? GR_OK : GR_NOT_IMPLEMENTED;
+        }
+        if (stage != 0U) return GR_NOT_IMPLEMENTED;
+
+        TextureStageSnapshot candidate = textureStage_;
+        switch (state)
+        {
+        case D3DTSS_COLOROP:
+            if (!IsTextureStageOperation(value)) return GR_NOT_IMPLEMENTED;
+            candidate.colorOperation = value;
+            break;
+        case D3DTSS_COLORARG1:
+            if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
+            candidate.colorArgument1 = value;
+            break;
+        case D3DTSS_COLORARG2:
+            if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
+            candidate.colorArgument2 = value;
+            break;
+        case D3DTSS_ALPHAOP:
+            if (!IsTextureStageOperation(value)) return GR_NOT_IMPLEMENTED;
+            candidate.alphaOperation = value;
+            break;
+        case D3DTSS_ALPHAARG1:
+            if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
+            candidate.alphaArgument1 = value;
+            break;
+        case D3DTSS_ALPHAARG2:
+            if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
+            candidate.alphaArgument2 = value;
+            break;
+        default:
+            return GR_NOT_IMPLEMENTED;
+        }
+        const GENRESULT result = textureStageCallback_(context_, candidate);
+        if (result == GR_OK) textureStage_ = candidate;
+        return result;
     }
-    GENRESULT COMAPI get_texture_stage_state(U32, D3DTEXTURESTAGESTATETYPE, U32 *) override
+    GENRESULT COMAPI get_texture_stage_state(
+        U32 stage, D3DTEXTURESTAGESTATETYPE state, U32 * value) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!textureStageCallback_) return GR_NOT_IMPLEMENTED;
+        if (!value) return GR_INVALID_PARMS;
+        if (stage == 1U)
+        {
+            if (state != D3DTSS_COLOROP && state != D3DTSS_ALPHAOP)
+                return GR_NOT_IMPLEMENTED;
+            *value = D3DTOP_DISABLE;
+            return GR_OK;
+        }
+        if (stage != 0U) return GR_NOT_IMPLEMENTED;
+        switch (state)
+        {
+        case D3DTSS_COLOROP: *value = textureStage_.colorOperation; break;
+        case D3DTSS_COLORARG1: *value = textureStage_.colorArgument1; break;
+        case D3DTSS_COLORARG2: *value = textureStage_.colorArgument2; break;
+        case D3DTSS_ALPHAOP: *value = textureStage_.alphaOperation; break;
+        case D3DTSS_ALPHAARG1: *value = textureStage_.alphaArgument1; break;
+        case D3DTSS_ALPHAARG2: *value = textureStage_.alphaArgument2; break;
+        default: return GR_NOT_IMPLEMENTED;
+        }
+        return GR_OK;
     }
     GENRESULT COMAPI set_sampler_state(U32, D3DSAMPLERSTATETYPE, U32) override
     {
@@ -179,13 +244,20 @@ public:
     {
         return GR_NOT_IMPLEMENTED;
     }
-    GENRESULT COMAPI set_texture_stage_texture(U32, U32) override
+    GENRESULT COMAPI set_texture_stage_texture(U32 stage, U32 texture) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!textureBindCallback_) return GR_NOT_IMPLEMENTED;
+        const GENRESULT result = textureBindCallback_(context_, stage, texture);
+        if (result == GR_OK && stage == 0U) textureHandle_ = texture;
+        return result;
     }
-    GENRESULT COMAPI get_texture_stage_texture(U32, U32 *) override
+    GENRESULT COMAPI get_texture_stage_texture(U32 stage, U32 * texture) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!textureBindCallback_) return GR_NOT_IMPLEMENTED;
+        if (!texture) return GR_INVALID_PARMS;
+        if (stage > 1U) return GR_NOT_IMPLEMENTED;
+        *texture = stage == 0U ? textureHandle_ : 0U;
+        return GR_OK;
     }
     GENRESULT COMAPI verify_state() override { return GR_NOT_IMPLEMENTED; }
 
@@ -307,8 +379,12 @@ private:
     NativeRenderSubmissionCallback callback_ = nullptr;
     NativeRenderSubmission2Callback callback2_ = nullptr;
     NativeRenderStateCallback stateCallback_ = nullptr;
+    NativeTextureStageCallback textureStageCallback_ = nullptr;
+    NativeTextureBindCallback textureBindCallback_ = nullptr;
     void * context_ = nullptr;
     RenderStateSnapshot renderState_{};
+    TextureStageSnapshot textureStage_{};
+    U32 textureHandle_ = 0U;
     std::vector<RenderVertexP3DiffuseT2> converted_;
     std::vector<RenderVertexP3DiffuseT4> converted2_;
     std::unique_ptr<NativeRenderPipeline> vertexPipeline_;

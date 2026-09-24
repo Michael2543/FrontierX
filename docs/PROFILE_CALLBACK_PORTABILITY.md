@@ -104,6 +104,21 @@ the real header and invokes an `IProfileCallback` implementation with a pointer 
 
 ## Evidence
 
+### Option defaults without a parser interface (2026-09-23)
+
+The production `IProfileParser_Utility.h` option helpers are used by the App-side
+`RenderBatcher::init`. Source review and the linked synthetic batcher process showed that
+`opt_get_u32` returned an uninitialized local when `ICOManager::QueryInterface` did not provide
+`IProfileParser`; the float, string and vector helpers had the same conditional-default pattern.
+Each helper now writes its supplied default before the interface lookup. The numeric helpers also
+use a character terminator (`'\0'`) when truncating parsed text. The existing
+`frontierx_render_batcher_runtime_probe` checks all four defaults with the real native manager and
+no parser interface. GCC 16.2.1 and Clang 22.1.8 focused builds and CTests, plus the focused
+Clang ASan/UBSan process, passed on Linux x86_64 using synthetic values. This is not a Windows
+runtime comparison or a test of parsing a present key. Native Win32 Debug/Final rebuilds and
+cross-module behavior checks remain open because the inline helpers are shared with Windows
+callers.
+
 The following checks passed on Linux x86_64 on 2026-09-17:
 
 - GCC and Clang strict-warning builds of the profile buffer, profile document, and public DACOM

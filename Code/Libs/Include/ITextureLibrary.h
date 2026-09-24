@@ -7,8 +7,8 @@
 #ifndef ITEXTURELIBRARY_H
 #define ITEXTURELIBRARY_H
 
-#include "Pixel.h"
-#include "dacom.h"
+#include "pixel.h"
+#include "DACOM.H"
 
 struct IFileSystem;
 //
@@ -300,5 +300,4 @@ struct DACOM_NO_VTABLE ITextureLibrary : public IDAComponent
 
 
 #endif
-
 

@@ -43,12 +43,25 @@ enum ErrorKind
 #endif
 
 #ifndef CQIMAGE_H
-#include "..\\CQImage.h"
+#include "../CQImage.h"
 #endif
+
+#if !defined(_MSC_VER)
+#include <cstdlib>
+#endif
+
+inline void CQDiagnosticBreak()
+{
+#if defined(_MSC_VER)
+	__asm int 3
+#else
+	std::abort();
+#endif
+}
 
 //----------------------------------------------------------------------------
 //
-typedef int (__cdecl * DA_ERROR_HANDLER) (ErrorCode code, const C8 *fmt, ...);
+typedef int (DACOM_CDECL * DA_ERROR_HANDLER) (ErrorCode code, const C8 *fmt, ...);
 
 #ifdef FINAL_RELEASE
 #define SILENCE_TRACE
@@ -134,41 +147,41 @@ typedef int (__cdecl * DA_ERROR_HANDLER) (ErrorCode code, const C8 *fmt, ...);
 
 #else  // !FINAL_RELEASE
 
-#define CQTRACE10(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : "##exp"\n", __FILE__, __LINE__)
-#define CQTRACE11(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1)
-#define CQTRACE12(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2)
-#define CQTRACE13(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3)
-#define CQTRACE14(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
+#define CQTRACE10(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : " exp"\n", __FILE__, __LINE__)
+#define CQTRACE11(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1)
+#define CQTRACE12(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2)
+#define CQTRACE13(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3)
+#define CQTRACE14(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
 
-#define CQTRACE20(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : "##exp"\n", __FILE__, __LINE__)
-#define CQTRACE21(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1)
-#define CQTRACE22(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2)
-#define CQTRACE23(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3)
-#define CQTRACE24(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
+#define CQTRACE20(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : " exp"\n", __FILE__, __LINE__)
+#define CQTRACE21(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1)
+#define CQTRACE22(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2)
+#define CQTRACE23(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3)
+#define CQTRACE24(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_2), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
 
-#define CQTRACE30(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : "##exp"\n", __FILE__, __LINE__)
-#define CQTRACE31(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1)
-#define CQTRACE32(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2)
-#define CQTRACE33(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3)
-#define CQTRACE34(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
+#define CQTRACE30(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : " exp"\n", __FILE__, __LINE__)
+#define CQTRACE31(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1)
+#define CQTRACE32(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2)
+#define CQTRACE33(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3)
+#define CQTRACE34(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_3), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
 
-#define CQTRACE40(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__)
-#define CQTRACE41(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1)
-#define CQTRACE42(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2)
-#define CQTRACE43(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3)
-#define CQTRACE44(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
+#define CQTRACE40(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__)
+#define CQTRACE41(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1)
+#define CQTRACE42(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2)
+#define CQTRACE43(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3)
+#define CQTRACE44(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
 
-#define CQTRACE50(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : "##exp"\n", __FILE__, __LINE__)
-#define CQTRACE51(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1)
-#define CQTRACE52(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2)
-#define CQTRACE53(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3)
-#define CQTRACE54(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
+#define CQTRACE50(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : " exp"\n", __FILE__, __LINE__)
+#define CQTRACE51(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1)
+#define CQTRACE52(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2)
+#define CQTRACE53(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3)
+#define CQTRACE54(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_5), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
 
-#define CQTRACEM0(exp) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__)
-#define CQTRACEM1(exp,p1) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1)
-#define CQTRACEM2(exp,p1,p2) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2)
-#define CQTRACEM3(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3)
-#define CQTRACEM4(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : "##exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
+#define CQTRACEM0(exp) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__)
+#define CQTRACEM1(exp,p1) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1)
+#define CQTRACEM2(exp,p1,p2) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2)
+#define CQTRACEM3(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3)
+#define CQTRACEM4(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_MISSION, SEV_TRACE_4), "%s(%d) : " exp"\n", __FILE__, __LINE__,p1,p2,p3,p4)
 
 #define CQTRACER0(exp) FDUMP(ErrorCode(ERR_RULES, SEV_TRACE_1), exp)
 #define CQTRACER1(exp,p1) FDUMP(ErrorCode(ERR_RULES, SEV_TRACE_1), exp,p1)
@@ -179,92 +192,92 @@ typedef int (__cdecl * DA_ERROR_HANDLER) (ErrorCode code, const C8 *fmt, ...);
 
 #define CQFILENOTFOUND(p1) 	{	\
 	if (ICQImage::Error("%s(%d) : File not found: %s", __FILE__, __LINE__, p1)) {\
-		__asm int 3	\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQASSERT(exp)	{	\
 	if ( (exp) == 0)	\
 	{						\
-		if (ICQImage::Assert(#exp, __FILE__, __LINE__))	\
-			__asm int 3	\
+		if (ICQImage::Assert(#exp, const_cast<char *>(__FILE__), __LINE__))	\
+			CQDiagnosticBreak();	\
 	} }
 
 #define CQASSERT1(exp,msg,p1)	{	\
 	if ( (exp) == 0)	\
 	{						\
-		if (ICQImage::Bomb("%s(%d) : "#exp##msg, __FILE__, __LINE__, p1))	\
-			__asm int 3	\
+		if (ICQImage::Bomb("%s(%d) : "#exp msg, __FILE__, __LINE__, p1))	\
+			CQDiagnosticBreak();	\
 	} }
 
 #define CQASSERT2(exp,msg,p1,p2)	{	\
 	if ( (exp) == 0)	\
 	{						\
-		if (ICQImage::Bomb("%s(%d) : "#exp##msg, __FILE__, __LINE__, p1, p2))	\
-			__asm int 3	\
+		if (ICQImage::Bomb("%s(%d) : "#exp msg, __FILE__, __LINE__, p1, p2))	\
+			CQDiagnosticBreak();	\
 	} }
 
 #define CQASSERT3(exp,msg,p1,p2,p3)	{	\
 	if ( (exp) == 0)	\
 	{						\
-		if (ICQImage::Bomb("%s(%d) : "#exp##msg, __FILE__, __LINE__, p1, p2, p3))	\
-			__asm int 3	\
+		if (ICQImage::Bomb("%s(%d) : "#exp msg, __FILE__, __LINE__, p1, p2, p3))	\
+			CQDiagnosticBreak();	\
 	} }
 
 #define CQASSERT4(exp,msg,p1,p2,p3,p4)	{	\
 	if ( (exp) == 0)	\
 	{						\
-		if (ICQImage::Bomb("%s(%d) : "#exp##msg, __FILE__, __LINE__, p1, p2, p3, p4))	\
-			__asm int 3	\
+		if (ICQImage::Bomb("%s(%d) : "#exp msg, __FILE__, __LINE__, p1, p2, p3, p4))	\
+			CQDiagnosticBreak();	\
 	} }
 
 #define CQBOMB0(exp)	{	\
-	if (ICQImage::Bomb("%s(%d) : "##exp, __FILE__, __LINE__)) { \
-		__asm int 3	\
+	if (ICQImage::Bomb("%s(%d) : " exp, __FILE__, __LINE__)) { \
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQBOMB1(exp,p1)	{	\
-	if (ICQImage::Bomb("%s(%d) : "##exp, __FILE__, __LINE__, p1)) {\
-		__asm int 3	\
+	if (ICQImage::Bomb("%s(%d) : " exp, __FILE__, __LINE__, p1)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQBOMB2(exp,p1,p2)	{	\
-	if (ICQImage::Bomb("%s(%d) : "##exp, __FILE__, __LINE__, p1, p2)) {\
-		__asm int 3	\
+	if (ICQImage::Bomb("%s(%d) : " exp, __FILE__, __LINE__, p1, p2)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQBOMB3(exp,p1,p2,p3)	{	\
-	if (ICQImage::Bomb("%s(%d) : "##exp, __FILE__, __LINE__, p1, p2, p3)) {\
-		__asm int 3	\
+	if (ICQImage::Bomb("%s(%d) : " exp, __FILE__, __LINE__, p1, p2, p3)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQBOMB4(exp,p1,p2,p3,p4)	{	\
-	if (ICQImage::Bomb("%s(%d) : "##exp, __FILE__, __LINE__, p1, p2, p3, p4)) {\
-		__asm int 3	\
+	if (ICQImage::Bomb("%s(%d) : " exp, __FILE__, __LINE__, p1, p2, p3, p4)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQERROR0(exp)	{	\
-	if (ICQImage::Error("%s(%d) : "##exp, __FILE__, __LINE__)) { \
-		__asm int 3	\
+	if (ICQImage::Error("%s(%d) : " exp, __FILE__, __LINE__)) { \
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQERROR1(exp,p1)	{	\
-	if (ICQImage::Error("%s(%d) : "##exp, __FILE__, __LINE__, p1)) {\
-		__asm int 3	\
+	if (ICQImage::Error("%s(%d) : " exp, __FILE__, __LINE__, p1)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQERROR2(exp,p1,p2)	{	\
-	if (ICQImage::Error("%s(%d) : "##exp, __FILE__, __LINE__, p1, p2)) {\
-		__asm int 3	\
+	if (ICQImage::Error("%s(%d) : " exp, __FILE__, __LINE__, p1, p2)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQERROR3(exp,p1,p2,p3)	{	\
-	if (ICQImage::Error("%s(%d) : "##exp, __FILE__, __LINE__, p1, p2, p3)) {\
-		__asm int 3	\
+	if (ICQImage::Error("%s(%d) : " exp, __FILE__, __LINE__, p1, p2, p3)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 #define CQERROR4(exp,p1,p2,p3,p4)	{	\
-	if (ICQImage::Error("%s(%d) : "##exp, __FILE__, __LINE__, p1, p2, p3, p4)) {\
-		__asm int 3	\
+	if (ICQImage::Error("%s(%d) : " exp, __FILE__, __LINE__, p1, p2, p3, p4)) {\
+		CQDiagnosticBreak();	\
 	} }
 
 

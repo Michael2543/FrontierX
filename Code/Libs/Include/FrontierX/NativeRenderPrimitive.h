@@ -16,6 +16,10 @@ using NativeRenderSubmission2Callback =
     GENRESULT (DACOM_CDECL *)(void * context, const RenderSubmissionView2 & submission);
 using NativeRenderStateCallback =
     GENRESULT (DACOM_CDECL *)(void * context, const RenderStateSnapshot & state);
+using NativeTextureStageCallback =
+    GENRESULT (DACOM_CDECL *)(void * context, const TextureStageSnapshot & state);
+using NativeTextureBindCallback =
+    GENRESULT (DACOM_CDECL *)(void * context, U32 stage, U32 texture);
 
 struct NativeRenderPrimitiveDesc : public DACOMDESC
 {
@@ -25,9 +29,13 @@ struct NativeRenderPrimitiveDesc : public DACOMDESC
         NativeRenderSubmission2Callback submit2Callback = nullptr,
         NativeRenderStateCallback stateCallback = nullptr,
         NativeVertexBufferLookup vertexBufferLookup = nullptr,
-        void * vertexBufferContext = nullptr) :
+        void * vertexBufferContext = nullptr,
+        NativeTextureStageCallback textureStageCallback = nullptr,
+        NativeTextureBindCallback textureBindCallback = nullptr) :
         callback(submitCallback), callback2(submit2Callback), state(stateCallback),
-        context(submitContext), lookup(vertexBufferLookup), lookupContext(vertexBufferContext)
+        context(submitContext), lookup(vertexBufferLookup),
+        lookupContext(vertexBufferContext), textureStage(textureStageCallback),
+        textureBind(textureBindCallback)
     {
         interface_name = "IRenderPrimitive";
         size = sizeof(*this);
@@ -39,6 +47,8 @@ struct NativeRenderPrimitiveDesc : public DACOMDESC
     void * context;
     NativeVertexBufferLookup lookup;
     void * lookupContext;
+    NativeTextureStageCallback textureStage;
+    NativeTextureBindCallback textureBind;
 };
 
 void RegisterNativeRenderPrimitive(ICOManager * manager);

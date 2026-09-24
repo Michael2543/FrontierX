@@ -1,7 +1,7 @@
 # Native Startup Shell
 
-Status: integrated startup/window lifecycle plus explicit repository render-smoke path implemented,
-2026-09-21.
+Status: integrated startup/window lifecycle plus explicit production-batcher render-smoke path,
+2026-09-23.
 
 ## Scope
 
@@ -34,7 +34,8 @@ game logic:
 - the real `IWindowManager` aggregate owns SDL video/window, text-input and callback-pump lifetime;
 - an optional `SdlGpuRenderer` owns device, window claim, pipeline, GPU resources, presentation,
   bounded readback and teardown while production `PrimitiveBuilder` submits the shared scene through
-  the real native `IRenderPipeline` vtable and registered `IRenderPrimitive`;
+  the App-side `RenderBatcher`, real native `IRenderPipeline` vtable and registered
+  `IRenderPrimitive`;
 - the shell callback forwards compatibility records synchronously to `IEventSystem` without a
   parallel direct SDL dispatch path; and
 - the real EventSystem system owner advances once after each window batch; and
@@ -69,12 +70,21 @@ the ordinary invocation opens a visible 800 by 600 window and runs until close o
 `--render-smoke` is available when `FRONTIERX_BUILD_SDL3_GPU` is enabled. It requires explicit
 vertex and fragment SPIR-V paths, initializes `SdlGpuRenderer` against the window owned by
 `IWindowManager`, obtains native `IRenderPrimitive` from the process component manager, wraps it in
-the implemented `IRenderPipeline` adapter and submits the shared triangle-and-quad fixture through
-the production pipeline constructor of `PrimitiveBuilder`. The shell presents until
+the implemented `IRenderPipeline` adapter, registers and initializes the production App-side
+`RenderBatcher` aggregate, and submits the shared triangle-and-quad fixture first through the
+production primitive constructor of `PrimitiveBuilder`, then as seven unique RPVertex values and
+nine U16 indices through the same batcher/pipeline boundary. It takes a bounded direct readback
+before the indexed upload and compares it with the indexed readback after presentation. The indexed
+submission is the image presented by the shell. The shell presents until
 close/deadline, performs a bounded 64-by-64 structural readback, reports counts and a diagnostic
 checksum, and tears the renderer down before the window. It never loads a retail asset. Missing or
 invalid shaders and GPU/presentation/readback failures return exit code 7. The shell does not request
 legacy centering because Wayland compositors own top-level placement.
+
+The shell currently supplies the batcher's required App globals and fatal diagnostics locally.
+Those are composition scaffolding for the repository fixture, not native game services. The SDL
+renderer still supplies the fixture texture directly; batcher texture-stage/material state and
+queued batching remain unimplemented.
 
 `--hotkeys FILE` is an explicit bring-up input, not an installed-resource search policy. The file
 must be a validated UTF 1.01 container with the production hotkey children. Successful startup
@@ -156,12 +166,38 @@ On 2026-09-21, separate non-sandboxed visible executions used the GCC and Clang 
 the same generated shaders, a synthetic empty directory tree and `--smoke-ms 250`. Both reported
 `video driver: wayland`, `backend: vulkan`, 17 presented frames, nine vertices, 2,496 changed pixels
 and checksum `7951318278861886233` after configuring depth plus source-alpha blending through
-`IRenderPipeline` and the native `IRenderPrimitive` state callback. Both current shells identify
+`IRenderPipeline` and the native `IRenderPrimitive` state callback. Those earlier shells identified
 their source as `production PrimitiveBuilder via IRenderPipeline`. Focused
 AddressSanitizer/UndefinedBehaviorSanitizer CPU checks cover pipeline inheritance, production-builder
-dispatch, state validation and rollback; the earlier sanitized visible shell run predates the
-alpha-state fixture and is not claimed as current image evidence. This is synthetic Linux runtime
-evidence, not a Windows or retail run.
+dispatch, state validation and rollback.
+
+On 2026-09-23, visible GCC, Clang and focused Clang ASan/UBSan shell runs included the production
+App-side `RenderBatcher` direct branch and reported the same nine vertices, 2,496 changed pixels
+and checksum `7951318278861886233`. The latter run used
+`ASAN_OPTIONS=detect_leaks=0` because LeakSanitizer cannot run reliably under host ptrace. Exact
+commands, fixture provenance and the absent queued/texture/material evidence are in
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md). These are synthetic Linux runtime
+results, not Windows or retail runs.
+
+A later 2026-09-23 visible run of each of those three builds submitted the same fixture in indexed
+form through the production batcher after the direct draw. The shell required matching structural
+readbacks and exact local checksum equality between both forms in each process, and verified seven uploaded
+vertices and nine U16 indices before presentation. Each run reported Wayland/Vulkan, 17 presented
+frames, seven vertices, 2,496 changed pixels and the same local checksum
+`7951318278861886233`. This proves indexed GPU presentation through the batcher for synthetic
+fixture data. It does not establish queued pool batching or texture-stage/material mapping; the
+SDL renderer still receives the fixture texture directly. Exact commands and the separate
+ASan/UBSan and sandbox-skip limits are recorded in
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md).
+
+The subsequent 2026-09-23 shell run bound the original and an additional repository-owned RGBA8
+texture by runtime `U32` handles through the production batcher's texture-stage setter. The extra
+texture changed the bounded readback; rebinding the original recovered checksum
+`7951318278861886233` before the indexed draw. Visible GCC, Clang and focused Clang ASan/UBSan
+Wayland/Vulkan shell runs passed, each with 17 presentations and clean shutdown. The fixture
+bytes still originate in the shell; no `TextureManager` or material owner was executed. Exact
+commands and handle-lifetime checks are in
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
 
 ## Remaining gates
 
@@ -176,8 +212,9 @@ data compatibility merely because empty required directories exist. The next int
   order;
 - establish game application update/render cadence and focus/background behavior without changing
   simulation order or timing;
-- compile and execute the actual production `RenderBatcher` closure against the native pipeline;
-- connect texture-stage and material state beyond the representative depth/blend state now routed
+- replace the shell-local batcher globals and diagnostics with production native owners;
+- connect queued production `RenderBatcher` pool/flush behavior and material loading/state
+  beyond the representative depth/blend, stage-zero combine and texture-handle binding now routed
   through existing renderer ownership;
 - exercise a lawful retail installation without recording its files or private path; and
 - pass native Windows Debug/Final builds plus affected ABI and behavior comparisons.

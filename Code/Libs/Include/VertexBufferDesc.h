@@ -26,10 +26,10 @@ const VertexBufferFlag	VBD_F_INDEXED	= (1<<2);	// Use the VertexBufferItemDesc i
 struct VertexBufferItemDesc
 {
 	void *data;						// Pointer to database of values
-	unsigned long size;				// Size in bytes of each individual item
-	unsigned long stride;			// Stride in bytes from start of one item to the start of the next item
-	unsigned long *indices;			// Indices for the given item.
-	unsigned long count;			// Number of elements in 'data'
+	U32 size;				// Size in bytes of each individual item
+	U32 stride;			// Stride in bytes from start of one item to the start of the next item
+	U32 *indices;			// Indices for the given item.
+	U32 count;			// Number of elements in 'data'
 };
 
 //
@@ -45,13 +45,13 @@ struct VertexBufferDesc
 	VertexBufferItemDesc MC0s;		// Vertex Map Coord 0	(n-floats, where n is 1,2,3,4)
 	VertexBufferItemDesc MC1s;		// Vertex Map Coord 1	(n-floats, where n is 1,2,3,4)
 
-	unsigned long vertex_format;	// Flexible Vertex Format Flags
+	U32 vertex_format;	// Flexible Vertex Format Flags
 									// This determines which of the above vertex items are
 									// actually accessed.  Enabling a vertex item (via some
 									// FVF flag) when the item is not available (the above
 									// pointers are NULL) will caused undefined behavior.
 	
-	unsigned long num_vertices;		// Total number of vertices.  This is also the number
+	U32 num_vertices;		// Total number of vertices.  This is also the number
 									// of entries in the 'indices' arrays for each item.
 									// i.e. VertexCount == length(Ps.indices)
 									//

@@ -1,5 +1,6 @@
 #ifndef DEFFECTOPTS_H
 #define DEFFECTOPTS_H
+#include "TYPEDEFS.H"
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                              DEffectOpts.h								//
@@ -13,10 +14,14 @@
 //---------------------------------------------------------------------------
 
 #undef CQEXTERN
-#ifdef _ADB
+#ifndef __readonly
+#define __readonly
+#endif
+#if !defined(_WIN32)
+ #define CQEXTERN extern
+#elif defined(_ADB)
  #define CQEXTERN
 #else
- #define __readonly
  #ifdef BUILD_GLOBALS
   #define CQEXTERN __declspec(dllexport)
  #else
@@ -64,4 +69,3 @@ struct GlobalEffectsOptions_V3
 //-------------------------------------------------------------------
 
 #endif
-

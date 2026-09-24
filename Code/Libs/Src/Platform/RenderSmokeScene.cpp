@@ -1,6 +1,7 @@
 #include "FrontierX/RenderSmokeScene.h"
 
 #include "IRenderPrimitive.h"
+#include "RPVertex1.h"
 #include "RPUL/PrimitiveBuilder.h"
 
 #include <array>
@@ -33,6 +34,10 @@ constexpr std::array<SmokeVertex, 9> kVertices = {{
     {0.82F, 0.74F, 0.70F, 209U, 209U, 209U, 160U, 1.0F, 1.0F},
     {-0.82F, 0.74F, 0.70F, 209U, 209U, 209U, 160U, 0.0F, 1.0F},
 }};
+constexpr std::array<std::size_t, RenderSmokeIndexedVertexCount> kUniqueVertexPositions =
+    {{0U, 1U, 2U, 3U, 4U, 5U, 8U}};
+constexpr std::array<U16, RenderSmokeIndexCount> kIndices =
+    {{0U, 1U, 2U, 3U, 4U, 5U, 3U, 5U, 6U}};
 
 template <typename RenderTarget>
 GENRESULT ConfigureState(RenderTarget * target)
@@ -55,6 +60,27 @@ GENRESULT ConfigureState(RenderTarget * target)
         const GENRESULT result = target->set_render_state(value.state, value.value);
         if (result != GR_OK) return result;
     }
+    const struct StageValue
+    {
+        U32 stage;
+        D3DTEXTURESTAGESTATETYPE state;
+        U32 value;
+    } stages[] = {
+        {0U, D3DTSS_COLOROP, D3DTOP_MODULATE},
+        {0U, D3DTSS_COLORARG1, D3DTA_DIFFUSE},
+        {0U, D3DTSS_COLORARG2, D3DTA_TEXTURE},
+        {0U, D3DTSS_ALPHAOP, D3DTOP_MODULATE},
+        {0U, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE},
+        {0U, D3DTSS_ALPHAARG2, D3DTA_TEXTURE},
+        {1U, D3DTSS_COLOROP, D3DTOP_DISABLE},
+        {1U, D3DTSS_ALPHAOP, D3DTOP_DISABLE},
+    };
+    for (const StageValue & value : stages)
+    {
+        const GENRESULT result = target->set_texture_stage_state(
+            value.stage, value.state, value.value);
+        if (result != GR_OK) return result;
+    }
     return GR_OK;
 }
 
@@ -73,6 +99,28 @@ GENRESULT SubmitScene(RenderTarget * target)
     builder.End();
     return GR_OK;
 }
+
+template <typename RenderTarget>
+GENRESULT SubmitIndexedScene(RenderTarget * target)
+{
+    if (!target) return GR_INVALID_PARMS;
+    std::array<RPVertex, RenderSmokeIndexedVertexCount> vertices{};
+    for (std::size_t index = 0U; index < vertices.size(); ++index)
+    {
+        const SmokeVertex & source = kVertices[kUniqueVertexPositions[index]];
+        RPVertex & vertex = vertices[index];
+        vertex.pos.set(source.x, source.y, source.z);
+        vertex.b = source.blue;
+        vertex.g = source.green;
+        vertex.r = source.red;
+        vertex.a = source.alpha;
+        vertex.u = source.u;
+        vertex.v = source.v;
+    }
+    return target->draw_indexed_primitive(D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX,
+        vertices.data(), static_cast<int>(vertices.size()),
+        kIndices.data(), static_cast<int>(kIndices.size()), 0U);
+}
 }
 
 GENRESULT ConfigureRenderSmokeState(IRenderPrimitive * primitive)
@@ -85,6 +133,11 @@ GENRESULT SubmitRenderSmokeScene(IRenderPrimitive * primitive)
     return SubmitScene(primitive);
 }
 
+GENRESULT SubmitIndexedRenderSmokeScene(IRenderPrimitive * primitive)
+{
+    return SubmitIndexedScene(primitive);
+}
+
 GENRESULT ConfigureRenderSmokeState(IRenderPipeline * pipeline)
 {
     return ConfigureState(pipeline);
@@ -93,5 +146,10 @@ GENRESULT ConfigureRenderSmokeState(IRenderPipeline * pipeline)
 GENRESULT SubmitRenderSmokeScene(IRenderPipeline * pipeline)
 {
     return SubmitScene(pipeline);
+}
+
+GENRESULT SubmitIndexedRenderSmokeScene(IRenderPipeline * pipeline)
+{
+    return SubmitIndexedScene(pipeline);
 }
 }

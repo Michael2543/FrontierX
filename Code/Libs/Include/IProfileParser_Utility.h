@@ -41,6 +41,7 @@ inline U32 opt_get_u32( ICOManager *DACOM, IProfileParser *_IPP, const char *sec
 	if( out_value == NULL ) {
 		out_value = &ret;
 	}
+	*out_value = def_value;
 
 	static char buffer[1024+1];
 	COMPTR<IProfileParser> IPP;
@@ -48,7 +49,6 @@ inline U32 opt_get_u32( ICOManager *DACOM, IProfileParser *_IPP, const char *sec
 	if( (IPP = _IPP) || SUCCEEDED( DACOM->QueryInterface( IID_IProfileParser, (void**) &IPP ) ) ) {
 		HANDLE hSection;
 
-		*out_value = def_value;
 		if( (hSection = IPP->CreateSection( section )) != 0 ) {
 			if( IPP->ReadKeyValue( hSection, key, buffer, 1024 ) ) {
 				// replace the first occurance of any character not in valid_char_set with a NULL to terminate the string
@@ -56,7 +56,7 @@ inline U32 opt_get_u32( ICOManager *DACOM, IProfileParser *_IPP, const char *sec
 				U32 early_termination = strspn(buffer, valid_char_set);
 				if (early_termination)
 				{
-					buffer [early_termination] = NULL;
+					buffer [early_termination] = '\0';
 				}
 				if( stricmp( buffer, "true" ) == 0 ) {
 					*out_value = 1;
@@ -98,6 +98,7 @@ inline float opt_get_float( ICOManager *DACOM, IProfileParser *_IPP, const char 
 	if( out_value == NULL ) {
 		out_value = &ret;
 	}
+	*out_value = def_value;
 
 	static char buffer[1024+1];
 	COMPTR<IProfileParser> IPP;
@@ -105,7 +106,6 @@ inline float opt_get_float( ICOManager *DACOM, IProfileParser *_IPP, const char 
 	if( (IPP = _IPP) || SUCCEEDED( DACOM->QueryInterface( IID_IProfileParser, (void**) &IPP ) ) ) {
 		HANDLE hSection;
 
-		*out_value = def_value;
 		if( (hSection = IPP->CreateSection( section )) != 0 ) {
 			if( IPP->ReadKeyValue( hSection, key, buffer, 1024 ) ) {
 				// replace the first occurance of any character not in valid_char_set with a NULL to terminate the string
@@ -113,7 +113,7 @@ inline float opt_get_float( ICOManager *DACOM, IProfileParser *_IPP, const char 
 				U32 early_termination = strspn(buffer, valid_char_set);
 				if (early_termination)
 				{
-					buffer [early_termination] = NULL;
+					buffer [early_termination] = '\0';
 				}
 				*out_value = (float)atof( buffer );
 			}
@@ -130,11 +130,11 @@ inline char *opt_get_string( ICOManager *DACOM, IProfileParser *_IPP, const char
 {
 	static char buffer[1024+1];
 	COMPTR<IProfileParser> IPP;
+	strncpy( out_value, def_value, max_len );
 
 	if( (IPP = _IPP) || SUCCEEDED( DACOM->QueryInterface( IID_IProfileParser, (void**) &IPP ) ) ) {
 		HANDLE hSection;
 
-		strncpy( out_value, def_value, max_len );
 		if( (hSection = IPP->CreateSection( section )) != 0 ) {
 			if( IPP->ReadKeyValue( hSection, key, buffer, 1024 ) ) {
 				strncpy( out_value, buffer, max_len );
@@ -152,11 +152,11 @@ inline Vector &opt_get_vector( ICOManager *DACOM, IProfileParser *_IPP, const ch
 {
 	static char buffer[1024+1];
 	COMPTR<IProfileParser> IPP;
+	out_value = def_value;
 
 	if( (IPP = _IPP) || SUCCEEDED( DACOM->QueryInterface( IID_IProfileParser, (void**) &IPP ) ) ) {
 		HANDLE hSection;
 
-		out_value = def_value;
 		if( (hSection = IPP->CreateSection( section )) != 0 ) {
 			if( IPP->ReadKeyValue( hSection, key, buffer, 1024 ) ) {
 				char *tok;

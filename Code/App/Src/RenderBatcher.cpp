@@ -2,12 +2,18 @@
 //
 //
 
+#if defined(_WIN32)
 #include "pch.h"
-#include <globals.h>
+#endif
+#if defined(_WIN32)
+#include "Globals.h"
+#else
+#include "GlobalFlagTypes.h"
+#endif
 
 #include "CQTrace.h"
-#include "tcomponent.h"
-#include "stddat.h"
+#include "TComponent.h"
+#include "STDDAT.H"
 #include "FDump.h"
 #include "pixel.h"
 #include "3dmath.h"
@@ -24,7 +30,16 @@
 
 #include <IVertexBufferManager.h>
 
+#if !defined(_WIN32)
+extern GlobalFlags CQFLAGS;
+extern GlobalRenderFlags CQRENDERFLAGS;
+extern IRenderPipeline *PIPE;
+extern IVertexBufferManager *VB_MANAGER;
+#endif
+
 #include "TempStr.h"
+#include <algorithm>
+#include <cfloat>
 
 #ifndef EDITOR
 	#define USE_HEAP 1
@@ -36,6 +51,9 @@
 
 
 #include "FVF.h"
+#if !defined(_WIN32)
+#include "RenderBatcherRegistration.h"
+#endif
 #define BIG_BATCH 202
 #define SCRATCH_BUFF_SIZE 12000
 
@@ -148,7 +166,7 @@ public:		// public interface
 
 	//ICQBatch methods
 
-	virtual unsigned __int64 GetTicks()
+	virtual U64 GetTicks()
 	{
 		return ticks;
 	}
@@ -186,6 +204,8 @@ public:		// public interface
 	{
 		U32 pool = hintID >> 30;
 		U32 matID = hintID & 0x3fffffff;
+		if (pool >= sizeof(bm_pools) / sizeof(bm_pools[0]))
+			return false;
 		if (matID < bm_pools[pool].materials_used_cnt && bm_pools[pool].materials[matID].owns_state_id(stateID))
 		{
 			activeMaterialHint = hintID;
@@ -379,7 +399,7 @@ protected:	// protected data
 	U32						commitedTextureID[BM_NUM_STAGES];
 	U32 texture_stage_state[BM_NUM_STAGES][D3DTSS_MAX_STATE];
 	Transform modelview;
-	unsigned __int64 ticks;
+	U64 ticks;
 	//D3DPRIMITIVETYPE type;
 	//U32 vertex_format;
 	bool bIdentityModelview:1;
@@ -1425,7 +1445,7 @@ void BMPOOL::set_name( const char *_name )
 			materials_cnt = materials_max_cnt;*/
 			//materials_used_cnt = 0;
 			unsigned int i=0;
-			while (materials[i].is_free() == false && i < materials_max_cnt)
+			while (i < materials_max_cnt && materials[i].is_free() == false)
 			{
 				i++;
 			}
@@ -1600,7 +1620,7 @@ void BMPOOL::set_name( const char *_name )
 			return GR_GENERIC;
 		}
 
-		maxDelay = max(batcher->state[RPR_DELAY],maxDelay);
+		maxDelay = std::max(batcher->state[RPR_DELAY],maxDelay);
 
 	//	__int64 time1,time2;
 
@@ -1959,6 +1979,9 @@ void BMPOOL::set_name( const char *_name )
 
 DA_METHOD(	set_state,(RPRSTATE _state, U32 value ))
 {
+	if (static_cast<U32>(_state) >= RPR_MAX_STATE + EXTRA_STATES)
+		return GR_INVALID_PARMS;
+
 	//if (_state == RPR_BATCH) 	value = 0;	// disable batching for debug
 
 	if( state[_state] != value ) {
@@ -1966,11 +1989,16 @@ DA_METHOD(	set_state,(RPRSTATE _state, U32 value ))
 		case RPR_BATCH:
 			if (value)
 			{
+				U32 captured_state[BM_NUM_STAGES][D3DTSS_MAX_STATE] = {};
 				for (int texture_stage_cnt=0;texture_stage_cnt < BM_NUM_STAGES;texture_stage_cnt++ ) {
 					for( U32 tss=1; tss<D3DTSS_MAX_STATE; tss++ ) {
-						PIPE->get_texture_stage_state( texture_stage_cnt, (D3DTEXTURESTAGESTATETYPE)tss, &texture_stage_state[texture_stage_cnt][tss] );
+						GENRESULT result = PIPE->get_texture_stage_state( texture_stage_cnt,
+							(D3DTEXTURESTAGESTATETYPE)tss, &captured_state[texture_stage_cnt][tss] );
+						if (result != GR_OK)
+							return result;
 					}
 				}
+				memcpy(texture_stage_state, captured_state, sizeof(texture_stage_state));
 			} 
 			break;
 
@@ -2002,6 +2030,9 @@ DA_METHOD(	set_state,(RPRSTATE _state, U32 value ))
 
 DA_METHOD(	get_state,(RPRSTATE _state, U32 *value ))
 {
+	if (!value || static_cast<U32>(_state) >= RPR_MAX_STATE + EXTRA_STATES)
+		return GR_INVALID_PARMS;
+
 	*value = state[_state];
 	return GR_OK;
 }
@@ -2127,15 +2158,18 @@ DA_METHOD(  get_sampler_state,	(U32 stage, D3DSAMPLERSTATETYPE ss, U32 *value ))
 }
 DA_METHOD(  set_texture_stage_state,(U32 stage, D3DTEXTURESTAGESTATETYPE tss, U32 value ))
 {
-	GENRESULT result;
-	
-	texture_stage_state[stage][tss] = value;
-	if( !state[RPR_BATCH] )
-		result =  PIPE->set_texture_stage_state( stage, tss, value );
-	else
-		return GR_OK;
+	if (stage >= BM_NUM_STAGES || tss < D3DTSS_COLOROP || tss >= D3DTSS_MAX_STATE)
+		return GR_INVALID_PARMS;
 
-	return result;
+	if( !state[RPR_BATCH] )
+	{
+		GENRESULT result = PIPE->set_texture_stage_state( stage, tss, value );
+		if (result != GR_OK)
+			return result;
+	}
+
+	texture_stage_state[stage][tss] = value;
+	return GR_OK;
 }
 
 //
@@ -2149,22 +2183,25 @@ DA_METHOD(  get_texture_stage_state,(U32 stage, D3DTEXTURESTAGESTATETYPE tss, U3
 
 DA_METHOD(  set_texture_stage_texture,(U32 stage, U32 htexture ))
 {
-	GENRESULT result = GR_OK;
+	if (stage >= BM_NUM_STAGES)
+		return GR_INVALID_PARMS;
 #ifndef _ROB
 	CQASSERT(htexture == 0 || PIPE->is_texture(htexture) == GR_OK);
 #endif
 
-	currentTextureID[stage] = htexture;
 	if( !state[RPR_BATCH] )
 	{
 		if (commitedTextureID[stage] != htexture)
 		{
-			result = PIPE->set_texture_stage_texture( stage, htexture );
+			GENRESULT result = PIPE->set_texture_stage_texture( stage, htexture );
+			if (result != GR_OK)
+				return result;
 			commitedTextureID[stage] = htexture;
 		}
 	}
 
-	return result;
+	currentTextureID[stage] = htexture;
+	return GR_OK;
 }
 
 //
@@ -2345,7 +2382,7 @@ DA_METHOD(	draw_indexed_primitive,(D3DPRIMITIVETYPE type, U32 vertex_format, con
 
 //
 
-DA_METHOD(	flush,(DWORD flags ))
+DA_METHOD(	flush,(U32 flags ))
 {
 	if (bQueueSetup)
 	{
@@ -2402,7 +2439,7 @@ bool RenderBatcher::GetPrimBuffer (BATCHDESC *desc,bool bAllowFailure)
 	//batch only if there is a state ID
 	if (state[RPR_STATE_ID] != 0 || activeMaterialHint != U32(-1) || CQRENDERFLAGS.bSoftwareRenderer)
 	{
-		maxDelay = max(state[RPR_DELAY],maxDelay);
+		maxDelay = std::max(state[RPR_DELAY],maxDelay);
 
 		BATCHEDMATERIAL *material;
 		U32 pool;
@@ -2857,8 +2894,12 @@ RenderBatcher::RenderBatcher(void)
 
 RenderBatcher::~RenderBatcher(void)
 {
-	PIPE = NULL;
 	free_all_pools();
+	if (BATCHER == this)
+	{
+		BATCHER = NULL;
+		PIPE = NULL;
+	}
 }
 
 //
@@ -2912,6 +2953,19 @@ GENRESULT RenderBatcher::init(AGGDESC *desc)
 // DLL Related code
 // ------------------------------------------------------------------
 
+#if !defined(_WIN32)
+void RegisterTheRenderBatcher(ICOManager * manager)
+{
+	if (!manager) return;
+	IComponentFactory *factory =
+		new DAComponentFactory2<DAComponentAggregate<RenderBatcher>, AGGDESC>("IRenderPrimitive");
+	if (!factory) return;
+	manager->RegisterComponent(factory, "IRenderPrimitive", DACOM_HIGH_PRIORITY);
+	factory->Release();
+}
+#endif
+
+#if defined(_WIN32)
 // linker bug
 void main (void)
 {
@@ -3001,9 +3055,4 @@ __declspec(dllexport) IHeap * __stdcall GetBatchHeap (void)
 }
 
 // EOF
-
-
-
-
-
-
+#endif

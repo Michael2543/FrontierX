@@ -547,13 +547,238 @@ bool CheckExtendedSubmissionRegressions()
     return true;
 }
 
+struct ReusedTextureHandle
+{
+    unsigned creates = 0U;
+    unsigned destroys = 0U;
+};
+
+GENRESULT CreateReusedTexture(void * context, U32, U32, U32 & handle)
+{
+    ++static_cast<ReusedTextureHandle *>(context)->creates;
+    handle = 41U;
+    return GR_OK;
+}
+
+GENRESULT DestroyReusedTexture(void * context, U32 handle)
+{
+    if (handle != 41U) return GR_INVALID_PARMS;
+    ++static_cast<ReusedTextureHandle *>(context)->destroys;
+    return GR_OK;
+}
+
+bool CheckTextureHandleCollision()
+{
+    ReusedTextureHandle owner;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &owner;
+    operations.create = CreateReusedTexture;
+    operations.destroy = DestroyReusedTexture;
+    FrontierX::NativeRenderPipeline pipeline{nullptr, operations};
+    const PixelFormat format(PF_RGBA8);
+    U32 first = 0U;
+    U32 duplicate = 99U;
+    U32 width = 0U;
+    U32 height = 0U;
+    U32 levels = 0U;
+    return Expect(pipeline.create_texture(2, 2, format, 0, 0U, first) == GR_OK &&
+                      first == 41U, "first native texture handle") &&
+        Expect(pipeline.create_texture(4, 4, format, 0, 0U, duplicate) == GR_GENERIC &&
+                   duplicate == 0U, "reused native texture handle rejected") &&
+        Expect(pipeline.get_texture_dim(first, &width, &height, &levels) == GR_OK &&
+                   width == 2U && height == 2U && levels == 1U,
+               "collision preserves original texture metadata") &&
+        Expect(pipeline.destroy_texture(first) == GR_OK && owner.creates == 2U &&
+                   owner.destroys == 1U, "original texture remains destroyable");
+}
+
+struct LockTextureBackend
+{
+    std::array<std::uint8_t, 16> committed{};
+    bool failUpload = false;
+    unsigned uploads = 0U;
+    unsigned destroys = 0U;
+};
+
+GENRESULT CreateLockTexture(void *, U32 width, U32 height, U32 & handle)
+{
+    if (width != 2U || height != 2U) return GR_INVALID_PARMS;
+    handle = 52U;
+    return GR_OK;
+}
+
+GENRESULT UploadLockTexture(void * context, U32 handle, const std::uint8_t * pixels,
+                            U32 width, U32 height, std::size_t byteCount)
+{
+    auto & backend = *static_cast<LockTextureBackend *>(context);
+    if (handle != 52U || width != 2U || height != 2U || byteCount != 16U)
+        return GR_INVALID_PARMS;
+    ++backend.uploads;
+    if (backend.failUpload) return GR_GENERIC;
+    std::memcpy(backend.committed.data(), pixels, byteCount);
+    return GR_OK;
+}
+
+GENRESULT DestroyLockTexture(void * context, U32 handle)
+{
+    if (handle != 52U) return GR_INVALID_PARMS;
+    ++static_cast<LockTextureBackend *>(context)->destroys;
+    return GR_OK;
+}
+
+bool CheckTextureLockLifecycle()
+{
+    LockTextureBackend backend;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &backend;
+    operations.create = CreateLockTexture;
+    operations.upload = UploadLockTexture;
+    operations.destroy = DestroyLockTexture;
+    FrontierX::NativeRenderPipeline pipeline{nullptr, operations};
+    const PixelFormat format(PF_RGBA8);
+    U32 handle = 0U;
+    const std::array<std::uint8_t, 16> original{{
+        1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U,
+        9U, 10U, 11U, 12U, 13U, 14U, 15U, 16U}};
+    if (!Expect(pipeline.create_texture(2, 2, format, 0, 0U, handle) == GR_OK &&
+                    handle == 52U, "lockable native texture created") ||
+        !Expect(pipeline.set_texture_level_data(handle, 0, 2, 2, 8, format,
+                    original.data(), nullptr, nullptr) == GR_OK &&
+                    backend.committed == original, "initial upload populates texture shadow"))
+        return false;
+    const std::array<std::uint8_t, 16> rejected{};
+    backend.failUpload = true;
+    if (!Expect(pipeline.set_texture_level_data(handle, 0, 2, 2, 8, format,
+                    rejected.data(), nullptr, nullptr) == GR_GENERIC &&
+                    backend.committed == original,
+                "failed replacement preserves committed texels"))
+        return false;
+    backend.failUpload = false;
+    RPLOCKDATA locked{};
+    if (!Expect(pipeline.lock_texture(handle, 0, &locked) == GR_OK &&
+                    locked.width == 2U && locked.height == 2U && locked.pitch == 8U &&
+                    locked.pixels != nullptr && locked.pf.num_bits() == 32 &&
+                    std::memcmp(locked.pixels, original.data(), original.size()) == 0,
+                "RGBA8 lock returns bounded CPU texels") ||
+        !Expect(pipeline.lock_texture(handle, 0, &locked) == GR_GENERIC &&
+                    pipeline.destroy_texture(handle) == GR_GENERIC &&
+                    pipeline.set_texture_level_data(handle, 0, 2, 2, 8, format,
+                        original.data(), nullptr, nullptr) == GR_NOT_IMPLEMENTED,
+                "locked texture rejects conflicting operations"))
+        return false;
+    static_cast<std::uint8_t *>(locked.pixels)[0] = 99U;
+    backend.failUpload = true;
+    if (!Expect(pipeline.unlock_texture(handle, 0) == GR_GENERIC &&
+                    backend.committed == original &&
+                    pipeline.destroy_texture(handle) == GR_GENERIC,
+                "failed upload preserves GPU data and lock for retry"))
+        return false;
+    backend.failUpload = false;
+    RPLOCKDATA reopened{};
+    return Expect(pipeline.unlock_texture(handle, 0) == GR_OK &&
+                      backend.committed[0] == 99U && backend.uploads == 4U,
+                  "retry commits modified texel") &&
+        Expect(pipeline.unlock_texture(handle, 0) == GR_INVALID_PARMS &&
+                   pipeline.lock_texture(handle, 1, &reopened) == GR_INVALID_PARMS &&
+                   pipeline.lock_texture(handle, 0, nullptr) == GR_INVALID_PARMS,
+               "invalid unlock, level and output rejected") &&
+        Expect(pipeline.lock_texture(handle, 0, &reopened) == GR_OK &&
+                   static_cast<std::uint8_t *>(reopened.pixels)[0] == 99U &&
+                   pipeline.unlock_texture(handle, 0) == GR_OK &&
+                   pipeline.destroy_texture(handle) == GR_OK &&
+                   backend.destroys == 1U,
+               "relock sees committed bytes and texture is destroyed");
+}
+
+struct BlitTextureBackend
+{
+    std::array<std::array<std::uint8_t, 16>, 2> committed{};
+    U32 nextHandle = 60U;
+    bool failUpload = false;
+};
+
+GENRESULT CreateBlitTexture(void * context, U32 width, U32 height, U32 & handle)
+{
+    if (width != 2U || height != 2U) return GR_INVALID_PARMS;
+    handle = static_cast<BlitTextureBackend *>(context)->nextHandle++;
+    return GR_OK;
+}
+
+GENRESULT UploadBlitTexture(void * context, U32 handle, const std::uint8_t * pixels,
+                            U32 width, U32 height, std::size_t byteCount)
+{
+    auto & backend = *static_cast<BlitTextureBackend *>(context);
+    if (handle < 60U || handle > 61U || width != 2U || height != 2U ||
+        byteCount != 16U) return GR_INVALID_PARMS;
+    if (backend.failUpload) return GR_GENERIC;
+    std::memcpy(backend.committed[handle - 60U].data(), pixels, byteCount);
+    return GR_OK;
+}
+
+GENRESULT DestroyBlitTexture(void *, U32 handle)
+{
+    return handle == 60U || handle == 61U ? GR_OK : GR_INVALID_PARMS;
+}
+
+bool CheckTextureBlit()
+{
+    BlitTextureBackend backend;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &backend;
+    operations.create = CreateBlitTexture;
+    operations.upload = UploadBlitTexture;
+    operations.destroy = DestroyBlitTexture;
+    FrontierX::NativeRenderPipeline pipeline{nullptr, operations};
+    const PixelFormat format(PF_RGBA8);
+    U32 source = 0U, destination = 0U;
+    const std::array<std::uint8_t, 16> pixels{{
+        1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U,
+        9U, 10U, 11U, 12U, 13U, 14U, 15U, 16U}};
+    const RECT full{0, 0, 2, 2};
+    const RECT partial{0, 0, 1, 2};
+    if (!Expect(pipeline.create_texture(2, 2, format, 0, 0U, source) == GR_OK &&
+                    pipeline.create_texture(2, 2, format, 0, 0U, destination) == GR_OK &&
+                    pipeline.set_texture_level_data(source, 0, 2, 2, 8, format,
+                        pixels.data(), nullptr, nullptr) == GR_OK,
+                "blit source and destination created")) return false;
+    backend.failUpload = true;
+    if (!Expect(pipeline.blit_texture(destination, 0, full, source, 0, full) == GR_GENERIC &&
+                    backend.committed[1] != pixels,
+                "failed blit preserves destination backend")) return false;
+    RPLOCKDATA failedDestination{};
+    if (!Expect(pipeline.lock_texture(destination, 0, &failedDestination) == GR_OK &&
+                    std::memcmp(failedDestination.pixels, pixels.data(), pixels.size()) != 0,
+                "failed blit preserves destination shadow")) return false;
+    backend.failUpload = false;
+    if (!Expect(pipeline.unlock_texture(destination, 0) == GR_OK,
+                "destination unlock after failed blit")) return false;
+    if (!Expect(pipeline.blit_texture(destination, 0, partial, source, 0, full) ==
+                    GR_NOT_IMPLEMENTED &&
+                    pipeline.blit_texture(destination, 1, full, source, 0, full) ==
+                    GR_INVALID_PARMS &&
+                    pipeline.blit_texture(destination, 0, full, source, 0, full) == GR_OK &&
+                    backend.committed[1] == pixels,
+                "bounded RGBA8 full copy and explicit unsupported rectangles")) return false;
+    RPLOCKDATA locked{};
+    return Expect(pipeline.lock_texture(destination, 0, &locked) == GR_OK &&
+                      std::memcmp(locked.pixels, pixels.data(), pixels.size()) == 0 &&
+                      pipeline.blit_texture(destination, 0, full, source, 0, full) ==
+                          GR_INVALID_PARMS &&
+                      pipeline.unlock_texture(destination, 0) == GR_OK,
+                  "blit updates shadow and rejects locked destination") &&
+        Expect(pipeline.destroy_texture(destination) == GR_OK &&
+                   pipeline.destroy_texture(source) == GR_OK,
+               "blit resources destroyed");
+}
+
 } // namespace
 
 int main()
 {
     if (!CheckInterfaceRegressions() || !CheckPipelineRegressions() ||
         !CheckOwnedVertexBufferRegressions() ||
-        !CheckExtendedSubmissionRegressions())
+        !CheckExtendedSubmissionRegressions() || !CheckTextureHandleCollision() ||
+        !CheckTextureLockLifecycle() || !CheckTextureBlit())
     {
         return 1;
     }

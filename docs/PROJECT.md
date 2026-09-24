@@ -1,6 +1,6 @@
 # FrontierX Project Charter
 
-Status: incremental native bring-up, 2026-09-21
+Status: incremental native bring-up, 2026-09-24
 
 ## Mission
 
@@ -67,11 +67,29 @@ platform, renderer, ABI, and gameplay changes in one step.
 | Build | CMake presets with Ninja; preserve existing MSBuild path | Isolated probes, platform services, a configured production EventSystem ELF module, production event/profile owners and native lifecycle shell build; game graph planned |
 | Hotkey input | Existing DAHOTKEY event processor behind legacy-message and `IFileSystem` contracts | Production factory, read-only UTF adapter, checked-in source tables and optional shell/EventSystem composition work natively; packaging, SDL joystick, recorder and Windows parity remain open |
 | Window/input/time | SDL3 plus standard C++ behind a FrontierX platform boundary | A native SDL-backed DACOM `IWindowManager` owns the shell window, callback pump, focus/cursor state and close-veto lifecycle; application cadence, Windows parity, renderer and game integration remain |
-| Graphics | Keep D3D9-facing code for bring-up; evaluate maintained native Vulkan paths | The native shell can explicitly select the SDL GPU lifecycle and send the repository scene from production `PrimitiveBuilder` through a native implementation of the real `IRenderPipeline` vtable and registered `IRenderPrimitive` to Vulkan presentation/readback. The adapter owns checked RPVertex/RPVERTEX2 CPU buffers through create/lock/unlock/destroy, routes direct/indexed draws into the registered owner and supports six transactional depth/blend states; unsupported pipeline slots fail explicitly. Actual `RenderBatcher` execution, RPVERTEX2 GPU, texture-stage/material mapping, Windows oracle, backend selection and game rendering remain open |
+| Graphics | Keep D3D9-facing code for bring-up; evaluate maintained native Vulkan paths | The native shell can explicitly send the repository scene from production `PrimitiveBuilder` through the actual App-side `RenderBatcher`, native `IRenderPipeline` vtable and registered `IRenderPrimitive` to Vulkan presentation/readback. The adapter owns checked RPVertex/RPVERTEX2 CPU buffers through create/lock/unlock/destroy, routes direct/indexed draws into the registered owner and supports six transactional depth/blend states; unsupported pipeline slots fail explicitly. The production `BMPOOLJR` arena owner, vertex-buffer manager CPU lifecycle and neighboring vertex-descriptor copier execute in focused native targets. The batcher direct and U16-indexed branches have linked synthetic CPU checks and visible GCC/Clang and focused sanitizer GPU evidence using equivalent repository geometry. A separate GPU probe draws indexed RPVERTEX2 geometry, observes the second UV pair through readback and verifies two GPU scene lifecycles plus preservation after an invalid upload. Six stage-zero color/alpha combine fields now traverse the batcher and primitive to the fragment shader, with bounded image-change and rollback evidence. Production `StateMaterial` now submits a cached indexed draw in visible GCC/Clang and focused sanitizer Vulkan probes. Production texture loading/material-library ownership, queued pool batching, production global/diagnostic services, Windows oracle, backend selection and game rendering remain open |
+
 | D3DX9 | Inventory and replace effects, texture helpers, and math dependencies | Required |
 | Audio | Portable backend, selected after dependency and behavior evaluation | Undecided |
 | Video | FFmpeg-based replacement for legacy movie playback | Planned, later phase |
 | Network | Portable sockets with deterministic protocol behavior | Deferred |
+
+The SDL owner now registers two repository RGBA8 textures under monotonic runtime `U32` handles;
+the production `RenderBatcher` binds both through the existing texture-stage slot, with bounded
+image-change, exact restoration and stale-handle checks. The production texture library and
+material loading remain unported; see
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
+The production `StateMaterial` now runs through DACOM initialization, native
+state/texture callbacks and a cached indexed draw in a synthetic CPU target
+and visible Vulkan probe; its ownership checks and remaining material-library
+and game-composition gates are in
+[STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md).
+The native `IRenderPipeline` also creates and uploads one RGBA8 texture level for the probe and
+shell. A 2026-09-24 synthetic regression rejects duplicate live backend handles while retaining
+the first texture's metadata. Its one-level CPU lock/unlock path now preserves a writable
+shadow and retries a failed backend upload. Visible GCC, Clang and focused ASan/UBSan
+Wayland/Vulkan probe runs observed the resulting alternate texture. Production material
+ownership and further formats remain open.
 
 ### Verified Linux Layout Probe
 

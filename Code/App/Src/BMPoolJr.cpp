@@ -1,9 +1,12 @@
 #define WIN32_LEAN_AND_MEAN
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 #include <stdio.h>
+#include <cstring>
 
-#include "stddat.h"
-#include "dacom.h"
+#include "STDDAT.H"
+#include "DACOM.H"
 #include "CQTrace.h"
 #include "TempStr.h"
 
@@ -32,9 +35,16 @@ U32 TheBigPointer=0;
 
 	void BMPOOLJR::reallocate ()
 	{
+		if (TheBigPointer > MAX_BUFFER_SIZE ||
+			pool_used_cnt > MAX_BUFFER_SIZE - TheBigPointer ||
+			(pool_used_cnt && !pool))
+		{
+			CQASSERT(false);
+			return;
+		}
 		U8 * new_pool = &TheBigBuffer[TheBigPointer];
 		if (pool_used_cnt)
-			memcpy(new_pool,pool,pool_used_cnt);
+			memmove(new_pool,pool,pool_used_cnt);
 		pool = new_pool;
 		TheBigPointer += pool_used_cnt;
 	}
@@ -48,20 +58,28 @@ U32 TheBigPointer=0;
 			return 0;
 		}
 
+		if (pool_used_cnt > MAX_BUFFER_SIZE || size > MAX_BUFFER_SIZE - pool_used_cnt ||
+			(pool_used_cnt && !pool) ||
+			pool_size > MAX_BUFFER_SIZE || TheBigPointer > MAX_BUFFER_SIZE)
+			return U32(-1);
+
+		const U32 required = pool_used_cnt + size;
 		U32 newSize = pool_size;
-		if( (pool_used_cnt+size) > pool_size ) 
+		if (required > pool_size)
 		{
-			newSize = max(pool_size+GROW_SIZE,pool_used_cnt+size);
+			const U32 grown = pool_size > MAX_BUFFER_SIZE - GROW_SIZE
+				? MAX_BUFFER_SIZE : pool_size + GROW_SIZE;
+			newSize = grown > required ? grown : required;
 		}
 
 		if ( newSize > pool_size || pool==0)
 		{
-			if (newSize+TheBigPointer < MAX_BUFFER_SIZE)
+			if (newSize <= MAX_BUFFER_SIZE - TheBigPointer)
 			{
 				pool_size = newSize;
 				U8 * new_pool = &TheBigBuffer[TheBigPointer];
 				if (pool_used_cnt)
-					memcpy(new_pool,pool,pool_used_cnt);
+					memmove(new_pool,pool,pool_used_cnt);
 				pool = new_pool;
 				TheBigPointer += newSize;
 			}
@@ -91,7 +109,11 @@ U32 TheBigPointer=0;
 
 	void BMPOOLJR::set_pool_used_cnt( U32 cnt)
 	{
-		CQASSERT(old_used_cnt+cnt <= pool_used_cnt);
+		if (old_used_cnt > pool_used_cnt || cnt > pool_used_cnt - old_used_cnt)
+		{
+			CQASSERT(false);
+			return;
+		}
 		pool_used_cnt = old_used_cnt+cnt;
 	}
 
@@ -108,6 +130,7 @@ U32 TheBigPointer=0;
 	//
 	void BMPOOLJR::update( bool bInternal )
 	{
+		(void)bInternal;
 	/*	if (bInternal)
 		{
 			if (pool_used_cnt == 0)
@@ -121,8 +144,8 @@ U32 TheBigPointer=0;
 
 			old_used_cnt = pool_used_cnt = 0;
 
-			if (!bLastRendered && !bRendered)
-				pool_size = min(GROW_SIZE*4,pool_size);
+			if (!bLastRendered && !bRendered && pool_size > GROW_SIZE*4)
+				pool_size = GROW_SIZE*4;
 
 			bLastRendered = bRendered;
 			bRendered = 0;

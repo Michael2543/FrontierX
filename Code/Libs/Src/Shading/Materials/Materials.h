@@ -13,25 +13,31 @@
 
 //
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
 #include <stdio.h>
 #include <map>
 #pragma warning( disable: 4018 4201 4245 4663 )	// for some reason this is required *right here* again
 #include <vector>
 #include <string>
 #include <list>
+#if defined(_WIN32)
 #include <mmsystem.h>
+#endif
 
 //
 
-#include "dacom.h"
+#include "DACOM.H"
 #include "FDump.h"
 #include "TempStr.h"
 #include "TSmartPointer.h"
-#include "tcomponent.h"
+#include "TComponent.h"
 #include "da_heap_utility.h"
+#if defined(_WIN32)
 #include "AllocLite.h"
+#endif
 #include "FileSys_Utility.h"
 #include "IProfileParser_Utility.h"
 #include "ITextureLibrary.h"

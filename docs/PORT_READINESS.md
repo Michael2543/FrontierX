@@ -1,6 +1,6 @@
 # Linux Port Readiness Plan
 
-Status: implementation in progress, 2026-09-12
+Status: implementation in progress, 2026-09-24
 
 This document turns the direction in [PROJECT.md](PROJECT.md) into an executable sequence of
 small, falsifiable milestones. Native layout, TinyXML, platform timing, and data-root inspection
@@ -8,6 +8,33 @@ targets now exist, but no Linux game or engine-module target exists. Current res
 remains in
 [HANDOFF.md](../HANDOFF.md), and runtime acceptance evidence remains in
 [RETAIL_TEST_MATRIX.md](../RETAIL_TEST_MATRIX.md).
+
+The 2026-09-23 renderer slice now forwards six stage-zero texture combine fields from the
+production `RenderBatcher` through the native primitive to an SDL fragment uniform. Synthetic
+visible Vulkan readback distinguishes combine operations and verifies rollback. A subsequent
+synthetic slice binds two registered runtime `U32` texture handles through the same boundary and
+the production batcher, with image change, rollback and stale-handle evidence. Production
+texture loading, queued batching, native game startup and Windows/retail image comparison remain open;
+the exact evidence is in [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
+The later native pipeline creates and uploads one RGBA8 texture level through the existing
+`IRenderPipeline` slots. Its 2026-09-24 handle-collision regression preserves the first
+resource when a backend violates the live-handle uniqueness contract. The one-level RGBA8
+lock/unlock path now runs in a synthetic CPU check and in visible GCC/Clang and focused
+ASan/UBSan Wayland/Vulkan GPU probes. Production material loading and game rendering remain
+open; the focused evidence is in the same renderer document.
+The native pipeline also copies a complete, equally sized level-zero RGBA8 texture through
+the production `blit_texture` slot used by `SysMap::addPlayerIcon`; GCC/Clang and focused
+sanitizer CPU checks cover upload rollback and shadow ownership. The game caller has not
+executed natively. The same full copy now passes visible GCC, Clang and focused
+ASan/UBSan Wayland/Vulkan readback with equal source/copy checksums and repeated
+scene teardown. Scaling, partial copies and the map drawing context remain open.
+The production `StateMaterial` now executes one cached indexed draw through
+DACOM, native state/texture callbacks and the existing material vtable in both
+a synthetic CPU check and visible GCC, Clang and focused sanitizer Vulkan
+probes. The bounded material readback and material-driven alternate/copy texture
+checks agree across compilers and repeated scene runs. Material-library loading,
+real media, game composition and Windows comparison remain open; see
+[STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md).
 
 ## Evidence Labels
 
@@ -385,7 +412,16 @@ execution and the visible probe/shell runs cross `PrimitiveBuilder -> IRenderPip
 IRenderPrimitive -> SdlGpuRenderer`. Unimplemented pipeline slots return `GR_NOT_IMPLEMENTED`.
 This proves one real production draw caller and representative depth/source-alpha state through the
 existing pipeline boundary in the integrated startup/window lifecycle; it does not provide a game
-renderer. The ZBatcher declarative header closure now compiles on Linux under both compilers (see RENDER_BATCHER_PORTABILITY.md); behavior on the App-side `.cpp`, RPVERTEX2 GPU and texture-stage/material mapping remain open. See
+renderer. The ZBatcher declarative header closure and its production `BMPOOLJR`
+arena owner now compile under both Linux compilers. `BMPOOLJR` executes
+allocation, growth, bounds and teardown checks under GCC, Clang and focused
+Clang ASan/UBSan. The neighboring production vertex-descriptor copier now
+executes its equal-format AOS and indexed PN/color/UV paths with synthetic data under
+both compilers and focused sanitizers. The production vertex-buffer manager
+now executes against the native CPU pipeline owner under GCC and Clang with
+synthetic lifecycle requests. The App-side `RenderBatcher.cpp` now forwards equivalent direct and U16-indexed versions of the repository smoke scene to visible Vulkan presentation/readback under GCC, Clang and focused sanitizers. A separate indexed RPVERTEX2 GPU check observes a changed second UV pair in readback, repeats the renderer lifecycle and retains the previous scene after a rejected oversize upload. Shell-local App globals and diagnostics still stand in for production services; queued pool batching and
+texture-stage/material mapping remain open; see
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md) and
 [RENDER_SUBMISSION_PORTABILITY.md](RENDER_SUBMISSION_PORTABILITY.md).
 
 Exit criteria:
@@ -470,7 +506,7 @@ Exit criteria:
 
 | Blocker | Evidence now | Next falsifiable check | Target milestone |
 |---|---|---|---|
-| No portable game or engine-module build graph | Platform services plus an integrated native lifecycle shell build; no game owner compiles | Compile the first game/renderer-owned closure without weakening Windows | 2-5 |
+| No portable game or engine-module build graph | Platform services, native lifecycle shell and isolated production `BMPOOLJR` App owner build and execute; no game or ZBatcher module closes | Compile the full `RenderBatcher` owner against native resource and diagnostic services without weakening Windows | 2-5 |
 | Parameterized ABI checks lack native Windows execution evidence | Static source validation only | Run both checks against fresh Debug and Final builds on native Windows | 0-1 |
 | Win32/MSVC assumptions in shared headers | 150 direct-header matches and 1,342 extension matches measured lexically | Compile selected owner closures with GCC and Clang | 1-2 |
 | 32-bit runtime assumptions versus LP64 | Both measured object/address truncations and encoded DOSFile-handle casts are eliminated in source | Validate all affected modules and interfaces on native Windows, then continue the wider implicit-conversion audit | 1-3 |
@@ -478,7 +514,7 @@ Exit criteria:
 | Production game startup owner remains Windows-bound | Headless and shell initialization, shared profile callbacks, native preferences and data-root checks pass | Compile and connect the first real game-startup owner without changing Windows registry behavior | 3 |
 | Linux path case and asset lookup are unmeasured | Known platform difference | Scan, then exercise external data discovery on a case-sensitive filesystem | 3 |
 | SDL3 integration is locally prototyped but not approved for distribution | System package, neutral backend, production-event batch pump, native DACOM `IWindowManager`, shell integration and Wayland smoke | Connect real application cadence, compare Windows behavior, and review provenance/notice packaging | 4 |
-| Native rendering path is undecided | The shell-selected SDL GPU owner presents the shared production `PrimitiveBuilder` scene through the real `IRenderPipeline` vtable and registered `IRenderPrimitive`; U16 validation, transactional depth/blend state, resize, readback and teardown are covered. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers with non-pointer tokens and create/lock/unlock/destroy lifetime, then routes direct/indexed slices through the registered owner under GCC, Clang and ASan/UBSan | Compile and execute the actual `RenderBatcher` closure against this owner, then add RPVERTEX2 GPU and texture-stage/material mapping before the Windows capture comparison | 5 |
+| Native rendering path is undecided | The shell-selected SDL GPU owner presents equivalent direct and U16-indexed repository scenes through the actual App-side `RenderBatcher`, real `IRenderPipeline` vtable and registered `IRenderPrimitive`. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers and routes direct/indexed slices through the registered owner. Visible GCC, Clang and focused sanitizer indexed batcher draws produced bounded readback matching the earlier direct fixture; a separate indexed RPVERTEX2 GPU probe shows second-UV sampling. Unsupported pool activation and texture setters fail explicitly | Add texture-stage/material mapping, then execute queued batching and capture the same fixture on Windows | 5 |
 | D3DX9 replacement remains incomplete | 155 lexical matches in eight files after production ray-geometry replacement | Characterize and replace shared renderer matrices/tangents, effects and cubemap decoding | 5 |
 | Campaign DLL model may not map directly to ELF | Native DACOM ELF registration/unload passes a synthetic module test; campaign ABI remains Windows-only and separate | Define and test one campaign C export/ABI strategy | 6 |
 | Audio backend is undecided | Architecture direction | Inventory semantics and prototype selected candidate | 7 |
@@ -500,10 +536,10 @@ Exit criteria:
 5. Adapt the isolated scalar math core to `I3DMathEngine` after capturing Windows provider-loading
    and numerical-oracle evidence. The files containing 402 of 441 measured assembly matches belong
    to the separate historical K62/3DNow provider and are not first-target requirements.
-6. Compile and execute the actual `RenderBatcher` closure through the now-portable public
-   `IRenderPipeline` and checked native create/lock/unlock/destroy resource owner. Then add an SDL
-   GPU consumer for the validated direct and indexed
-   `D3DFVF_RPVERTEX2` paths followed by texture-stage/material mapping and Windows capture
+6. Extend the now-visible production `RenderBatcher` direct path with texture-stage/material
+   mapping. The separate SDL GPU probe already consumes indexed `D3DFVF_RPVERTEX2` and samples its
+   second UV pair; connect that format to a real game caller before claiming game rendering. Then
+   execute queued batching and perform the Windows capture
    comparison before selecting a direct
    adapter or another maintained translation route. Continue the classified D3DX9 matrix/tangent,
    effect and cubemap work alongside that evidence, not as a name-only rewrite.

@@ -8,7 +8,9 @@
 
 // 
 
-#include "FileSys.h"
+#include "Filesys.h"
+#include "FDump.h"
+#include <algorithm>
 
 //
 
@@ -56,13 +58,14 @@ HRESULT read_type_array( IFileSystem *IFS, const char *key, U32 num_to_read, Typ
 
 inline HRESULT read_string( IFileSystem *IFS, const char *key, U32 max_string_len, char *out_string )
 {
+	if( max_string_len == 0 || out_string == NULL ) return E_FAIL;
 	DAFILEDESC desc( key );
 	HANDLE h;
 	U32 uBytesRead;
 
 	if( (h = IFS->OpenChild( &desc )) != INVALID_HANDLE_VALUE ) {
 		U32 uBytes = IFS->GetFileSize( h );
-		U32 uBytesToRead = __min( uBytes, max_string_len-1 );
+		U32 uBytesToRead = std::min( uBytes, max_string_len-1 );
 		if( IFS->ReadFile( h, out_string, uBytesToRead, &uBytesRead, NULL) && (uBytesRead == uBytesToRead) ) {
 			out_string[uBytesRead] = 0;			
 			IFS->CloseHandle( h );

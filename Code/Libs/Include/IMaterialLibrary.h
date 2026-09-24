@@ -8,7 +8,7 @@
 
 //
 
-#include "DACOM.h"
+#include "DACOM.H"
 #include "IMaterial.h"
 
 //
@@ -40,4 +40,3 @@ struct IMaterialLibrary : public IDAComponent
 
 
 #endif // EOF
-

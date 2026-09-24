@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace FrontierX
@@ -24,6 +25,22 @@ struct NativeVertexBufferView
 
 using NativeVertexBufferLookup = NativeVertexBufferView (*)(void * context,
                                                             IRP_VERTEXBUFFERHANDLE handle);
+using NativeTextureHandleLookup = bool (*)(void * context, U32 handle);
+using NativeTextureCreate = GENRESULT (*)(void * context, U32 width, U32 height,
+                                         U32 & handle);
+using NativeTextureUpload = GENRESULT (*)(void * context, U32 handle,
+                                         const std::uint8_t * pixels, U32 width,
+                                         U32 height, std::size_t byteCount);
+using NativeTextureDestroy = GENRESULT (*)(void * context, U32 handle);
+
+struct NativeTextureOperations
+{
+    void * context = nullptr;
+    NativeTextureHandleLookup lookup = nullptr;
+    NativeTextureCreate create = nullptr;
+    NativeTextureUpload upload = nullptr;
+    NativeTextureDestroy destroy = nullptr;
+};
 
 // Native implementation of the established IRenderPipeline boundary. The
 // implemented slots forward to the checked IRenderPrimitive owner or manage
@@ -31,7 +48,8 @@ using NativeVertexBufferLookup = NativeVertexBufferView (*)(void * context,
 class NativeRenderPipeline final : public RenderPipelineAdapter
 {
 public:
-    explicit NativeRenderPipeline(IRenderPrimitive * drawTarget) noexcept;
+    explicit NativeRenderPipeline(IRenderPrimitive * drawTarget,
+                                  NativeTextureOperations textures = {}) noexcept;
     NativeRenderPipeline(NativeVertexBufferLookup lookup,
                          void * lookupContext,
                          IRenderPrimitive * drawTarget) noexcept;
@@ -74,6 +92,22 @@ public:
                                              U32 * value) override;
     GENRESULT COMAPI set_texture_stage_texture(U32 stage, U32 texture) override;
     GENRESULT COMAPI get_texture_stage_texture(U32 stage, U32 * texture) override;
+    GENRESULT COMAPI is_texture(U32 texture) override;
+    GENRESULT COMAPI create_texture(int width, int height, const PixelFormat & format,
+                                    int lodCount, U32 flags, U32 & handle) override;
+    GENRESULT COMAPI destroy_texture(U32 handle) override;
+    GENRESULT COMAPI lock_texture(U32 handle, int level, RPLOCKDATA * lockData) override;
+    GENRESULT COMAPI unlock_texture(U32 handle, int level) override;
+    GENRESULT COMAPI set_texture_level_data(
+        U32 handle, int level, int width, int height, int stride,
+        const PixelFormat & format, const void * pixels, const void * alpha,
+        const RGB * palette) override;
+    GENRESULT COMAPI blit_texture(U32 destination, U32 destinationLevel,
+                                  RECT destinationRect, U32 source, U32 sourceLevel,
+                                  RECT sourceRect) override;
+    GENRESULT COMAPI get_texture_format(U32 handle, PixelFormat * format) override;
+    GENRESULT COMAPI get_texture_dim(U32 handle, U32 * width, U32 * height,
+                                    U32 * lodCount) override;
     GENRESULT COMAPI verify_state() override;
     GENRESULT COMAPI draw_primitive(D3DPRIMITIVETYPE primitiveType, U32 vertexFormat,
                                     const void * vertices, int vertexCount,
@@ -97,6 +131,14 @@ public:
         int indexCount, U32 flags) override;
 
 private:
+    struct OwnedTexture
+    {
+        U32 width = 0U;
+        U32 height = 0U;
+        std::vector<std::uint8_t> pixels;
+        bool locked = false;
+    };
+
     struct OwnedVertexBuffer
     {
         std::vector<unsigned char> bytes;
@@ -117,6 +159,8 @@ private:
     NativeVertexBufferLookup lookup_ = nullptr;
     void * lookupContext_ = nullptr;
     IRenderPrimitive * drawTarget_ = nullptr;
+    NativeTextureOperations textures_{};
+    std::map<U32, OwnedTexture> ownedTextures_;
     std::atomic<U32> referenceCount_{1U};
     std::map<IRP_VERTEXBUFFERHANDLE, OwnedVertexBuffer> ownedBuffers_;
     IRP_VERTEXBUFFERHANDLE nextHandle_ = 1U;

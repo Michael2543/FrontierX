@@ -1,5 +1,8 @@
+#ifndef BMPOOLJR_H
+#define BMPOOLJR_H
+
 #ifndef RENDPIPELINE_H
-#include "RendPipeline.h"
+#include "rendpipeline.h"
 #endif
 //
 extern unsigned char TheBigBuffer[];
@@ -47,7 +50,7 @@ public:	// Interface
 
 	~BMPOOLJR()
 	{
-		delete[] pool;
+		// The arena owns the storage; pool is only a view into it.
 		pool = NULL;
 	}
 
@@ -67,5 +70,6 @@ public:	// Interface
 	void update( bool bInternal );
 
 };
-//
 
+#endif // BMPOOLJR_H
+//

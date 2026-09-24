@@ -1,6 +1,6 @@
 # Portable Render-Submission Contract
 
-Status snapshot: **2026-09-21**. This is a narrow runtime transfer contract derived from existing
+Status snapshot: **2026-09-23**. This is a narrow runtime transfer contract derived from existing
 renderer consumers. It is not a replacement `IRenderPipeline`, material system, vertex-buffer
 manager, or persistent mesh format.
 
@@ -178,9 +178,9 @@ the host's `ptrace` environment.
 
 ## Remaining adapter work
 
-- Compile and execute the actual production `RenderBatcher` against the implemented
-  `IRenderPipeline`; the current regression models and protects its buffer contract but does not run
-  that owner.
+- Complete the actual production `RenderBatcher` closure beyond the direct and U16-indexed
+  branches now executed through `IRenderPipeline`; queued pools, texture/material state and
+  native production global services remain open.
 - Define triangle-fan/polygon policy. Quad expansion is now characterized, but the portable
   adapter deliberately rejects direct triangle-fan submissions.
 - Continue render/material/sampler capture beyond the six depth/blend states now connected through
@@ -244,12 +244,12 @@ destination and returns a view of that destination, including when the source is
 storage. Direct and indexed extended-format calls use the same list/strip rules as RPVertex;
 triangle fans and indexed point lists remain explicitly unsupported.
 
-This is an `IRenderPipeline` implementation, but not an actual `RenderBatcher` integration or a
-complete game renderer. The native adapter owns repository-created CPU buffers and the registered
-primitive consumes those resources through its production-shaped vertex-buffer vtable, while the
-SDL GPU callback still consumes only RPVertex direct submissions. Compilation/execution of the
-production batcher, extended-format GPU consumption, texture-stage/material mapping and native
-Windows/retail comparison remain open.
+This is an `IRenderPipeline` implementation, but not a complete game renderer. The native adapter
+owns repository-created CPU buffers and the registered primitive consumes those resources through
+its production-shaped vertex-buffer vtable. The shell now executes the App-side `RenderBatcher`
+direct and U16-indexed branches to GPU output, and the separate SDL probe consumes RPVERTEX2 through its extended
+callback. Queued batcher execution, material texture binding and native Windows/retail comparison
+remain open; the later stage-zero combine-state slice is recorded below.
 
 ## Public pipeline-vtable closure (2026-09-21)
 
@@ -275,6 +275,31 @@ repository scene through the production builder.
 This closes interface inheritance and one real caller, not the `RenderBatcher` closure. It also does
 not select SDL GPU as the production backend: `SdlGpuRenderer` remains a callback consumer behind
 the existing renderer interfaces.
+
+## Native stage-zero texture combine state (2026-09-23)
+
+Source review of the production material callers identified `MODULATE` of diffuse and texture
+for stage-zero color and alpha, with stage one disabled. The native-only `D3DTSS`, `D3DTOP` and
+`D3DTA` constants retain the D3D9 numeric values; Windows continues to use its SDK definitions.
+The registered `IRenderPrimitive` now accepts six stage-zero fields through an optional complete
+snapshot callback, commits after backend success and exposes committed values through the matching
+getter. It accepts stage-one disable as a no-op and rejects other stage/state combinations.
+The SDL owner validates and pushes the snapshot as a fragment uniform for presentation and bounded
+readback. The existing visible GPU probe observes a different image under `SELECTARG1` diffuse,
+checks rejection of stage-zero disable without a state change, and recovers the exact original
+image on restoring `MODULATE`. A separate texture-only alpha selection changes the blended image
+and restoring alpha `MODULATE` recovers it again. GCC, Clang and focused Clang ASan/UBSan visible Vulkan runs passed
+on repository-owned synthetic input; exact commands and observations are in
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md). Texture resource binding, a real
+material caller on Linux, Windows Debug/Final, module ABI and retail comparison remain open.
+
+The later native binding slice now passes a live `U32` handle through
+`IRenderPipeline::set_texture_stage_texture`, `IRenderPrimitive` and the SDL backend. The pipeline
+also answers `is_texture` through the backend's live table, allowing the production batcher to
+forward an additional synthetic fixture texture. Its GPU image changes and recovers exactly after
+rebinding; unknown and stale handles are rejected. The production material owner and texture
+creation/lock API remain open; see
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
 
 ## Native depth and alpha-blend state slice (2026-09-21)
 
@@ -320,7 +345,9 @@ checksum `7951318278861886233` after the production caller moved to the real pip
 output identifies `source=primitivebuilder-native-irenderpipeline`, and both shells identify
 `production PrimitiveBuilder via IRenderPipeline`. This is synthetic Linux hardware evidence. It is
 not a Windows image comparison, retail-data run, RPVERTEX2 GPU path or proof of complete game-state
-compatibility.
+compatibility. A later 2026-09-23 probe added the extended `RPVERTEX2` GPU path; see
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md) for the separate visible GCC, Clang
+and sanitizer image evidence.
 
 ### Review regression evidence (2026-09-21)
 

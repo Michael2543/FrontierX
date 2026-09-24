@@ -536,12 +536,14 @@ frontierx_enable_strict_warnings(frontierx_render_smoke_scene)
 target_link_libraries(frontierx_render_pipeline_probe
 	PRIVATE frontierx_render_smoke_scene)
 
-# The ZBatcher header is the declarative closure for the App-side RenderBatcher
-# owner; this probe guards that boundary on non-Windows toolchains.
+# Guard the ZBatcher declaration boundary and execute the production
+# vertex-descriptor copier used by the neighboring vertex-buffer manager.
 add_executable(frontierx_render_batcher_header_probe
-	Tools/portability/render_batcher_header_probe.cpp)
+	Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp
+	Tools/portability/render_batcher_header_probe.cpp
+	Tools/portability/render_batcher_myvertex_header.cpp)
 target_include_directories(frontierx_render_batcher_header_probe
-	PRIVATE Code/App/Src Code/Libs/Include)
+	PRIVATE Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
 target_compile_features(frontierx_render_batcher_header_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_render_batcher_header_probe)
 # Legacy math/graphics headers containing the batcher header chain carry
@@ -557,8 +559,103 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         list(APPEND FRONTIERX_RB_HEADER_WARNS -Wno-template-id-cdtor)
     endif()
-	target_compile_options(frontierx_render_batcher_header_probe
+target_compile_options(frontierx_render_batcher_header_probe
 		PRIVATE ${FRONTIERX_RB_HEADER_WARNS})
+endif()
+
+# Compile the supported App-side ZBatcher owner without claiming it links or runs yet.
+add_library(frontierx_render_batcher_object OBJECT Code/App/Src/RenderBatcher.cpp)
+target_include_directories(frontierx_render_batcher_object PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_render_batcher_object PRIVATE cxx_std_17)
+
+# The production MathLib accessor is an unresolved dependency of RenderBatcher.
+add_library(frontierx_native_math_accessor STATIC Code/Libs/Src/x86Math/MathLib.cpp)
+target_include_directories(frontierx_native_math_accessor PUBLIC Code/Libs/Include)
+target_link_libraries(frontierx_native_math_accessor PUBLIC frontierx_native_dacom_bootstrap)
+target_compile_features(frontierx_native_math_accessor PUBLIC cxx_std_17)
+
+add_executable(frontierx_math_accessor_probe Tools/portability/math_accessor_probe.cpp)
+target_link_libraries(frontierx_math_accessor_probe PRIVATE frontierx_native_math_accessor)
+target_compile_features(frontierx_math_accessor_probe PRIVATE cxx_std_17)
+
+add_library(frontierx_bmpooljr_object OBJECT Code/App/Src/BMPoolJr.cpp)
+target_include_directories(frontierx_bmpooljr_object PRIVATE
+	Code/App/Src Code/App/Src/Include Code/Libs/Include)
+target_compile_features(frontierx_bmpooljr_object PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_bmpooljr_object)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_bmpooljr_object PRIVATE ${FRONTIERX_RB_HEADER_WARNS})
+endif()
+
+add_executable(frontierx_render_batcher_runtime_probe
+	$<TARGET_OBJECTS:frontierx_render_batcher_object>
+	$<TARGET_OBJECTS:frontierx_bmpooljr_object>
+	Tools/portability/render_batcher_runtime_probe.cpp)
+target_include_directories(frontierx_render_batcher_runtime_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_link_libraries(frontierx_render_batcher_runtime_probe PRIVATE
+	frontierx_native_math_accessor frontierx_native_render_primitive
+	frontierx_render_smoke_scene)
+target_compile_features(frontierx_render_batcher_runtime_probe PRIVATE cxx_std_17)
+
+# Exercise the production manager through DACOM and the real native pipeline.
+add_executable(frontierx_vertex_buffer_manager_probe
+	Code/Libs/Src/VertexBufferManager/VertexBufferManager.cpp
+	Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp
+	Tools/portability/vertex_buffer_manager_probe.cpp)
+target_link_libraries(frontierx_vertex_buffer_manager_probe PRIVATE
+	frontierx_native_dacom_bootstrap frontierx_native_render_pipeline)
+target_compile_features(frontierx_vertex_buffer_manager_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_vertex_buffer_manager_probe)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_vertex_buffer_manager_probe PRIVATE
+		${FRONTIERX_RB_HEADER_WARNS} -Wno-unused-parameter)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_vertex_buffer_manager_probe PRIVATE
+		-Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_vertex_buffer_manager_probe PRIVATE
+		-Wno-delete-abstract-non-virtual-dtor
+		-Wno-delete-non-abstract-non-virtual-dtor)
+endif()
+
+# Execute the production StateMaterial owner through its DACOM factory and a
+# cached indexed draw at the established renderer boundary.
+add_executable(frontierx_state_material_probe
+	Code/Libs/Src/Shading/Materials/StateMaterial.cpp
+	Code/Libs/Src/VertexBufferManager/VertexBufferManager.cpp
+	Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp
+	Tools/portability/state_material_probe.cpp)
+target_include_directories(frontierx_state_material_probe PRIVATE Code/Libs/Include)
+target_link_libraries(frontierx_state_material_probe PRIVATE
+	frontierx_native_dacom_bootstrap frontierx_native_render_primitive
+	frontierx_native_render_pipeline)
+target_compile_features(frontierx_state_material_probe PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_state_material_probe PRIVATE
+		${FRONTIERX_RB_HEADER_WARNS} -Wno-unused-parameter)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_state_material_probe PRIVATE
+		-Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_state_material_probe PRIVATE
+		-Wno-delete-abstract-non-virtual-dtor
+		-Wno-delete-non-abstract-non-virtual-dtor)
+endif()
+
+# Execute the production vertex/index arena owner used by RenderBatcher.
+add_executable(frontierx_bmpooljr_probe
+	$<TARGET_OBJECTS:frontierx_bmpooljr_object>
+	Tools/portability/bmpooljr_probe.cpp)
+target_include_directories(frontierx_bmpooljr_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/Libs/Include)
+target_compile_features(frontierx_bmpooljr_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_bmpooljr_probe)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_bmpooljr_probe PRIVATE ${FRONTIERX_RB_HEADER_WARNS})
 endif()
 
 # The production DACOM adapter and this probe share the same inline parser core.
@@ -640,8 +737,14 @@ if(FRONTIERX_BUILD_SDL3)
 		frontierx_enable_strict_warnings(frontierx_sdl3_gpu_renderer)
 		target_link_libraries(frontierx_native_shell PRIVATE
 			frontierx_native_render_primitive
+			frontierx_native_math_accessor
 			frontierx_render_smoke_scene
 			frontierx_sdl3_gpu_renderer)
+		target_sources(frontierx_native_shell PRIVATE
+			$<TARGET_OBJECTS:frontierx_render_batcher_object>
+			$<TARGET_OBJECTS:frontierx_bmpooljr_object>)
+		target_include_directories(frontierx_native_shell PRIVATE
+			Code/App/Src Code/App/Src/Include Code/App/DInclude)
 		target_compile_definitions(frontierx_native_shell PRIVATE
 			FRONTIERX_HAS_SDL_GPU_RENDERER=1)
 		set(FRONTIERX_GPU_SHADER_SOURCE_DIR
@@ -652,6 +755,8 @@ if(FRONTIERX_BUILD_SDL3)
 			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe.vert.spv)
 		set(FRONTIERX_GPU_FRAGMENT_SHADER
 			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe.frag.spv)
+		set(FRONTIERX_GPU_T4_VERTEX_SHADER
+			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe_t4.vert.spv)
 		add_custom_command(
 			OUTPUT ${FRONTIERX_GPU_VERTEX_SHADER}
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${FRONTIERX_GPU_SHADER_BINARY_DIR}
@@ -672,19 +777,48 @@ if(FRONTIERX_BUILD_SDL3)
 				${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe.frag
 			DEPENDS ${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe.frag
 			VERBATIM)
+		add_custom_command(
+			OUTPUT ${FRONTIERX_GPU_T4_VERTEX_SHADER}
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${FRONTIERX_GPU_SHADER_BINARY_DIR}
+			COMMAND ${FRONTIERX_GLSLC_EXECUTABLE}
+				--target-env=vulkan1.0
+				-fshader-stage=vert
+				-o ${FRONTIERX_GPU_T4_VERTEX_SHADER}
+				${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe_t4.vert
+			DEPENDS ${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe_t4.vert
+			VERBATIM)
 		add_custom_target(frontierx_sdl3_gpu_shaders DEPENDS
 			${FRONTIERX_GPU_VERTEX_SHADER}
-			${FRONTIERX_GPU_FRAGMENT_SHADER})
-		add_executable(frontierx_sdl3_gpu_probe Tools/portability/sdl3_gpu_probe.cpp)
+			${FRONTIERX_GPU_FRAGMENT_SHADER}
+			${FRONTIERX_GPU_T4_VERTEX_SHADER})
+		add_executable(frontierx_sdl3_gpu_probe
+			Tools/portability/sdl3_gpu_probe.cpp
+			Code/Libs/Src/Shading/Materials/StateMaterial.cpp
+			Code/Libs/Src/VertexBufferManager/VertexBufferManager.cpp
+			Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp)
 		add_dependencies(frontierx_sdl3_gpu_probe frontierx_sdl3_gpu_shaders)
 		target_link_libraries(frontierx_sdl3_gpu_probe
 			PRIVATE
+				frontierx_native_dacom_bootstrap
 				frontierx_native_render_primitive
 				frontierx_render_smoke_scene
 				frontierx_sdl3_gpu_renderer
 				PkgConfig::SDL3)
 		target_compile_features(frontierx_sdl3_gpu_probe PRIVATE cxx_std_17)
 		frontierx_enable_strict_warnings(frontierx_sdl3_gpu_probe)
+		if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+			target_compile_options(frontierx_sdl3_gpu_probe PRIVATE
+				${FRONTIERX_RB_HEADER_WARNS} -Wno-unused-parameter)
+		endif()
+		if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+			target_compile_options(frontierx_sdl3_gpu_probe PRIVATE
+				-Wno-delete-non-virtual-dtor -Wno-write-strings)
+		elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+			target_compile_options(frontierx_sdl3_gpu_probe PRIVATE
+				-Wno-delete-abstract-non-virtual-dtor
+				-Wno-delete-non-abstract-non-virtual-dtor
+				-Wno-writable-strings)
+		endif()
 	endif()
 	add_executable(frontierx_legacy_input_probe Tools/portability/legacy_input_probe.cpp)
 	target_link_libraries(frontierx_legacy_input_probe
@@ -747,6 +881,11 @@ if(BUILD_TESTING)
 	add_test(NAME portability.render_submission COMMAND frontierx_render_submission_probe)
 	add_test(NAME portability.render_pipeline COMMAND frontierx_render_pipeline_probe)
 	add_test(NAME portability.render_batcher_header COMMAND frontierx_render_batcher_header_probe)
+	add_test(NAME portability.vertex_buffer_manager COMMAND frontierx_vertex_buffer_manager_probe)
+	add_test(NAME portability.state_material COMMAND frontierx_state_material_probe)
+	add_test(NAME portability.math_accessor COMMAND frontierx_math_accessor_probe)
+	add_test(NAME portability.render_batcher_runtime COMMAND frontierx_render_batcher_runtime_probe)
+	add_test(NAME portability.bmpooljr COMMAND frontierx_bmpooljr_probe)
 	if(TARGET frontierx_sdl3_window_probe)
 		add_test(NAME portability.sdl3_window COMMAND frontierx_sdl3_window_probe)
 		set_tests_properties(portability.sdl3_window PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")
@@ -765,6 +904,7 @@ if(BUILD_TESTING)
 		add_test(NAME portability.sdl3_gpu COMMAND frontierx_sdl3_gpu_probe
 			${FRONTIERX_GPU_VERTEX_SHADER}
 			${FRONTIERX_GPU_FRAGMENT_SHADER}
+			${FRONTIERX_GPU_T4_VERTEX_SHADER}
 			--visible)
 		set_tests_properties(portability.sdl3_gpu PROPERTIES SKIP_RETURN_CODE 77)
 	endif()
