@@ -484,6 +484,7 @@ xcopy /Y "$(OutDir)Trim.pdb" "$(ConquestDebugDeployDir)\"</Command>
   <ItemGroup>
     <ClCompile Include="..\..\Libs\Src\Platform\PlatformTime.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <UndefinePreprocessorDefinitions Condition="'$(Configuration)'=='Debug' or '$(Configuration)'=='DEMO Debug'">_DEBUG;%(UndefinePreprocessorDefinitions)</UndefinePreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="Animate.cpp">
       <Optimization Condition="'$(Configuration)|$(Platform)'=='DEMO Final|Win32'">MaxSpeed</Optimization>
@@ -627,6 +628,8 @@ xcopy /Y "$(OutDir)Trim.pdb" "$(ConquestDebugDeployDir)\"</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
     </ClCompile>
     <ClCompile Include="LineManager.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <UndefinePreprocessorDefinitions Condition="'$(Configuration)'=='Debug' or '$(Configuration)'=='DEMO Debug'">_DEBUG;%(UndefinePreprocessorDefinitions)</UndefinePreprocessorDefinitions>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='DEMO Final|Win32'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Final|Win32'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
@@ -972,6 +975,8 @@ xcopy /Y "$(OutDir)Trim.pdb" "$(ConquestDebugDeployDir)\"</Command>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>
     </ClCompile>
     <ClCompile Include="Teletype.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <UndefinePreprocessorDefinitions Condition="'$(Configuration)'=='Debug' or '$(Configuration)'=='DEMO Debug'">_DEBUG;%(UndefinePreprocessorDefinitions)</UndefinePreprocessorDefinitions>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='DEMO Final|Win32'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Final|Win32'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MaxSpeed</Optimization>

@@ -102,11 +102,11 @@ $arguments = @(
     '/v:minimal'
 )
 
+if ($NoDeploy) {
+    $arguments += '/p:ConquestEnableDeploy=false'
+}
 if ($Configuration -eq 'Debug') {
     $arguments += "/p:ConquestDebugDeployDir=$DeployDirectory"
-    if ($NoDeploy) {
-        $arguments += '/p:ConquestEnableDeploy=false'
-    }
 }
 
 Write-Host "Building engine modules: $engineConfiguration | Win32"
@@ -127,6 +127,9 @@ foreach ($engineProject in $engineProjects) {
         '/p:Platform=Win32',
         '/v:minimal'
     )
+    if ($NoDeploy) {
+        $engineArguments += '/p:ConquestEnableDeploy=false'
+    }
     & $msbuild @engineArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Engine build failed for $engineProject with exit code $LASTEXITCODE."
@@ -148,6 +151,9 @@ $campaignArguments = @(
     '/p:Platform=Win32',
     '/v:minimal'
 )
+if ($NoDeploy) {
+    $campaignArguments += '/p:ConquestEnableDeploy=false'
+}
 Write-Host "Building retail campaign modules: $campaignConfiguration | Win32"
 & $msbuild @campaignArguments
 $campaignBuildExit = $LASTEXITCODE

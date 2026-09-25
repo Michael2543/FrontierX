@@ -22,9 +22,9 @@ namespace
 {
 U32 *GrowStateArray(U32 *values, U32 count, U32 wordsPerState)
 {
-	if (count == std::numeric_limits<U32>::max() ||
+	if (count == (std::numeric_limits<U32>::max)() ||
 		static_cast<std::size_t>(count + 1U) >
-			std::numeric_limits<std::size_t>::max() / (wordsPerState * sizeof(U32)))
+			(std::numeric_limits<std::size_t>::max)() / (wordsPerState * sizeof(U32)))
 		return NULL;
 	return static_cast<U32 *>(std::realloc(values,
 		static_cast<std::size_t>(count + 1U) * wordsPerState * sizeof(U32)));

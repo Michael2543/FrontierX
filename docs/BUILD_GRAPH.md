@@ -1,13 +1,14 @@
 # Windows build declarations and next portable slice
 
-Evidence: source review and automated inventory, 2026-09-13. No MSBuild execution or retail run.
+Original inventory evidence: source review and automated inventory, 2026-09-13. It did not run
+MSBuild or the retail game. A separate native-Windows rebuild is recorded below.
 
 This build-declaration view is complemented by the 2026-09-16 lexical
 [platform touchpoint inventory](PLATFORM_INVENTORY.md), which groups Windows, compiler,
 pointer-width, graphics, audio, and video candidates by source owner. Neither inventory evaluates
 MSBuild imports or establishes a native game target.
 
-Native matrix status, 2026-09-24: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets
+Native matrix status, 2026-09-25: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets
 completed. Their CTest presets each discovered 38 tests, executed 37 successfully and skipped only
 `portability.sdl3_gpu` because this sandbox exposed no graphical/GPU runtime. The focused render
 submission and pipeline tests executed in both matrices; the skipped GPU test is not runtime
@@ -23,6 +24,17 @@ two renderer initialization cycles. The latest visible probe and shell additiona
 repository RGBA8 textures by runtime `U32` handle through the existing renderer boundary and the
 production batcher, observe different images and recover the original readback. The preset CTest
 GPU entry still skips in the command sandbox.
+After the queued-pool change, `cmake --build --preset linux-gcc-debug -j2` and the corresponding
+Clang build reported no remaining work; `ctest --preset linux-gcc-debug --output-on-failure` and
+the Clang counterpart each executed 37 passing checks and skipped only `portability.sdl3_gpu` in
+the command sandbox. Separate visible Wayland/Vulkan shell runs under both compilers and focused
+Clang ASan/UBSan exercised one production alpha-depth queued draw per process, with immediate and pooled
+readback equality. Exact commands, checksum and limitations are in
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md).
+The separate native-Windows 2026-09-25 regression rebuilt the supported VS2022 Win32 Debug and
+Final wrappers, including both engine DLLs and all 18 campaign modules, in a Windows 11 VM.
+This is compilation/link evidence only; commands, outputs and remaining ABI, retail and image
+comparison gates are in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
 The new `frontierx_state_material_probe` compiles and executes production
 `StateMaterial` through its DACOM factory and a cached indexed native draw in
 both presets. Its focused CPU and sanitizer evidence is in
@@ -178,9 +190,10 @@ remain failures. See
 The supported App-side `RenderBatcher.cpp` compiles as
 `frontierx_render_batcher_object` under both GCC and Clang. A focused linked
 process executes its direct and U16-indexed draw branches against the native CPU submission
-owner; the shell visibly presents an indexed fixture through that same batcher and observes bounded
-GPU readback. Queued pool batching, production global/diagnostic ownership, texture/material
-mapping and Windows comparison remain open. See
+owner; the shell visibly presents direct, indexed and one alpha-depth queued-pool fixture through that
+same batcher and observes bounded GPU readback. Additional pool modes, production
+global/diagnostic ownership, production texture/material loading and Windows comparison remain
+open. See
 [RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md).
 
 The public `WindowManager.h` declaration now compiles as part of the existing

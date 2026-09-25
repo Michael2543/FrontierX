@@ -1,11 +1,11 @@
 # ZBatcher RenderBatcher Portability
 
-Status snapshot: **2026-09-23**. This document records the Linux declarative closure of the
+Status snapshot: **2026-09-25**. This document records the Linux declarative closure of the
 production ZBatcher interface, execution of its `BMPOOLJR` arena owner, the
 production vertex-buffer manager lifecycle, a neighboring vertex-descriptor copier, linked
 synthetic direct and U16-indexed draws and visible SDL GPU direct and indexed draws through the actual App-side
-`RenderBatcher.cpp`. It does not claim pool batching, a native game scene, or completion of
-Milestone 5.
+`RenderBatcher.cpp`, plus a native VS2022 Win32 build follow-up. It does not claim pool batching,
+a native game scene, or completion of Milestone 5.
 
 ## Question and falsifiable check
 
@@ -377,7 +377,7 @@ global use from that broad header. Its two existing flag type definitions
 were moved verbatim into `GlobalFlagTypes.h`; `Globals.h` continues to declare
 the same exported Windows variables of those types. The native batcher branch
 includes the shared type header and declares only the four references it
-actually uses. The native type check asserts an eight-byte `GlobalFlags` and
+actually uses. The native type check asserts an eight-byte `CQGlobalFlags` and
 four-byte `GlobalRenderFlags` under both Linux compilers. These flags are
 runtime globals shared across modules, not disk or wire records. Moving the
 definitions does not establish Windows ABI parity: native Win32 layout and
@@ -681,7 +681,7 @@ Source review of `Globals.h` shows the batcher needs a few render globals,
 but the header also declares Windows UI, VFX, exception, network and module
 entry points. A diagnostic-only GCC syntax check, with temporary command-line
 decoration overrides, still found missing Windows declaration types and VFX
-types. No narrow replacement or duplicate `GlobalFlags` layout was added:
+types. No narrow replacement or duplicate `CQGlobalFlags` layout was added:
 the real `Globals` owner and module ABI must be established before the
 App-side `RenderBatcher.cpp` can be compiled and linked natively. Windows
 Debug/Final rebuilds, ABI checks, batcher execution, retail runtime, GPU
@@ -889,3 +889,87 @@ compilation is recorded above. Actual queued draws, texture/material mapping, sa
 execution for this manager target, native Windows Debug/Final rebuilds and
 cross-module ABI checks, retail runtime and Windows image comparison remain
 open.
+
+## Native queued pool slice (2026-09-25)
+
+The next integration blocker was `RenderBatcher::set_state(RPR_BATCH, 1)`: it snapshots every
+legacy D3D texture-stage slot, while the native primitive implements six stage-zero combine
+fields and the disabled stage-one color/alpha operations. Before this change, the snapshot
+returned `GR_NOT_IMPLEMENTED` and left batching disabled. The production batcher now checks a
+single replay predicate when taking, comparing and applying texture-stage snapshots. On Linux it
+uses only the implemented native slots; on Windows the predicate accepts every slot, preserving
+the original D3D9 loops. Unsupported native setters still fail explicitly in the primitive.
+No persistent structure, vtable or serialized layout changed. The real caller is the
+`RenderBatcher` pool path selected by `RPR_STATE_ID` and `RPR_BATCH`; the existing linked probe and
+shell were extended because they already own its DACOM and renderer boundary.
+
+The linked `frontierx_render_batcher_runtime_probe` now provides the native state and
+texture-stage callbacks, enables `RPR_BATCH`, sets a nonzero state ID and identity modelview,
+submits the repository U16-indexed fixture, and proves that the submission count stays unchanged
+until `flush`. In the second lifecycle it queues the fixture twice; one flush then submits a
+14-vertex, 18-index primitive with the second index set rebased by seven vertices. The callback
+checks the final index values and separately counts the merged submission. The process reports
+six submissions total, two immediate and one pooled per lifecycle. The first pooled draw uses the
+opaque pool; the second enables alpha blending, selects the alpha-depth pool and merges two indexed
+primitives. This is synthetic CPU runtime evidence. It uses state flags zero; material replay
+combinations, unsorted alpha, delay stages and queue vertex-buffer paths remain unexecuted.
+
+The native shell uses the alpha-depth production pool with the same repository geometry and RGBA8
+texture. Its source-reviewed `render_depth_sort` currently delegates to `render_no_sort`, so this
+does not establish depth ordering. It reads back the immediate indexed draw and the later pooled
+draw, requiring exact checksum and changed-pixel equality. Visible Wayland/Vulkan runs on this
+host with GCC 16.2.1,
+Clang 22.1.8 and a focused Clang ASan/UBSan build each reported 17 presented frames, 2,496 changed
+pixels and pooled checksum `7951318278861886233`. The sanitizer CPU probe also submitted six
+draws without a finding; LeakSanitizer was disabled for this host's ptrace environment. The
+synthetic data root contained empty required directories, not retail media. Commands actually run:
+
+```text
+cmake --build --preset linux-gcc-debug --target frontierx_native_shell frontierx_render_batcher_runtime_probe -j2
+cmake --build --preset linux-clang-debug --target frontierx_native_shell frontierx_render_batcher_runtime_probe -j2
+ctest --preset linux-gcc-debug -R '^portability.render_batcher_runtime$' --output-on-failure
+ctest --preset linux-clang-debug -R '^portability.render_batcher_runtime$' --output-on-failure
+cmake -S . -B /tmp/frontierx-pooled-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined -DFRONTIERX_BUILD_SDL3=ON -DFRONTIERX_BUILD_SDL3_GPU=ON
+cmake --build /tmp/frontierx-pooled-asan --target frontierx_render_batcher_runtime_probe frontierx_native_shell -j2
+ASAN_OPTIONS=detect_leaks=0 /tmp/frontierx-pooled-asan/frontierx_render_batcher_runtime_probe
+env XDG_CONFIG_HOME=/tmp/frontierx-pooled-shell-settings out/build/linux-gcc-debug/frontierx_native_shell --data-root /tmp/frontierx-pooled-shell-data --smoke-ms 250 --render-smoke out/build/linux-gcc-debug/generated/shaders/sdl3_gpu_probe.vert.spv out/build/linux-gcc-debug/generated/shaders/sdl3_gpu_probe.frag.spv
+env XDG_CONFIG_HOME=/tmp/frontierx-pooled-shell-settings out/build/linux-clang-debug/frontierx_native_shell --data-root /tmp/frontierx-pooled-shell-data --smoke-ms 250 --render-smoke out/build/linux-clang-debug/generated/shaders/sdl3_gpu_probe.vert.spv out/build/linux-clang-debug/generated/shaders/sdl3_gpu_probe.frag.spv
+env ASAN_OPTIONS=detect_leaks=0 XDG_CONFIG_HOME=/tmp/frontierx-pooled-shell-settings /tmp/frontierx-pooled-asan/frontierx_native_shell --data-root /tmp/frontierx-pooled-shell-data --smoke-ms 250 --render-smoke out/build/linux-gcc-debug/generated/shaders/sdl3_gpu_probe.vert.spv out/build/linux-gcc-debug/generated/shaders/sdl3_gpu_probe.frag.spv
+```
+
+The shell commands ran outside the command sandbox against the local Wayland display. The first
+sanitizer shell attempt used shader paths under the focused build, where no shader target had run;
+it exited before rendering with `could not open shader`. The recorded successful sanitizer command
+uses the already generated repository shaders from the GCC preset. Both complete Linux preset
+builds and CTest runs also passed as recorded in [BUILD_GRAPH.md](BUILD_GRAPH.md); their GPU CTest
+entry skipped in the command sandbox and supplies no GPU runtime evidence.
+
+The supported VS2022 Win32 Debug and Final no-deploy builds were rerun after this source change;
+both compiled `RenderBatcher.cpp`, linked `ZBatcher.dll` and produced the game and 18 campaign
+modules. The fresh Final same-build ABI check satisfied all 153 `Mission.dll` and two `Trim.dll`
+imports requested by those campaign modules. See
+[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md) for commands and limits. This slice is
+not Milestone 5 acceptance: Windows D3D9 fixture capture and cross-platform image-tolerance
+comparison, retail runtime, production global/diagnostic ownership, material-library loading,
+and a native game scene remain open.
+
+## Native Windows build follow-up (2026-09-25)
+
+The supported VS2022 Win32 Debug and Final no-deploy wrappers now rebuild
+`ZBatcher.dll` as part of the complete game and campaign build. Native Windows
+compilation exposed the Win32 `max` macro at two `std::max` calls and a distinct
+`U32` (`unsigned long`) versus `maxDelay` (`unsigned int`) template deduction.
+The calls now shield `std::max` from the macro and convert the state operand to
+the existing 32-bit `maxDelay` type; the global variable, state layout and
+submission order are unchanged. The exported `CQFLAGS` variable keeps its name
+and bitfields, while its C++ type is `CQGlobalFlags` to avoid the Win32
+`GlobalFlags` function name. Its 8-byte layout and the 4-byte render-flag
+layout are compile-time checked by the Win32 build.
+
+After the final batcher change, GCC 16.2.1 and Clang 22.1.8 rebuilt
+`frontierx_render_batcher_runtime_probe` and
+`frontierx_render_batcher_header_probe`; both focused CTests passed under each
+compiler. These are synthetic Linux checks. The Windows result is compilation
+and linking, with no game execution, cross-module retail ABI comparison or
+Windows fixture capture. Commands and outputs are in
+[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).

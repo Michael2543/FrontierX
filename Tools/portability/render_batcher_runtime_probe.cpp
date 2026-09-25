@@ -17,7 +17,7 @@
 class RenderBatcher;
 extern RenderBatcher * BATCHER;
 
-GlobalFlags CQFLAGS = {};
+CQGlobalFlags CQFLAGS = {};
 GlobalRenderFlags CQRENDERFLAGS = {};
 GlobalEffectsOptions CQEFFECTS = {};
 IRenderPipeline *PIPE = nullptr;
@@ -27,7 +27,20 @@ namespace
 {
 unsigned assertionCount = 0;
 unsigned submissionCount = 0;
+unsigned mergedSubmissionCount = 0;
 bool submissionShapeValid = true;
+
+GENRESULT DACOM_CDECL AcceptRenderState(
+    void *, const FrontierX::RenderStateSnapshot &)
+{
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL AcceptTextureStage(
+    void *, const FrontierX::TextureStageSnapshot &)
+{
+    return GR_OK;
+}
 
 int DACOM_CDECL IgnoreDiagnostic(ErrorCode, const C8 *, ...)
 {
@@ -51,9 +64,19 @@ GENRESULT DACOM_CDECL CaptureSubmission(
         submission.indices[0] == 0U && submission.indices[1] == 1U &&
         submission.indices[2] == 2U && submission.indices[6] == 3U &&
         submission.indices[7] == 5U && submission.indices[8] == 6U;
+    const bool mergedIndexedSmoke =
+        submission.vertexCount == 2U * FrontierX::RenderSmokeIndexedVertexCount &&
+        submission.indices != nullptr &&
+        submission.indexCount == 2U * FrontierX::RenderSmokeIndexCount &&
+        submission.PrimitiveCount() == 6U &&
+        submission.indices[0] == 0U && submission.indices[8] == 6U &&
+        submission.indices[9] == 7U && submission.indices[10] == 8U &&
+        submission.indices[11] == 9U && submission.indices[15] == 10U &&
+        submission.indices[16] == 12U && submission.indices[17] == 13U;
     submissionShapeValid = submissionShapeValid &&
         submission.topology == FrontierX::PrimitiveTopology::TriangleList &&
-        (directSmoke || indexedSmoke);
+        (directSmoke || indexedSmoke || mergedIndexedSmoke);
+    if (mergedIndexedSmoke) ++mergedSubmissionCount;
     ++submissionCount;
     return GR_OK;
 }
@@ -102,7 +125,9 @@ int main()
                     vectorDefault.y == 2.0F && vectorDefault.z == 3.0F,
                 "profile helper defaults without parser interface")) return 1;
     FrontierX::RegisterNativeRenderPrimitive(components);
-    FrontierX::NativeRenderPrimitiveDesc nativeDescriptor(CaptureSubmission);
+    FrontierX::NativeRenderPrimitiveDesc nativeDescriptor(
+        CaptureSubmission, nullptr, nullptr, AcceptRenderState,
+        nullptr, nullptr, AcceptTextureStage);
     void * nativeRaw = nullptr;
     if (!Expect(components->CreateInstance(&nativeDescriptor, &nativeRaw) == GR_OK &&
                     nativeRaw != nullptr, "native submission owner")) return 1;
@@ -138,10 +163,10 @@ int main()
                         batchState == 0U,
                     "state bounds reject invalid input without changing batch state"))
             return 1;
-        if (!Expect(batcher->set_state(RPR_BATCH, 1U) == GR_NOT_IMPLEMENTED &&
+        if (!Expect(batcher->set_state(RPR_BATCH, 1U) == GR_OK &&
                         batcher->get_state(RPR_BATCH, &batchState) == GR_OK &&
-                        batchState == 0U,
-                    "unsupported texture-stage snapshot rejects batching transactionally"))
+                        batchState == 1U,
+                    "supported texture-stage snapshot enables native batching"))
             return 1;
         if (!Expect(batcher->set_texture_stage_state(D3DTSS_NUM_STAGES,
                         D3DTSS_COLOROP, D3DTOP_DISABLE) == GR_INVALID_PARMS &&
@@ -149,17 +174,43 @@ int main()
                             static_cast<D3DTEXTURESTAGESTATETYPE>(0),
                             D3DTOP_DISABLE) == GR_INVALID_PARMS &&
                         batcher->set_texture_stage_state(0U, D3DTSS_COLOROP,
-                            D3DTOP_DISABLE) == GR_NOT_IMPLEMENTED &&
+                            D3DTOP_DISABLE) == GR_OK &&
+                        batcher->set_texture_stage_state(0U, D3DTSS_COLOROP,
+                            D3DTOP_MODULATE) == GR_OK &&
                         batcher->set_texture_stage_texture(D3DTSS_NUM_STAGES, 0U) ==
                             GR_INVALID_PARMS,
                     "texture-stage setters reject invalid or unsupported state")) return 1;
 
-        if (!Expect(FrontierX::SubmitRenderSmokeScene(batcher) == GR_OK &&
-                        submissionCount == 2U * run + 1U && submissionShapeValid,
+        if (!Expect(batcher->set_state(RPR_BATCH, 0U) == GR_OK &&
+                        FrontierX::SubmitRenderSmokeScene(batcher) == GR_OK &&
+                        submissionCount == 3U * run + 1U && submissionShapeValid,
                     "production draw reaches native owner with fixture geometry")) return 1;
         if (!Expect(FrontierX::SubmitIndexedRenderSmokeScene(batcher) == GR_OK &&
-                        submissionCount == 2U * run + 2U && submissionShapeValid,
+                        submissionCount == 3U * run + 2U && submissionShapeValid,
                     "production indexed draw reaches native owner")) return 1;
+        ICQBatch * batch = nullptr;
+        if (!Expect(batcher->QueryInterface(IID_ICQBatch,
+                        reinterpret_cast<void **>(&batch)) == GR_OK && batch,
+                    "production pool interface")) return 1;
+        batch->SetIdentityModelview();
+        batch->Release();
+        if (run == 1U && !Expect(
+                pipeline.set_render_state(D3DRS_ALPHABLENDENABLE, 1U) == GR_OK,
+                "translucent pool state")) return 1;
+        if (!Expect(batcher->set_state(RPR_STATE_FLAGS, 0U) == GR_OK &&
+                        batcher->set_state(RPR_STATE_ID, 1U) == GR_OK &&
+                        batcher->set_state(RPR_BATCH, 1U) == GR_OK &&
+                        FrontierX::SubmitIndexedRenderSmokeScene(batcher) == GR_OK &&
+                        submissionCount == 3U * run + 2U,
+                    "indexed draw remains queued until flush")) return 1;
+        if (run == 1U && !Expect(
+                FrontierX::SubmitIndexedRenderSmokeScene(batcher) == GR_OK &&
+                    submissionCount == 3U * run + 2U,
+                "second indexed draw merges without early submission")) return 1;
+        if (!Expect(batcher->flush(U32(-1)) == GR_OK &&
+                        submissionCount == 3U * run + 3U &&
+                        mergedSubmissionCount == run && submissionShapeValid,
+                    "production pool flush submits indexed draw with rebased indices")) return 1;
         batcher->Release();
         if (!Expect(BATCHER == nullptr && PIPE == nullptr,
                     "destroyed batcher clears its global ownership")) return 1;

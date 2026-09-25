@@ -17,6 +17,7 @@
 #include "WindowManager.h"
 
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+#include "CQBatch.h"
 #include "CQImage.h"
 #include "DEffectOpts.h"
 #include "FDump.h"
@@ -41,7 +42,7 @@
 #include <string>
 
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
-GlobalFlags CQFLAGS = {};
+CQGlobalFlags CQFLAGS = {};
 GlobalRenderFlags CQRENDERFLAGS = {};
 GlobalEffectsOptions CQEFFECTS = {};
 IRenderPipeline *PIPE = nullptr;
@@ -594,12 +595,38 @@ int Run(int argc, char ** argv)
             std::cerr << "Native render-scene submission failed\n";
             return 7;
         }
+        FrontierX::SdlGpuReadback indexedReadback;
+        FrontierX::SdlGpuReadback pooledReadback;
+        InterfaceOwner<ICQBatch> poolBatch;
+        if (!renderer.Readback64(indexedReadback, renderError) ||
+            renderBatcher.Get()->QueryInterface(IID_ICQBatch,
+                reinterpret_cast<void **>(poolBatch.Receive())) != GR_OK ||
+            !poolBatch.Get())
+        {
+            std::cerr << "Native render-pool setup failed\n";
+            return 7;
+        }
+        poolBatch.Get()->SetIdentityModelview();
+        poolBatch.Reset();
+        if (renderBatcher.Get()->set_state(RPR_STATE_FLAGS, 0U) != GR_OK ||
+            renderBatcher.Get()->set_state(RPR_STATE_ID, 1U) != GR_OK ||
+            renderBatcher.Get()->set_state(RPR_BATCH, 1U) != GR_OK ||
+            FrontierX::SubmitIndexedRenderSmokeScene(renderBatcher.Get()) != GR_OK ||
+            renderBatcher.Get()->flush(U32(-1)) != GR_OK ||
+            !renderer.Readback64(pooledReadback, renderError) ||
+            pooledReadback.checksum != indexedReadback.checksum ||
+            pooledReadback.changedPixels != indexedReadback.changedPixels)
+        {
+            std::cerr << "Native render-pool submission failed\n";
+            return 7;
+        }
         renderBatcher.Reset();
         PIPE = nullptr;
         std::cout << "Native render smoke initialized; backend: "
                   << renderer.DriverName()
-                  << "; source: PrimitiveBuilder and indexed fixture via production "
-                     "RenderBatcher and IRenderPipeline\n";
+                  << "; source: PrimitiveBuilder, indexed and pooled fixture via production "
+                     "RenderBatcher and IRenderPipeline; pooled checksum: "
+                  << pooledReadback.checksum << '\n';
     }
 #endif
 

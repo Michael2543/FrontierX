@@ -12,9 +12,24 @@ Debug and Final builds with the retail reference and record evidence, not impres
 | All 18 retail campaign DLLs rebuild | PASS | PASS |
 | Deployed binaries match build SHA-256 | PASS | NOT DEPLOYED IN LATEST CHECK |
 | Isolated deployment directory | PASS | PASS |
+| Original retail campaign imports resolve against fresh modules | PASS (2026-09-25; 153 `Mission`, 2 `Trim`) | PASS (2026-09-25; same) |
+| Retail/build `Mission.dll` export-set difference (descriptive) | MEASURED (4 retail-only; 28 build-only) | MEASURED (same counts) |
 
 Warnings are not a passing fidelity signal. In particular, the linker still reports `/FORCE`,
 runtime-library conflicts, and shared intermediate directories.
+The 2026-09-25 import checks used all 18 original campaign DLLs from a lawfully installed copy
+and fresh Debug/Final builds. They did not launch the game or establish runtime parity; see
+[WINDOWS_BUILD_VALIDATION.md](docs/WINDOWS_BUILD_VALIDATION.md).
+The retail binary and restored CQ2-derived source are different versions; equal export sets are
+not an acceptance criterion. The import check measures whether the original campaign DLLs can
+resolve the symbols they actually request.
+An interactive retail startup attempt on the 2026-09-25 Windows 11 VM reached the logo; the user
+reported a visible menu, but the agent did not capture a stable menu or game scene. The VM lacked
+a sound device, and a temporary no-sound INI
+then exposed a graphics-card incompatibility with the Red Hat VirtIO GPU DOD adapter. The same
+error occurred with the documented software renderer selected. This is a VM-specific retail
+runtime blocker, not evidence of a restored Debug or Final regression; details and cleanup are
+in [WINDOWS_BUILD_VALIDATION.md](docs/WINDOWS_BUILD_VALIDATION.md).
 
 ## Runtime smoke tests
 

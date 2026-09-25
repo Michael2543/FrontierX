@@ -23,7 +23,7 @@ inline bool TryDecodeHandleIndex(const void * handle, std::size_t limit,
                                  std::size_t & index) noexcept
 {
     const EncodedHandleValue value = DecodeEncodedHandle(handle);
-    if (value >= limit || value > std::numeric_limits<std::size_t>::max())
+    if (value >= limit || value > (std::numeric_limits<std::size_t>::max)())
         return false;
 
     index = static_cast<std::size_t>(value);
@@ -38,7 +38,7 @@ inline bool TryDecodeOffsetHandleIndex(const void * handle, EncodedHandleValue b
         return false;
 
     const EncodedHandleValue offset = value - base;
-    if (offset >= limit || offset > std::numeric_limits<std::size_t>::max())
+    if (offset >= limit || offset > (std::numeric_limits<std::size_t>::max)())
         return false;
 
     index = static_cast<std::size_t>(offset);

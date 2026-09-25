@@ -81,8 +81,8 @@ inline bool AreRenderElementsValid(PrimitiveTopology topology,
                                    std::size_t indexCount) noexcept
 {
     if (vertexCount == 0U ||
-        vertexCount > std::numeric_limits<std::uint32_t>::max() ||
-        indexCount > std::numeric_limits<std::uint32_t>::max())
+        vertexCount > (std::numeric_limits<std::uint32_t>::max)() ||
+        indexCount > (std::numeric_limits<std::uint32_t>::max)())
     {
         return false;
     }

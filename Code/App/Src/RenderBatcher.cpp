@@ -31,7 +31,7 @@
 #include <IVertexBufferManager.h>
 
 #if !defined(_WIN32)
-extern GlobalFlags CQFLAGS;
+extern CQGlobalFlags CQFLAGS;
 extern GlobalRenderFlags CQRENDERFLAGS;
 extern IRenderPipeline *PIPE;
 extern IVertexBufferManager *VB_MANAGER;
@@ -56,6 +56,23 @@ extern IVertexBufferManager *VB_MANAGER;
 #endif
 #define BIG_BATCH 202
 #define SCRATCH_BUFF_SIZE 12000
+
+// The native primitive only accepts states it can restore during a pooled flush.
+static bool CanReplayTextureStageState(U32 stage, U32 state)
+{
+#if defined(_WIN32)
+	(void)stage;
+	(void)state;
+	return true;
+#else
+	if (stage == 1)
+		return state == D3DTSS_COLOROP || state == D3DTSS_ALPHAOP;
+	return stage == 0 && (state == D3DTSS_COLOROP ||
+		state == D3DTSS_COLORARG1 || state == D3DTSS_COLORARG2 ||
+		state == D3DTSS_ALPHAOP || state == D3DTSS_ALPHAARG1 ||
+		state == D3DTSS_ALPHAARG2);
+#endif
+}
 
 U8 vert_buff[SCRATCH_BUFF_SIZE];
 int buff_pos=0;
@@ -784,6 +801,7 @@ bool BATCHEDMATERIAL::is_equal( BATCHEDMATERIAL *material )
 
 				// must start at 1, this is a compare - COLOROP is 1, zero is invalid;
 				for( U32 tss=1; tss<D3DTSS_MAX_STATE; tss++ ) {
+					if (!CanReplayTextureStageState(ts, tss)) continue;
 					if( texture_stage_state[ts][tss] != material->texture_stage_state[ts][tss] ) {
 						return false;
 					}
@@ -928,6 +946,7 @@ bool BATCHEDMATERIAL::is_equal( BATCHEDMATERIAL *material )
 				
 				// start at 2, COLOROP is 1, zero is invalid;
 				for( U32 tss=2; tss<D3DTSS_MAX_STATE; tss++ ) {
+					if (!CanReplayTextureStageState(texture_stage_cnt, tss)) continue;
 				//	PIPE->get_texture_stage_state( texture_stage_cnt, (D3DTEXTURESTAGESTATETYPE)tss, &texture_stage_state[texture_stage_cnt][tss] );
 					texture_stage_state[texture_stage_cnt][tss] = batcher->texture_stage_state[texture_stage_cnt][tss];
 				}
@@ -1054,6 +1073,7 @@ bool BATCHEDMATERIAL::is_equal( BATCHEDMATERIAL *material )
 				
 					// start at 2, COLOROP is 1, zero is invalid;
 					for( U32 tss=2; tss<D3DTSS_MAX_STATE; tss++ ) {
+						if (!CanReplayTextureStageState(ts, tss)) continue;
 						PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] );
 					}
 				}
@@ -1620,7 +1640,7 @@ void BMPOOL::set_name( const char *_name )
 			return GR_GENERIC;
 		}
 
-		maxDelay = std::max(batcher->state[RPR_DELAY],maxDelay);
+		maxDelay = (std::max)(static_cast<unsigned int>(batcher->state[RPR_DELAY]),maxDelay);
 
 	//	__int64 time1,time2;
 
@@ -1992,6 +2012,7 @@ DA_METHOD(	set_state,(RPRSTATE _state, U32 value ))
 				U32 captured_state[BM_NUM_STAGES][D3DTSS_MAX_STATE] = {};
 				for (int texture_stage_cnt=0;texture_stage_cnt < BM_NUM_STAGES;texture_stage_cnt++ ) {
 					for( U32 tss=1; tss<D3DTSS_MAX_STATE; tss++ ) {
+						if (!CanReplayTextureStageState(texture_stage_cnt, tss)) continue;
 						GENRESULT result = PIPE->get_texture_stage_state( texture_stage_cnt,
 							(D3DTEXTURESTAGESTATETYPE)tss, &captured_state[texture_stage_cnt][tss] );
 						if (result != GR_OK)
@@ -2235,6 +2256,7 @@ DA_METHOD(	verify_state,())
 				
 				// start at 2, COLOROP is 1, zero is invalid;
 				for( U32 tss=2; tss<D3DTSS_MAX_STATE; tss++ ) {
+					if (!CanReplayTextureStageState(ts, tss)) continue;
 					PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] );
 				}
 			}
@@ -2291,6 +2313,7 @@ DA_METHOD(	draw_primitive,(D3DPRIMITIVETYPE type, U32 vertex_format, const void 
 					
 					// start at 2, COLOROP is 1, zero is invalid;
 					for( U32 tss=2; tss<D3DTSS_MAX_STATE; tss++ ) {
+						if (!CanReplayTextureStageState(ts, tss)) continue;
 						PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] );
 					}
 			}
@@ -2359,6 +2382,7 @@ DA_METHOD(	draw_indexed_primitive,(D3DPRIMITIVETYPE type, U32 vertex_format, con
 					
 					// start at 2, COLOROP is 1, zero is invalid;
 					for( U32 tss=2; tss<D3DTSS_MAX_STATE; tss++ ) {
+						if (!CanReplayTextureStageState(ts, tss)) continue;
 						PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] );
 					}
 			}
@@ -2439,7 +2463,7 @@ bool RenderBatcher::GetPrimBuffer (BATCHDESC *desc,bool bAllowFailure)
 	//batch only if there is a state ID
 	if (state[RPR_STATE_ID] != 0 || activeMaterialHint != U32(-1) || CQRENDERFLAGS.bSoftwareRenderer)
 	{
-		maxDelay = std::max(state[RPR_DELAY],maxDelay);
+		maxDelay = (std::max)(static_cast<unsigned int>(state[RPR_DELAY]),maxDelay);
 
 		BATCHEDMATERIAL *material;
 		U32 pool;
@@ -2661,6 +2685,7 @@ void RenderBatcher::ReleasePrimBuffer (BATCHDESC *desc)
 					// start at 2, COLOROP is 1, zero is invalid;
 					for( U32 tss=2; tss<D3DTSS_MAX_STATE; tss++ ) 
 					{
+						if (!CanReplayTextureStageState(ts, tss)) continue;
 						PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] );
 					}
 				}
@@ -2846,6 +2871,7 @@ void RenderBatcher::CommitState ()
 			
 			// start at 2, COLOROP is 1, zero is invalid;
 			for( U32 tss=1; tss<D3DTSS_MAX_STATE; tss++ ) {
+				if (!CanReplayTextureStageState(ts, tss)) continue;
 				PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] );
 			}
 		//}

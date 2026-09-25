@@ -1,10 +1,15 @@
 # Linux Port Readiness Plan
 
-Status: implementation in progress, 2026-09-24
+Status: implementation in progress, 2026-09-25. Native-Windows VS2022 Win32 Debug and Final
+no-deploy rebuilds now complete through the campaign modules. Original retail campaign imports
+were checked against fresh Debug and Final modules. An interactive retail startup attempt then
+stopped at sound and virtual-graphics device errors; the evidence and remaining runtime and
+image-comparison gates are in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
 
 This document turns the direction in [PROJECT.md](PROJECT.md) into an executable sequence of
 small, falsifiable milestones. Native layout, TinyXML, platform timing, and data-root inspection
-targets now exist, but no Linux game or engine-module target exists. Current restoration state
+targets now exist, but no Linux game target exists. A configured production EventSystem ELF
+module builds; it does not close the game graph. Current restoration state
 remains in
 [HANDOFF.md](../HANDOFF.md), and runtime acceptance evidence remains in
 [RETAIL_TEST_MATRIX.md](../RETAIL_TEST_MATRIX.md).
@@ -13,8 +18,9 @@ The 2026-09-23 renderer slice now forwards six stage-zero texture combine fields
 production `RenderBatcher` through the native primitive to an SDL fragment uniform. Synthetic
 visible Vulkan readback distinguishes combine operations and verifies rollback. A subsequent
 synthetic slice binds two registered runtime `U32` texture handles through the same boundary and
-the production batcher, with image change, rollback and stale-handle evidence. Production
-texture loading, queued batching, native game startup and Windows/retail image comparison remain open;
+the production batcher, with image change, rollback and stale-handle evidence.
+Production texture loading, other pool modes, native game startup and Windows/retail image
+comparison remain open;
 the exact evidence is in [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
 The later native pipeline creates and uploads one RGBA8 texture level through the existing
 `IRenderPipeline` slots. Its 2026-09-24 handle-collision regression preserves the first
@@ -419,8 +425,8 @@ Clang ASan/UBSan. The neighboring production vertex-descriptor copier now
 executes its equal-format AOS and indexed PN/color/UV paths with synthetic data under
 both compilers and focused sanitizers. The production vertex-buffer manager
 now executes against the native CPU pipeline owner under GCC and Clang with
-synthetic lifecycle requests. The App-side `RenderBatcher.cpp` now forwards equivalent direct and U16-indexed versions of the repository smoke scene to visible Vulkan presentation/readback under GCC, Clang and focused sanitizers. A separate indexed RPVERTEX2 GPU check observes a changed second UV pair in readback, repeats the renderer lifecycle and retains the previous scene after a rejected oversize upload. Shell-local App globals and diagnostics still stand in for production services; queued pool batching and
-texture-stage/material mapping remain open; see
+synthetic lifecycle requests. The App-side `RenderBatcher.cpp` now forwards equivalent direct and U16-indexed versions of the repository smoke scene to visible Vulkan presentation/readback under GCC, Clang and focused sanitizers. One alpha-depth queued-pool U16-indexed draw now reaches the same boundary after `flush`, with a readback checksum exactly matching the immediate indexed fixture under both compilers and focused sanitizers; the linked CPU check also exercises the opaque pool and two-primitive alpha-depth merging. A separate indexed RPVERTEX2 GPU check observes a changed second UV pair in readback, repeats the renderer lifecycle and retains the previous scene after a rejected oversize upload. Shell-local App globals and diagnostics still stand in for production services; other pool modes and production
+texture/material loading remain open; see
 [RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md) and
 [RENDER_SUBMISSION_PORTABILITY.md](RENDER_SUBMISSION_PORTABILITY.md).
 
@@ -507,14 +513,15 @@ Exit criteria:
 | Blocker | Evidence now | Next falsifiable check | Target milestone |
 |---|---|---|---|
 | No portable game or engine-module build graph | Platform services, native lifecycle shell and isolated production `BMPOOLJR` App owner build and execute; no game or ZBatcher module closes | Compile the full `RenderBatcher` owner against native resource and diagnostic services without weakening Windows | 2-5 |
-| Parameterized ABI checks lack native Windows execution evidence | Static source validation only | Run both checks against fresh Debug and Final builds on native Windows | 0-1 |
+| Retail campaign import compatibility can regress after module changes | Native Windows `allmods.ps1` and `symdiff.ps1` ran against all 18 original retail campaign DLLs and fresh Debug/Final modules. All 153 `Mission` and two `Trim` imports resolve. Four retail-only `Mission` export names are version/toolchain differences that these campaigns do not import | Rerun the original campaign import check after affected ABI changes; investigate an export difference only when a real consumer requires it | 0-1 |
 | Win32/MSVC assumptions in shared headers | 150 direct-header matches and 1,342 extension matches measured lexically | Compile selected owner closures with GCC and Clang | 1-2 |
 | 32-bit runtime assumptions versus LP64 | Both measured object/address truncations and encoded DOSFile-handle casts are eliminated in source | Validate all affected modules and interfaces on native Windows, then continue the wider implicit-conversion audit | 1-3 |
 | Legacy solution dependency graph is unmapped | Source-review requirement | Map one selected library and link a real consumer | 2 |
 | Production game startup owner remains Windows-bound | Headless and shell initialization, shared profile callbacks, native preferences and data-root checks pass | Compile and connect the first real game-startup owner without changing Windows registry behavior | 3 |
 | Linux path case and asset lookup are unmeasured | Known platform difference | Scan, then exercise external data discovery on a case-sensitive filesystem | 3 |
 | SDL3 integration is locally prototyped but not approved for distribution | System package, neutral backend, production-event batch pump, native DACOM `IWindowManager`, shell integration and Wayland smoke | Connect real application cadence, compare Windows behavior, and review provenance/notice packaging | 4 |
-| Native rendering path is undecided | The shell-selected SDL GPU owner presents equivalent direct and U16-indexed repository scenes through the actual App-side `RenderBatcher`, real `IRenderPipeline` vtable and registered `IRenderPrimitive`. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers and routes direct/indexed slices through the registered owner. Visible GCC, Clang and focused sanitizer indexed batcher draws produced bounded readback matching the earlier direct fixture; a separate indexed RPVERTEX2 GPU probe shows second-UV sampling. Unsupported pool activation and texture setters fail explicitly | Add texture-stage/material mapping, then execute queued batching and capture the same fixture on Windows | 5 |
+| Native rendering path is undecided | The shell-selected SDL GPU owner presents equivalent direct, U16-indexed and one alpha-depth queued-pool repository scene through the actual App-side `RenderBatcher`, real `IRenderPipeline` vtable and registered `IRenderPrimitive`. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers and routes direct/indexed slices through the registered owner. Visible GCC, Clang and focused sanitizer pooled draws produced bounded readback exactly matching the immediate indexed fixture; the linked CPU check also covers opaque and merged alpha-depth pools. A separate indexed RPVERTEX2 GPU probe shows second-UV sampling. Unsupported native state setters still fail explicitly | Exercise additional material/pool combinations and capture the same fixture on Windows for a documented comparison | 5 |
+| VM cannot yet provide the required Windows D3D9 image oracle | The installed retail game reached its logo through NoVNC, then failed on missing audio; with audio disabled in a temporary INI it reported an incompatible Red Hat VirtIO GPU DOD adapter. Selecting `RendSft` still failed. No stable game scene or Windows frame was captured | Run the supported D3D9 path on a Windows environment with a working graphics adapter; then capture the repository fixture and compare under a documented tolerance | 5 |
 | D3DX9 replacement remains incomplete | 155 lexical matches in eight files after production ray-geometry replacement | Characterize and replace shared renderer matrices/tangents, effects and cubemap decoding | 5 |
 | Campaign DLL model may not map directly to ELF | Native DACOM ELF registration/unload passes a synthetic module test; campaign ABI remains Windows-only and separate | Define and test one campaign C export/ABI strategy | 6 |
 | Audio backend is undecided | Architecture direction | Inventory semantics and prototype selected candidate | 7 |
@@ -536,15 +543,12 @@ Exit criteria:
 5. Adapt the isolated scalar math core to `I3DMathEngine` after capturing Windows provider-loading
    and numerical-oracle evidence. The files containing 402 of 441 measured assembly matches belong
    to the separate historical K62/3DNow provider and are not first-target requirements.
-6. Extend the now-visible production `RenderBatcher` direct path with texture-stage/material
-   mapping. The separate SDL GPU probe already consumes indexed `D3DFVF_RPVERTEX2` and samples its
-   second UV pair; connect that format to a real game caller before claiming game rendering. Then
-   execute queued batching and perform the Windows capture
-   comparison before selecting a direct
+6. Extend the now-visible production `RenderBatcher` material and queued-pool paths beyond the
+   one alpha-depth indexed fixture. The separate SDL GPU probe already consumes indexed
+   `D3DFVF_RPVERTEX2` and samples its second UV pair; connect that format to a real game caller
+   before claiming game rendering. Perform the Windows capture comparison before selecting a direct
    adapter or another maintained translation route. Continue the classified D3DX9 matrix/tangent,
    effect and cubemap work alongside that evidence, not as a name-only rewrite.
-7. Validate the unchanged Windows rebuild and parameterized ABI checks on native Windows before
-   accepting Milestone 1; do not emulate this check on Linux.
 
 The completed owner-grouped inventory, exact reproduction commands, limitations, counts, and
 ordered interpretation are recorded in [PLATFORM_INVENTORY.md](PLATFORM_INVENTORY.md). Imported

@@ -509,6 +509,7 @@ struct _modalfactory : GlobalComponent
 		if (hInstance)
 			GetBatchHeap = (GETBATCHHEAP) GetProcAddress(hInstance, "_GetBatchHeap@0");
 	}
+	virtual void Initialize (void) {}
 
 };
 

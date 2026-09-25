@@ -47,7 +47,7 @@ inline Owner * OwnerFromMember(Member * member, DacomRuntimeOffset offset) noexc
 template <class Node>
 inline ConnectionToken NextConnectionToken(const Node * first,
                                            ConnectionToken maximum =
-                                               std::numeric_limits<ConnectionToken>::max()) noexcept
+                                               (std::numeric_limits<ConnectionToken>::max)()) noexcept
 {
     for (ConnectionToken candidate = 1; candidate != 0 && candidate <= maximum; ++candidate)
     {

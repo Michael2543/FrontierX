@@ -1,7 +1,7 @@
 # Native Startup Shell
 
 Status: integrated startup/window lifecycle plus explicit production-batcher render-smoke path,
-2026-09-23.
+2026-09-25.
 
 ## Scope
 
@@ -75,16 +75,18 @@ the implemented `IRenderPipeline` adapter, registers and initializes the product
 production primitive constructor of `PrimitiveBuilder`, then as seven unique RPVertex values and
 nine U16 indices through the same batcher/pipeline boundary. It takes a bounded direct readback
 before the indexed upload and compares it with the indexed readback after presentation. The indexed
-submission is the image presented by the shell. The shell presents until
+submission and the following alpha-depth queued-pool submission have exactly matching 64-by-64
+readback checksums and changed-pixel counts. The pooled submission is the image presented by the
+shell. The shell presents until
 close/deadline, performs a bounded 64-by-64 structural readback, reports counts and a diagnostic
 checksum, and tears the renderer down before the window. It never loads a retail asset. Missing or
 invalid shaders and GPU/presentation/readback failures return exit code 7. The shell does not request
 legacy centering because Wayland compositors own top-level placement.
 
 The shell currently supplies the batcher's required App globals and fatal diagnostics locally.
-Those are composition scaffolding for the repository fixture, not native game services. The SDL
-renderer still supplies the fixture texture directly; batcher texture-stage/material state and
-queued batching remain unimplemented.
+Those are composition scaffolding for the repository fixture, not native game services. The
+repository texture is bound by a runtime `U32` handle through the batcher and native renderer;
+production texture/material-library loading and other pool modes remain open.
 
 `--hotkeys FILE` is an explicit bring-up input, not an installed-resource search policy. The file
 must be a validated UTF 1.01 container with the production hotkey children. Successful startup
@@ -199,6 +201,14 @@ bytes still originate in the shell; no `TextureManager` or material owner was ex
 commands and handle-lifetime checks are in
 [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
 
+The 2026-09-25 shell change enables `RPR_BATCH` with the native primitive's supported
+texture-stage snapshot, sets one material ID and identity modelview, submits the same
+U16-indexed fixture into the production pool, and flushes it before readback. The immediate and
+pooled images agree exactly in visible GCC, Clang and focused Clang ASan/UBSan Wayland/Vulkan runs:
+2,496 changed pixels, checksum `7951318278861886233`, 17 presented frames. A separate linked CPU
+check verifies that the draw is deferred until flush across two batcher lifecycles. Commands and
+limits are in [RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md).
+
 ## Remaining gates
 
 This is compile and synthetic process evidence, not a native game runtime. It does not prove retail
@@ -213,8 +223,8 @@ data compatibility merely because empty required directories exist. The next int
 - establish game application update/render cadence and focus/background behavior without changing
   simulation order or timing;
 - replace the shell-local batcher globals and diagnostics with production native owners;
-- connect queued production `RenderBatcher` pool/flush behavior and material loading/state
-  beyond the representative depth/blend, stage-zero combine and texture-handle binding now routed
+- extend production `RenderBatcher` pool/flush behavior beyond one alpha-depth indexed draw, and connect
+  material loading/state beyond the representative depth/blend, stage-zero combine and texture-handle binding now routed
   through existing renderer ownership;
 - exercise a lawful retail installation without recording its files or private path; and
 - pass native Windows Debug/Final builds plus affected ABI and behavior comparisons.

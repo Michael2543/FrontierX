@@ -1,6 +1,6 @@
 # Production StateMaterial Native Slice
 
-Status: 2026-09-24, synthetic Linux CPU and visible Vulkan runtime integration. This is a production
+Status: 2026-09-25, synthetic Linux CPU and visible Vulkan runtime integration. This is a production
 `StateMaterial` owner executing through the existing `IMaterial` and
 `IStateMaterial` interfaces. Production material-library loading and native game
 rendering remain open.
@@ -121,6 +121,8 @@ The noncached vertex-copy branch, `clone` and allocation-failure injection
 remain unexecuted. The GPU draw uses synthetic service composition rather than
 the game startup/material library. `SimpleMaterial`/`DebugMaterial` retain the
 compile-derived D3D/Win32 blockers listed in the renderer document. Native
-Windows Debug/Final rebuilds, material-module ABI checks, retail runtime and
-Windows image comparison were not performed. No native Linux game target is
-claimed.
+The supported native-Windows Debug/Final wrappers now rebuild successfully,
+but their measured closure does not compile this `StateMaterial` translation
+unit; see [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md). A separate
+material-module Windows build and ABI check, retail runtime and Windows image
+comparison remain unperformed. No native Linux game target is claimed.

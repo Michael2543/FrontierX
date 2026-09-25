@@ -17,7 +17,7 @@
 
   <ItemDefinitionGroup Condition="'$(ConquestCampaignAppConfiguration)' != ''">
     <Link>
-      <AdditionalDependencies>dacom.lib;$(ConquestCampaignAppOutput)\Mission.lib;$(ConquestCampaignAppOutput)\Trim.lib;odbc32.lib;odbccp32.lib</AdditionalDependencies>
+      <AdditionalDependencies>dacom.lib;MathLib.lib;$(ConquestCampaignAppOutput)\Mission.lib;$(ConquestCampaignAppOutput)\Trim.lib;odbc32.lib;odbccp32.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(ConquestCampaignStaticLibraries);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>

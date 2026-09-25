@@ -3,7 +3,7 @@
 
 #include "TYPEDEFS.H"
 
-struct GlobalFlags
+struct CQGlobalFlags
 {
 	BOOL32 bFullScreen:1;
 	BOOL32 bExceptionHappened:1;
@@ -72,5 +72,7 @@ struct GlobalRenderFlags
 	BOOL32 bFSAA:1;
 };
 
+static_assert(sizeof(CQGlobalFlags) == 8, "global flags must retain their two-word layout");
+static_assert(sizeof(GlobalRenderFlags) == 4, "render flags must retain their word layout");
 
 #endif

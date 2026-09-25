@@ -296,7 +296,7 @@ GENRESULT ProfileParser::Initialize (const C8 *fileName, ACCESS access)
     if (!input) return GR_FILE_ERROR;
     const auto end = input.tellg();
     if (end < 0 || static_cast<std::uintmax_t>(end) >
-        static_cast<std::uintmax_t>(std::numeric_limits<U32>::max() - 8U))
+        static_cast<std::uintmax_t>((std::numeric_limits<U32>::max)() - 8U))
         return GR_FILE_ERROR;
     fileSize = static_cast<std::size_t>(end);
 
@@ -331,7 +331,7 @@ GENRESULT ProfileParser2::Initialize2 (const C8 *buffer, U32 bufferSize )
 GENRESULT ProfileParser::InitializeBuffer (const C8 *buffer, U32 size)
 {
 	if (!buffer && size) return GR_INVALID_PARMS;
-	if (size > std::numeric_limits<U32>::max() - 8U) return GR_OUT_OF_MEMORY;
+	if (size > (std::numeric_limits<U32>::max)() - 8U) return GR_OUT_OF_MEMORY;
 	C8 * next = static_cast<C8 *>(std::calloc(static_cast<std::size_t>(size) + 8, 1));
 	if (!next) return GR_OUT_OF_MEMORY;
 	if (size) std::memcpy(next + 1, buffer, size);

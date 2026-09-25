@@ -9,7 +9,7 @@
 #include <cstring>
 
 static_assert(sizeof(Vertex2) == 32, "production RPVERTEX2 stride must remain 32 bytes");
-static_assert(sizeof(GlobalFlags) == 8, "production global flags must retain their two-word layout");
+static_assert(sizeof(CQGlobalFlags) == 8, "production global flags must retain their two-word layout");
 static_assert(sizeof(GlobalRenderFlags) == 4, "production render flags must retain their word layout");
 
 namespace

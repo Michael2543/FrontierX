@@ -269,7 +269,7 @@ CQEXTERN TEX_LOD TEXLOD;
 
 #include "GlobalFlagTypes.h"
 
-CQEXTERN GlobalFlags CQFLAGS;
+CQEXTERN CQGlobalFlags CQFLAGS;
 CQEXTERN GlobalRenderFlags CQRENDERFLAGS;
 
 #define NUM_CIRCLE_SEGS 80 //need for CIRCLELINES extern

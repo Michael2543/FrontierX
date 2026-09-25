@@ -139,6 +139,7 @@ rc /l 0x409 /fo DemoDebug\Globals.res /d_DEBUG /d_DEMO_ Globals.rc
     </PreLinkEvent>
     <Link>
       <OutputFile>.\DemoDebug/Globals.dll</OutputFile>
+      <AdditionalDependencies>..\..\Libs\Static\debug\MathLib.lib;..\..\Libs\Static\debug\DACOM.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ProgramDatabaseFile>.\DemoDebug/Globals.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
@@ -191,6 +192,7 @@ rc /l 0x409 /fo Release\Globals.res /dNDEBUG Globals.rc
     </PreLinkEvent>
     <Link>
       <OutputFile>.\Release/Globals.dll</OutputFile>
+      <AdditionalDependencies>..\..\Libs\Static\release\MathLib.lib;..\..\Libs\Static\release\DACOM.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ProgramDatabaseFile>.\Release/Globals.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
@@ -243,6 +245,7 @@ rc /l 0x409 /fo DemoFinal\Globals.res /dNDEBUG /d_DEMO_ Globals.rc
     </PreLinkEvent>
     <Link>
       <OutputFile>.\DemoFinal/Globals.dll</OutputFile>
+      <AdditionalDependencies>..\..\Libs\Static\release\MathLib.lib;..\..\Libs\Static\release\DACOM.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ProgramDatabaseFile>.\DemoFinal/Globals.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
@@ -271,7 +274,7 @@ rc /l 0x409 /fo DemoFinal\Globals.res /dNDEBUG /d_DEMO_ Globals.rc
       <Optimization>Disabled</Optimization>
       <AdditionalIncludeDirectories>include;..\DInclude;..\..\Libs\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>BUILD_DLL;BUILD_GLOBALS;DA_ERROR_LEVEL=7;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeaderOutputFile>.\Debug/Globals.pch</PrecompiledHeaderOutputFile>
       <AssemblerListingLocation>.\Debug/</AssemblerListingLocation>
       <ObjectFileName>.\Debug/</ObjectFileName>
@@ -293,6 +296,7 @@ rc /l 0x409 /fo Debug\Globals.res /d_DEBUG Globals.rc
     </PreLinkEvent>
     <Link>
       <OutputFile>.\Debug/Globals.dll</OutputFile>
+      <AdditionalDependencies>..\..\Libs\Static\debug\MathLib.lib;..\..\Libs\Static\debug\DACOM.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ProgramDatabaseFile>.\Debug/Globals.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
@@ -349,6 +353,7 @@ rc /l 0x409 /fo Final\Globals.res /dNDEBUG Globals.rc
     </PreLinkEvent>
     <Link>
       <OutputFile>.\Final/Globals.dll</OutputFile>
+      <AdditionalDependencies>..\..\Libs\Static\release\MathLib.lib;..\..\Libs\Static\release\DACOM.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ProgramDatabaseFile>.\Final/Globals.pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
@@ -448,7 +453,7 @@ rc /l 0x409 /fo Final\Globals.res /dNDEBUG Globals.rc
     <None Include="RuseKeys.utf" />
     <None Include="Sfxdata.dat" />
     <CustomBuild Include="sfxdata.xmf">
-      <Command>py ..\..\..\Tools\xmiff2\xmiff2.py sfxdata.xmf ..\dinclude\Sfxid.h sfxdata.dat</Command>
+      <Command>python ..\..\..\Tools\xmiff2\xmiff2.py sfxdata.xmf ..\dinclude\Sfxid.h sfxdata.dat</Command>
       <Outputs>sfxdata.dat;%(Outputs)</Outputs>
     </CustomBuild>
   </ItemGroup>

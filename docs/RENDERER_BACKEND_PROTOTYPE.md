@@ -1,6 +1,6 @@
 # SDL3 GPU Renderer-Backend Prototype
 
-Status snapshot: **2026-09-24**. This document records a focused backend experiment. It does not
+Status snapshot: **2026-09-25**. This document records a focused backend experiment. It does not
 select the production renderer, connect the game renderer, or claim a native Linux game build.
 
 ## Question and falsifiable check
@@ -670,12 +670,37 @@ comparison run. The implementation and CPU ownership check are documented in
 The native `IRenderPipeline::create_texture`, `set_texture_level_data`,
 `lock_texture`/`unlock_texture` and bounded `blit_texture` slots now cover one
 RGBA8 level with visible GPU evidence. `StateMaterial` now has a production-owner
-synthetic CPU draw and a visible material-driven indexed Vulkan draw. The next
-renderer change should extend the now-visible `RenderBatcher` to queued pool
-execution. The separate
+synthetic CPU draw and a visible material-driven indexed Vulkan draw. The production
+`RenderBatcher` now executes one alpha-depth U16-indexed queued pool draw through its
+existing `flush` path in visible GCC, Clang and focused sanitizer Wayland/Vulkan
+shell runs. The pooled and immediate indexed fixture readbacks agree exactly:
+2,496 changed pixels and checksum `7951318278861886233`. See
+[RENDER_BATCHER_PORTABILITY.md](RENDER_BATCHER_PORTABILITY.md) for commands,
+synthetic input provenance and remaining pool branches. The separate
 `RPVERTEX2` GPU path now consumes and distinguishes
 the second UV pair, but has not been exercised through a production game caller.
 The repository-owned fixture must also be driven through the supported Windows path and compared
 under a documented tolerance.
 Only after that evidence should the project decide between a direct adapter and another maintained
 D3D9-preserving route.
+
+The separate 2026-09-25 VS2022 Win32 Debug and Final builds now compile and
+link the supported D3D9 game/engine path and all campaign modules. Native Windows
+`dumpbin` checks also found that the 18 installed original retail campaign DLLs'
+153 `Mission` and two `Trim` imports resolve in both fresh configurations. The
+retail and restored-build `Mission` export sets still differ, as expected for distinct source
+states and toolchains. This is build and bounded retail-binary ABI evidence: the Windows fixture
+image, tolerance comparison and retail runtime remain open. See
+[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
+
+Source review of the supported D3D9 owner found that its `IRenderPipeline::lock_buffer`
+still returns `GR_GENERIC`, `IDDBackDoor::get_dd_provider` returns `GR_OK` before filling its
+output, and `save_screen_capture` has only a commented-out legacy call in
+`Direct3D_pipe.cpp`. None is a usable image capture contract. The next Windows runtime check
+therefore needs the installed game's actual D3D9 scene and an external screen or device capture;
+the current Win32 rebuild alone cannot supply comparison pixels. No retail installation was
+present in the VM during this source review. A subsequent installation allowed the interactive
+retail startup attempt documented in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md):
+the VM had no sound device, and, after sound was disabled in a temporary INI, the game reported
+that its virtual graphics card was incompatible. The D3D9 scene and image comparison remain
+unexecuted.
