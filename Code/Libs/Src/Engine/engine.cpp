@@ -20,6 +20,7 @@
 #include <list>
 #include <vector>
 #include <map>
+#include <stdio.h>
 
 #include "dacom.h"                    // DA component manager
 #include "TComponent.h"
@@ -944,6 +945,11 @@ HRESULT ENGINE::create_compound_archetype( ARCHETYPE_INDEX arch_index, IFileSyst
 
 ARCHETYPE_INDEX COMAPI ENGINE::create_archetype( const C8 *arch_name, IFileSystem *filesys )
 {
+	static FILE *diag = NULL;
+	const bool trace_this = arch_name != NULL && strcmp(arch_name, "slotholder.3db") == 0;
+	if (trace_this && diag == NULL) diag = fopen("debug/engine_archetype_diag.txt", "w");
+	#define ARCH_DIAG(...) do { if (trace_this && diag != NULL) { fprintf(diag, __VA_ARGS__); fflush(diag); } } while (0)
+	ARCH_DIAG("create_archetype: name=%s filesys=%p\n", arch_name ? arch_name : "(null)", (void *)filesys);
 	ARCHETYPE_INDEX arch_index = INVALID_ARCHETYPE_INDEX;
 	int num_created = 0;
 	COMPTR<IFileSystem> cmpnd_dir;
@@ -976,9 +982,14 @@ ARCHETYPE_INDEX COMAPI ENGINE::create_archetype( const C8 *arch_name, IFileSyste
 		GENERAL_TRACE_1( "Engine: create_archetype: unable to allocate_archetype\n" );
 		return INVALID_ARCHETYPE_INDEX;
 	}
+	ARCH_DIAG("create_archetype: allocated %s index=%d\n", arch_name, arch_index);
 
-	if( FAILED( filesys->CreateInstance( &desc, cmpnd_dir ) ) ||
-		FAILED( create_compound_archetype( arch_index, cmpnd_dir, filesys ) ) ) {
+	ARCH_DIAG("create_archetype: before compound directory %s\n", arch_name);
+	HRESULT compound_dir_result = filesys->CreateInstance( &desc, cmpnd_dir );
+	ARCH_DIAG("create_archetype: compound directory %s result=0x%08lX\n", arch_name, (unsigned long)compound_dir_result);
+	HRESULT compound_result = FAILED(compound_dir_result) ? E_FAIL : create_compound_archetype( arch_index, cmpnd_dir, filesys );
+	ARCH_DIAG("create_archetype: compound archetype %s result=0x%08lX\n", arch_name, (unsigned long)compound_result);
+	if( FAILED( compound_dir_result ) || FAILED( compound_result ) ) {
 
 		// Otherwise, try to load it as a simple engine archetype
 		//
@@ -990,7 +1001,10 @@ ARCHETYPE_INDEX COMAPI ENGINE::create_archetype( const C8 *arch_name, IFileSyste
 		LoadedEngineComponentList::iterator en = engine_components.end();
 
 		for( ec=bg; ec != en; ec++ ) {
-			if( (*ec).component->create_archetype( arch_index, filesys ) ) {
+			ARCH_DIAG("create_archetype: before component %s for %s\n", (*ec).component_name, arch_name);
+			BOOL32 created = (*ec).component->create_archetype( arch_index, filesys );
+			ARCH_DIAG("create_archetype: after component %s for %s created=%d\n", (*ec).component_name, arch_name, created);
+			if( created ) {
 				DEBUG_LIFETIME_TRACE( TEMPSTR( "Engine: create_archetype: '%s' created archetype %d (%s)\n", (*ec).component_name, arch_index, arch_name ) );
 				num_created++;
 			}
@@ -1008,6 +1022,7 @@ ARCHETYPE_INDEX COMAPI ENGINE::create_archetype( const C8 *arch_name, IFileSyste
 		}
 
 	}
+	ARCH_DIAG("create_archetype: done %s index=%d\n", arch_name, arch_index);
 
 	return arch_index;
 }
@@ -2374,4 +2389,3 @@ const C8* COMAPI ENGINE::get_archetype_part_name2( ARCHETYPE_INDEX arch_index ) 
 //--------------------------------------------------------------------------//
 //--------------------------END engine.cpp----------------------------------//
 //--------------------------------------------------------------------------//
-

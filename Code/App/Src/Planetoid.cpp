@@ -13,6 +13,11 @@
 
 #include "pch.h"
 #include <globals.h>
+#include <stdio.h>
+
+static FILE * g_planetDiag;
+#define PLANET_LOG(s) do { if (!g_planetDiag) g_planetDiag = fopen("debug/planet_diag.txt", "w"); if (g_planetDiag) { fputs((s), g_planetDiag); fflush(g_planetDiag); } } while (0)
+#define PLANET_LOGF(...) do { if (!g_planetDiag) g_planetDiag = fopen("debug/planet_diag.txt", "w"); if (g_planetDiag) { fprintf(g_planetDiag, __VA_ARGS__); fflush(g_planetDiag); } } while (0)
 
 #include "MGlobals.h"
 #include "FogofWar.h"
@@ -2371,25 +2376,33 @@ inline struct IBaseObject * createPlanetoid (const PLANET_INIT & data)
 //
 static void load_global_slots (void)
 {
+	PLANET_LOG("load_global_slots: entered\n");
 	Mesh *mesh;
 	if (slot == INVALID_INSTANCE_INDEX)
 	{
 		COMPTR<IFileSystem> file;
 		DAFILEDESC fdesc = "slotholder.3db";
+		PLANET_LOG("load_global_slots: opening slotholder.3db\n");
 		if (OBJECTDIR->CreateInstance(&fdesc,file) != GR_OK)
 			CQFILENOTFOUND(fdesc.lpFileName);
+		PLANET_LOG("load_global_slots: slotholder opened\n");
 
 		HARCH archeID;
+		PLANET_LOG("load_global_slots: before slotholder archetype\n");
 		if (file!=0 && archeID.setArchetype(ENGINE->create_archetype("slotholder.3db",file)) != INVALID_ARCHETYPE_INDEX)
 		{
+			PLANET_LOG("load_global_slots: slotholder archetype ready\n");
 			slot = ENGINE->create_instance2(archeID, NULL);
+			PLANET_LOGF("load_global_slots: slotholder instance=%d\n", slot);
 			baseSlotTrans.set_identity();
 			baseSlotTrans.rotate_about_i(90*MUL_DEG_TO_RAD);
 			baseSlotTrans.rotate_about_j(PI/4+180*MUL_DEG_TO_RAD);
 	
 			mesh = REND->get_instance_mesh(slot);
+			PLANET_LOGF("load_global_slots: slotholder mesh=%p\n", (void *)mesh);
 			slot_mat = mesh->material_list;
 			mat_cnt = mesh->material_cnt;
+			PLANET_LOGF("load_global_slots: slotholder materials=%d\n", mat_cnt);
 			for (int c=0;c<mat_cnt;c++)
 			{
 				slot_mat[c].diffuse.r = 0;
@@ -2404,21 +2417,28 @@ static void load_global_slots (void)
 	{
 		COMPTR<IFileSystem> file;
 		DAFILEDESC fdesc = "planet_inside.3db";
+		PLANET_LOG("load_global_slots: opening planet_inside.3db\n");
 		if (OBJECTDIR->CreateInstance(&fdesc,file) != GR_OK)
 			CQFILENOTFOUND(fdesc.lpFileName);
+		PLANET_LOG("load_global_slots: planet_inside opened\n");
 
 		HARCH archeID;
+		PLANET_LOG("load_global_slots: before planet_inside archetype\n");
 		if (file!=0 && archeID.setArchetype(ENGINE->create_archetype("planet_inside.3db",file)) != INVALID_ARCHETYPE_INDEX)
 		{
+			PLANET_LOG("load_global_slots: planet_inside archetype ready\n");
 			circle = ENGINE->create_instance2(archeID, NULL);
+			PLANET_LOGF("load_global_slots: planet_inside instance=%d\n", circle);
 			/*basecircleTrans.set_identity();
 			basecircleTrans.rotate_about_i(90*MUL_DEG_TO_RAD);
 			basecircleTrans.rotate_about_j(180*MUL_DEG_TO_RAD);*/
 
 			Mesh *mesh = REND->get_instance_mesh(circle);
+			PLANET_LOGF("load_global_slots: planet_inside mesh=%p\n", (void *)mesh);
 			circle_mat = mesh->material_list;
 		}
 	}
+	PLANET_LOG("load_global_slots: done\n");
 }
 //------------------------------------------------------------------------------------------
 //
@@ -2783,15 +2803,21 @@ GENRESULT PlanetFactory::Notify (U32 message, void *param)
 //
 void PlanetFactory::loadTextures (bool bLoad)
 {
+	PLANET_LOGF("PlanetFactory::loadTextures: bLoad=%u\n", (unsigned)bLoad);
 	if (bLoad)
 	{
 		DAFILEDESC fdesc = "point.anm";
 		COMPTR<IFileSystem> file;
+		PLANET_LOG("PlanetFactory::loadTextures: opening point.anm\n");
 		if (OBJECTDIR->CreateInstance(&fdesc, file) == GR_OK)
 		{
+			PLANET_LOG("PlanetFactory::loadTextures: point.anm opened\n");
 			pointAnimArch = ANIM2D->create_archetype(file);
+			PLANET_LOGF("PlanetFactory::loadTextures: point archetype=%p\n", (void *)pointAnimArch);
 		}
+		PLANET_LOG("PlanetFactory::loadTextures: before global slots\n");
 		load_global_slots();
+		PLANET_LOG("PlanetFactory::loadTextures: after global slots\n");
 	}
 	else
 	{

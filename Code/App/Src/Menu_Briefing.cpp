@@ -319,9 +319,14 @@ void MenuBriefing::checkFreeSlot (U32 slotID)
 //
 void MenuBriefing::onUpdate (U32 dt)
 {
+	static U32 tracedUpdates = 0;
+	if (tracedUpdates < 4)
+		BRF_LOG("MenuBriefing::onUpdate: before mission update\n");
 	ELAPSED_TIME = SINGLE(dt) / 1000;
 	REALTIME_FRAMERATE = (ELAPSED_TIME > 0) ? (1 / ELAPSED_TIME) : 4;
 	MISSION->Update();
+	if (tracedUpdates++ < 4)
+		BRF_LOG("MenuBriefing::onUpdate: after mission update\n");
 
 
 	static int timer = 0;//what is this and why is it here -tom
@@ -379,6 +384,7 @@ void MenuBriefing::draw (void)
 //
 void MenuBriefing::setStateInfo (void)
 {
+	BRF_LOG("MenuBriefing::setStateInfo: entered\n");
 	//
 	// create members if not done already
 	//
@@ -424,7 +430,9 @@ void MenuBriefing::setStateInfo (void)
 	if (bLoaded == false)
 	{
 		bLoaded = true;
+		BRF_LOG("MenuBriefing::setStateInfo: before LoadBriefing\n");
 		MISSION->LoadBriefing(szFileName);
+		BRF_LOG("MenuBriefing::setStateInfo: after LoadBriefing\n");
 	}
 
 	if (childFrame)
@@ -435,6 +443,7 @@ void MenuBriefing::setStateInfo (void)
 	{
 		setFocus(start);
 	}
+	BRF_LOG("MenuBriefing::setStateInfo: done\n");
 }
 //--------------------------------------------------------------------------//
 //
@@ -570,14 +579,21 @@ Frame * __stdcall CreateMenuBriefing ()
 //
 U32 __stdcall DoMenu_Briefing (Frame * parent, const char * szFileName)
 {
+	BRF_LOG("DoMenu_Briefing: entered\n");
 	MUSICMANAGER->PlayMusic(NULL);
+	BRF_LOG("DoMenu_Briefing: music stopped\n");
 	MenuBriefing * menu = new MenuBriefing(parent, szFileName);
+	BRF_LOG("DoMenu_Briefing: menu constructed\n");
 
 	menu->createViewer("\\GT_BRIEFING\\MenuBriefing", "GT_BRIEFING", IDS_VIEWBRIEFING);
+	BRF_LOG("DoMenu_Briefing: viewer created\n");
 	menu->beginModalFocus();
+	BRF_LOG("DoMenu_Briefing: modal focus entered\n");
 
 	U32 result = CQDoModal(menu);
+	BRF_LOG("DoMenu_Briefing: modal returned\n");
 	delete menu;
+	BRF_LOG("DoMenu_Briefing: menu deleted\n");
 	return result;
 }
 

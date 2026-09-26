@@ -2710,7 +2710,7 @@ DA_METHOD(	draw_primitive,(D3DPRIMITIVETYPE type, U32 vertex_format, const void 
 		
 	if( FAILED( direct3d_device->DrawPrimitiveUP( type,primCount,(void*)_verts,  stride) ) ) 
 	{
-		return GR_OK;//GENERIC;
+		return GR_GENERIC;
 	}
 	rp_rd_dp( type, vertex_format, _verts, num_verts, flags );
 	return GR_OK;
@@ -3529,7 +3529,7 @@ DA_METHOD(	clear_buffers,(DWORD flag, RECT *rect ))
 								// (D3DRECT*)&scissor, 
 								 cflags, 
 								 //curr_pipeline_state[RP_CLEAR_COLOR].get(), 
-								 D3DCOLOR_XRGB(0,0,0),
+					curr_pipeline_state[RP_CLEAR_COLOR].get(),
 								 1.0, 
 								 curr_pipeline_state[RP_CLEAR_STENCIL].get() );
 
@@ -3707,8 +3707,8 @@ DA_METHOD(	create_buffers,(HWND hwnd, int hres, int vres ))
 	params.SwapEffect                 = D3DSWAPEFFECT_DISCARD;
 	params.hDeviceWindow              = hwnd;
 	params.Windowed                   = TRUE;
-	params.EnableAutoDepthStencil     = FALSE;   /* create depth buffer manually */
-	params.AutoDepthStencilFormat     = D3DFMT_UNKNOWN;
+	params.EnableAutoDepthStencil     = TRUE;
+	params.AutoDepthStencilFormat     = depthFmt;
 	params.Flags                      = 0;
 	params.FullScreen_RefreshRateInHz = 0;
 	/* D3DPRESENT_INTERVAL_DEFAULT causes DXVK 2.7+ to select

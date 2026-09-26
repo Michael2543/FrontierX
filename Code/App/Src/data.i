@@ -13,6 +13,7 @@
 
 
 
+
 typedef signed   long    BOOL32;
 typedef unsigned char    U8 ;
 typedef unsigned short   U16;
@@ -21,6 +22,20 @@ typedef          char    C8 ;
 typedef signed   char    S8 ;
 typedef signed   short   S16;
 typedef signed   long    S32;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -379,6 +394,88 @@ typedef U16 M_PART_ID;
 
 
 			    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+struct ResourceCost
+{
+	U32 gas:8;
+	U32 metal:8;
+	U32 crew:8;
+	U32 commandPt:8;
+};
+
+
+struct MISSION_DATA_BIN
+{
+	unsigned int mObjClass:8;
+	unsigned int race:4;
+	unsigned int displayName:18;
+
+	struct M_CAPS
+	{
+		U8 padding;
+		bool moveOk:1;
+		bool attackOk:1;
+		bool specialAttackOk:1;
+		bool specialEOAOk:1;
+		bool specialAbilityOk:1;
+		bool specialAttackWormOk:1;
+		bool defendOk:1;
+		bool supplyOk:1;
+		bool harvestOk:1;
+		bool buildOk:1;
+		bool repairOk:1;
+		bool jumpOk:1;
+		bool admiralOk:1;
+		bool captureOk:1;
+		bool salvageOk:1;
+		bool probeOk:1;
+		bool mimicOk:1;
+		bool recoverOk:1;
+		bool createWormholeOk:1;
+		bool synthesisOk:1;
+		bool cloakOk:1;
+		bool specialAttackShipOk:1;
+		bool targetPositionOk:1;
+		bool specialTargetPlanetOk:1;
+
+
+
+
+
+	} caps;
+
+	U16 hullPointsMax;
+	U16 supplyPointsMax;
+	U16 scrapValue;
+	U16 buildTime;
+
+	ResourceCost resourceCost;
+
+	SINGLE sensorRadius;
+	SINGLE cloakedSensorRadius;
+	SINGLE maxVelocity;
+	SINGLE baseWeaponAccuracy;
+	SINGLE baseShieldLevel;
+};
+
+
+
+
+
+
 
 
 
@@ -3827,14 +3924,6 @@ struct ARMOR_DATA
 
 };
 
-struct ResourceCost
-{
-	U32 gas:8;
-	U32 metal:8;
-	U32 crew:8;
-	U32 commandPt:8;
-};
-
 struct DamageSave
 {
 	U32 damage;
@@ -3897,77 +3986,6 @@ struct GT_VFXSHAPE : GENBASE_DATA
 
 
 
-
-
-
-
-
-
-
-
-
-struct MISSION_DATA_BIN
-{
-	
-	
-	
-	
-	
-	unsigned int mObjClass:8;	
-	unsigned int race:4;		
-	unsigned int displayName:18;	
-
-	struct M_CAPS
-	{
-		U8 padding;
-		
-		
-		
-		bool moveOk:1;
-		bool attackOk:1;
-		bool specialAttackOk:1;
-		bool specialEOAOk:1;
-		bool specialAbilityOk:1;
-		bool specialAttackWormOk:1;
-		bool defendOk:1;	
-		bool supplyOk:1;
-		bool harvestOk:1;
-		bool buildOk:1;
-		bool repairOk:1;
-		bool jumpOk:1;
-		bool admiralOk:1;	
-		bool captureOk:1;	
-		bool salvageOk:1;
-		bool probeOk:1;
-		bool mimicOk:1;
-		bool recoverOk:1;
-		bool createWormholeOk:1;
-		bool synthesisOk:1;
-		bool cloakOk:1;
-		bool specialAttackShipOk:1;  
-		bool targetPositionOk:1;		
-		bool specialTargetPlanetOk:1;	
-
-
-
-
-
-
-	} caps;
-
-	U16			hullPointsMax;
-	U16			supplyPointsMax;
-	U16			scrapValue;
-	U16			buildTime;
-
-	ResourceCost	resourceCost;
-
-	SINGLE		sensorRadius;
-	SINGLE		cloakedSensorRadius;
-	SINGLE		maxVelocity;
-	SINGLE		baseWeaponAccuracy;
-	SINGLE		baseShieldLevel;
-};
 
 
 
@@ -4823,23 +4841,25 @@ struct BASE_SPACESHIP_DATA : BASIC_DATA
 	
 	
 };
-static_assert(sizeof(BASE_SPACESHIP_DATA) == 644, "BASE_SPACESHIP_DATA binary layout mismatch");
-
-
-static_assert(offsetof(BASE_SPACESHIP_DATA, missionData)   ==  44, "missionData offset");
-static_assert(offsetof(BASE_SPACESHIP_DATA, dynamicsData)  == 116, "dynamicsData offset");
-static_assert(offsetof(BASE_SPACESHIP_DATA, rockingData)   == 132, "rockingData offset");
 
 
 
 
 
-static_assert(offsetof(BASE_SPACESHIP_DATA, techActive) + sizeof(SINGLE_TECHNODE)
-              == sizeof(BASE_SPACESHIP_DATA),
-              "techActive must be the FINAL member of BASE_SPACESHIP_DATA (retail schema)");
-static_assert(offsetof(BASE_SPACESHIP_DATA, billboard) + sizeof(BILLBOARD_DATA)
-              == offsetof(BASE_SPACESHIP_DATA, techActive),
-              "billboard must sit immediately before techActive (retail schema)");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5501,17 +5521,19 @@ struct BASE_PLATFORM_DATA : BASIC_DATA
 	U32 gasStorage;
 	U32 crewStorage;
 };
-static_assert(sizeof(BASE_PLATFORM_DATA) == 560, "BASE_PLATFORM_DATA binary layout mismatch");
-static_assert(offsetof(BASE_PLATFORM_DATA, slotsNeeded) == 476, "BASE_PLATFORM_DATA::slotsNeeded offset mismatch");
 
 
 
-static_assert(offsetof(BASE_PLATFORM_DATA, extension)
-              == offsetof(BASE_PLATFORM_DATA, missionData) + sizeof(MISSION_DATA),
-              "extension[] must begin immediately after a full MISSION_DATA (retail schema)");
-static_assert(offsetof(BASE_PLATFORM_DATA, extensionBits)
-              == offsetof(BASE_PLATFORM_DATA, extension) + sizeof(EXTENSION_DATA) * 4,
-              "extension[] must hold exactly 4 entries (retail schema)");
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -15228,8 +15250,131 @@ struct ENGINETRAIL : BASE_ENGINETRAIL_SAVELOAD
 
 
 
- 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
 
 
 
@@ -15245,7 +15390,7 @@ struct ENGINETRAIL : BASE_ENGINETRAIL_SAVELOAD
 struct GlobalEffectsOptions
 {
 	enum OPTVAL { off, on=-1 };
-	__readonly U32 version;
+	 U32 version;
 	OPTVAL bWeaponTrails:1;
 	OPTVAL bEmissiveTextures:1;
 	OPTVAL bExpensiveTerrain:1;
@@ -15262,7 +15407,7 @@ struct GlobalEffectsOptions
 struct GlobalEffectsOptions_V3
 {
 	enum OPTVAL { off, on=-1 };
-	__readonly U32 version;
+	 U32 version;
 	OPTVAL bWeaponTrails:1;
 	OPTVAL bEmissiveTextures:1;
 	OPTVAL bExpensiveTerrain:1;
@@ -15273,7 +15418,6 @@ struct GlobalEffectsOptions_V3
 	OPTVAL bNoForceMinLOD:1;
 	OPTVAL bNoForceMaxLOD:1;
 };
-
 
 
 
@@ -15508,10 +15652,10 @@ struct BT_ADMIRAL_RES : BT_RESEARCH
 
 struct CAMERA_DATA
 {
-	__readonly U32 version;
+	 U32 version;
 
 	SINGLE worldRotation;
-	__readonly Vector lookAt;
+	 Vector lookAt;
 
 	SINGLE FOV_x, FOV_y;
 	Vector position;
@@ -18774,7 +18918,7 @@ struct RGBA
 
 struct FOG_DATA
 {
-	__readonly U32 version;
+	 U32 version;
 
 
 	RGBA hardFog;

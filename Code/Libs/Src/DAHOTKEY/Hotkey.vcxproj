@@ -102,7 +102,7 @@
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <OutputFile>.\Release/Hotkey.bsc</OutputFile>
     </Bscmake>
-    <PostBuildEvent>
+    <PostBuildEvent Condition="'$(ConquestEnableDeploy)'!='false'">
       <Command>..\copy_release_explicit.bat</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>

@@ -651,7 +651,12 @@ void HotkeyEvent::SystemMessage (FrontierX::LegacyWindowToken hwnd,
 		UpdateJoystick(dwButtons, dwPOV, dwJoyDIR);
 	}
 	else
-		WndCallback(static_cast<HWND>(hwnd), message,
+		WndCallback(
+#if defined(_WIN32)
+			reinterpret_cast<HWND>(hwnd), message,
+#else
+			static_cast<HWND>(hwnd), message,
+#endif
 			static_cast<WPARAM>(wParam), static_cast<LPARAM>(lParam));
 
 	if (bFilterMessage == 0)
@@ -1483,7 +1488,7 @@ GENRESULT HotkeyEvent::init (HKEVENTDESC *lpDesc)
 		!ReadExact(lpDesc->file, hFile1, &dwNumKeys, sizeof(dwNumKeys)) ||
 		!ReadExact(lpDesc->file, hFile1, &dwSizeOfKey, sizeof(dwSizeOfKey)) ||
 		dwSizeOfKey != sizeof(DAHOTKEY_STRUCT) ||
-		dwNumKeys > (std::numeric_limits<DWORD>::max() - binaryHeaderSize) /
+		dwNumKeys > ((std::numeric_limits<DWORD>::max)() - binaryHeaderSize) /
 			dwSizeOfKey)
 	{
 		result = GR_GENERIC;
@@ -1539,7 +1544,7 @@ GENRESULT HotkeyEvent::init (HKEVENTDESC *lpDesc)
 		pKeyText->numStrings != dwNumKeys ||
 		(pKeyText->numStrings != 0 &&
 			(pKeyText->sizeOfString == 0 || pKeyText->numStrings >
-				(std::numeric_limits<DWORD>::max() - textHeaderSize) /
+				((std::numeric_limits<DWORD>::max)() - textHeaderSize) /
 				pKeyText->sizeOfString)) ||
 		dwKeyTextSize != textHeaderSize + pKeyText->numStrings * pKeyText->sizeOfString)
 	{

@@ -255,6 +255,8 @@ static U32 g_preprocessSize;
 static HINSTANCE g_hScriptDLL, g_hLocalDLL;
 static PROGNODE * g_pPrograms;
 static PROGNODE * g_pProgramsEnd;
+static FILE * g_scriptDiag;
+#define SCRIPT_LOGF(...) do { if (!g_scriptDiag) g_scriptDiag = fopen("debug/mscript_diag.txt", "w"); if (g_scriptDiag) { fprintf(g_scriptDiag, __VA_ARGS__); fflush(g_scriptDiag); } } while (0)
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
@@ -667,8 +669,10 @@ void MScript::Load (IFileSystem * inFile)
 	}
 	if (MGlobals::GetScriptName(abuffer+len, sizeof(abuffer)-len))
 	{
+		SCRIPT_LOGF("LoadScript: path=%s\n", abuffer);
 		if ((g_hScriptDLL = LoadLibrary(abuffer)) != 0)
 		{
+			SCRIPT_LOGF("LoadScript: module=%p\n", g_hScriptDLL);
 			if (g_preprocessData == 0 || g_preprocessSize == 0 || g_scriptDataType == 0 || g_pScriptData == 0 || g_scriptDataSize == 0 || g_hLocalDLL == 0)
 			{
 				CQERROR1("Invalid script file: %d", abuffer);
@@ -680,18 +684,28 @@ void MScript::Load (IFileSystem * inFile)
 			{
 				COMPTR<IViewConstructor2> parser;
 
+				SCRIPT_LOGF("LoadScript: before LoadSymTable\n");
 				CQIMAGE->LoadSymTable(g_hScriptDLL);
+				SCRIPT_LOGF("LoadScript: after LoadSymTable\n");
 				enableMenuItems(true);
+				SCRIPT_LOGF("LoadScript: after enableMenuItems\n");
 
 				if (PARSER->QueryInterface("IViewConstructor2", parser) == GR_OK)
 				{
+					SCRIPT_LOGF("LoadScript: parser available\n");
 					if (inFile != 0)
 					{
+						SCRIPT_LOGF("LoadScript: before loadParseData\n");
 						loadParseData(inFile, parser);
+						SCRIPT_LOGF("LoadScript: after loadParseData\n");
 						if (updateCount > 0)
 						{
+							SCRIPT_LOGF("LoadScript: before loadGlobalData\n");
 							loadGlobalData(inFile, parser);
+							SCRIPT_LOGF("LoadScript: after loadGlobalData\n");
+							SCRIPT_LOGF("LoadScript: before loadProgramData\n");
 							loadProgramData(inFile, parser);
+							SCRIPT_LOGF("LoadScript: after loadProgramData\n");
 						}
 					}
 				}
@@ -707,9 +721,14 @@ void MScript::Load (IFileSystem * inFile)
 	// loading string table / scripting (inFile may be NULL for new-game loads)
 	if (inFile)
 	{
+		SCRIPT_LOGF("LoadScript: before loadStringTable\n");
 		loadStringTable( *inFile );
+		SCRIPT_LOGF("LoadScript: after loadStringTable\n");
+		SCRIPT_LOGF("LoadScript: before loadScripts\n");
 		loadScripts( *inFile );
+		SCRIPT_LOGF("LoadScript: after loadScripts\n");
 	}
+	SCRIPT_LOGF("LoadScript: complete\n");
 }
 //--------------------------------------------------------------------------//
 //
@@ -730,8 +749,10 @@ void MScript::LoadScript (void)
 	}
 	if (MGlobals::GetScriptName(abuffer+len, sizeof(abuffer)-len))
 	{
+		SCRIPT_LOGF("LoadBriefingScript: path=%s\n", abuffer);
 		if ((g_hScriptDLL = LoadLibrary(abuffer)) != 0)
 		{
+			SCRIPT_LOGF("LoadBriefingScript: module=%p\n", g_hScriptDLL);
 			if (g_preprocessData == 0 || g_preprocessSize == 0 || g_scriptDataType == 0 || g_pScriptData == 0 || g_scriptDataSize == 0 || g_hLocalDLL == 0)
 			{
 				CQERROR1("Invalid script file: %d", abuffer);
@@ -745,7 +766,9 @@ void MScript::LoadScript (void)
 				enableMenuItems(true);
 			}
 		}
+		SCRIPT_LOGF("LoadScript: before start program\n");
 		runStartProgram(true);
+		SCRIPT_LOGF("LoadScript: after start program head=%p\n", g_pPrograms);
 	}
 }
 //--------------------------------------------------------------------------//
@@ -806,10 +829,18 @@ void MScript::Close  (void)
 //
 void MScript::Update (void)
 {
+	static U32 tracedUpdates = 0;
+	const bool trace = tracedUpdates++ < 4;
 	PROGNODE * node = g_pPrograms, *prev = 0;
+	if (trace) SCRIPT_LOGF("Update: head=%p module=%p\n", node, g_hScriptDLL);
 	while (node)
 	{
-		if (node->pProgram->Update() == false)
+		if (trace) SCRIPT_LOGF("Update: node=%p script=%p program=%p\n", node, node->pScript, node->pProgram);
+		if (trace) SCRIPT_LOGF("Update: program name=%s\n", node->pScript->progName);
+		if (trace) SCRIPT_LOGF("Update: before program callback\n");
+		const bool active = node->pProgram->Update();
+		if (trace) SCRIPT_LOGF("Update: after program callback active=%u\n", active);
+		if (active == false)
 		{
 			// remove this node
 			if (prev)
@@ -833,6 +864,7 @@ void MScript::Update (void)
 			node = node->pNext;
 		}
 	}
+	if (trace) SCRIPT_LOGF("Update: done\n");
 }
 //--------------------------------------------------------------------------//
 //
@@ -1961,7 +1993,12 @@ wchar_t * MScript::GetCountedString (U32 stringID)
 	HRSRC hRes;
 
 	// find address of string resource group (16 in a group)
-	if ((hRes = FindResourceEx(g_hLocalDLL , RT_STRING, MAKEINTRESOURCE((stringID/16)+1), findUserLang())) != 0)
+	const LPCTSTR group = MAKEINTRESOURCE((stringID/16)+1);
+	hRes = FindResourceEx(g_hLocalDLL, RT_STRING, group, findUserLang());
+	if (hRes == 0)
+		hRes = FindResourceEx(g_hLocalDLL, RT_STRING, group,
+			MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
+	if (hRes != 0)
 	{
 		HGLOBAL hGlobal;
 

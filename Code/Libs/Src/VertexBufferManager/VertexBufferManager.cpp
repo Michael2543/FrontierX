@@ -383,7 +383,7 @@ GENRESULT COMAPI VertexBufferManager::cleanup( void )
 
 GENRESULT VertexBufferManager::add_vertex_buffer( U32 vertex_format, U32 num_verts, U32 irp_vbf_flags ) 
 {
-	if( !render_pipeline || !num_verts || num_verts > static_cast<U32>(std::numeric_limits<int>::max()) ) {
+	if( !render_pipeline || !num_verts || num_verts > static_cast<U32>((std::numeric_limits<int>::max)()) ) {
 		return GR_INVALID_PARMS;
 	}
 	IVBM_VERTEXBUFFER vb;
@@ -434,7 +434,7 @@ GENRESULT VertexBufferManager::remove_all_vertex_buffers( void )
 GENRESULT VertexBufferManager::acquire_vertex_buffer( U32 vertex_format, U32 num_verts, U32 irp_vbf_flags, U32 irp_lock_flags, U32 ivbm_avbf_flags, IRP_VERTEXBUFFERHANDLE *out_vbhandle, void **out_vbmemptr, U32 *out_vertex_format, U32 *out_num_verts ) 
 {
 	if( !render_pipeline || !out_vbhandle || !out_vertex_format || !out_num_verts ||
-		!vertex_count_granularity || num_verts > static_cast<U32>(std::numeric_limits<int>::max()) ) {
+		!vertex_count_granularity || num_verts > static_cast<U32>((std::numeric_limits<int>::max)()) ) {
 		return GR_INVALID_PARMS;
 	}
 	vertex_buffer_list::iterator beg = available_vbs.begin();
@@ -494,7 +494,7 @@ GENRESULT VertexBufferManager::acquire_vertex_buffer( U32 vertex_format, U32 num
 
 	vbnum_verts  = (num_verts / vertex_count_granularity) * vertex_count_granularity;
 	if( num_verts % vertex_count_granularity ) {
-		if( vbnum_verts > std::numeric_limits<U32>::max() - vertex_count_granularity ) {
+		if( vbnum_verts > (std::numeric_limits<U32>::max)() - vertex_count_granularity ) {
 			return GR_INVALID_PARMS;
 		}
 		vbnum_verts += vertex_count_granularity;
@@ -503,7 +503,7 @@ GENRESULT VertexBufferManager::acquire_vertex_buffer( U32 vertex_format, U32 num
 	if( vbnum_verts < vertex_count_min ) {
 		vbnum_verts = vertex_count_min;
 	}
-	if( vbnum_verts > static_cast<U32>(std::numeric_limits<int>::max()) ) {
+	if( vbnum_verts > static_cast<U32>((std::numeric_limits<int>::max)()) ) {
 		return GR_INVALID_PARMS;
 	}
 

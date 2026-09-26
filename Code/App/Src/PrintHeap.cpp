@@ -144,7 +144,12 @@ const wchar_t * __cdecl _localLoadStringW (U32 dwID)
 	//
 	// find address of string resource group (16 in a group)
 	//
-	if ((hRes = FindResourceEx(hResource,  RT_STRING, MAKEINTRESOURCE((dwID/16)+1),findUserLang())) != 0)
+	const LPCTSTR group = MAKEINTRESOURCE((dwID/16)+1);
+	hRes = FindResourceEx(hResource, RT_STRING, group, findUserLang());
+	if (hRes == 0)
+		hRes = FindResourceEx(hResource, RT_STRING, group,
+		MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US));
+	if (hRes != 0)
 	{
 		HGLOBAL hGlobal;
 
