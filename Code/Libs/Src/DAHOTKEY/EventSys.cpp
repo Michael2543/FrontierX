@@ -12,7 +12,15 @@
 //--------------------------------------------------------------------------//
 
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include <cstring>
+#if defined(_WIN32)
+#include <cstdio>
+#endif
 
 #include "EventSys.h"
 
@@ -218,6 +226,10 @@ Done:
 GENRESULT EventSystem::Send (U32 message, void *param)
 {
 	CONNECTION_NODE<IEventCallback> *pList = eventCallback.pClientList, *pNext;
+	#if defined(_WIN32)
+	FILE * diagnostic = message == 0x1062U ? fopen("debug/ingame_dispatch.txt", "w") : 0;
+	U32 callbackIndex = 0;
+	#endif
 
 	//------------------------------
 	// service all of the callbacks
@@ -226,9 +238,33 @@ GENRESULT EventSystem::Send (U32 message, void *param)
 	while (pList)
 	{
 		pNext = pList->pNext;
+		#if defined(_WIN32)
+		if (diagnostic)
+		{
+			const void * vtable = *reinterpret_cast<const void * const *>(pList->client);
+			MEMORY_BASIC_INFORMATION memory = {};
+			char moduleName[MAX_PATH] = {};
+			if (VirtualQuery(vtable, &memory, sizeof(memory)))
+				GetModuleFileNameA(static_cast<HMODULE>(memory.AllocationBase), moduleName, MAX_PATH);
+			fprintf(diagnostic, "before %u client=%p vtable=%p module=%s\n",
+				callbackIndex, pList->client, vtable, moduleName);
+			fflush(diagnostic);
+		}
+		#endif
 		pList->client->Notify(message, param);
+		#if defined(_WIN32)
+		if (diagnostic)
+		{
+			fprintf(diagnostic, "after %u\n", callbackIndex);
+			fflush(diagnostic);
+		}
+		callbackIndex++;
+		#endif
 		pList = pNext;
 	}
+	#if defined(_WIN32)
+	if (diagnostic) fclose(diagnostic);
+	#endif
 
 	return GR_OK;
 }

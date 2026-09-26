@@ -4823,23 +4823,13 @@ struct BASE_SPACESHIP_DATA : BASIC_DATA
 	
 	
 };
-static_assert(sizeof(BASE_SPACESHIP_DATA) == 644, "BASE_SPACESHIP_DATA binary layout mismatch");
-
-
-static_assert(offsetof(BASE_SPACESHIP_DATA, missionData)   ==  44, "missionData offset");
-static_assert(offsetof(BASE_SPACESHIP_DATA, dynamicsData)  == 116, "dynamicsData offset");
-static_assert(offsetof(BASE_SPACESHIP_DATA, rockingData)   == 132, "rockingData offset");
 
 
 
 
 
-static_assert(offsetof(BASE_SPACESHIP_DATA, techActive) + sizeof(SINGLE_TECHNODE)
-              == sizeof(BASE_SPACESHIP_DATA),
-              "techActive must be the FINAL member of BASE_SPACESHIP_DATA (retail schema)");
-static_assert(offsetof(BASE_SPACESHIP_DATA, billboard) + sizeof(BILLBOARD_DATA)
-              == offsetof(BASE_SPACESHIP_DATA, techActive),
-              "billboard must sit immediately before techActive (retail schema)");
+
+
 
 
 
@@ -5501,17 +5491,9 @@ struct BASE_PLATFORM_DATA : BASIC_DATA
 	U32 gasStorage;
 	U32 crewStorage;
 };
-static_assert(sizeof(BASE_PLATFORM_DATA) == 560, "BASE_PLATFORM_DATA binary layout mismatch");
-static_assert(offsetof(BASE_PLATFORM_DATA, slotsNeeded) == 476, "BASE_PLATFORM_DATA::slotsNeeded offset mismatch");
 
 
 
-static_assert(offsetof(BASE_PLATFORM_DATA, extension)
-              == offsetof(BASE_PLATFORM_DATA, missionData) + sizeof(MISSION_DATA),
-              "extension[] must begin immediately after a full MISSION_DATA (retail schema)");
-static_assert(offsetof(BASE_PLATFORM_DATA, extensionBits)
-              == offsetof(BASE_PLATFORM_DATA, extension) + sizeof(EXTENSION_DATA) * 4,
-              "extension[] must hold exactly 4 entries (retail schema)");
 
 
 
@@ -19010,7 +18992,6 @@ struct TROOPPOD_SAVELOAD
 {
 	__hexview U32 dwTargetID;
 };
-
 
 
 

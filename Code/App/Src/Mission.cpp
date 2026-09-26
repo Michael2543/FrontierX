@@ -1714,16 +1714,29 @@ BOOL32 Mission::Notify (struct IResource *res, U32 message, void *parm)
 //
 void Mission::Update()
 {
+	static U32 tracedUpdates = 0;
+	const bool trace = tracedUpdates++ < 4;
+	if (trace)
+		MIS_LOGF("Mission::Update: paused=%u rtPaused=%u matrix=%p\n",
+			CQFLAGS.bGamePaused, CQFLAGS.bRTGamePaused, (void *)THEMATRIX);
 	if(CQFLAGS.bGamePaused==0 && CQFLAGS.bRTGamePaused==0)
 	{
 		__int64 pretick, posttick;
 		QueryPerformanceCounter((LARGE_INTEGER *)&pretick);
+		if (trace) MIS_LOG("Mission::Update: before matrix\n");
 		THEMATRIX->Update();
+		if (trace) MIS_LOG("Mission::Update: after matrix\n");
 		QueryPerformanceCounter((LARGE_INTEGER *)&posttick);
 		OBJLIST->AddTimerTicks(TIMING_OPAGENT, posttick-pretick);
+		if (trace) MIS_LOG("Mission::Update: before script\n");
 		MScript::Update();
+		if (trace) MIS_LOG("Mission::Update: after script\n");
 		if (THEMATRIX->IsMaster())
+		{
+			if (trace) MIS_LOG("Mission::Update: before scores\n");
 			calculateCtrlO_Scores();
+			if (trace) MIS_LOG("Mission::Update: after scores\n");
+		}
 
 
 		if (THEMATRIX->IsMaster())
@@ -1733,7 +1746,11 @@ void Mission::Update()
 			for (i = 0; i < MAX_PLAYERS; i++)
 			{
 				if (playerAI[i])
+				{
+					if (trace) MIS_LOGF("Mission::Update: before playerAI[%d]\n", i);
 					playerAI[i]->Update();
+					if (trace) MIS_LOGF("Mission::Update: after playerAI[%d]\n", i);
+				}
 			}
 			QueryPerformanceCounter((LARGE_INTEGER *)&posttick);
 			OBJLIST->AddTimerTicks(TIMING_PLAYERAI, posttick-pretick);
@@ -1741,8 +1758,11 @@ void Mission::Update()
 	}
 	else if(CQFLAGS.bGamePaused==0 && CQFLAGS.bRTGamePaused!=0)
 	{
+		if (trace) MIS_LOG("Mission::Update: before paused script\n");
 		MScript::Update();
+		if (trace) MIS_LOG("Mission::Update: after paused script\n");
 	}
+	if (trace) MIS_LOG("Mission::Update: done\n");
 }
 //-------------------------------------------------------------------
 //
@@ -3605,4 +3625,3 @@ void __stdcall MissionResetHeap (IHeap * heap)
 //------------------------------------------------------------------------------------//
 //---------------------------------------End Mission.cpp------------------------------//
 //------------------------------------------------------------------------------------//
-

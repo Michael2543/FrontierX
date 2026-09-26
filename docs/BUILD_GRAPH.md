@@ -24,6 +24,15 @@ two renderer initialization cycles. The latest visible probe and shell additiona
 repository RGBA8 textures by runtime `U32` handle through the existing renderer boundary and the
 production batcher, observe different images and recover the original readback. The preset CTest
 GPU entry still skips in the command sandbox.
+After the Windows fixture comparison, both native Linux preset builds were repeated successfully.
+Their first CTest rerun exposed two stale lexical expectations in
+`portability.platform_inventory`: the Windows repair correctly places `<windows.h>` behind
+`_WIN32` in `EventSys.cpp`, and guards `numeric_limits<DWORD>::max` against the Win32 `max`
+macro in `HKEvent.cpp`. The inventory now asserts those exact guarded forms instead of the old
+ungated absence and unparenthesized spelling. The focused inventory test then passed, followed
+by complete GCC and Clang CTest reruns: each reported 38 discovered, 37 executed passing and
+the same one GPU test skipped in the command sandbox. The prior separate visible Vulkan P6
+exports, not these skipped CTests, supply GPU runtime evidence.
 After the queued-pool change, `cmake --build --preset linux-gcc-debug -j2` and the corresponding
 Clang build reported no remaining work; `ctest --preset linux-gcc-debug --output-on-failure` and
 the Clang counterpart each executed 37 passing checks and skipped only `portability.sdl3_gpu` in
@@ -35,6 +44,21 @@ The separate native-Windows 2026-09-25 regression rebuilt the supported VS2022 W
 Final wrappers, including both engine DLLs and all 18 campaign modules, in a Windows 11 VM.
 This is compilation/link evidence only; commands, outputs and remaining ABI, retail and image
 comparison gates are in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
+On the later physical Windows 11 host, the wrapper's explicit engine roots were extended to
+`Engine`, `Anim`, `HardPoint`, `RenderMgr`, `TextureLibrary`, `PolyMesh` and `Optics` after each
+target had passed a focused build. Fresh NoDeploy Win32 Debug and Final wrapper rebuilds then
+completed with all nine explicit
+engine DLLs, the five core outputs and 18 campaign DLLs in each configuration. Same-build
+campaign import checks found zero missing `Mission` or `Trim` symbols. After the final D3D9
+depth-buffer, clear-color and fixture changes, the full NoDeploy Win32 Debug and Final wrappers
+were repeated on the physical host; both rebuilt the same nine engine DLLs, five application
+outputs and 18 campaigns and passed immediate same-build import checks (153 `Mission`, two `Trim`,
+zero unsatisfied in each configuration). An isolated Final runtime reached a visible, scrollable
+first Terran scene after staging repository TextureLibrary, but that mission does not progress.
+The same isolated Final runtime also presented and captured the repository-owned D3D9 fixture;
+its 64-by-64 P6 passed the documented Linux Vulkan tolerance comparison. The wrapper still does
+not rebuild every DLL listed in `Conquest.ini`; see the focused Windows validation and renderer
+documents for exact observations and limits.
 The new `frontierx_state_material_probe` compiles and executes production
 `StateMaterial` through its DACOM factory and a cached indexed native draw in
 both presets. Its focused CPU and sanitizer evidence is in
@@ -70,9 +94,11 @@ exact case, that a project builds, or that a linked DLL was rebuilt.
 
 ## Measured closure
 
-The supported entry points reach **29 projects**, **12 distinct ProjectReference edges** and
+The current supported entry points reach **36 projects**, **34 distinct ProjectReference edges** and
 **8 solution dependency edges**. The closure contains five application projects, eighteen campaign
-projects and six library projects. StringTable is not in this explicit closure; its existing TinyXML
+projects and thirteen library projects. These counts were regenerated from the literal wrapper roots
+after the 2026-09-25 extension; the five synthetic inventory checks passed. StringTable is not in
+this explicit closure; its existing TinyXML
 ownership does not prove that the supported wrapper rebuilds it.
 
 | Library in explicit closure | Declared source items | Boundary found by source review |
@@ -83,6 +109,13 @@ ownership does not prove that the supported wrapper rebuilds it.
 | RPUL | 3 | Win32 device enumeration, render interfaces and text utilities |
 | MeshManager | 4 | Link declarations include DACOM, MathLib, COMHeap and D3DX9 |
 | D3DRenderPipe | 5 | Renderer and its dependent engine libraries; unsuitable as first isolated service |
+| Engine | 1 | Production archetype dispatch and component aggregation; Windows runtime enters this owner |
+| Anim | 4 | Animation support module loaded by the restored runtime |
+| HardPoint | 1 | Hardpoint support module loaded by the restored runtime |
+| RenderMgr | 2 | Existing `IRenderer` implementation and render-component selection |
+| TextureLibrary | 1 | Production material texture-library load and upload path; restored Windows scene now executes it |
+| PolyMesh | 3 | Production mesh archetype and draw component; current scene-entry diagnostic boundary |
+| Optics | 3 | Production particle-system render component |
 
 Globals declares only one ClCompile source item but also custom generation steps for Data.cpp and
 sfxdata.xmf. A source-count ranking would therefore hide both generation and runtime dependencies.

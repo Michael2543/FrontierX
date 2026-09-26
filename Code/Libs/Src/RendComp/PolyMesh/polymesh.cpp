@@ -21,6 +21,10 @@
 #include <windows.h>
 #include <limits.h>
 #include <map>
+#include <stdio.h>
+
+static FILE *g_polyMeshDiag;
+#define PM_DIAG(...) do { if (!g_polyMeshDiag) g_polyMeshDiag = fopen("debug/polymesh_diag.txt", "w"); if (g_polyMeshDiag) { fprintf(g_polyMeshDiag, __VA_ARGS__); fflush(g_polyMeshDiag); } } while (0)
 
 #include "dacom.h"
 #include "TComponent.h"
@@ -365,6 +369,7 @@ void POLYMESH::update( float dt )
 
 bool POLYMESH::create_archetype( RENDER_ARCHETYPE render_arch_index, IFileSystem *filesys )
 {
+	PM_DIAG("POLYMESH::create_archetype entry index=%d filesys=%p\n", render_arch_index, (void *)filesys);
 	ASSERT( render_arch_index != INVALID_RENDER_ARCHETYPE );
 	ASSERT( filesys != NULL );
 
@@ -372,22 +377,30 @@ bool POLYMESH::create_archetype( RENDER_ARCHETYPE render_arch_index, IFileSystem
 	DAFILEDESC fdesc = "openFLAME 3D N-mesh";
 	XMesh *mesh_archetype;
 
-	if( FAILED( filesys->CreateInstance( &fdesc, meshDir ) ) ) {
+	HRESULT open_result = filesys->CreateInstance( &fdesc, meshDir );
+	PM_DIAG("POLYMESH::create_archetype mesh directory result=0x%08lX\n", (unsigned long)open_result);
+	if( FAILED( open_result ) ) {
 		return false;
 	}
 
 	if( !got_pipe_info) {
+		PM_DIAG("POLYMESH::create_archetype before pipe info\n");
 		get_pipe_info();
+		PM_DIAG("POLYMESH::create_archetype after pipe info\n");
 	}
 
+	PM_DIAG("POLYMESH::create_archetype before XMesh allocation\n");
 	if( (mesh_archetype = new XMesh) == NULL ) {
 		return false;
 	}
+	PM_DIAG("POLYMESH::create_archetype before XMesh read\n");
 
 	if( !mesh_archetype->read( meshDir, texturelibrary,materialmanager, cont_lod_mode ) ) {
+		PM_DIAG("POLYMESH::create_archetype XMesh read rejected\n");
 		delete mesh_archetype;
 		return false;
 	}
+	PM_DIAG("POLYMESH::create_archetype XMesh read complete\n");
 
 	if (mesh_archetype->material_cnt > 0)
 	{
@@ -2132,5 +2145,4 @@ BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 
    return TRUE;
 }
-
 

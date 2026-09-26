@@ -9,6 +9,10 @@
 #include <limits>
 #include <map>
 #include <list>
+#include <stdio.h>
+
+static FILE *g_renderMgrDiag;
+#define RM_DIAG(...) do { if (!g_renderMgrDiag) g_renderMgrDiag = fopen("debug/rendermgr_diag.txt", "w"); if (g_renderMgrDiag) { fprintf(g_renderMgrDiag, __VA_ARGS__); fflush(g_renderMgrDiag); } } while (0)
 
 #include "dacom.h"
 #include "TComponent.h"
@@ -261,20 +265,29 @@ void COMAPI RenderMgr::update (SINGLE dt)
 
 BOOL32 RenderMgr::create_archetype( ARCHETYPE_INDEX arch_index, struct IFileSystem *filesys )
 {
+	RM_DIAG("RenderMgr::create_archetype entry index=%d filesys=%p\n", arch_index, (void *)filesys);
 	ASSERT( arch_index != INVALID_ARCHETYPE_INDEX );
 	ASSERT( filesys != NULL );
 
 	if( archetypes.insert( APPR_ARCH_MAP::value_type( arch_index, RenderArchetype() ) ).second == false ) {
+		RM_DIAG("RenderMgr::create_archetype duplicate index=%d\n", arch_index);
 		return FALSE;
 	}
+	RM_DIAG("RenderMgr::create_archetype inserted index=%d\n", arch_index);
 
-	if( SUCCEEDED( create_discrete_lod_archetype( arch_index, filesys ) ) ) {
+	GENRESULT result = create_discrete_lod_archetype( arch_index, filesys );
+	RM_DIAG("RenderMgr::create_archetype discrete result=0x%08lX\n", (unsigned long)result);
+	if( SUCCEEDED( result ) ) {
 		return TRUE;
 	}
-	else if( SUCCEEDED( create_continuous_lod_archetype( arch_index, filesys ) ) ) {
+	result = create_continuous_lod_archetype( arch_index, filesys );
+	RM_DIAG("RenderMgr::create_archetype continuous result=0x%08lX\n", (unsigned long)result);
+	if( SUCCEEDED( result ) ) {
 		return TRUE;
 	}
-	else if( SUCCEEDED( create_simple_archetype( arch_index, filesys ) ) ) {
+	result = create_simple_archetype( arch_index, filesys );
+	RM_DIAG("RenderMgr::create_archetype simple result=0x%08lX\n", (unsigned long)result);
+	if( SUCCEEDED( result ) ) {
 		return TRUE;
 	}
 
@@ -1555,7 +1568,10 @@ GENRESULT RenderMgr::create_continuous_lod_archetype( ARCHETYPE_INDEX arch_index
 	COMPONENT_LIST::iterator end = components.end();
 
 	for( cmp = beg; cmp != end; cmp++ ) {
-		if( (*cmp)->create_archetype( next_render_arch_index, filesys ) ) {
+		RM_DIAG("RenderMgr::create_continuous_lod_archetype before component=%p index=%d\n", (void *)(*cmp), next_render_arch_index);
+		bool created = (*cmp)->create_archetype( next_render_arch_index, filesys );
+		RM_DIAG("RenderMgr::create_continuous_lod_archetype after component=%p created=%u\n", (void *)(*cmp), (unsigned)created);
+		if( created ) {
 		
 			// Note that we delay setting this stuff until here in an 
 			// attempt to not have to undo the state of a partially created
@@ -1599,7 +1615,10 @@ GENRESULT RenderMgr::create_simple_archetype( ARCHETYPE_INDEX arch_index, IFileS
 	COMPONENT_LIST::iterator end = components.end();
 
 	for( cmp = beg; cmp != end; cmp++ ) {
-		if( (*cmp)->create_archetype( next_render_arch_index, filesys ) ) {
+		RM_DIAG("RenderMgr::create_simple_archetype before component=%p index=%d\n", (void *)(*cmp), next_render_arch_index);
+		bool created = (*cmp)->create_archetype( next_render_arch_index, filesys );
+		RM_DIAG("RenderMgr::create_simple_archetype after component=%p created=%u\n", (void *)(*cmp), (unsigned)created);
+		if( created ) {
 		
 			// Note that we delay setting this stuff until here in an 
 			// attempt to not have to undo the state of a partially created
@@ -1680,8 +1699,6 @@ BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 }
 
 // EOF
-
-
 
 
 

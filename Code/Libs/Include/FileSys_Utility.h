@@ -65,7 +65,7 @@ inline HRESULT read_string( IFileSystem *IFS, const char *key, U32 max_string_le
 
 	if( (h = IFS->OpenChild( &desc )) != INVALID_HANDLE_VALUE ) {
 		U32 uBytes = IFS->GetFileSize( h );
-		U32 uBytesToRead = std::min( uBytes, max_string_len-1 );
+		U32 uBytesToRead = (std::min)( uBytes, max_string_len-1 );
 		if( IFS->ReadFile( h, out_string, uBytesToRead, &uBytesRead, NULL) && (uBytesRead == uBytesToRead) ) {
 			out_string[uBytesRead] = 0;			
 			IFS->CloseHandle( h );

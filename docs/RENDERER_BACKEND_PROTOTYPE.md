@@ -665,6 +665,160 @@ and there was no native game, Windows Debug/Final, ABI, retail or Windows image
 comparison run. The implementation and CPU ownership check are documented in
 [STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md).
 
+### Repository-fixture image export preparation (2026-09-25)
+
+The existing `SdlGpuRenderer::Readback64` already downloads a 64-by-64 color target and checks
+its geometry, but previously retained only a pixel checksum and count. The native shell now accepts
+`--capture-ppm FILE` alongside `--render-smoke` and writes the final repository-fixture readback as
+a binary P6 image after successful presentation and checksum validation. The SDL owner converts
+the two supported RGBA8/BGRA8 swapchain channel orders to RGB; an unrecognized format rejects the
+requested export instead of silently swapping colors. The raw four-channel checksum used by the
+existing regression remains unchanged. This result is a bounded synthetic fixture image, not a
+game frame or a Windows comparison. The 64-by-64 image excludes alpha because blending is already
+resolved into the color target; the full in-memory checksum still includes the original fourth
+channel.
+
+The falsifiable blocker was that checksum-only Linux evidence cannot be spatially aligned with a
+Windows D3D9 capture. This extends the existing production-boundary shell and GPU readback rather
+than adding an isolated renderer probe. `SdlGpuReadback` is a native backend value, not a disk,
+network or campaign ABI record. The P6 file is diagnostic output and must stay outside the source
+tree. The intended command is:
+
+```text
+env XDG_CONFIG_HOME=/tmp/frontierx-capture-settings \
+  out/build/linux-gcc-debug/frontierx_native_shell \
+  --data-root /tmp/frontierx-capture-data --smoke-ms 250 \
+  --capture-ppm /tmp/frontierx-capture.ppm \
+  --render-smoke out/build/linux-gcc-debug/generated/shaders/sdl3_gpu_probe.vert.spv \
+  out/build/linux-gcc-debug/generated/shaders/sdl3_gpu_probe.frag.spv
+```
+
+Validation commands:
+
+```text
+mkdir -p /tmp/frontierx-capture-data/{Objects,Interface,Textures,Mat,Profiles,Maps/Campaign,Maps/Multiplayer} /tmp/frontierx-capture-settings
+cmake --build --preset linux-gcc-debug --target frontierx_native_shell -j2
+ctest --preset linux-gcc-debug -R '^portability.native_shell$' --output-on-failure
+cmake --build --preset linux-clang-debug --target frontierx_native_shell -j2
+ctest --preset linux-clang-debug -R '^portability.native_shell$' --output-on-failure
+env XDG_CONFIG_HOME=/tmp/frontierx-capture-settings \
+  out/build/linux-clang-debug/frontierx_native_shell \
+  --data-root /tmp/frontierx-capture-data --smoke-ms 250 \
+  --capture-ppm /tmp/frontierx-capture-clang.ppm \
+  --render-smoke out/build/linux-clang-debug/generated/shaders/sdl3_gpu_probe.vert.spv \
+  out/build/linux-clang-debug/generated/shaders/sdl3_gpu_probe.frag.spv
+file /tmp/frontierx-capture.ppm /tmp/frontierx-capture-clang.ppm
+cmp /tmp/frontierx-capture.ppm /tmp/frontierx-capture-clang.ppm
+```
+
+On this Linux x86_64 host, the affected `frontierx_native_shell` target compiled with GCC and
+Clang. `ctest --preset linux-gcc-debug -R '^portability.native_shell$' --output-on-failure` and
+the corresponding Clang command both passed one process check. A direct invocation with
+`--capture-ppm` but no `--render-smoke` returned the expected usage error. The complete GPU
+command first exited before SDL window startup in the restricted command environment. The same
+command then ran in the visible Wayland/Vulkan session with GCC and Clang, using separate `/tmp`
+output paths. Both executions presented 17 frames, observed 2,496 changed pixels and retained
+the existing raw checksum `7951318278861886233`. `file` identified both outputs as 64-by-64
+binary Netpbm images; each was 12,301 bytes including its P6 header, and `cmp` found the files
+byte-identical. This is visible synthetic Linux GPU runtime and image-export evidence using only
+repository geometry and texture. The matching Windows fixture capture, spatial tolerance
+comparison, Windows Debug/Final rebuild and retail runtime remain unperformed for this change.
+
+### Same-fixture Win32 D3D9 capture and comparison (2026-09-25)
+
+**Blocker and owner.** The Linux P6 export above had no corresponding Windows image. The
+supported Win32 game now has an explicit `/renderfixture` validation path in
+`Code/App/Src/Conquest.cpp` and `WindowsRenderFixture.cpp`. It uses the **same repository-owned**
+`RenderSmokeScene.cpp` geometry, two-by-two RGBA texture and six depth/blend plus eight texture
+combine states. `PrimitiveBuilder` submits its direct triangles through the existing production
+`IRenderPipeline` vtable and D3D9 `D3DRenderPipe`, then the helper presents and copies the top-left
+64-by-64 window client pixels into P6 RGB. No retail image is part of either fixture. The Windows
+runtime directory uses lawful external game data only to start the supported process; its capture
+content is repository-owned. The GDI copy captures the visible desktop surface after `Present`, so
+an occluding window or display transform would invalidate this method; the captured file was
+inspected and has the expected fixture structure. This is **Windows runtime** fixture evidence,
+not a retail game frame or native Linux game scene.
+
+The first visible Windows diagnostic returned `GR_GENERIC` from `clear_buffers`. A targeted D3D9
+trace measured `Clear` HRESULT `0x8876086C` (`D3DERR_INVALIDCALL`) with color and depth flags,
+while the device's cooperative status was OK. Source inspection found that `create_buffers`
+declared `D3DRP_F_DEPTH_CREATED` but passed `EnableAutoDepthStencil=FALSE` and
+`AutoDepthStencilFormat=D3DFMT_UNKNOWN` to `CreateDeviceEx`; no manual depth surface was created
+on that live path. The production renderer now requests its already selected compatible `depthFmt`
+as an automatic depth/stencil surface. The following Windows run completed color/depth clear,
+scene begin, production draw, end and presentation, each returning `GR_OK`.
+
+The D3D9 `clear_buffers` implementation also used a hard-coded black instead of its documented
+`RP_CLEAR_COLOR` pipeline state. It now passes that state to `Clear`, and the fixture sets
+`0xFF060911`, the RGB value of the native SDL target's background. Both samplers use **nearest**
+filtering: the SDL GPU owner sets `SDL_GPU_FILTER_NEAREST`, and the Windows fixture uses
+`D3DTEXF_POINT`. A deliberate Windows linear-filter trial made the image visibly blurrier and
+was discarded. The production `draw_primitive` owner now returns `GR_GENERIC` on a failed
+`DrawPrimitiveUP` instead of falsely returning `GR_OK`.
+
+Reproduction on a physical Windows 11 x86_64 host with NVIDIA graphics, VS2022 Community and
+the June 2010 DirectX SDK, from the supported checkout:
+
+```powershell
+& .\Build-Conquest.ps1 -Configuration Final -NoDeploy
+& .\Build-Conquest.ps1 -Configuration Debug -NoDeploy
+# In the separate, hash-verified Final runtime directory on the visible desktop:
+.\Conquest.exe /renderfixture /w
+# Writes debug\render_fixture_status.txt, debug\render_fixture_steps.txt,
+# and, on success, debug\render_fixture_win32.ppm.
+```
+
+The isolated runtime directory contained five Final application outputs, nine corresponding
+engine DLLs and 18 matching campaign DLLs copied with SHA-256 verification and backup. Its
+`DataPath=DataOverlay;Data` linked repository materials and external Steam media without
+copying either into the checkout. The final P6 was 12,301 bytes with the exact
+`P6\n64 64\n255\n` header. The step trace reported `0x00000000` for texture creation/upload,
+viewport, transforms, state and sampler setup, color/depth clear, scene begin, draw, end and
+present; capture returned 1. The process then exited by design. The user's observation of the
+brief image in the upper-left corner agrees with the 64-by-64 viewport placement.
+
+Comparison command on Linux x86_64, after obtaining the Windows P6 into `/tmp`:
+
+```text
+python3 Tools/portability/compare_render_fixture.py \
+  /tmp/frontierx-capture.ppm /tmp/frontierx-win32-render-fixture.ppm
+```
+
+The tool requires exact P6 dimensions/length, background `(6,9,17)`, a populated foreground
+and color diversity on each input, foreground counts within 10 pixels, direct mean RGB channel
+error at most 3, and bidirectional one-pixel-neighborhood maximum channel error at most 8. The
+one-pixel allowance covers D3D9 versus Vulkan triangle-edge sample ownership while the direct
+mean and structure gates reject a shifted or empty image. It reported **PASS**: Linux 2,496
+foreground pixels and 582 distinct RGB values; Windows 2,491 and 597; direct mean 2.7085;
+Windows-to-Linux neighborhood maximum 4 and Linux-to-Windows maximum 8. Of 4,096 aligned pixels,
+169 differed by more than eight in at least one channel at their exact coordinate; these are
+covered by the spatial tolerance. A synthetic all-background Windows P6 correctly returned
+`FAIL` (zero foreground pixels, mean error 45.3162). Linux GCC and Clang P6 files were byte
+identical, as recorded above. The comparator is an explicit diagnostic, not a retail-parity
+test; no retail asset or capture was added to the repository.
+
+Native Win32 Debug/Final full-wrapper and same-build campaign ABI rerun status after the final
+renderer edits is recorded in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
+The native scene still belongs to the shell and production rendering boundary. The Linux game
+composition, production texture/material library loading, additional pool modes, and playable
+single-player runtime remain later work; no production backend choice follows from this fixture.
+
+#### First production render-boundary slice: acceptance ledger
+
+| Current slice gate | Evidence and limit |
+|---|---|
+| Real production draw caller through existing boundary | `PrimitiveBuilder` and the App-side `RenderBatcher` direct and U16-indexed paths traverse the native `IRenderPipeline` and registered `IRenderPrimitive`. Bounded CPU and visible Vulkan checks reject unsupported topology, FVF, state and handle inputs; queued alpha-depth batching is a separately bounded branch. This is not native gameplay. |
+| Inspectable representative SDL3 scene | Repository-owned vertices, two-by-two texture and shared material/depth/blend states present visibly in the native shell; no retail asset was copied. |
+| Sampling, depth, alpha, resize, presentation and ownership | Existing visible probe/shell and focused CPU checks exercise those states, resized depth targets, repeated scene initialization, rejected upload rollback and ordered teardown. A skipped CTest is excluded from GPU runtime evidence. |
+| GCC, Clang and sanitizers | Both Linux x86_64 presets built and executed the affected CPU checks; separate visible GCC/Clang and focused Clang ASan/UBSan Vulkan runs produced matching bounded readbacks. LeakSanitizer was disabled for the host's ptrace environment as documented above. |
+| Same input on supported Windows | Physical Windows 11/NVIDIA Final D3D9 captured the same fixture; the P6 comparator passed the explicit spatial/color tolerance. Native VS2022 Win32 Debug and Final full-wrapper rebuilds and immediate same-build 18-campaign ABI checks passed. The comparison is synthetic, not retail. |
+| Focused record | This document records commands, pixel counts, image tolerance, data provenance, host/compiler evidence, first failure and owner fix, plus unperformed game, retail and production-backend gates. |
+
+The **first production render-boundary slice** meets these six focused gates. Broader Milestone 5
+remains open because a native game scene, production material/texture-library integration and
+remaining D3DX9 facility replacements do not yet execute in the game composition. Retain D3D9
+as the supported Windows baseline and do not select a Linux production backend from this result.
+
 ## Next acceptance slice
 
 The native `IRenderPipeline::create_texture`, `set_texture_level_data`,
@@ -679,10 +833,11 @@ shell runs. The pooled and immediate indexed fixture readbacks agree exactly:
 synthetic input provenance and remaining pool branches. The separate
 `RPVERTEX2` GPU path now consumes and distinguishes
 the second UV pair, but has not been exercised through a production game caller.
-The repository-owned fixture must also be driven through the supported Windows path and compared
-under a documented tolerance.
-Only after that evidence should the project decide between a direct adapter and another maintained
-D3D9-preserving route.
+The repository-owned fixture now also runs through the supported Windows D3D9 path and passes the
+bounded comparison above. This closes the same-input image-oracle gate for the first production
+render-boundary slice. It does not close the broader native game scene, full material-library,
+D3DX9 replacement or retail-parity work. Keep backend selection open until those owners can
+execute in the game composition and the dependency decision is documented.
 
 The separate 2026-09-25 VS2022 Win32 Debug and Final builds now compile and
 link the supported D3D9 game/engine path and all campaign modules. Native Windows
@@ -690,7 +845,8 @@ link the supported D3D9 game/engine path and all campaign modules. Native Window
 153 `Mission` and two `Trim` imports resolve in both fresh configurations. The
 retail and restored-build `Mission` export sets still differ, as expected for distinct source
 states and toolchains. This is build and bounded retail-binary ABI evidence: the Windows fixture
-image, tolerance comparison and retail runtime remain open. See
+image and tolerance comparison are recorded above; a retail-parity runtime comparison remains
+open. See
 [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
 
 Source review of the supported D3D9 owner found that its `IRenderPipeline::lock_buffer`
@@ -704,3 +860,26 @@ retail startup attempt documented in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD
 the VM had no sound device, and, after sound was disabled in a temporary INI, the game reported
 that its virtual graphics card was incompatible. The D3D9 scene and image comparison remain
 unexecuted.
+
+At this earlier physical Windows 11 check, the restored Final executable loaded the freshly built
+`D3DRenderPipe.dll` and system `d3d9.dll` and visibly presented the main menu and Quick Battle
+setup. That confirms Windows D3D9 startup and UI rendering with lawfully installed external data.
+Starting a battle exited before a gameplay scene was confirmed in that check. The repository
+fixture had not yet been submitted to D3D9; the later same-fixture capture and comparison are
+recorded below and in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
+
+The shared repository fixture source was checked against the supported Windows compiler before
+integration. On the physical Windows 11 host, the VS2022 x86 developer environment compiled
+`Code/Libs/Src/Platform/RenderSmokeScene.cpp` with `/std:c++17 /EHsc /c`, the repository
+`Code/Libs/Include` directory and the June 2010 DirectX SDK Include directory. `cl.exe` exited
+zero and wrote a 19,193-byte object in the user's temporary directory. Its Windows checkout copy
+matches the Linux worktree source after normalizing CRLF line endings. The first attempt without
+the SDK Include directory failed at `d3dx9.h`, confirming that this remains a real D3DX9 build
+dependency. This is **Windows compilation** of the exact source used by the Linux fixture, not
+linkage into `Conquest`, D3D9 draw execution, an image capture or a tolerance comparison. A
+Windows caller must still submit the fixture through the existing production render boundary.
+The equivalent command after `VsDevCmd.bat -arch=x86 -host_arch=x64` is:
+
+```cmd
+cl /nologo /std:c++17 /EHsc /c /ICode\Libs\Include /I"%DXSDK_DIR%Include" /Fo:"%TEMP%\frontierx-render-fixture-win32.obj" Code\Libs\Src\Platform\RenderSmokeScene.cpp
+```

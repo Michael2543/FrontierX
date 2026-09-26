@@ -80,6 +80,9 @@ static M_RACE interfaceRace;
 static char cmd_line_file[256];	// filename specified on the command line
 static char cmd_line_ini[32] = "Conquest.ini";	// ini file specified on the command line
 static char cmd_line_script[32];	// script file specified on the command line
+static bool bRenderFixture;
+
+bool RunWindowsRenderFixtureCapture(const char * filename);
 
 extern "C"
 __declspec(dllimport) IHeap * __stdcall GetBatchHeap (void);
@@ -357,6 +360,7 @@ static void create_bogus_savedir (void)
 static void parse_command_line (const char *lpszCmdLine)
 {
 	const char * tmp;
+	bRenderFixture = strstr(lpszCmdLine, "/renderfixture") != 0;
 
 	if (strstr(lpszCmdLine, "/w"))
 		DEFAULTS->GetDefaults()->bWindowMode=1;
@@ -604,6 +608,7 @@ static void dochecksum (HINSTANCE hInstance)
 //
 int WINAPI WinMain(HINSTANCE _hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+	int gameResult = 0;
 	TRACELEVEL = SEV_TRACE_1;
 	hResource = GetModuleHandle("Globals.dll");
 	DACOM = DACOM_Acquire();
@@ -893,6 +898,20 @@ int WINAPI WinMain(HINSTANCE _hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	matInfo.MATDIR = MATERIALDIR;
 	MATMAN->Initialize(matInfo);
 	if (VIDEOSYS) VIDEOSYS->Initialize(MOVIEDIR,PIPE);
+	if (bRenderFixture)
+	{
+		ShutdownSplash(hSplash);
+		hSplash = NULL;
+		const bool captured = RunWindowsRenderFixtureCapture("debug/render_fixture_win32.ppm");
+		if (FILE * status = fopen("debug/render_fixture_status.txt", "w"))
+		{
+			fputs(captured ? "CAPTURE_OK\n" : "CAPTURE_FAILED\n", status);
+			fclose(status);
+		}
+		gameResult = captured ? 0 : 2;
+		Shutdown3DMode();
+		goto Done;
+	}
 
 	/* Start3DMode (System.cpp) already calls WM->SetWindowPos and create_buffers
 	 * in the correct order.  The old fullscreen/windowed branching here was
@@ -945,7 +964,13 @@ int WINAPI WinMain(HINSTANCE _hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		bool bSkipMenus = false;
 		while (1)
 		{
-			if (CreateMenu1(bSkipMenus)==0)
+			const U32 menuResult = CreateMenu1(bSkipMenus);
+			if (FILE *trace = fopen("debug/mainflow_diag.txt", "a"))
+			{
+				fprintf(trace, "CreateMenu1 result=%u\n", menuResult);
+				fclose(trace);
+			}
+			if (menuResult==0)
 				break;
 			bSkipMenus = false;
 			FULLSCREEN->Notify(CQE_UPDATE, 0);	// give all menus a chance to destruct
@@ -954,6 +979,11 @@ int WINAPI WinMain(HINSTANCE _hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			EVENTSYS->Send(CQE_GAME_ACTIVE, (void*)1);
 			MSCROLL->SetActive(1);
 			U32 missionResult = CQDoModal(0);
+			if (FILE *trace = fopen("debug/mainflow_diag.txt", "a"))
+			{
+				fprintf(trace, "CQDoModal game result=%u\n", missionResult);
+				fclose(trace);
+			}
 			if (missionResult==0)
 				break;
 			else
@@ -1012,6 +1042,11 @@ int WINAPI WinMain(HINSTANCE _hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 				break;
 		}
 	}
+	if (FILE *trace = fopen("debug/mainflow_diag.txt", "a"))
+	{
+		fputs("leaving menu/game loop\n", trace);
+		fclose(trace);
+	}
 	Shutdown3DMode();
 
 Done:
@@ -1020,7 +1055,7 @@ Done:
 	if (FULLSCREEN)
 		FULLSCREEN->Notify(CQE_UPDATE, 0);	// force one last update
 
-	return 0;
+	return gameResult;
 }
 
 //----------------------------------------------------------------------------------

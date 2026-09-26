@@ -341,7 +341,8 @@ class PlatformInventoryTests(unittest.TestCase):
                 encoding='utf-8', errors='replace'))
         cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
 
-        self.assertNotIn('#include <windows.h>', source)
+        self.assertIn('#if defined(_WIN32)\n#define WIN32_LEAN_AND_MEAN\n'
+                      '#include <windows.h>\n#endif', source)
         self.assertIn('#include "SYSTEM.H"', source)
         self.assertIn('pFreeList(0)', source)
         self.assertEqual(source.count('DA_HEAP_FREE(HEAP,'), 3)
@@ -387,7 +388,7 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('#include "FrontierX/LegacyInput.h"', source)
         self.assertIn('#include "FrontierX/LegacyJoystick.h"', source)
         self.assertIn('dwSizeOfKey != sizeof(DAHOTKEY_STRUCT)', source)
-        self.assertIn('std::numeric_limits<DWORD>::max()', source)
+        self.assertIn('(std::numeric_limits<DWORD>::max)()', source)
         self.assertIn('std::memchr(text', source)
         self.assertEqual(source.count('std::memmove(dst, src,'), 2)
         self.assertIn('DA_HEAP_FREE(HEAP, pKeyData)', source)

@@ -1,5 +1,32 @@
 # ConquestFWR — Project Handoff
 
+## FrontierX validation addendum (2026-09-25)
+
+This addendum records the current FrontierX checkout; the original ConquestFWR handoff below is
+historical restoration context from 2026-08-30 and describes a different installation/build
+composition. The supported VS2022 Win32 Debug and Final no-deploy wrappers now rebuild five
+application outputs, nine explicit engine DLLs and 18 campaign DLLs on a physical Windows 11
+host. After the latest D3D9 renderer changes, both full wrappers exited successfully, and
+same-build campaign import checks found zero missing among 153 `Mission` and two `Trim` symbols.
+The supported Final process in a separate, hash-verified runtime directory reaches the main menu,
+first Terran briefing and a scrollable D3D9 scene with lawful external data. That Terran scene
+has no units or mission progress; the user separately observed two ships in the Celareon campaign.
+Quick Battle `Start` still loses the visible window, and the briefing appears to advance early.
+The later traced `MScript::Load` and `Mission::Reload` returned, disproving the earlier loader-hang
+hypothesis for that run. The source of the early briefing event and missing Terran objects remains
+unresolved. See [WINDOWS_BUILD_VALIDATION.md](docs/WINDOWS_BUILD_VALIDATION.md) and
+[RETAIL_TEST_MATRIX.md](RETAIL_TEST_MATRIX.md) for bounded evidence and provenance.
+
+The independent repository-owned 64-by-64 render fixture now presents and captures through the
+same supported Final D3D9 renderer. A Windows/Linux image comparison passed a documented
+one-pixel spatial and eight-level color tolerance after fixing the D3D9 owner's missing depth
+surface, hard-coded clear color and false draw-success result. This is synthetic cross-backend
+evidence through a production render boundary, not native game execution or retail parity. See
+[RENDERER_BACKEND_PROTOTYPE.md](docs/RENDERER_BACKEND_PROTOTYPE.md). A normal Final launch after
+the depth fix briefly displayed the game HUD and space scene, then ended; it did not establish a
+stable mission. The next restoration check is a traced Terran/Celareon scene comparison; the next
+port work is native game composition and D3DX9 replacement. No retail data entered this repository.
+
 _Last updated: 2026-08-30_
 
 Restoration + modernization of **Conquest: Frontier Wars**. The released source is an

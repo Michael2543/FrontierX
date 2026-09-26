@@ -230,6 +230,13 @@ PGENTYPE GenData::LoadArchetype (const C8 *name)
 			result->archDataType = dataType;
 			archList = result;
 
+			if (FILE *trace = fopen("debug/gendata_diag.txt", "a"))
+			{
+				fprintf(trace, "begin name=%s result=%p factory=%p\n",
+					name, (void *)result, (void *)result->factory.ptr);
+				fclose(trace);
+			}
+
 			CURSOR->SetBusy(1);
 			
 			while (node)
@@ -241,6 +248,13 @@ PGENTYPE GenData::LoadArchetype (const C8 *name)
 
 			if (node)
 			{
+				if (FILE *trace = fopen("debug/gendata_diag.txt", "a"))
+				{
+					fprintf(trace, "created name=%s result=%p factory=%p client=%p handle=%p\n",
+						name, (void *)result, (void *)result->factory.ptr,
+						(void *)node->client, handle);
+					fclose(trace);
+				}
 				result->factory = node->client;
 				result->hArchetype = handle;
 			}

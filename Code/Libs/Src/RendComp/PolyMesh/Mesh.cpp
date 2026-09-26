@@ -32,6 +32,9 @@
 #include <stdio.h>
 #include <float.h>
 
+static FILE *g_xmeshDiag;
+#define XM_DIAG(...) do { if (!g_xmeshDiag) g_xmeshDiag = fopen("debug/xmesh_diag.txt", "w"); if (g_xmeshDiag) { fprintf(g_xmeshDiag, __VA_ARGS__); fflush(g_xmeshDiag); } } while (0)
+
 #include "RPUL.h"
 #include "IMaterialManager.h"
 
@@ -973,8 +976,10 @@ HRESULT XMesh::read_material( IFileSystem *parent, ITextureLibrary *texturelib, 
 
 bool XMesh::read (IFileSystem* parent, ITextureLibrary* txm_lib,IMaterialManager * matMan,  U32 cont_lod_mode)
 {
+	XM_DIAG("XMesh::read entry parent=%p lod_mode=%lu\n", (void *)parent, (unsigned long)cont_lod_mode);
 	char debug_name[MAX_PATH];
 	GetFullName( parent, debug_name );
+	XM_DIAG("XMesh::read full name resolved\n");
 	TempStr old_format_warning( "%s is in an unsupported mesh format, re-export.", debug_name );
 	HRESULT hr;
 
@@ -985,21 +990,25 @@ bool XMesh::read (IFileSystem* parent, ITextureLibrary* txm_lib,IMaterialManager
 		parent->SetCurrentDirectory( ".." );
 		return false;
 	}
+	XM_DIAG("XMesh::read old-format check complete\n");
 
 
 	if( FAILED( hr = read_face_groups( parent ) ) ) {
 		ASSERT(0);
 	}
+	XM_DIAG("XMesh::read face groups result=0x%08lX\n", (unsigned long)hr);
 
 	if( parent->SetCurrentDirectory( "Normals" ) ) {
 		read_type( parent, "Surface normal count", &normal_cnt );
 		read_alloc_chunk( parent, "Surface normal list", 0, &normal_ABC );
 		parent->SetCurrentDirectory( ".." );
 	}
+	XM_DIAG("XMesh::read normals complete\n");
 
 	if( FAILED( hr = read_vertex_data( parent ) ) ) {
 		ASSERT(0);
 	}
+	XM_DIAG("XMesh::read vertex data result=0x%08lX\n", (unsigned long)hr);
 
 
 	lod_fraction = -1.0f;  // invalid
@@ -1021,6 +1030,7 @@ bool XMesh::read (IFileSystem* parent, ITextureLibrary* txm_lib,IMaterialManager
 		default: // do lod on a per instance basis
 			read_lod_library( parent );
 	}
+	XM_DIAG("XMesh::read LOD complete\n");
 	
 
 	if( FAILED( hr = read_edge_data( parent ) ) ) {
@@ -1028,14 +1038,17 @@ bool XMesh::read (IFileSystem* parent, ITextureLibrary* txm_lib,IMaterialManager
 	else if( hr == S_WARN_OLD_FORMAT ) {
 		GENERAL_WARNING( (char*)old_format_warning );
 	}
+	XM_DIAG("XMesh::read edge data result=0x%08lX\n", (unsigned long)hr);
 
 
 	hr = read_uv_channels( parent );
+	XM_DIAG("XMesh::read UV channels result=0x%08lX\n", (unsigned long)hr);
 	
 	if( FAILED( read_material_library( parent, txm_lib,matMan ) ) ) {
 		// cleanup ?
 		return false;
 	}
+	XM_DIAG("XMesh::read materials complete\n");
 
 
 	// Compute (or read) bounding sphere.
@@ -1048,11 +1061,13 @@ bool XMesh::read (IFileSystem* parent, ITextureLibrary* txm_lib,IMaterialManager
 	else {
 		compute_sphere();
 	}
+	XM_DIAG("XMesh::read sphere complete radius=%f\n", radius);
 
 	ASSERT_FATAL(radius > 0.0f);
 
 	compute_bounds ();
 	compute_centroid ();
+	XM_DIAG("XMesh::read bounds and centroid complete\n");
 		
 
 	// Sort faces based on the area
@@ -1079,6 +1094,7 @@ bool XMesh::read (IFileSystem* parent, ITextureLibrary* txm_lib,IMaterialManager
 
 		sorted_faces = 0;		// only sorted at lod 0.0
 	}
+	XM_DIAG("XMesh::read sorting complete\n");
 
 	return true;
 }

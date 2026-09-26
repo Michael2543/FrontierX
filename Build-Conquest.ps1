@@ -19,7 +19,14 @@ $campaignSolution = Join-Path $repoRoot 'Code\App\Src\Scripts\ConquestCampaign.s
 $campaignOutputDirectory = Join-Path $repoRoot 'Code\App\Src\Scripts\Build'
 $engineProjects = @(
     (Join-Path $repoRoot 'Code\Libs\Src\RenderPipeline\D3DRenderPipe.vcxproj'),
-    (Join-Path $repoRoot 'Code\Libs\Src\MeshManager\MeshManager.vcxproj')
+    (Join-Path $repoRoot 'Code\Libs\Src\MeshManager\MeshManager.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\Engine\Engine.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\Anim\Anim.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\EngComps\Hardpoint\HardPoint.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\EngComps\RenderMgr\RenderMgr.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\Shading\TextureLibrary\TextureLibrary.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\RendComp\PolyMesh\PolyMesh.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\RendComp\Optics\Optics.vcxproj')
 )
 if ([string]::IsNullOrWhiteSpace($DeployDirectory)) {
     $DeployDirectory = if ($Configuration -eq 'Debug') {
@@ -88,7 +95,10 @@ $engineConfiguration = if ($Configuration -eq 'Debug') { 'debug' } else { 'relea
 $campaignConfiguration = if ($Configuration -eq 'Debug') { 'Debug' } else { 'Release' }
 $dacomSource = Join-Path $repoRoot "Code\Libs\ImplicitDLL\$engineConfiguration\DACOM.dll"
 $engineOutputDirectory = Join-Path $repoRoot "Code\Libs\ExplicitDLL\$engineConfiguration"
-$engineBinaries = @('D3DRenderPipe.dll', 'MeshManager.dll')
+$engineBinaries = @(
+    'D3DRenderPipe.dll', 'MeshManager.dll', 'Engine.dll', 'Anim.dll',
+    'HardPoint.dll', 'RenderMgr.dll', 'TextureLibrary.dll', 'PolyMesh.dll', 'Optics.dll'
+)
 if (-not $NoDeploy -and -not (Test-Path -LiteralPath $DeployDirectory -PathType Container)) {
     throw "Deployment directory does not exist: $DeployDirectory"
 }

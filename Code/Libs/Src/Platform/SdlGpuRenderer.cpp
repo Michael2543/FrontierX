@@ -1013,6 +1013,22 @@ bool SdlGpuRenderer::Readback64(SdlGpuReadback & result, std::string & error)
     result.structureValid = result.changedPixels > 1800U && result.changedPixels < 3400U &&
         PixelsDiffer(center, corner, 12U) && PixelsDiffer(background, corner, 12U) &&
         PixelsDiffer(center, background, 12U);
+    const bool rgba = impl_->colorTargetFormat == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM ||
+        impl_->colorTargetFormat == SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+    const bool bgra = impl_->colorTargetFormat == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM ||
+        impl_->colorTargetFormat == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB;
+    if (rgba || bgra)
+    {
+        for (Uint32 pixel = 0U; pixel < width * height; ++pixel)
+        {
+            const std::uint8_t * source = pixels + pixel * bytesPerPixel;
+            std::uint8_t * destination = result.rgb8.data() + pixel * 3U;
+            destination[0] = source[bgra ? 2U : 0U];
+            destination[1] = source[1U];
+            destination[2] = source[bgra ? 0U : 2U];
+        }
+        result.rgbValid = true;
+    }
     SDL_UnmapGPUTransferBuffer(impl_->device, resources.download);
     return true;
 }
