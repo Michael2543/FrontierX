@@ -5521,19 +5521,17 @@ struct BASE_PLATFORM_DATA : BASIC_DATA
 	U32 gasStorage;
 	U32 crewStorage;
 };
+static_assert(sizeof(BASE_PLATFORM_DATA) == 560, "BASE_PLATFORM_DATA binary layout mismatch");
+static_assert(offsetof(BASE_PLATFORM_DATA, slotsNeeded) == 476, "BASE_PLATFORM_DATA::slotsNeeded offset mismatch");
 
 
 
-
-
-
-
-
-
-
-
-
-
+static_assert(offsetof(BASE_PLATFORM_DATA, extension)
+              == offsetof(BASE_PLATFORM_DATA, missionData) + sizeof(MISSION_DATA),
+              "extension[] must begin immediately after a full MISSION_DATA (retail schema)");
+static_assert(offsetof(BASE_PLATFORM_DATA, extensionBits)
+              == offsetof(BASE_PLATFORM_DATA, extension) + sizeof(EXTENSION_DATA) * 4,
+              "extension[] must hold exactly 4 entries (retail schema)");
 
 
 
@@ -19154,7 +19152,6 @@ struct TROOPPOD_SAVELOAD
 {
 	__hexview U32 dwTargetID;
 };
-
 
 
 

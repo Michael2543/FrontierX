@@ -52,9 +52,10 @@ Read the smallest relevant authoritative document before changing code:
   handle checks; the production texture library is not connected. A production `StateMaterial`
   owner now applies native states and submits one cached indexed draw in a synthetic CPU check
   and a visible Vulkan probe with bounded readback. Unsupported legacy pipeline slots fail
-  explicitly. Queued pool batching, material-library loading, Windows comparison,
-  backend selection and a native game scene
-  remain open.
+  explicitly. A queued alpha-depth U16 pool draw also reaches visible Vulkan output. The same
+  repository fixture was captured through the supported Windows D3D9 path and passed the
+  documented Linux/Windows spatial and color comparison. Production material-library loading,
+  backend selection and a native game scene remain open.
 - Linux x86_64 ELF is the first port target. macOS, ARM64 and multiplayer portability are later.
 - Missing retail media must come from a lawfully obtained installation and must never enter this
   repository.
@@ -77,13 +78,17 @@ retail runtime.
 Do not combine several priorities into a repository-wide rewrite. Prefer the smallest change that
 advances a production owner and produces a falsifiable build, layout, ABI or runtime result.
 
-## Current rendering milestone
+## Completed rendering slice and next milestone
 
-The active milestone is the **first native scene through a production render boundary**. Its Linux
-geometry/presentation slice now runs in the native shell; complete it incrementally through the
-existing `IRenderPipeline`/`IRenderPrimitive` ownership model rather than creating a parallel API.
+The **first native scene through a production render boundary** met the six focused gates below
+on 2026-09-25. Its evidence is the synthetic repository fixture, production draw callers, visible
+Linux SDL/Vulkan and Windows D3D9 runtime, focused sanitizers, native Windows rebuild/ABI checks,
+and the documented bounded image comparison in `docs/RENDERER_BACKEND_PROTOTYPE.md`. This is not a
+native game scene or retail parity result. The next rendering milestone is to connect the
+production texture/material loading owners and a game scene to the native composition through the
+existing `IRenderPipeline`/`IRenderPrimitive` ownership model.
 
-The milestone is accepted only when all of the following are evidenced:
+The completed slice was accepted only after all of the following were evidenced:
 
 1. At least one real production draw caller reaches the native backend through an adapter at the
    existing renderer boundary. Direct and U16-indexed RPVertex-shaped submissions are covered;
@@ -100,8 +105,9 @@ The milestone is accepted only when all of the following are evidenced:
 6. The focused renderer document records commands, observed output, data provenance, known gaps and
    whether the evidence is compilation, synthetic runtime, Windows runtime or retail runtime.
 
-Do not select a production backend or claim the rendering milestone from the isolated GPU probe
-alone. Continue replacing D3DX9 facilities explicitly and keep the supported D3D9 path viable.
+Do not select a production backend from this synthetic slice. Continue replacing D3DX9 facilities
+explicitly and keep the supported D3D9 path viable. Record the next native game/material gate in
+`docs/PORT_READINESS.md` as its production owners become executable.
 
 ## Non-negotiable invariants
 

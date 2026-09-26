@@ -1,10 +1,42 @@
 # Linux Port Readiness Plan
 
 Status: implementation in progress, 2026-09-25. Native-Windows VS2022 Win32 Debug and Final
-no-deploy rebuilds now complete through the campaign modules. Original retail campaign imports
-were checked against fresh Debug and Final modules. An interactive retail startup attempt then
-stopped at sound and virtual-graphics device errors; the evidence and remaining runtime and
-image-comparison gates are in [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
+no-deploy rebuilds completed through the campaign modules on a physical Windows 11 host, and
+original retail campaign imports resolved against fresh modules. The restored Final executable
+and rebuilt D3D9 renderer reached the main menu, Quick Battle setup and first Terran campaign
+briefing using legally installed external data and matching repository databases. With the
+repository-built TextureLibrary staged in the isolated runtime directory, the first Terran
+briefing's Start button now reaches a visible, scrollable D3D9 game scene. Only the space
+background and HUD are visible in the first Terran mission; it does not progress and no units
+appear there. The user separately reported two ships in the Celareon campaign. The same
+repository-owned fixture has now been captured through supported Windows D3D9 and compared with
+the visible Linux SDL/Vulkan frame under the tolerance recorded in
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md). This cross-backend synthetic
+comparison does not establish retail parity or a native Linux game scene. See
+[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md) for the dated evidence and limits.
+The final pre-pause Windows dispatcher trace stopped inside the `PlanetFactory` callback for
+`CQE_ENTERING_INGAMEMODE`. On resumption, a temporary repository-material overlay corrected
+the repeated missing-`Mat` startup error in the isolated test directory. A later Windows runtime
+trace reached `PlanetFactory::loadTextures` and stopped inside
+`ENGINE::create_archetype("slotholder.3db")`. The test directory still had an older external
+`Engine.dll`; the restored Engine target now compiles in VS2022 Win32 Debug and Release. The
+subsequent runtime path reached `RenderMgr`, `PolyMesh` and `XMesh::read`; with a stale external
+TextureLibrary copy it stopped during material loading. A repository-built Release
+`TextureLibrary.dll` was staged with a backup and hash check, after which texture uploads and a
+visible game scene were observed. This sequence implicates the earlier DLL composition but does
+not isolate one cause in a controlled A/B test. The supported Windows wrapper now rebuilds nine
+explicit engine DLLs, including `Engine`, `Anim`, `HardPoint`, `RenderMgr`, `TextureLibrary`,
+`PolyMesh` and `Optics`. Complete native Win32 Debug/Final no-deploy wrapper runs and matching
+campaign ABI checks passed. The later isolated runtime contains a hash-verified Final closure of
+the five application outputs, nine engine DLLs and 18 campaign DLLs; other INI runtime modules
+remain outside the wrapper. An earlier missing-unit trace stopped after entering `MScript::Load`,
+but a later instrumented Windows run logged completion of that loader and return from
+`Mission::Reload`. The missing units therefore remain unexplained by the current trace. The temporary
+`DataPath=DataOverlay;Data` override is active only for this test; restore the saved value when
+validation ends. A Windows validation helper now creates the lawful-data/material junctions and
+restores the previous registry value automatically around future isolated runs; its setup and
+cleanup passed a synthetic native-Windows check. See
+[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
 
 This document turns the direction in [PROJECT.md](PROJECT.md) into an executable sequence of
 small, falsifiable milestones. Native layout, TinyXML, platform timing, and data-root inspection
@@ -448,6 +480,15 @@ Exit criteria:
 - [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md) records exact commands, compiler/
   host, input provenance, observed output and every unperformed Windows, retail and hardware check.
 
+The focused **first production render-boundary slice** now satisfies its six acceptance gates:
+production direct/indexed submissions, inspectable repository fixture, bounded native lifecycle,
+GCC/Clang and focused sanitizer execution, a same-input Windows D3D9 image comparison, and
+documented evidence. This is a synthetic native-shell scene. **Milestone 5 as a whole remains
+open** under its broader goal and exit criteria: no Linux game scene or production
+material-library/data path exists, and D3DX9 replacement owners are incomplete. The next
+integration target is that native game composition; the Windows first-Terran and Quick Battle
+regressions remain separate restoration work.
+
 ## Milestone 6: First Playable Single-Player Slice
 
 **Goal:** start a known mission and complete a narrow gameplay path natively.
@@ -520,8 +561,8 @@ Exit criteria:
 | Production game startup owner remains Windows-bound | Headless and shell initialization, shared profile callbacks, native preferences and data-root checks pass | Compile and connect the first real game-startup owner without changing Windows registry behavior | 3 |
 | Linux path case and asset lookup are unmeasured | Known platform difference | Scan, then exercise external data discovery on a case-sensitive filesystem | 3 |
 | SDL3 integration is locally prototyped but not approved for distribution | System package, neutral backend, production-event batch pump, native DACOM `IWindowManager`, shell integration and Wayland smoke | Connect real application cadence, compare Windows behavior, and review provenance/notice packaging | 4 |
-| Native rendering path is undecided | The shell-selected SDL GPU owner presents equivalent direct, U16-indexed and one alpha-depth queued-pool repository scene through the actual App-side `RenderBatcher`, real `IRenderPipeline` vtable and registered `IRenderPrimitive`. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers and routes direct/indexed slices through the registered owner. Visible GCC, Clang and focused sanitizer pooled draws produced bounded readback exactly matching the immediate indexed fixture; the linked CPU check also covers opaque and merged alpha-depth pools. A separate indexed RPVERTEX2 GPU probe shows second-UV sampling. Unsupported native state setters still fail explicitly | Exercise additional material/pool combinations and capture the same fixture on Windows for a documented comparison | 5 |
-| VM cannot yet provide the required Windows D3D9 image oracle | The installed retail game reached its logo through NoVNC, then failed on missing audio; with audio disabled in a temporary INI it reported an incompatible Red Hat VirtIO GPU DOD adapter. Selecting `RendSft` still failed. No stable game scene or Windows frame was captured | Run the supported D3D9 path on a Windows environment with a working graphics adapter; then capture the repository fixture and compare under a documented tolerance | 5 |
+| Native rendering path is undecided | The shell-selected SDL GPU owner presents equivalent direct, U16-indexed and one alpha-depth queued-pool repository scene through the actual App-side `RenderBatcher`, real `IRenderPipeline` vtable and registered `IRenderPrimitive`. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers and routes direct/indexed slices through the registered owner. Visible GCC, Clang and focused sanitizer pooled draws produced bounded readback exactly matching the immediate indexed fixture; the linked CPU check also covers opaque and merged alpha-depth pools. A separate indexed RPVERTEX2 GPU probe shows second-UV sampling. Unsupported native state setters still fail explicitly. The same repository fixture now passes a Windows D3D9/Linux Vulkan image comparison | Connect production texture/material loading and a real native game scene before selecting a backend; exercise additional material and pool modes | 5 |
+| Windows D3D9 same-fixture image oracle | The physical Windows 11/NVIDIA host captured the repository smoke fixture through its production D3D9 pipeline. A 64-by-64 P6 comparison with visible Linux Vulkan passed the documented bidirectional one-pixel/color tolerance: mean channel error 2.7085, neighborhood maximum 8. The first Terran mission still shows no units or progress, while a separate Celareon report saw two ships | Retain this fixture check while advancing native game composition and investigating mission-specific Windows restoration | 5 |
 | D3DX9 replacement remains incomplete | 155 lexical matches in eight files after production ray-geometry replacement | Characterize and replace shared renderer matrices/tangents, effects and cubemap decoding | 5 |
 | Campaign DLL model may not map directly to ELF | Native DACOM ELF registration/unload passes a synthetic module test; campaign ABI remains Windows-only and separate | Define and test one campaign C export/ABI strategy | 6 |
 | Audio backend is undecided | Architecture direction | Inventory semantics and prototype selected candidate | 7 |

@@ -1,9 +1,16 @@
 # FrontierX Project Charter
 
 Status: incremental native bring-up, 2026-09-25. The supported VS2022 Win32 Debug and Final
-no-deploy builds were rebuilt in a Windows 11 VM, including the 18 campaign modules; see
-[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md). This is build evidence, with Windows
-runtime, retail ABI and representative image comparison still open.
+no-deploy builds were rebuilt on physical Windows 11, including the 18 campaign modules.
+Fresh modules passed the original campaign import check. On the physical Windows host, the
+restored Final D3D9 path reached the main menu, first Terran campaign briefing and a visible,
+scrollable game scene with external installed data and repository-built TextureLibrary. The first
+Terran mission currently shows the background and HUD but no running mission or units; the user
+separately reported two visible ships in the Celareon campaign. The repository-owned rendering
+fixture now also executes and captures through the supported Windows D3D9 path. Its 64-by-64 P6
+image passes the documented one-pixel-tolerant comparison with the visible Linux SDL/Vulkan
+capture; this is synthetic cross-backend runtime evidence, not retail gameplay parity. See
+[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
 
 ## Mission
 

@@ -5,6 +5,7 @@
 #include "FrontierX/RenderState.h"
 #include "FrontierX/RenderSubmission.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -22,9 +23,13 @@ struct SdlGpuTextureView
 
 struct SdlGpuReadback
 {
+    static constexpr std::size_t Width = 64U;
+    static constexpr std::size_t Height = 64U;
+    std::array<std::uint8_t, Width * Height * 3U> rgb8{};
     std::uint64_t checksum = 0U;
     std::size_t changedPixels = 0U;
     bool structureValid = false;
+    bool rgbValid = false;
 };
 
 class SdlGpuRenderer

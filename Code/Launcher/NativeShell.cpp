@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -167,6 +168,7 @@ struct Options
     std::filesystem::path hotkeysPath;
     std::filesystem::path vertexShaderPath;
     std::filesystem::path fragmentShaderPath;
+    std::filesystem::path capturePpmPath;
     std::uint32_t smokeMilliseconds = 0;
     bool hidden = false;
 };
@@ -193,6 +195,7 @@ Options ParseOptions(int argc, char ** argv)
             std::cout << "Usage: frontierx_native_shell [--config FILE] [--preferences FILE] "
                          "[--data-root DIRECTORY] [--hotkeys FILE] "
                          "[--render-smoke VERTEX_SPV FRAGMENT_SPV] "
+                         "[--capture-ppm FILE] "
                          "[--smoke-ms MILLISECONDS [--hidden]]\n"
                          "Opens the native startup shell; the optional render smoke draws a "
                          "repository fixture, not the game.\n";
@@ -218,10 +221,12 @@ Options ParseOptions(int argc, char ** argv)
             continue;
         }
         if ((option != "--config" && option != "--preferences" && option != "--hotkeys" &&
-             option != "--data-root" && option != "--smoke-ms") ||
+             option != "--data-root" && option != "--smoke-ms" &&
+             option != "--capture-ppm") ||
             index + 1 == argc)
             throw std::invalid_argument(
-                "expected --config, --preferences, --data-root, --hotkeys, --smoke-ms or --hidden");
+                "expected --config, --preferences, --data-root, --hotkeys, --smoke-ms, "
+                "--capture-ppm or --hidden");
         const char * value = argv[++index];
         if (!value[0] || std::string(value).rfind("--", 0) == 0)
             throw std::invalid_argument("missing option value");
@@ -249,6 +254,12 @@ Options ParseOptions(int argc, char ** argv)
                 throw std::invalid_argument("duplicate option: --data-root");
             options.dataRoot = value;
         }
+        else if (option == "--capture-ppm")
+        {
+            if (!options.capturePpmPath.empty())
+                throw std::invalid_argument("duplicate option: --capture-ppm");
+            options.capturePpmPath = value;
+        }
         else
         {
             if (options.smokeMilliseconds)
@@ -258,6 +269,8 @@ Options ParseOptions(int argc, char ** argv)
     }
     if (options.hidden && !options.smokeMilliseconds)
         throw std::invalid_argument("--hidden requires --smoke-ms");
+    if (!options.capturePpmPath.empty() && options.vertexShaderPath.empty())
+        throw std::invalid_argument("--capture-ppm requires --render-smoke");
     return options;
 }
 
@@ -681,6 +694,26 @@ int Run(int argc, char ** argv)
                   << "; vertices: " << renderer.VertexCount()
                   << "; changed-pixels: " << readback.changedPixels
                   << "; pixel-checksum: " << readback.checksum << '\n';
+        if (!options.capturePpmPath.empty())
+        {
+            if (!readback.rgbValid)
+            {
+                std::cerr << "Native render capture has an unsupported color format\n";
+                return 7;
+            }
+            std::ofstream capture(options.capturePpmPath, std::ios::binary);
+            capture << "P6\n" << FrontierX::SdlGpuReadback::Width << ' '
+                    << FrontierX::SdlGpuReadback::Height << "\n255\n";
+            capture.write(reinterpret_cast<const char *>(readback.rgb8.data()),
+                static_cast<std::streamsize>(readback.rgb8.size()));
+            capture.close();
+            if (!capture)
+            {
+                std::cerr << "Native render capture write failed\n";
+                return 7;
+            }
+            std::cout << "Native render fixture captured: " << options.capturePpmPath << '\n';
+        }
         renderPrimitive.Reset();
         renderer.Shutdown();
     }

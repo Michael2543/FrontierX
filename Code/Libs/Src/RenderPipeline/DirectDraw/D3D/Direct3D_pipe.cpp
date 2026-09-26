@@ -3528,8 +3528,7 @@ DA_METHOD(	clear_buffers,(DWORD flag, RECT *rect ))
 								NULL,
 								// (D3DRECT*)&scissor, 
 								 cflags, 
-								 //curr_pipeline_state[RP_CLEAR_COLOR].get(), 
-					curr_pipeline_state[RP_CLEAR_COLOR].get(),
+								 curr_pipeline_state[RP_CLEAR_COLOR].get(),
 								 1.0, 
 								 curr_pipeline_state[RP_CLEAR_STENCIL].get() );
 

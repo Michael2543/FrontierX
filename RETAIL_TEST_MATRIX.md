@@ -23,6 +23,32 @@ and fresh Debug/Final builds. They did not launch the game or establish runtime 
 The retail binary and restored CQ2-derived source are different versions; equal export sets are
 not an acceptance criterion. The import check measures whether the original campaign DLLs can
 resolve the symbols they actually request.
+On a physical Windows 11 host with an NVIDIA GPU, the restored Final build reached a visible
+main menu and Quick Battle setup through its built D3D9 renderer and a separate test directory
+pointing at lawfully installed Steam data. The early Quick Battle `Start` attempts ended the
+process. Targeted repository DLL replacements removed two earlier crashes in installed retail
+support DLLs, but those exits had no new Windows Application Error event. See
+[WINDOWS_BUILD_VALIDATION.md](docs/WINDOWS_BUILD_VALIDATION.md).
+The restored Final build later opened the first Terran campaign briefing with the repository's
+matching databases and campaign DLLs. On a German-locale Windows host, its `SCRIPT01.dll` had
+only English (US) resources; an English-group fallback in the Mission script string owner let
+`TM1_Briefing` update and display its objectives. This is a supported Windows runtime observation,
+not retail gameplay parity. Early briefing `Start` attempts removed the visible window inside
+`CQE_ENTERING_INGAMEMODE`. The dispatcher trace completed four callbacks and stopped in the
+`PlanetFactory` callback. Subsequent isolated tests progressed through repository `Engine`,
+`RenderMgr`, `PolyMesh` and, after staging repository `TextureLibrary`, displayed a game scene.
+At the 2026-09-25 physical-host Final runtime check of the first Terran mission, the space
+background and HUD were visible and the view scrolled, but no units appeared and the mission did
+not progress. The user separately reported two visible ships in the Celareon campaign earlier
+that day, without a matching trace or build hash. These observations confirm scene entry but
+neither playable missions nor retail parity. The temporary
+`DataPath=DataOverlay;Data` override and lawful-data junctions apply only to that isolated test
+composition. See [WINDOWS_BUILD_VALIDATION.md](docs/WINDOWS_BUILD_VALIDATION.md).
+The independent repository-owned render fixture subsequently executed in the supported restored
+Final D3D9 process and its 64-by-64 Windows P6 passed a documented comparison against the visible
+Linux SDL/Vulkan fixture. This is a cross-backend **synthetic runtime** check. It does not compare
+the restored game with retail missions, art, timing or behavior; see
+[RENDERER_BACKEND_PROTOTYPE.md](docs/RENDERER_BACKEND_PROTOTYPE.md).
 An interactive retail startup attempt on the 2026-09-25 Windows 11 VM reached the logo; the user
 reported a visible menu, but the agent did not capture a stable menu or game scene. The VM lacked
 a sound device, and a temporary no-sound INI
@@ -36,7 +62,7 @@ in [WINDOWS_BUILD_VALIDATION.md](docs/WINDOWS_BUILD_VALIDATION.md).
 | Area | Test | Debug | Final | Retail comparison / evidence |
 |---|---|---:|---:|---|
 | Startup | Intro/menu reaches stable idle | TODO | TODO | |
-| Mission | Start a known retail mission | TODO | TODO | |
+| Mission | Start a known retail mission | TODO | PARTIAL | First Terran mission enters a scrollable background/HUD scene; no units or mission progress |
 | Rendering | Player ships use correct authored orientation | PASS | TODO | Level and forward in Mission 1 |
 | Visibility | Enemy units become visible under retail conditions | PASS | TODO | Earlier report was a unit-identification mistake |
 | Combat | Weapons, impacts, damage and destruction complete | PARTIAL | TODO | Combat completes; projectile visual axis remains wrong |
