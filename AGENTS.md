@@ -30,6 +30,27 @@ Read the smallest relevant authoritative document before changing code:
 - VS2022 Win32 on Windows 10/11 remains the supported game build and regression baseline.
 - The Linux CMake/Ninja graph is implemented for isolated libraries and checks, platform services,
   a headless data checker and a native startup/window shell. It does not yet build or run the game.
+- The native shell now uses the active App `ISystemContainer` owner for its
+  EventSystem and SDL-backed WindowManager aggregates through a synthetic
+  `[System]` profile or a bounded externally supplied profile. Its GPU build
+  executes `GameSystem::startup`; the default profile has an empty synthetic
+  `[Engine]` section. The shell later draws the repository fixture through
+  that GameSystem-owned Engine. The App container now owns the production
+  `ITManager`, `IMaterialManager` and `TextureLibrary` aggregates. A supplied
+  profile can also create its `IRenderPrimitive` aggregate, which binds to the
+  temporary GPU after startup; a supplied profile can also create the `IRenderPipeline` aggregate, and
+  both bind after GPU startup. The production `IViewConstructor` and
+  `TextureLibrary` now aggregate from a supplied profile; the checked-in
+  `Conquest.ini` next stops at
+  `IStreamer`. Retail profiles and game
+  startup remain open.
+- The production `DOCUVIEW` parser core now compiles and parses a generated
+  Win32-shaped record in a native check. Its `long` and pointer field sizes
+  match four-byte Win32 layout, and production `IDataParser` enumerates its
+  fields. The constructor now parses generated same and changed schemas,
+  correlates scalar, enum, bitfield and nested array records through
+  `IViewConstructor2`, and releases its native heap allocations. The real
+  `MScript` caller remains outside the Linux closure.
 - SDL3 is implemented at the native platform boundary: an SDL-backed `IWindowManager` owns the
   shell window/event lifecycle, and an isolated SDL GPU/Vulkan prototype exercises indexed drawing,
   texture sampling, depth, resize, presentation and readback. Neither result is a production game
@@ -49,13 +70,46 @@ Read the smallest relevant authoritative document before changing code:
   Six stage-zero texture-combine fields reach the SDL fragment shader through the production
   batcher and native primitive, with bounded image and rollback evidence. Runtime `U32` texture
   handles now bind two repository textures through those interfaces and survive invalid/stale
-  handle checks; the production texture library is not connected. A production `StateMaterial`
+  handle checks. A production `StateMaterial`
   owner now applies native states and submits one cached indexed draw in a synthetic CPU check
   and a visible Vulkan probe with bounded readback. Unsupported legacy pipeline slots fail
   explicitly. A queued alpha-depth U16 pool draw also reaches visible Vulkan output. The same
   repository fixture was captured through the supported Windows D3D9 path and passed the
-  documented Linux/Windows spatial and color comparison. Production material-library loading,
-  backend selection and a native game scene remain open.
+  documented Linux/Windows spatial and color comparison. A focused Linux CPU check now loads
+  `StateMaterial` and `SimpleMaterial` classes from a synthetic UTF archive through the
+  production `MaterialLibrary`; the latter reads diffuse and opacity fields and submits a
+  cached indexed CPU draw. The production `TextureLibrary` now decodes a generated RGB565 UTF
+  texture, uploads an RGBA8 conversion through the native pipeline, and supplies its frame to
+  `SimpleMaterial` in a linked CPU check. The GPU probe also loads that material through the
+  production `MaterialLibrary` and sends its resolved texture frame to visible Vulkan output
+  through `StateMaterial`. A separate native CPU check now compiles and
+  executes the supported game's `MaterialManager`/`Material` owners on a
+  generated UTF script and saved float parameter, and connects them to
+  `XMesh::read` and `TextureLibrary` with a generated CQ2 mesh. The same check
+  now links the game's production `ITManager` and TGA reader: a generated
+  material texture reaches a checked 4-by-4 native pipeline CPU upload and
+  texture release. The production Engine/RenderMgr/PolyMesh synthetic caller
+  now reaches an indexed 36-byte game-vertex CPU submission and stops later
+  passes after a rejected draw. The same production Engine/RenderMgr/PolyMesh
+  caller now reaches visible SDL/Vulkan output from a generated RGB565-textured
+  game mesh under GCC and Clang; its GPU checks skip only in the command
+  sandbox. The App
+  `StandardVertex` format now has a checked 68-byte native CPU buffer and
+  optional primitive callback. A generated `Synthetic.fx` material now rejects
+  draws because it has no native effect. One source-pinned native
+  `VertexColor.fx` effect applies its pass, c30/c31 constants and production
+  TGA texture; both direct `Material::DrawVB` and the CQ2 App
+  `MeshRender::Render` caller reach visible SDL/Vulkan output from generated
+  UTF data. The older-format App branch also reaches visible
+  SDL/Vulkan output through its 68-byte vertex format. The same App draw
+  applies stage-zero texture factor and clockwise culling in bounded
+  synthetic readback. Other shader techniques, texture formats, effect
+  semantics and backend selection remain open. The native shell can explicitly
+  compose a production Engine/RenderMgr/PolyMesh instance from supplied UTF
+  files and repeatedly present an RGB565-textured legacy mesh or a CQ2
+  `VertexColor.fx` App `MeshRender::Render` mesh while pumping window events.
+  It does not advance simulation. This is not gameplay or
+  retail-runtime evidence.
 - Linux x86_64 ELF is the first port target. macOS, ARM64 and multiplayer portability are later.
 - Missing retail media must come from a lawfully obtained installation and must never enter this
   repository.
@@ -84,9 +138,37 @@ The **first native scene through a production render boundary** met the six focu
 on 2026-09-25. Its evidence is the synthetic repository fixture, production draw callers, visible
 Linux SDL/Vulkan and Windows D3D9 runtime, focused sanitizers, native Windows rebuild/ABI checks,
 and the documented bounded image comparison in `docs/RENDERER_BACKEND_PROTOTYPE.md`. This is not a
-native game scene or retail parity result. The next rendering milestone is to connect the
-production texture/material loading owners and a game scene to the native composition through the
-existing `IRenderPipeline`/`IRenderPrimitive` ownership model.
+playable native game scene or retail parity result. The next rendering milestone is to connect the
+active game texture/material loading owners and a game scene to the native composition through the
+existing `IRenderPipeline`/`IRenderPrimitive` ownership model. The supported game's
+`PolyMesh`/`IMaterialManager`/`DrawVB` path is distinct from the synthetic native
+`IMaterialLibrary`/`SimpleMaterial` fixture. `PolyMesh/Mesh.cpp`, the
+`polymesh.cpp` component, `Engine/engine.cpp`, `RenderMgr/RenderMgr.cpp` and
+the scalar `x86math.cpp` provider now compile as Linux objects.
+The native CPU check now loads `RenderMgr` and `PolyMesh` through the
+production Engine profile, creates a generated CQ2 mesh archetype and an
+engine instance, and retrieves its mesh through `IRenderer`. The production
+`render_instance` path now enters `PolyMesh` with the registered scalar math
+provider in a synthetic CPU check, reads the native `RP_TEXTURE` state,
+and forwards model/view through a registered native primitive receiver.
+The production `PolyMesh` indexed `MTVERTEX` draw reaches a rejecting
+native CPU callback with six U16 indices and, in the visible GPU mode, the
+SDL renderer with a production-loaded generated RGB565 texture and 496
+changed readback pixels under GCC and Clang. The
+SDL backend and shaders execute model/view plus projection on that generated
+mesh; the GPU checks skip in the command sandbox.
+`XMesh::read` executes a synthetic UTF mesh with one
+legacy material and a production texture frame in the linked CPU check. The
+same mesh owner reaches the CQ2 material-name
+lookup through a counting test manager. A separate native CPU check links
+production `XMesh`, `TextureLibrary` and `MaterialManager` on generated UTF
+input; its generated material texture reaches the production game `ITManager`
+and native pipeline CPU upload. The App caller rejects an unsupported
+synthetic effect, while the supported repository `VertexColor.fx` source
+now drives one synthetic CQ2 material draw through production
+`MeshRender::Render` to visible Vulkan. The older-format App branch reaches
+visible Vulkan geometry with tested texture-factor/culling states. See
+`docs/GAME_MATERIAL_PATH.md`.
 
 The completed slice was accepted only after all of the following were evidenced:
 
