@@ -890,6 +890,27 @@ execution for this manager target, native Windows Debug/Final rebuilds and
 cross-module ABI checks, retail runtime and Windows image comparison remain
 open.
 
+On 2026-09-27, the same production source was moved into the shared
+`frontierx_vertex_buffer_manager_owner` object target and linked into the
+GPU shell. Native registration now uses the supported Windows aggregate
+factory shape; the existing lifecycle probe requires its populated inner
+component and still executes acquisition/release against the real native
+pipeline under GCC, Clang and focused Clang ASan/UBSan. A generated
+eight-service system profile loads this owner through the App container;
+the scene initializes it after pipeline binding and cleans it up before
+unbinding. Visible GCC, Clang and focused sanitizer scenes preserve the
+legacy PolyMesh checksum `3422507570980372643` on generated inputs.
+The full App `RenderBatcher` buffer-acquisition branch has not yet been
+executed through this profile owner. Startup composition details are in
+[GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+The first full preset rerun exposed an existing StateMaterial fixture that
+queried the factory's outer pointer as though it were standalone. That
+fixture and the SDL GPU material fixture now supply and query the
+aggregate inner pointer. Focused StateMaterial checks pass under GCC,
+Clang and Clang ASan/UBSan; visible SDL GPU checks pass under both native
+compilers. Both complete Debug presets pass 42 executing checks and skip
+the two command-sandbox GPU checks.
+
 ## Native queued pool slice (2026-09-25)
 
 The next integration blocker was `RenderBatcher::set_state(RPR_BATCH, 1)`: it snapshots every

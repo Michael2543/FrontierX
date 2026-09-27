@@ -1,6 +1,7 @@
 #include "FrontierX/NativeWindowManager.h"
 
 #include "FrontierX/LegacyInput.h"
+#include "FrontierX/NativeStreamer.h"
 #include "FrontierX/SdlWindow.h"
 #include "SYSTEM.H"
 #include "TComponent.h"
@@ -106,6 +107,7 @@ public:
     {
         if (!window_.IsOpen()) return;
 
+        UpdateNativeStreamers();
         const bool background = (flags & WMF_BACKGROUND) != 0;
         bool wait = (flags & WMF_WAIT) != 0 || (!background && !active_);
         std::string error;
@@ -137,6 +139,19 @@ public:
     {
         x = cursor_x_;
         y = cursor_y_;
+    }
+
+    static bool HasMessageTarget(LegacyWindowToken window)
+    {
+        return live_window_ && live_window_->GetWindowHandle() == window &&
+            live_window_->window_callback_;
+    }
+    static bool Dispatch(LegacyWindowToken window, LegacyMessageId message,
+                         LegacyWParam wparam, LegacyLParam lparam)
+    {
+        if (!HasMessageTarget(window)) return false;
+        live_window_->window_callback_(window, message, wparam, lparam);
+        return true;
     }
 
 private:
@@ -205,6 +220,17 @@ private:
 };
 
 NativeWindowManager * NativeWindowManager::live_window_ = nullptr;
+}
+
+bool HasNativeWindowMessageTarget(LegacyWindowToken window)
+{
+    return NativeWindowManager::HasMessageTarget(window);
+}
+
+bool DispatchNativeWindowMessage(LegacyWindowToken window, LegacyMessageId message,
+                                 LegacyWParam wparam, LegacyLParam lparam)
+{
+    return NativeWindowManager::Dispatch(window, message, wparam, lparam);
 }
 
 void RegisterNativeWindowManager(ICOManager * manager)

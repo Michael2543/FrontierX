@@ -1,5 +1,8 @@
 #ifndef CQLIGHT_H
 #define CQLIGHT_H
+#if !defined(_WIN32)
+#include "Include/NativeAppGlobals.h"
+#endif
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                                CQLight.h                                 //

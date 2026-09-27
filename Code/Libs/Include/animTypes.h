@@ -3,8 +3,8 @@
 #ifndef __ANIMTYPES_H
 #define __ANIMTYPES_H
 
-#include "eventiterator.h"
-#include "engine.h"
+#include "EventIterator.h"
+#include "ENGINE.H"
 
 class Transform;
 

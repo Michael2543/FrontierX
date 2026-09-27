@@ -92,7 +92,9 @@ static INSTANCE_INDEX slot = INVALID_INSTANCE_INDEX,circle = INVALID_INSTANCE_IN
 static TRANSFORM baseSlotTrans;
 static Material *slot_mat,*circle_mat;
 static S32 mat_cnt;
+#if defined(_WIN32)
 S32 camMoved=0;
+#endif
 static U32 PLANETTEXMEMUSED=0;
 
 PGENTYPE pPlanetFontType;

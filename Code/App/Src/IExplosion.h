@@ -67,6 +67,7 @@ struct _NO_VTABLE IDebris : IObject
 //--------------------------------------------------------------------------//
 //
 struct IMeshInfoTree;
+struct MeshChain;
 struct _NO_VTABLE IExtent : IObject
 {
 	virtual void GetExtentInfo (const RECT *&extents,SINGLE *z_step,SINGLE *z_min,U8 *slices) = 0;

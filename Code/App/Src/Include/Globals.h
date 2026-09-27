@@ -19,6 +19,7 @@
 //--------------------------------------------------------------------------//
 
 #include <TManager.h>
+#include "AppObjectContracts.h"
 
 #undef CQEXTERN
 #ifdef BUILD_GLOBALS
@@ -38,8 +39,6 @@ enum InterfaceRes
 };
 
 #define MAX_ORTHO_DEPTH 1
-#define MAX_PLAYERS     8
-#define MAX_SELECTED_UNITS 22		
 #define MAX_NUGGETS		3			// max nuggets created after a ship explodes
 #define HYPER_SYSTEM_MASK 0x80
 #define FAB_MAX_QUEUE_SIZE 15		// also defined in DFabSave.h
@@ -49,11 +48,6 @@ enum InterfaceRes
 #define BASE_MAX_CREW 250
 #define BASE_MAX_METAL 220
 #define BASE_MAX_GAS 180
-
-#define SYSVOLATILEPTR (MAX_PLAYERS+1)		// for OBJPTR
-#define NONSYSVOLATILEPTR 0					// for OBJPTR
-#define TOTALLYVOLATILEPTR (0xFFFFFFFF)		// for OBJPTR
-#define LAUNCHVOLATILEPTR (0xFFFFFFFE)		// for OBJPTR
 
 // explosion instance limiting
 #define LOWER_EXP_BOUND     5			// off screen|same system, or same player
@@ -454,188 +448,11 @@ CQEXTERN LPTOP_LEVEL_EXCEPTION_FILTER cqExceptionHandler;
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
-enum CQTIMING
-{
-	// warning! if you change the order or add a new value, you must update the string names in OBJLIST.cpp
-	//
-	TIMING_FLUSH,
-	TIMING_RENDER2D,
-	TIMING_RENDERBACKGROUND,
-	TIMING_SWAPBUFFERS,
-	TIMING_GAMESYSTEM,
-	TIMING_UPDATE2D,
-	TIMING_CLEARBUFFERS,
-	TIMING_PLAYERAI,
-	TIMING_OPAGENT,
-	//
-	TIMING_END		// no other timing values after here!
-};
-
-
-//--------------------------------------------------------------------------//
-//--------------------------Interface IDs-----------------------------------//
-//--------------------------------------------------------------------------//
-// All ID's need to be of the form Interface##ID
-//
-enum OBJID
-{
-	IEmptyID = 0,
-	IObjectID = 0x10000000,
-	IBaseObjectID,
-	IGotoPosID,
-	ISaveLoadID,
-	IWeaponID,
-	IWeaponTargetID,
-	IAttackID,
-	IExplosionID,
-	ILauncherID,
-	ILaunchOwnerID,
-	IExplosionOwnerID,
-	IMissionActorID,
-	IBlastID,
-	IBuildID,
-	IHarvestID,
-	IBuildShipID,
-	IUpgradeID,
-	IPlanetID,
-	IFabricatorID,
-	IFighterID,
-	IFighterOwnerID,
-	IPlatformID,
-	IDebrisID,
-	IJumpGateID,
-	IMinefieldID,
-	IMinelayerID,
-	IFireballID,
-	IEffectID,
-	INuggetID,
-	IFieldID,
-	ICloakEffectID,
-	IAegisShieldID,
-	IGroupID,
-	IAOEWeaponID,
-	IPhysicalObjectID,
-	IEngineTrailID,
-	ICloakID,
-	IAdmiralID,
-	ISpenderID,
-	IFleetShipID,
-	ISupplierID,
-	IRepairPlatformID,
-	IRepaireeID,
-	ITroopshipID,
-	IShipDamageID,
-	IScrollingTextID,
-	IReconProbeID,
-	IReconLauncherID,
-	IExtentID,
-	IMapGenID,
-	IBuildEffectID,
-	IMovieCameraID,
-	IObjectGeneratorID,
-	ITriggerID,
-	IRecoverShipID,
-	IQuickSaveLoadID,
-	IBuildQueueID,
-	ISpiderDroneID,
-	IShuttleID,
-	IGameLightID,
-	IJumpPlatID,
-	IScriptObjectID,
-	ITerranDroneID,
-	IMimicID,
-	IShipMoveID,
-	IWormGeneratorID,
-	IWormholeSyncID,
-	IPlayerBombID,
-	IWormholeBlastID,
-	ITalorianEffectID,
-	IToggleID,
-	ISpaceWaveID,
-	IHarvestBuilderID,
-	ISystemSupplierID,
-	IParticleCircleID,
-	INovaExplosionID,
-	IArtifactID,
-	IArtifactHolderID,
-	IEffectTargetID,
-};
 //----------------------------------------------------
 // Different packet types (See NetPacket.h)
 //  Need 6 bits for this
 //
-enum PACKET_TYPE
-{
-	PT_PLAYER_SYNC=-32,
-	PT_HOST,
-	PT_FILE_TRANSFER,
-	PT_GAMEROOM,
-	PT_ACK,
-	PT_NACK,
-	PT_PAUSE,
-	PT_TURTLE,
-	PT_PARTRENAME,
-	PT_ENDGAME,
-	PT_NETTEXT,
-	PT_RESIGN,
-	PT_PLAYERLOST,
-	PT_PAUSEWARNING,
-	PT_SYNCSTATS,
-	PT_RESIGNACK,
-	PT_AIRESIGN,
-	PT_HOSTPEND,
-	PT_HOSTPENDACK,
-	// begin game packets
-	PT_HOSTUPDATE,
-	PT_USRMOVE,
-	PT_USRATTACK,
-	PT_USRSPATTACK,
-	PT_USRSTOP,
-	PT_USRAOEATTACK,
-	PT_USRWORMATTACK,
-	PT_USRBUILD,
-	PT_USRFAB,
-	PT_USRHARVEST,
-	PT_USRRALLY,
-	PT_USRESCORT,
-	PT_USRDOCKFLAGSHIP,
-	PT_USRUNDOCKFLAGSHIP,
-	PT_USRRESUPPLY,
-	PT_USRSHIPREPAIR,
-	PT_USRFABREPAIR,
-	PT_USRCAPTURE,
-	PT_USRSPABILITY,
-	PT_USRFABSALVAGE,
-	PT_USRPROBE,
-	PT_USRMIMIC,
-	PT_USRRECOVER,
-	PT_USRDROPOFF,
-	PT_USRFABPOS,
-	PT_STANCECHANGE,
-	PT_PATROL,
-	PT_FLEETDEF,
-	PT_USRFABJUMP,
-	PT_SUPPLYSTANCECHANGE,
-	PT_USRKILLUNIT,
-	PT_ALLIANCEFLAGS,
-	PT_GIFTORE,
-	PT_GIFTCREW,
-	PT_GIFTGAS,
-	PT_USRCREATEWORMHOLE,
-	PT_USRCLOAK,
-	PT_USR_EJECT_ARTIFACT,
-	PT_USRJUMP,
-	PT_FIGHTERSTANCECHANGE,
-	PT_ADMIRALTACTICCHANGE,
-	PT_HARVESTSTANCECHANGE,
-	PT_HARVESTERAUTOMODE,
-	PT_ADMIRALFORMATIONCHANGE,
-	PT_USRFORMATIONMOVE,
-	PT_FORMATIONATTACK,
-	PT_USEARTIFACTTARGETED,
-	// end. no packet types after this point
-	PT_LAST
-};
+#include "AppPacketTypes.h"
 
 /*
 namespace DA

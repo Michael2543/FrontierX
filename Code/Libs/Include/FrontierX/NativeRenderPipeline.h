@@ -2,6 +2,7 @@
 #define FRONTIERX_NATIVE_RENDER_PIPELINE_H
 
 #include "IRenderPrimitive.h"
+#include "FrontierX/NativeMaterialEffect.h"
 #include "FrontierX/RenderPipelineAdapter.h"
 #include "FrontierX/RenderSubmission.h"
 
@@ -9,6 +10,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -32,11 +35,15 @@ using NativeTextureUpload = GENRESULT (*)(void * context, U32 handle,
                                          const std::uint8_t * pixels, U32 width,
                                          U32 height, std::size_t byteCount);
 using NativeTextureDestroy = GENRESULT (*)(void * context, U32 handle);
+using NativeVertexConstants = GENRESULT (*)(void * context, UINT firstRegister,
+                                           const FLOAT * values, UINT registerCount);
 
 struct NativeTextureOperations
 {
     void * context = nullptr;
     NativeTextureHandleLookup lookup = nullptr;
+    // Created handles must not exceed NativeBatchStateIds.h's limit; the pipeline
+    // destroys and rejects higher handles reserved for App material states.
     NativeTextureCreate create = nullptr;
     NativeTextureUpload upload = nullptr;
     NativeTextureDestroy destroy = nullptr;
@@ -45,20 +52,38 @@ struct NativeTextureOperations
 // Native implementation of the established IRenderPipeline boundary. The
 // implemented slots forward to the checked IRenderPrimitive owner or manage
 // CPU vertex buffers; every other slot fails in RenderPipelineAdapter.
-class NativeRenderPipeline final : public RenderPipelineAdapter
+class NativeRenderPipeline : public RenderPipelineAdapter
 {
 public:
+    NativeRenderPipeline() noexcept = default;
     explicit NativeRenderPipeline(IRenderPrimitive * drawTarget,
-                                  NativeTextureOperations textures = {}) noexcept;
+                                  NativeTextureOperations textures = {},
+                                  NativeVertexConstants vertexConstants = nullptr,
+                                  void * vertexConstantsContext = nullptr) noexcept;
     NativeRenderPipeline(NativeVertexBufferLookup lookup,
                          void * lookupContext,
-                         IRenderPrimitive * drawTarget) noexcept;
+                         IRenderPrimitive * drawTarget,
+                         NativeTextureOperations textures = {},
+                         NativeVertexConstants vertexConstants = nullptr,
+                         void * vertexConstantsContext = nullptr) noexcept;
+
+    GENRESULT BindScene(IRenderPrimitive * drawTarget,
+                        NativeTextureOperations textures,
+                        NativeVertexConstants vertexConstants,
+                        void * vertexConstantsContext) noexcept;
+    GENRESULT UnbindScene() noexcept;
 
     GENRESULT COMAPI QueryInterface(const C8 * interfaceName, void ** instance) override;
     U32 COMAPI AddRef() override;
     U32 COMAPI Release() override;
 
     GENRESULT COMAPI query_device_ability(RPDEVICEABILITY ability, U32 * outAnswer) override;
+    ID3DXEffect ** load_effect(const char * filename,
+                              IComponentFactory * directory) override;
+    GENRESULT COMAPI set_vs_constants(UINT firstRegister, CONST FLOAT * values,
+                                     UINT registerCount) override;
+    GENRESULT COMAPI set_pipeline_state(RPPIPELINESTATE state, U32 value) override;
+    GENRESULT COMAPI get_pipeline_state(RPPIPELINESTATE state, U32 * value) override;
     GENRESULT COMAPI create_vertex_buffer(U32 vertexFormat, int vertexCount, U32 flags,
                                           IRP_VERTEXBUFFERHANDLE * outHandle) override;
     GENRESULT COMAPI destroy_vertex_buffer(IRP_VERTEXBUFFERHANDLE handle) override;
@@ -129,8 +154,20 @@ public:
         D3DPRIMITIVETYPE primitiveType, IRP_VERTEXBUFFERHANDLE vertexBufferHandle,
         int startVertex, int vertexCount, const U16 * indices,
         int indexCount, U32 flags) override;
+    GENRESULT COMAPI draw_indexed_primitive_vb(
+        D3DPRIMITIVETYPE primitiveType, IRP_VERTEXBUFFERHANDLE vertexBufferHandle,
+        int startVertex, int vertexCount, IDirect3DIndexBuffer9 * indexBuffer,
+        int indexCount, U32 flags) override;
+    GENRESULT COMAPI create_index_buffer(
+        UINT byteLength, IDirect3DIndexBuffer9 ** outIndexBuffer) override;
 
 private:
+    struct OwnedEffect
+    {
+        std::unique_ptr<ID3DXEffect> owner;
+        ID3DXEffect * pointer = nullptr;
+    };
+
     struct OwnedTexture
     {
         U32 width = 0U;
@@ -160,13 +197,25 @@ private:
     void * lookupContext_ = nullptr;
     IRenderPrimitive * drawTarget_ = nullptr;
     NativeTextureOperations textures_{};
+    NativeVertexConstants vertexConstants_ = nullptr;
+    void * vertexConstantsContext_ = nullptr;
+    std::map<std::string, OwnedEffect> effects_;
     std::map<U32, OwnedTexture> ownedTextures_;
     std::atomic<U32> referenceCount_{1U};
+    U32 textureEnabled_ = 1U;
     std::map<IRP_VERTEXBUFFERHANDLE, OwnedVertexBuffer> ownedBuffers_;
     IRP_VERTEXBUFFERHANDLE nextHandle_ = 1U;
     std::vector<RenderVertexP3DiffuseT2> converted_;
     std::vector<RenderVertexP3DiffuseT4> converted2_;
 };
+
+void RegisterNativeRenderPipeline(ICOManager * manager);
+GENRESULT BindNativeRenderPipeline(IRenderPipeline * pipeline,
+                                   IRenderPrimitive * drawTarget,
+                                   NativeTextureOperations textures,
+                                   NativeVertexConstants vertexConstants,
+                                   void * vertexConstantsContext);
+GENRESULT UnbindNativeRenderPipeline(IRenderPipeline * pipeline);
 } // namespace FrontierX
 
 #endif

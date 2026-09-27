@@ -1,7 +1,7 @@
 #ifndef __SYSCONSUMERDESC_H
 #define __SYSCONSUMERDESC_H
 
-#include "DACOM.h"
+#include "DACOM.H"
 
 struct SYSCONSUMERDESC : public AGGDESC
 {

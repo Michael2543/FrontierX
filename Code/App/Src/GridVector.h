@@ -17,7 +17,9 @@
 #define HALFGRID 2048
 
 #undef GRIDVECTOREXTERN
-#ifdef BUILD_TRIM
+#if !defined(_WIN32)
+#define GRIDVECTOREXTERN
+#elif defined(BUILD_TRIM)
 #define GRIDVECTOREXTERN __declspec(dllexport)
 #else
 #define GRIDVECTOREXTERN __declspec(dllimport)
@@ -28,10 +30,16 @@
 
 inline long __fastcall F2LONG (SINGLE s)
 {
+#if defined(__x86_64__) && !defined(_WIN32)
+	S32 result;
+	__asm__ __volatile__("flds %1\n\tfistpl %0" : "=m"(result) : "m"(s) : "st");
+	return result;
+#else
 	long result;
 	__asm  fld	dword ptr[s]
 	__asm  fistp dword ptr[result]
 	return result;
+#endif
 }
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//

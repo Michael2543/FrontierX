@@ -17,7 +17,11 @@
 
 
 #ifndef DACOM_H
+#if !defined(_WIN32)
+#include <DACOM.H>
+#else
 #include <DACOM.h>
+#endif
 #endif
 
 

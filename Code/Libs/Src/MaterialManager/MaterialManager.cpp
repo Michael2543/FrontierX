@@ -4,23 +4,26 @@
 //
 //----------------------------------------------------------------------------------------------
 
+#if defined(_WIN32)
 #include "stdafx.h"
+#include <d3d9.h>
+#include "resource.h"
+#include <commctrl.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 #include <IMaterialManager.h>
 #include "InternalMaterialManager.h"
 #include "Material.h"
 #include "Modifier.h"
-#include <d3d9.h>
-
-#include "resource.h"
-
-#include <tcomponent.h>
+#include <TComponent.h>
 #include <da_heap_utility.h>
-#include <filesys.h>
-#include <commctrl.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
 
 #include <string>
 #include <list>
+#include <new>
 //-----------------------------------------------------------------------------------------------
 //script constants
 #define SC_BEGIN_SCRIPT "BEGIN_MAT_SCRIPT"
@@ -81,8 +84,10 @@ KnownRenderStateDef matRenderState[] = {
 //-------------------------------------------------------------------------------------------------
 
 
+#if defined(_WIN32)
 // to load IDD_DIALOG
 HINSTANCE g_hInstance = 0;
+#endif
 
 struct MaterialList : std::list<Material>
 {
@@ -375,7 +380,9 @@ struct ShaderNode : IShader
 
 //----------------------------------------------------------------------------------------------
 // DlgProc
+#if defined(_WIN32)
 INT_PTR CALLBACK MaterialDialogProc( HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam );
+#endif
 //----------------------------------------------------------------------------------------------
 
 struct MaterialManager : IMaterialManager, public IAggregateComponent, IInternalMaterialManager
@@ -574,6 +581,7 @@ GENRESULT COMAPI MaterialManager::OpenEditWindow( IMaterialCallback* _callback )
 		callback = _callback;
 	}
 
+#if defined(_WIN32)
 	if( !hDialog )
 	{
 		hDialog = ::CreateDialogParam( g_hInstance, MAKEINTRESOURCE(IDD_DIALOG), NULL, MaterialDialogProc, (DWORD)((IInternalMaterialManager*)this) );
@@ -582,6 +590,7 @@ GENRESULT COMAPI MaterialManager::OpenEditWindow( IMaterialCallback* _callback )
 			return GR_OK;
 		}
 	}
+#endif
 
 	return GR_GENERIC;
 }
@@ -1013,19 +1022,21 @@ void MaterialManager::parseShader(IFileSystem * inFile, const char * filename)
 		if(strncmp(currentLine,SC_BEGIN_SCRIPT,strlen(SC_BEGIN_SCRIPT)) == 0)
 		{
 			currentLine = getNextLine(currentLine);
+			if(*currentLine == '\n') ++currentLine;
 			//ok now parse the shader lines
 			bool bFinished = false;
-			while(!bFinished)
+			while(!bFinished && !isAtEnd(currentLine))
 			{
 				char * lineEnd = getNextLine(currentLine);
-				while(currentLine != lineEnd)
+				while(currentLine != lineEnd && !isAtEnd(currentLine))
 				{
 					if(parseCommand(node,currentLine,bFinished))
 						currentLine = lineEnd;
 					else
 						++currentLine;
 				}
-				++currentLine;
+				currentLine = lineEnd;
+				if(*currentLine == '\n') ++currentLine;
 			}
 			break;
 		}
@@ -1058,20 +1069,22 @@ void MaterialManager::reloadShader(ShaderNode * node)
 			char * currentLine = node->data;
 			while(!isAtEnd(currentLine))
 			{
-				if(strncmp(currentLine,SC_BEGIN_SCRIPT,strlen(SC_BEGIN_SCRIPT)) == 0)
-				{
-					currentLine = getNextLine(currentLine);
-					//ok now parse the shader lines
-					bool bFinished = false;
-					while(!bFinished)
+					if(strncmp(currentLine,SC_BEGIN_SCRIPT,strlen(SC_BEGIN_SCRIPT)) == 0)
 					{
-						char * lineEnd = getNextLine(currentLine);
-						while(currentLine != lineEnd)
+						currentLine = getNextLine(currentLine);
+						if(*currentLine == '\n') ++currentLine;
+						//ok now parse the shader lines
+						bool bFinished = false;
+						while(!bFinished && !isAtEnd(currentLine))
 						{
+							char * lineEnd = getNextLine(currentLine);
+							while(currentLine != lineEnd && !isAtEnd(currentLine))
+							{
 							if(parseCommand(node,currentLine,bFinished))
 								currentLine = lineEnd;
 							else
-								++currentLine;
+							currentLine = lineEnd;
+							if(*currentLine == '\n') ++currentLine;
 						}
 						++currentLine;
 					}
@@ -1529,6 +1542,7 @@ DWORD MaterialManager::getRenderStateValueFromString(char * valueName, DWORD sta
 
 //----------------------------------------------------------------------------------------------
 
+#if defined(_WIN32)
 BOOL COMAPI DllMain (HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	switch (fdwReason)
@@ -1563,4 +1577,41 @@ BOOL COMAPI DllMain (HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	return TRUE;
 }
+#endif
 
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool ResetNativeGameMaterialManager(IMaterialManager *manager)
+{
+	MaterialManager *owner = dynamic_cast<MaterialManager *>(manager);
+	if (!owner) return false;
+	owner->materialList.clear();
+	while (owner->shaders)
+	{
+		ShaderNode *node = owner->shaders;
+		owner->shaders = node->next;
+		delete node;
+	}
+	owner->SHADERDIR.free();
+	owner->TEXTUREDIR.free();
+	owner->MATDEFDIR.free();
+	owner->MATDIR = nullptr;
+	owner->PIPE = nullptr;
+	owner->TMANAGER = nullptr;
+	return true;
+}
+
+bool RegisterNativeGameMaterialManager(ICOManager *manager)
+{
+	if (!manager) return false;
+	IComponentFactory *factory = new (std::nothrow)
+		DAComponentFactory2<DAComponentAggregate<MaterialManager>, AGGDESC>(CLSID_MaterialManager);
+	if (!factory) return false;
+	const GENRESULT result = manager->RegisterComponent(
+		factory, CLSID_MaterialManager, DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

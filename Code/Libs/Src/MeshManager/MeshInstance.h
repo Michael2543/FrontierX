@@ -9,6 +9,11 @@
 //                                                                          //
 //--------------------------------------------------------------------------//
 
+#if !defined(_WIN32)
+namespace FrontierXMeshManager
+{
+#endif
+
 struct MeshInstance : public IMeshInstance, Animation::IEventHandler
 {
 	MeshInstance * next;
@@ -34,7 +39,7 @@ struct MeshInstance : public IMeshInstance, Animation::IEventHandler
 
 	~MeshInstance();
 
-	void Initialize(MeshArch * meshArch, struct IEngineInstance * engInst = NULL);
+	bool Initialize(MeshArch * meshArch, struct IEngineInstance * engInst = NULL);
 
 	INSTANCE_INDEX findInstanceFromArch(ARCHETYPE_INDEX baseArch);
 
@@ -89,5 +94,9 @@ struct MeshInstance : public IMeshInstance, Animation::IEventHandler
 
 	virtual void COMAPI on_loop(unsigned int channel_id, Transform & xform, void * user_supplied);
 };
+
+#if !defined(_WIN32)
+}
+#endif
 
 #endif

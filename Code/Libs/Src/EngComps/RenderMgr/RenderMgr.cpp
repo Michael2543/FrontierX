@@ -1,7 +1,9 @@
 //$Header: /Libs/dev/Src/EngComps/RenderMgr/RenderMgr.cpp 69    3/21/00 4:30p Pbleisch $
 
 #define WINDOWS_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #pragma warning (disable : 4786 4530)
 
 #include <limits.h>
@@ -14,23 +16,25 @@
 static FILE *g_renderMgrDiag;
 #define RM_DIAG(...) do { if (!g_renderMgrDiag) g_renderMgrDiag = fopen("debug/rendermgr_diag.txt", "w"); if (g_renderMgrDiag) { fprintf(g_renderMgrDiag, __VA_ARGS__); fflush(g_renderMgrDiag); } } while (0)
 
-#include "dacom.h"
+#include "DACOM.H"
 #include "TComponent.h"
 #include "TSmartPointer.h"
-#include "3DMath.h"
+#include "3dmath.h"
 #include "FDump.h"
 #include "TempStr.h"
 #include "SysConsumerDesc.h"
 #include "da_heap_utility.h"
+#ifdef _WIN32
 #include "AllocLite.h"
-#include "persistmisc.h"
+#endif
+#include "PersistMisc.h"
+#include "renderer.h"
+#include "ICamera.h"
 #include "IRenderComponent.h"
 #include "FileSys_Utility.h"
 #include "IProfileParser_Utility.h"
-#include "Engine.h"
-#include "EngComp.h"
-#include "Renderer.h"
-#include "ICamera.h"
+#include "ENGINE.H"
+#include "engcomp.h"
 #include "IRenderPrimitive.h"
 
 #include "Tfuncs.h"
@@ -934,8 +938,8 @@ BOOL32 RenderMgr::find_visible_rect( INSTANCE_INDEX inst_index, ICamera *camera,
 
 	const Vector &pos = engine->get_position( inst_index );
 
-	rect->x0 = rect->y0 = LONG_MAX;
-	rect->x1 = rect->y1 = LONG_MIN;
+	rect->x0 = rect->y0 = std::numeric_limits<S32>::max();
+	rect->x1 = rect->y1 = std::numeric_limits<S32>::min();
 	depth = 0.0f;
 
 	float x, y;
@@ -1354,7 +1358,7 @@ GENRESULT RenderMgr::load_render_components (void)
 	for( line_num = 0; IPP->ReadProfileLine( hSection, line_num, line, 1024 ); line_num++ ) {
 
 		// remove leading whitespace
-		for( p = line; *p && (*p == '\t' && *p == ' '); p++ );
+		for( p = line; *p && (*p == '\t' || *p == ' '); p++ );
 
 		// check for comment
 		if( *p == ';' ) {
@@ -1367,6 +1371,9 @@ GENRESULT RenderMgr::load_render_components (void)
 		for( p = clsid; *p && (*p != '\t' && *p != ' ' && *p != ';' ); p++ );
 
 		*p = 0;
+		if( *clsid == 0 ) {
+			continue;
+		}
 
 		info.interface_name = clsid;
 		info.engine_services = engine;
@@ -1374,7 +1381,13 @@ GENRESULT RenderMgr::load_render_components (void)
 
 		// create clsid and aggregate it.
 		if( FAILED( DACOM_Acquire()->CreateInstance( &info, (void **)&render_comp ) ) ) {
+#if defined(_WIN32)
 			GENERAL_TRACE_1( TEMPSTR( "RenderMgr: load_render_components: '%s' is not available\n", clsid ) );
+#else
+			GENERAL_WARNING( "RenderMgr: required render component is not available\n" );
+			IPP->CloseSection( hSection );
+			return GR_GENERIC;
+#endif
 		}
 		else {
 			components.push_back( render_comp );
@@ -1430,7 +1443,7 @@ GENRESULT RenderMgr::create_discrete_lod_archetype( ARCHETYPE_INDEX arch_index, 
 
 	SWITCH_DISTANCE_TYPE switch_in_distance;
 	SWITCH_DISTANCE_TYPE *switch_in_distances;
-	unsigned long num_switch_in_distances;
+	U32 num_switch_in_distances;
 
 	if( FAILED( ReadAllocVector( lodDir, SWITCH_DIST_FILE, num_switch_in_distances, switch_in_distances ) ) ){
 		GENERAL_TRACE_1( "RenderMgr: create_discrete_lod_archetype: no switches chunk, defaulting to minimum distance and one (1) lod level\n" );
@@ -1482,13 +1495,16 @@ GENRESULT RenderMgr::create_discrete_lod_archetype( ARCHETYPE_INDEX arch_index, 
 	COMPONENT_LIST::iterator beg = components.begin();
 	COMPONENT_LIST::iterator end = components.end();
 
-	char LevelStr[8] = { 'L', 'e', 'v', 'e', 'l', 0, 0, 0 };
+	char LevelStr[16] = { 'L', 'e', 'v', 'e', 'l', 0 };
 	char *num_pt = LevelStr + strlen( LevelStr );
 	bool succeeded;
 
 	for( int lod_level = 0; lod_level < render_arch->get_num_lod_levels(); lod_level++ ) {
 		
-		_itoa( lod_level, num_pt, 10 );
+		if( snprintf( num_pt, sizeof(LevelStr) - (num_pt - LevelStr), "%d", lod_level ) >=
+			static_cast<int>(sizeof(LevelStr) - (num_pt - LevelStr)) ) {
+			return GR_GENERIC;
+		}
 
 		DAFILEDESC arch_dir( LevelStr );
 
@@ -1680,6 +1696,7 @@ const RenderArchetypeLod *RenderMgr::compute_lod_level( INSTANCE_INDEX inst_inde
 // DllMain
 //
 //
+#ifdef _WIN32
 BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 {
 	IComponentFactory *server;
@@ -1697,13 +1714,25 @@ BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 
 	return TRUE;
 }
+#else
+#include "FrontierX/NativeRenderManager.h"
+
+bool FrontierX::RegisterNativeRenderManager( ICOManager *manager )
+{
+	if( manager == NULL ) {
+		return false;
+	}
+	IComponentFactory *server = new DAComponentFactory2<DAComponentAggregate<RenderMgr>, SYSCONSUMERDESC>( "IRenderer" );
+	if( server == NULL ) {
+		return false;
+	}
+	const GENRESULT result = manager->RegisterComponent( server, "IRenderer", DACOM_NORMAL_PRIORITY );
+	server->Release();
+	return result == GR_OK;
+}
+#endif
 
 // EOF
-
-
-
-
-
 
 
 

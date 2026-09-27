@@ -25,15 +25,15 @@
 #endif
 
 #ifndef ENGINE_H
-#include "Engine.h"
+#include "ENGINE.H"
 #endif
 
 #ifndef SYSTEM_H
-#include "System.h"
+#include "SYSTEM.H"
 #endif
 
 #ifndef LIGHTMAN_H
-#include "Lightman.h"
+#include "lightman.h"
 #endif
 
 #ifndef TSMARTPOINTER_H
@@ -41,7 +41,7 @@
 #endif
 
 #ifndef HEAPOBJ_H
-#include "heapobj.h"
+#include "HeapObj.h"
 #endif
 
 #ifndef __da_heap_utility_h__
@@ -49,7 +49,7 @@
 #endif
 
 #ifndef FDUMP_H
-#include "fdump.h"
+#include "FDump.h"
 #endif
 
 #include <malloc.h>		// for calloc

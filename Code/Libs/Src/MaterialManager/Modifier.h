@@ -1,7 +1,7 @@
 #ifndef _MODIFIER_H_
 #define _MODIFIER_H_
 
-#include "dacom.h"
+#include "DACOM.H"
 #include <string>
 
 //----------------------------------------------------------------------------------------------
@@ -39,6 +39,12 @@ struct Modifier : public IModifier
 	IInternalMaterialManager * owner;
 
 	U32 refCount;
+	struct ColorValue
+	{
+		U8 red;
+		U8 green;
+		U8 blue;
+	};
 
 	enum ModType
 	{
@@ -52,12 +58,7 @@ struct Modifier : public IModifier
 	{
 		S32 intValue;
 		SINGLE floatValue;
-		struct ColorValue
-		{
-			U8 red;
-			U8 green;
-			U8 blue;
-		}colorValue;
+		ColorValue colorValue;
 		DWORD stateValue;
 	};
 

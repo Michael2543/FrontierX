@@ -1,7 +1,7 @@
 #ifndef _MATERIAL_H_
 #define _MATERIAL_H_
 
-#include "dacom.h"
+#include "DACOM.H"
 #include <string>
 
 struct MatFloat
@@ -143,7 +143,7 @@ struct Material : public IMaterial
 
 	~Material();
 
-	void SetShaderConstants(IModifier * modList,SINGLE frameTime);
+	bool SetShaderConstants(IModifier * modList,SINGLE frameTime);
 
 	bool PreparePass(int pass);
 

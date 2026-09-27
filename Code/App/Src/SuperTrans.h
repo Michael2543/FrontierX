@@ -65,7 +65,7 @@ public:
 	{
 	}
 
-	TRANSFORM::TRANSFORM (const Matrix & matrix, const Vector & position) : Transform(matrix)
+	TRANSFORM (const Matrix & matrix, const Vector & position) : Transform(matrix)
 	{
 		translation = position;
 	}

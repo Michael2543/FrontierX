@@ -35,12 +35,14 @@ int main()
     FrontierX::NativeRenderPipeline pipeline(nullptr);
     AGGDESC descriptor("VertexBufferManager");
     descriptor.outer = &pipeline;
+    IDAComponent * inner = nullptr;
+    descriptor.inner = &inner;
     void * raw = nullptr;
-    if (!Expect(components->CreateInstance(&descriptor, &raw) == GR_OK && raw,
-                "production manager factory")) return 1;
-    auto * component = static_cast<IDAComponent *>(raw);
+    if (!Expect(components->CreateInstance(&descriptor, &raw) == GR_OK &&
+                raw && inner,
+                "production manager aggregate factory")) return 1;
     IVertexBufferManager * manager = nullptr;
-    if (!Expect(component->QueryInterface(IID_IVertexBufferManager,
+    if (!Expect(inner->QueryInterface(IID_IVertexBufferManager,
                     reinterpret_cast<void **>(&manager)) == GR_OK && manager,
                 "production manager interface")) return 1;
     if (!Expect(manager->add_vertex_buffer(FrontierX::LegacyD3d9::kRpVertexFvf,
@@ -101,6 +103,7 @@ int main()
     if (!Expect(manager->add_vertex_buffer(format, 64, 0) == GR_INVALID_PARMS,
                 "post-cleanup addition rejected")) return 1;
     manager->Release();
+    inner->Release();
     std::cout << "production vertex-buffer manager lifecycle passed\n";
     return 0;
 }

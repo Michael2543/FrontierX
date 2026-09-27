@@ -1,7 +1,7 @@
 #ifndef _INTERNAL_MATERIAL_MANAGER_H_
 #define _INTERNAL_MATERIAL_MANAGER_H_
 
-#include "dacom.h"
+#include "DACOM.H"
 
 #include "rendpipeline.h"
 

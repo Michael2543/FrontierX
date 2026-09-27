@@ -26,16 +26,19 @@
 // 4786: truncating function name (255 chars) in browser info
 #pragma warning (disable : 4514 4201 4100 4512 4245 4127 4355 4244 4710 4702 4786)
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #pragma warning (disable : 4355 4201)
 
-#include "symtable.h"
-#include "tokendef.h"
-#include "ferror.h"
-#include "fdump.h"
+#include "Symtable.h"
+#include "Tokendef.h"
+#include "Ferror.h"
+#include "FDump.h"
 
 #include "HeapObj.h"
 
+#include <cstdint>
 //#include <memory.h>
 //#include <string.h>
 //#include <stdio.h>
@@ -55,6 +58,12 @@ void * Symbol::operator new (size_t size)
 {
 	return HEAP->AllocateMemory(size, "DataViewer:Symbol struct");
 }
+#ifndef _WIN32
+void Symbol::operator delete (void * memory) noexcept
+{
+	if (memory) HEAP->FreeMemory(memory);
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 unsigned long Symbol::Release (void)
@@ -299,7 +308,7 @@ SYMBOL SymbolManager::create_symbol(char *_name, unsigned hashval, int level)
 void SymbolManager::add_node (SYMBOL sym)
 {
 	SYMBOL node;
-	const UINT hashval = sym->hash;
+        const unsigned hashval = sym->hash;
 
 	sym->left = sym->right = 0;
 
@@ -470,13 +479,14 @@ SYMBOL SymbolManager::set_reserved(void)
 	last->link = insertbt("float", REAL, sizeof(float));
 	last->link->AddRef();
 	last = last->link;
-	last->link = insertbt("__int64", INTEGER, sizeof(__int64));
+	last->link = insertbt("__int64", INTEGER, sizeof(std::int64_t));
 	last->link->AddRef();
 	last = last->link;
 	last->link = insertbt("int", INTEGER, sizeof(int));
 	last->link->AddRef();
 	last = last->link;
-	last->link = insertbt("long", INTEGER, sizeof(long));
+	// Parsed script layouts retain Win32's 32-bit long on LP64 hosts.
+	last->link = insertbt("long", INTEGER, sizeof(std::int32_t));
 	last->link->AddRef();
 	last = last->link;
 	last->link = insertbt("short", INTEGER, sizeof(short));

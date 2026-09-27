@@ -1,5 +1,6 @@
 #ifndef MSCRIPT_H
 #define MSCRIPT_H
+#include <stddef.h>
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                               MScript.h								    //
@@ -15,7 +16,11 @@
 // struct used by script dll's to register a program
 //
 #undef CQEXTERN
-#ifdef BUILD_MISSION
+#undef MEXTERN
+#if !defined(_WIN32)
+#define CQEXTERN
+#define MEXTERN
+#elif defined(BUILD_MISSION)
 #define CQEXTERN __declspec(dllexport)
 #define MEXTERN  __declspec(dllexport)
 #else
@@ -87,7 +92,16 @@ struct CQSCRIPTENTRY
 	U32   eventFlags;			// See eventFlag documentation, above
 	CQPROGFACTORY factory;
 };
+#if defined(_WIN32)
 static_assert(sizeof(CQSCRIPTENTRY) == 24, "CQSCRIPTENTRY must be 24 bytes to match the retail script ABI");
+static_assert(offsetof(CQSCRIPTENTRY, factory) == 20, "Win32 CQSCRIPTENTRY factory offset changed");
+#else
+// Native script registration carries process pointers, not serialized offsets.
+static_assert(sizeof(void *) == 8 && sizeof(CQSCRIPTENTRY) == 40,
+              "native CQSCRIPTENTRY pointer layout changed");
+static_assert(offsetof(CQSCRIPTENTRY, factory) == 32,
+              "native CQSCRIPTENTRY factory offset changed");
+#endif
 
 //---------------------------------------------------------------------------
 //
@@ -101,7 +115,16 @@ struct CQSCRIPTDATADESC
 	U32 typeSize;				// size of the save struct
 	struct HINSTANCE__ * hLocal;				// handle to the localization module
 };
+#if defined(_WIN32)
 static_assert(sizeof(CQSCRIPTDATADESC) == 28, "CQSCRIPTDATADESC must be 28 bytes to match the retail script ABI");
+static_assert(offsetof(CQSCRIPTDATADESC, hLocal) == 24,
+              "Win32 CQSCRIPTDATADESC module offset changed");
+#else
+static_assert(sizeof(CQSCRIPTDATADESC) == 56,
+              "native CQSCRIPTDATADESC pointer layout changed");
+static_assert(offsetof(CQSCRIPTDATADESC, hLocal) == 48,
+              "native CQSCRIPTDATADESC module offset changed");
+#endif
 
 //---------------------------------------------------------------------------
 //
@@ -1224,4 +1247,3 @@ private:
 
 
 #endif
-

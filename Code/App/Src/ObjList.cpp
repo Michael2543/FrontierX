@@ -11,16 +11,30 @@
     $Header: /Conquest/App/Src/ObjList.cpp 373   10/27/00 2:45p Jasony $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <FrontierX/PlatformTime.h>
+#include <FrontierX/LegacyInput.h>
+#include <DACOM.H>
+#include <HeapObj.h>
+#include <TSmartPointer.h>
+#include <IConnection.h>
+#include <cstring>
+struct IMeshArchetype;
+struct MeshChain;
+#endif
 
 #include "TResClient.h"
 #include "IObject.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "Objwatch.h"
 #include "ObjClass.h"
 #include "IResource.h"
-#include "Resource.h"
+#include "resource.h"
 #include "UserDefaults.h"
 #include "Menu.h"
 #include "Camera.h"
@@ -36,7 +50,9 @@
 #include <DMBaseData.h>
 #include "FogOfWar.h"
 #include "Sector.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "DrawAgent.h"
 #include "IBlast.h"
 #include "IGroup.h"
@@ -46,14 +62,14 @@
 #include "IAdmiral.h"
 #include "GenData.h"
 #include "IUnbornMeshList.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IDust.h"
 #include "ILauncher.h"
 #include "SFX.h"
-#include "IPLANET.h"
+#include "IPlanet.h"
 #include "EventScheduler.h"
 #include "EffectPlayer.h"
-#include <IParticleMAnager.h>
+#include <IParticleManager.h>
 //#include <IRenderDebugger.h>
 
 //for timing only
@@ -68,9 +84,12 @@
 #include "MeshRender.h"
 #include "ObjMap.h"
 #include "ObjMapIterator.h"
+#include <DNugget.h>
 #include "INugget.h"
 #include <DSector.h>
+#if defined(_WIN32)
 #include "CQLight.h"
+#endif
 #include "THashList.h"
 #include "IJumpPlat.h"
 #include "IAttack.h"
@@ -82,21 +101,76 @@
 #include <EventSys.h>
 #include <TComponent.h>
 #include <IConnection.h>
-#include <Engine.h> 
-#include <VFX.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <ICamera.h>
+#if !defined(_WIN32)
+#include "CQLight.h"
+#endif
+#include <ENGINE.H>
+#include <VFX.H>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <TConnPoint.h>
 #include <TConnContainer.h>
 #include <WindowManager.h>
-#include <Renderer.h>
+#include <renderer.h>
 #include <IAnim.h>
-#include <Pixel.h>
+#include <pixel.h>
 #include <IRenderPrimitive.h>
 
+#if defined(_WIN32)
 #include <CommCtrl.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
+#if !defined(_WIN32)
+#include <cstdint>
+#endif
+
+#if !defined(_WIN32)
+#define __max(a,b) (((a) > (b)) ? (a) : (b))
+#define __min(a,b) (((a) < (b)) ? (a) : (b))
+extern IMenuResource *MENU;
+constexpr U32 WM_LBUTTONUP = FrontierX::LegacyMessage::LeftButtonUp;
+constexpr U32 WM_LBUTTONDOWN = FrontierX::LegacyMessage::LeftButtonDown;
+constexpr U32 WM_LBUTTONDBLCLK = FrontierX::LegacyMessage::LeftButtonDoubleClick;
+constexpr U32 WM_RBUTTONDOWN = FrontierX::LegacyMessage::RightButtonDown;
+constexpr U32 WM_RBUTTONUP = FrontierX::LegacyMessage::RightButtonUp;
+constexpr U32 WM_MOUSEMOVE = FrontierX::LegacyMessage::MouseMove;
+constexpr U32 WM_MENUSELECT = 0x011f;
+constexpr std::uintptr_t MK_CONTROL = FrontierX::LegacyMouseMask::Control;
+constexpr std::uintptr_t MK_SHIFT = FrontierX::LegacyMouseMask::Shift;
+static U32 LOWORD(std::uintptr_t value) { return static_cast<U32>(value & 0xffffU); }
+static U32 HIWORD(std::uintptr_t value) { return static_cast<U32>((value >> 16) & 0xffffU); }
+// The original frame timer uses QPC ticks; the native platform clock uses
+// microsecond ticks with a matching fixed frequency.
+using LARGE_INTEGER = S64;
+static_assert(sizeof(LARGE_INTEGER) == sizeof(U64), "native clock tick width");
+static BOOL QueryPerformanceCounter(LARGE_INTEGER *counter)
+{
+	if (!counter)
+		return FALSE;
+	const U64 ticks = FrontierX::Platform::MonotonicMicroseconds();
+	std::memcpy(counter, &ticks, sizeof(ticks));
+	return TRUE;
+}
+
+static BOOL QueryPerformanceFrequency(LARGE_INTEGER *frequency)
+{
+	if (!frequency)
+		return FALSE;
+	const S64 ticksPerSecond = 1000000;
+	std::memcpy(frequency, &ticksPerSecond, sizeof(ticksPerSecond));
+	return TRUE;
+}
+
+static void Sleep(U32 milliseconds)
+{
+	if (milliseconds == 0)
+		FrontierX::Platform::YieldThread();
+	else
+		FrontierX::Platform::SleepForMilliseconds(milliseconds);
+}
+#endif
 
 //MeshRender.cpp
 void UpdateRenderEffects(SINGLE dt);
@@ -117,8 +191,10 @@ void clearFleetGroupList();
 void clearFleetMemberList();
 
 
+#if defined(_WIN32)
 extern "C"
 __declspec(dllimport) IHeap * __stdcall GetBatchHeap (void);
+#endif
 //-----------------------------------------------------------------------------------
 //
 static char *timingNames[TIMING_END] = {
@@ -135,6 +211,7 @@ static char *timingNames[TIMING_END] = {
 
 //-----------------------------------------------------------------------------------
 //
+#if defined(_WIN32)
 template <int Size> 
 struct REPORTFONT : IDebugFontDrawAgent
 {
@@ -212,6 +289,7 @@ struct REPORTFONT : IDebugFontDrawAgent
 		addText(pText, strlen(pText));
 	}
 };
+#endif
 //-----------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------
 enum CURSOR_MODE
@@ -239,6 +317,37 @@ struct ARCHDATA
 	U32 numArchetypes;
 	ARCHDATATYPE type[];
 };
+#if !defined(_WIN32)
+// The U32 archetype ID is a Win32 byte offset used by saves and packets.
+// Translate its 44-byte record stride to the native in-memory table index.
+static constexpr U32 WIN32_ARCHDATA_TYPE_OFFSET = 4;
+static constexpr U32 WIN32_ARCHDATATYPE_SIZE = 44;
+
+static ARCHDATATYPE * nativeArchTypeFromID(ARCHDATA * table, U32 id)
+{
+	if (!table || id < WIN32_ARCHDATA_TYPE_OFFSET ||
+		(id - WIN32_ARCHDATA_TYPE_OFFSET) % WIN32_ARCHDATATYPE_SIZE != 0)
+		return 0;
+	const U32 index = (id - WIN32_ARCHDATA_TYPE_OFFSET) / WIN32_ARCHDATATYPE_SIZE;
+	return index < table->numArchetypes ? &table->type[index] : 0;
+}
+
+static U32 nativeArchIDFromType(const ARCHDATA * table, const ARCHDATATYPE * type)
+{
+	if (!table || !type) return 0;
+	const std::uintptr_t first = reinterpret_cast<std::uintptr_t>(&table->type[0]);
+	const std::uintptr_t address = reinterpret_cast<std::uintptr_t>(type);
+	if (address < first) return 0;
+	const std::uintptr_t offset = address - first;
+	if (offset % sizeof(ARCHDATATYPE) != 0) return 0;
+	const std::uintptr_t index = offset / sizeof(ARCHDATATYPE);
+	if (index >= table->numArchetypes ||
+		index > (UINT32_MAX - WIN32_ARCHDATA_TYPE_OFFSET) / WIN32_ARCHDATATYPE_SIZE)
+		return 0;
+	return WIN32_ARCHDATA_TYPE_OFFSET +
+		static_cast<U32>(index) * WIN32_ARCHDATATYPE_SIZE;
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 struct ARCHNODE 
@@ -610,15 +719,15 @@ struct DACOM_NO_VTABLE ObjectList : public IObjectList,
 	//
 	// frame timing stuff
 	//
-	unsigned __int64 lastClockTick;
+	U64 lastClockTick;
 	DOUBLE  clockPeriod, updateTimeRemainder, fps;
 	SINGLE realRenderTime;		// according to real frame rate -- not game frame rate
 	SINGLE gameTime;//time from the start of the game in seconds, note that this should not be used by game logic. for visuals only.
 	U32 numRealTimeFrames;
-	unsigned __int64 waitUntilTick;
+	U64 waitUntilTick;
 	DOUBLE timeWaited;		// time spent in tight loop to limit frame rate
 	DOUBLE elapsedTime;		// total time of last frame (including wasted time)
-	unsigned __int64 ticksForBaseFrameRate;	 // # of high performance ticks for 1/30
+	U64 ticksForBaseFrameRate;	 // # of high performance ticks for 1/30
 	U32 frameCount;	// number of real-time frames since program start
 	bool bTimeTraceThisSecond;
 	int subParFrames;		// number of frames where we have had below-spec frame rate
@@ -647,9 +756,13 @@ struct DACOM_NO_VTABLE ObjectList : public IObjectList,
 	//
 	// dialog box data
 	//
+#if defined(_WIN32)
 	HWND hDlgBox;
+#endif
 	BOOL32 bEditorMode;
+#if defined(_WIN32)
 	U32  dlgArchID;
+#endif
 
 	//
 	// viewer data
@@ -854,9 +967,11 @@ struct DACOM_NO_VTABLE ObjectList : public IObjectList,
 
 	void removeObject (IBaseObject *obj);
 
+#if defined(_WIN32)
 	BOOL CALLBACK loadArchDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
 
 	static BOOL CALLBACK _loadArchDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+#endif
 
 	void flushUnusedArchetypes (void);
 
@@ -870,7 +985,9 @@ struct DACOM_NO_VTABLE ObjectList : public IObjectList,
 
 	ARCHDATATYPE * getArchDataType (const C8 * name);
 
+#if defined(_WIN32)
 	void initializeArchListbox (HWND hListbox);
+#endif
 
 	void getLassoRect (RECT & rect) const;
 
@@ -887,7 +1004,9 @@ struct DACOM_NO_VTABLE ObjectList : public IObjectList,
 
 	BOOL32 createPart (U32 archID, const char *partName);
 
+#if defined(_WIN32)
 	void setTextForSelection (HWND hwnd);
+#endif
 
 	static int getNumSelected (IBaseObject * selected);
 
@@ -922,7 +1041,7 @@ struct DACOM_NO_VTABLE ObjectList : public IObjectList,
 
 	void DEBUG_forceFlush (void);
 
-#ifndef FINAL_RELEASE
+#if defined(_WIN32) && !defined(FINAL_RELEASE)
 	void issuePerformanceWarning (bool bWarning);
 #endif
 
@@ -950,16 +1069,23 @@ ObjectList::~ObjectList (void)
 
 //	ENGINE->destroy_instance(spotlight_index);
 
+#if defined(_WIN32)
 	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
+#else
+	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+		connection->Unadvise(eventHandle);
+#endif
 
 	// destroy the object list, archetype list ?
 
 	free(archData);
 	archData = 0;
 
+#if defined(_WIN32)
 	SendMessage(hDlgBox, WM_CLOSE, 0, 0);
 	hDlgBox = 0;
+#endif
 }
 //--------------------------------------------------------------------------//
 // sets 'numRealTimeFrames' 
@@ -967,7 +1093,7 @@ ObjectList::~ObjectList (void)
 //
 void ObjectList::BeginFrame (void)
 {
-	__int64 clockTick, slamTicks;
+	S64 clockTick, slamTicks;
 
 	timing.update();
 
@@ -995,7 +1121,7 @@ void ObjectList::BeginFrame (void)
 			if (bWarningIssued == 0)
 			{
 				bWarningIssued = true;
-#ifndef FINAL_RELEASE
+#if defined(_WIN32) && !defined(FINAL_RELEASE)
 				if (PLAYERID)		// only issue warning in multiplayer
 					issuePerformanceWarning(true);
 #endif
@@ -1021,7 +1147,7 @@ void ObjectList::BeginFrame (void)
 
 	if (defaults->bNoFrameLimit==0)
 	{
-		if (__int64(waitUntilTick = clockTick + ticksForBaseFrameRate - slamTicks) < 0)
+		if (S64(waitUntilTick = clockTick + ticksForBaseFrameRate - slamTicks) < 0)
 			waitUntilTick += slamTicks;
 		if (fabs(elapsedTime - RENDER_PERIOD) < (RENDER_PERIOD / 20.0))
 			elapsedTime = RENDER_PERIOD;
@@ -1065,7 +1191,7 @@ void ObjectList::BeginFrame (void)
 //
 void ObjectList::EndFrame (void)
 {
-	unsigned __int64 clockTick, firstClockTick;
+	U64 clockTick, firstClockTick;
 
 	QueryPerformanceCounter((LARGE_INTEGER *)&firstClockTick);
 
@@ -1285,7 +1411,12 @@ void ObjectList::Render (void)
 	}
 
 	// don't check for highlight when cursor is over the toolbar
+#if defined(_WIN32)
 	bCheckRect = (bHasFocus && (bPointRect==false || TOOLBAR->bAlert==0));
+#else
+	// The native slice has no toolbar hit region to exclude from selection.
+	bCheckRect = bHasFocus;
+#endif
 	//clearHighlightBits(highlightedList);
 	FlushHighlightedList();
 
@@ -1406,7 +1537,8 @@ void ObjectList::Render (void)
 	else
 	{
 		NUGGETMANAGER->TestVisible(defaults, currentSystem, currentPlayer);
-		RECT rect = { 0x80000000, 0x80000000, 0x80000000, 0x80000000 };
+		const LONG offscreen = static_cast<LONG>(0x80000000U);
+		RECT rect = { offscreen, offscreen, offscreen, offscreen };
 		while (ptr)
 		{
 			ptr->TestVisible(defaults, currentSystem, currentPlayer);
@@ -1821,7 +1953,7 @@ void ObjectList::debug_print (IDebugFontDrawAgent * DEBUGFONT, bool bDetailedRep
 
 		for (i = 0; i < TIMING_PLAYERAI; i++)
 		{
-			char * name = (timingNames[i]) ? timingNames[i] : "?";
+			const char * name = (timingNames[i]) ? timingNames[i] : "?";
 			sprintf(buffer, "%s: %4d", name, timing.do_average(timing.timer_array[i]));
 			DEBUGFONT->StringDraw(0, 8, y, buffer, DCOLOR);
 			y += inc;
@@ -1898,7 +2030,7 @@ void ObjectList::doPerformanceTrace (U32 updateCounter)
 	if ((seconds % 60) != 0)
 		bNextFrameOk = true;
 }
-#ifndef FINAL_RELEASE
+#if defined(_WIN32) && !defined(FINAL_RELEASE)
 //--------------------------------------------------------------------------//
 //
 void ObjectList::issuePerformanceWarning (bool bWarning)
@@ -2361,7 +2493,12 @@ const char * ObjectList::GetArchName (U32 dwArchetypeID)
 
 	if (dwArchetypeID)
 	{
+#if defined(_WIN32)
 		dataType = (ARCHDATATYPE *) ( U32(archData) + dwArchetypeID );
+#else
+		dataType = nativeArchTypeFromID(archData, dwArchetypeID);
+		if (!dataType) return 0;
+#endif
 		return dataType->name;
 	}
 	
@@ -2394,7 +2531,11 @@ U32 ObjectList::GetArchetypeDataID (const C8 * name)
 	ARCHDATATYPE * dataType;
 		
 	if ((dataType = getArchDataType(name)) != 0)
+#if defined(_WIN32)
 		return (U32(dataType) - U32(archData));
+#else
+		return nativeArchIDFromType(archData, dataType);
+#endif
 
 	return 0;
 }
@@ -2405,7 +2546,11 @@ U32 ObjectList::GetArchetypeDataID (PARCHETYPE pArchetype)
 	ARCHDATATYPE * dataType;
 	
 	if (pArchetype && (dataType = pArchetype->archDataType) != 0)
+#if defined(_WIN32)
 		return (U32(dataType) - U32(archData));
+#else
+		return nativeArchIDFromType(archData, dataType);
+#endif
 
 	return 0;
 }
@@ -2417,7 +2562,12 @@ void * ObjectList::GetArchetypeData (U32 dwArchetypeID)
 
 	if (dwArchetypeID)
 	{
+#if defined(_WIN32)
 		dataType = (ARCHDATATYPE *) ( U32(archData) + dwArchetypeID );
+#else
+		dataType = nativeArchTypeFromID(archData, dwArchetypeID);
+		if (!dataType) return 0;
+#endif
 		return dataType->objData;
 	}
 	
@@ -2431,7 +2581,12 @@ PARCHETYPE ObjectList::LoadArchetype (U32 dwArchetypeID)
 
 	if (dwArchetypeID)
 	{
+#if defined(_WIN32)
 		dataType = (ARCHDATATYPE *) ( U32(archData) + dwArchetypeID );
+#else
+		dataType = nativeArchTypeFromID(archData, dwArchetypeID);
+		if (!dataType) return 0;
+#endif
 		return LoadArchetype(dataType->name);
 	}
 	
@@ -2646,7 +2801,27 @@ IBaseObject * ObjectList::CreateUIAnim (UIANIMTYPE type,const Vector &vec)
 //
 GENRESULT ObjectList::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	struct NativeMessageFields
+	{
+		FrontierX::LegacyWParam wParam;
+		FrontierX::LegacyLParam lParam;
+	} nativeMessage{};
+	NativeMessageFields *msg = &nativeMessage;
+	if (message == WM_LBUTTONUP || message == WM_LBUTTONDOWN ||
+		message == WM_LBUTTONDBLCLK || message == WM_RBUTTONDOWN ||
+		message == WM_RBUTTONUP || message == WM_MOUSEMOVE ||
+		message == WM_MENUSELECT)
+	{
+		if (!param) return GR_INVALID_PARMS;
+		const auto *event = static_cast<const FrontierX::LegacyWindowMessage *>(param);
+		if (event->message != message) return GR_INVALID_PARMS;
+		nativeMessage.wParam = event->wparam;
+		nativeMessage.lParam = event->lparam;
+	}
+#endif
 	CONNECTION_NODE<IEventCallback> *node= point.pClientList;
 	static bool bIgnore = false;
 
@@ -2659,7 +2834,13 @@ GENRESULT ObjectList::Notify (U32 message, void *param)
 	case CQE_GOTO_PART:
 		{
 			IBaseObject * obj;
+#if defined(_WIN32)
 			if ((obj = FindObject(U32(param))) != 0)
+#else
+			const std::uintptr_t id = reinterpret_cast<std::uintptr_t>(param);
+			if (id > UINT32_MAX) return GR_INVALID_PARMS;
+			if ((obj = FindObject(static_cast<U32>(id))) != 0)
+#endif
 			{
 				SECTOR->SetCurrentSystem(obj->GetSystemID());
 				CAMERA->SetLookAtPosition(obj->GetPosition());
@@ -2670,7 +2851,13 @@ GENRESULT ObjectList::Notify (U32 message, void *param)
 	case CQE_PART_SELECTION:
 		{
 			IBaseObject * obj;
+#if defined(_WIN32)
 			if ((obj = FindObject(U32(param))) != 0)
+#else
+			const std::uintptr_t id = reinterpret_cast<std::uintptr_t>(param);
+			if (id > UINT32_MAX) return GR_INVALID_PARMS;
+			if ((obj = FindObject(static_cast<U32>(id))) != 0)
+#endif
 				obj->View();
 		}
 		break;
@@ -2786,6 +2973,7 @@ GENRESULT ObjectList::Notify (U32 message, void *param)
 	case WM_RBUTTONDOWN:
 		if (viewerCount==0 && DEFAULTS->GetDefaults()->bEditorMode && ownsResources())
 		{
+#if defined(_WIN32)
 			IBaseObject * ptr = selectedList;
 
 			while (ptr)
@@ -2800,6 +2988,9 @@ GENRESULT ObjectList::Notify (U32 message, void *param)
 				PostMessage(hMainWindow, CQE_VIEW_OBJECT, 0, (LPARAM)highlightedList);
 				viewerCount++;
 			}
+#else
+			return GR_INTERFACE_UNSUPPORTED;
+#endif
 		}
 		break;
 
@@ -2815,18 +3006,26 @@ GENRESULT ObjectList::Notify (U32 message, void *param)
 		}
 		break;
 
+#if defined(_WIN32)
 	case CQE_VIEW_OBJECT:
 		{
 			((IBaseObject *)(msg->lParam))->View();
 			viewerCount--;
 		}
 		break;
+#endif
 	
 #ifndef FINAL_RELEASE	
 	case CQE_DEBUG_HOTKEY:
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
+#if defined(_WIN32)
 			switch ((U32) param)
+#else
+			const std::uintptr_t id = reinterpret_cast<std::uintptr_t>(param);
+			if (id > UINT32_MAX) return GR_INVALID_PARMS;
+			switch (id)
+#endif
 			{
 			case IDH_UNLOAD_TYPES:
 				flushUnusedArchetypes();
@@ -2838,10 +3037,18 @@ GENRESULT ObjectList::Notify (U32 message, void *param)
 	case CQE_HOTKEY:
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
+#if defined(_WIN32)
 			switch ((U32) param)
+#else
+			const std::uintptr_t id = reinterpret_cast<std::uintptr_t>(param);
+			if (id > UINT32_MAX) return GR_INVALID_PARMS;
+			switch (id)
+#endif
 			{
 			case IDH_REPORT_STATS:
+			#if defined(_WIN32)
 				issuePerformanceWarning(false);
+			#endif
 				break;
 			} // end switch ((U32) param)
 		}
@@ -2898,7 +3105,9 @@ GENRESULT ObjectList::Notify (U32 message, void *param)
 	case CQE_EDITOR_MODE:
 		bEditorMode = (param != 0);
 		FlushSelectedList();
+#if defined(_WIN32)
 		ShowWindow(hDlgBox, (bEditorMode)?SW_SHOW:SW_HIDE);
+#endif
 		EVENTSYS->Send(CQE_NEW_SELECTION, static_cast<ObjectList *>(this));
 		break;
 	}
@@ -2987,6 +3196,7 @@ Top:
 }
 //-------------------------------------------------------------------
 //
+#if defined(_WIN32)
 BOOL ObjectList::_loadArchDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 {
 	ObjectList * _this;
@@ -3336,6 +3546,7 @@ BOOL ObjectList::loadArchDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lPa
 
 	return result;
 }
+#endif
 //-------------------------------------------------------------------
 //
 void ObjectList::flushUnusedArchetypes (void)
@@ -3405,7 +3616,13 @@ BOOL32 ObjectList::Save (struct IFileSystem * outFile)
 		if (obj->QueryInterface(ISaveLoadID, pSaveLoad) != 0)
 		{
 			outFile->CreateDirectory(obj->pArchetype->archDataType->name);
+#if defined(_WIN32)
 			wsprintf(buffer, "%s\\%u", obj->pArchetype->archDataType->name, saveCounter++);
+#else
+			if (std::snprintf(buffer, sizeof(buffer), "%s\\%u",
+				obj->pArchetype->archDataType->name, saveCounter++) >=
+				static_cast<int>(sizeof(buffer))) goto Done;
+#endif
 
 			outFile->CreateDirectory(buffer);
 
@@ -4034,11 +4251,14 @@ static void load_bytes (IFileSystem * file, ARCHDATA * archData, U32 & checkSum)
 //
 BOOL32 ObjectList::loadTypesData (void)
 {
+#if defined(_WIN32)
 	DAFILEDESC fdesc = "GameTypes.db";
+#endif
 	COMPTR<IFileSystem> file;
 	U32 dataSize=0, numFiles=0, checkSum=0;
 	BOOL32 result = 0;
 
+#if defined(_WIN32)
 	if (DACOM->CreateInstance(&fdesc, file) != GR_OK)
 	{
 		fdesc.lpFileName = "..\\DB\\GameTypes.db";
@@ -4048,6 +4268,12 @@ BOOL32 ObjectList::loadTypesData (void)
 			goto Done;
 		}
 	}
+#else
+	// The native composition owns the validated, read-only external archive.
+	// An absent required source is a load failure, not an empty archetype table.
+	if (!GAMETYPESDIR) goto Done;
+	file = GAMETYPESDIR;
+#endif
 	
 	get_total_bytes(file, dataSize, numFiles);
 	
@@ -4056,11 +4282,13 @@ BOOL32 ObjectList::loadTypesData (void)
 
 	archData->type[0].objData = (BASIC_DATA *) (((U8 *)archData) + sizeof(ARCHDATA)+(sizeof(ARCHDATATYPE)*numFiles)); // mark beginning of data
 	load_bytes(file, archData, checkSum);
+#if defined(_WIN32)
 	SendMessage(hMainWindow, CQE_DATA_CHECKSUM, 0, checkSum);
 
 	if (hDlgBox)
 		SendMessage(hDlgBox, WM_CLOSE, 0, 0);
 	hDlgBox = CreateDialogParam(hResource, MAKEINTRESOURCE(IDD_DIALOG2), hMainWindow, _loadArchDlgProc, (LPARAM) this);
+#endif
 
 	result = 1;
 Done:
@@ -4462,7 +4690,11 @@ void ObjectList::getLassoRect (RECT & rect) const
 
 	rect.top    = __min(lassoRect.top, lassoRect.bottom);
 	rect.bottom = __max(lassoRect.top, lassoRect.bottom);
+#if defined(_WIN32)
 	rect.bottom = __min(rect.bottom, pane->y1 - IDEAL2REALY(10));	// adjust for toolbar slop area
+#else
+	rect.bottom = __min(rect.bottom, pane->y1);	// no native toolbar hit region
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -5101,16 +5333,23 @@ struct _olist : GlobalComponent
 	virtual void Initialize (void)
 	{
 		COMPTR<IDAConnectionPoint> connection;
-		__int64 clockFrequency;
+		S64 clockFrequency;
 
 		if (list->loadTypesData() == 0)
 			CQBOMB0("Load failed on game database.");
 
+		#if defined(_WIN32)
 		if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		{
 			connection->Advise(OBJLIST, &list->eventHandle);
 			FULLSCREEN->SetCallbackPriority(list, EVENT_PRIORITY_OBJLIST);
 		}
+		#else
+		if (!EVENTSYS ||
+			EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+			connection->Advise(OBJLIST, &list->eventHandle) != GR_OK)
+			CQBOMB0("ObjectList requires the native EventSystem callback point.");
+		#endif
 
 		list->initializeResources();
 		

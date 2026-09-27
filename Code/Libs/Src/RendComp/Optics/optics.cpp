@@ -3,14 +3,19 @@
 //
 
 #define WIN32_LEAN_AND_MEAN
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/NativeOptics.h"
+#endif
 
 #include "FDump.h"
 #include "TempStr.h"
-#include "dacom.h"
+#include "DACOM.H"
 #include "TComponent.h"
 #include "TSmartPointer.h"
-#include "View2D.h"
+#include "View2d.h"
 #include "3dmath.h"
 #include "packed_argb.h"
 #include "da_heap_utility.h"
@@ -18,10 +23,11 @@
 #include "ICamera.h"
 #include "rendpipeline.h"
 #include "IRenderPrimitive.h"
+#include "renderer.h"
 #include "IRenderComponent.h"
 #include "ITextureLibrary.h"
-#include "Engine.h"
-#include "FileSys.h"
+#include "ENGINE.H"
+#include "Filesys.h"
 #include "IParticleSystem.h"
 
 //
@@ -460,6 +466,7 @@ struct Mesh * COMAPI Optics::get_archetype_mesh( RENDER_ARCHETYPE render_arch_in
 
 //
 
+#if defined(_WIN32)
 BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 {
 	IComponentFactory *server;
@@ -480,3 +487,17 @@ BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 
 	return TRUE;
 }
+#else
+namespace FrontierX
+{
+bool RegisterNativeOptics(ICOManager * manager)
+{
+	if (!manager) return false;
+	IComponentFactory * factory =
+		new DAComponentFactory<DAComponent<Optics>, RendCompDesc>(CLSID_Optics);
+	const GENRESULT result = manager->RegisterComponent(factory, CLSID_Optics, DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

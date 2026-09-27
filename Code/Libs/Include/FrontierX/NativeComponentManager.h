@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+struct IProfileParser;
+
 namespace FrontierX
 {
 class NativeComponentManager final : public ICOManager
@@ -37,6 +39,7 @@ public:
     GENRESULT COMAPI SetINIConfig(const C8 * info, U32 flags = 0) override;
 
     std::size_t RegisteredCount() const noexcept;
+    void SetProfileParser(IProfileParser *parser) noexcept;
 
 private:
     struct Registration
@@ -65,6 +68,7 @@ private:
     std::size_t activeLibraryId_ = 0;
     std::size_t nextLibraryId_ = 1;
     bool configured_ = false;
+    IProfileParser *profileParser_ = nullptr;
 };
 }
 

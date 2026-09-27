@@ -24,6 +24,8 @@
 #ifndef DBASEDATA_H
 #include <DBaseData.h>
 #endif
+#include <DSupplyShipSave.h>
+#include <DNugget.h>
 
 #ifndef FINAL_RELEASE
 #ifndef COMMTRACK_H
@@ -621,7 +623,7 @@ struct USR_PACKET : Type
 
 	void init (int numObjects, bool bTrackCommand=true)
 	{
-		dwSize = sizeof(Type) + (numObjects*sizeof(U32));
+		this->dwSize = sizeof(Type) + (numObjects*sizeof(U32));
 	}
 };
 
@@ -647,14 +649,14 @@ struct USR_PACKET : Type
 
 	void init (int numObjects, bool bTrackCommand=true)
 	{
-		dwSize = sizeof(Type) + (numObjects*sizeof(U32));
+		this->dwSize = sizeof(Type) + (numObjects*sizeof(U32));
 		CQASSERT(numObjects);
 		CQASSERT(numObjects <= MAX_SELECTED_UNITS);
 		CQASSERT((objectID[0]&PLAYERID_MASK)!=MGlobals::GetGroupID() || OBJLIST->FindGroupObject(objectID[0]));
 		CQASSERT((objectID[0]&PLAYERID_MASK)==MGlobals::GetGroupID() || OBJLIST->FindObject(objectID[0]));
 		VerifySet(objectID, numObjects);
 		if (bTrackCommand)
-			COMMTRACK->AddCommand(type, objectID, numObjects);
+			COMMTRACK->AddCommand(this->type, objectID, numObjects);
 	}
 };
 template <> struct USR_PACKET<USRMOVE>;

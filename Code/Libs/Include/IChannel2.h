@@ -1,9 +1,9 @@
 #ifndef __ICHANNEL2_H
 #define __ICHANNEL2_H
 
-#include "dacom.h"
+#include "DACOM.H"
 #include "3dmath.h"
-#include "eventiterator.h"
+#include "EventIterator.h"
 
 struct IFileSystem;
 

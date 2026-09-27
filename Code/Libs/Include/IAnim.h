@@ -3,18 +3,27 @@
 #ifndef __IANIM_H
 #define __IANIM_H
 
+#if defined(_WIN32)
 typedef int SCRIPT_SET_ARCH;
+#else
+#include <cstdint>
+typedef std::intptr_t SCRIPT_SET_ARCH;
+static_assert(sizeof(SCRIPT_SET_ARCH) == sizeof(void *), "native animation archetype is a runtime pointer token");
+#endif
 typedef int SCRIPT_INST;
 
 const SCRIPT_SET_ARCH INVALID_SCRIPT_SET_ARCH = -1;
 const SCRIPT_INST INVALID_SCRIPT_INST = -1;
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 #ifndef __ANIMTYPES_H
-#include "AnimTypes.h"
+#if !defined(_WIN32)
+#include "ICamera.h"
+#endif
+#include "animTypes.h"
 #endif
 
 #include "ichannel.h"
@@ -22,13 +31,19 @@ const SCRIPT_INST INVALID_SCRIPT_INST = -1;
 typedef S32 INSTANCE_INDEX;		// also defined in Engine.h
 struct IFileSystem;
 
-#include "3DMath.h"
+#include "3dmath.h"
 
 //
 
-typedef void (__cdecl * SCRIPT_ENUM_CALLBACK)(const char* script_name, void* misc);
-typedef void (__cdecl * CHANNEL_ENUM_CALLBACK) (IChannel2* obj, void* user);
-typedef bool (__cdecl * CHANNEL_INSTANCE_ENUM_CALLBACK) (CHANNEL_INSTANCE_INDEX obj, void* user);
+#if defined(_WIN32)
+#define ANIM_CALLBACK_CALL __cdecl
+#else
+#define ANIM_CALLBACK_CALL
+#endif
+typedef void (ANIM_CALLBACK_CALL * SCRIPT_ENUM_CALLBACK)(const char* script_name, void* misc);
+typedef void (ANIM_CALLBACK_CALL * CHANNEL_ENUM_CALLBACK) (IChannel2* obj, void* user);
+typedef bool (ANIM_CALLBACK_CALL * CHANNEL_INSTANCE_ENUM_CALLBACK) (CHANNEL_INSTANCE_INDEX obj, void* user);
+#undef ANIM_CALLBACK_CALL
 
 #define IID_IAnimation MAKE_IID("IAnimation", 1)
 

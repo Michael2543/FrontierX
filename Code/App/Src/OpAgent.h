@@ -15,10 +15,13 @@
 //-------------------------------------------------------------------
 //
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 //-------------------------------------------------------------------
 //
+#ifndef _WIN32
+enum HOSTCMD : int;
+#endif
 struct IAgentEnumerator
 {
 	struct NODE

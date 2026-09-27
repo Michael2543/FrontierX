@@ -7,16 +7,22 @@
 //
 
 #define WINDOWS_LEAN_AND_MEAN 1
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 #include <stdio.h>
 
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 #include "3dmath.h"
-#include "tempstr.h"
+#include "TempStr.h"
 #include "packed_argb.h"
 #include "ICamera.h"
 #include "ITextureLibrary.h"
+#if defined(_WIN32)
 #include "RPUL.h"
+#endif
 
 //
 

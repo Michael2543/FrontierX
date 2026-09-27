@@ -4,6 +4,10 @@
 
 #include "Materials.h"
 
+#if !defined(_WIN32)
+#include <mutex>
+#endif
+
 //
 
 #define CLSID_MaterialLibrary "MaterialLibrary"
@@ -83,7 +87,11 @@ protected:	// protected data
 	typedef std::list<material_map>							material_map_list;
 	typedef std::map<std::string,IMaterial*,stricmp_pred>	named_material_map;
 
+#if defined(_WIN32)
 	mutable CRITICAL_SECTION lock_obj;
+#else
+	mutable std::recursive_mutex lock_obj;
+#endif
 
 	material_map_list	material_maps;
 	named_material_map	named_materials;
@@ -100,7 +108,9 @@ DECLARE_MATERIAL( MaterialLibrary, IS_AGGREGATE );
 MaterialLibrary::MaterialLibrary( void )
 {
 	system_services = NULL;
+#if defined(_WIN32)
 	InitializeCriticalSection (&lock_obj);
+#endif
 }
 
 //
@@ -108,7 +118,9 @@ MaterialLibrary::MaterialLibrary( void )
 MaterialLibrary::~MaterialLibrary( void )
 {
 	cleanup();
+#if defined(_WIN32)
 	DeleteCriticalSection (&lock_obj);
+#endif
 }
 
 //
@@ -134,14 +146,22 @@ GENRESULT COMAPI MaterialLibrary::Initialize(void)
 
 inline void MaterialLibrary::lock (void)
 {
+#if defined(_WIN32)
 	EnterCriticalSection (&lock_obj);
+#else
+	lock_obj.lock();
+#endif
 }
 
 //
 
 inline void MaterialLibrary::unlock (void)
 {
+#if defined(_WIN32)
 	LeaveCriticalSection (&lock_obj);
+#else
+	lock_obj.unlock();
+#endif
 }
 
 //
@@ -200,18 +220,11 @@ GENRESULT MaterialLibrary::initialize( IDAComponent *system_container )
 {
 	ASSERT( system_container );
 
-	ICOManager *DACOM;
-	COMPTR<IProfileParser> parser;
-
 	cleanup();
 
 	system_services = system_container;  // artificial reference, don't addref
-	DACOM = DACOM_Acquire();
-
-	if( FAILED( DACOM->QueryInterface( IID_IProfileParser, parser ) ) ) {
-		return GR_GENERIC;
-	}
-
+	// Class-map overrides are optional; initialize_materials_maps queries the
+	// parser when the host exposes one.
 	initialize_materials_maps();
 
 	return GR_OK; 
@@ -261,7 +274,7 @@ GENRESULT COMAPI MaterialLibrary::load_library( IFileSystem *IFS )
 	HANDLE hSearch;
 	bool got_any;
 	IMaterial *material;
-	char type[MAX_PATH];
+	char type[260];
 
 	if( IFS == NULL ) {
 		GENERAL_WARNING( "IFileSystem argument is NULL in MaterialLibrary::load_library" );
@@ -275,7 +288,9 @@ GENRESULT COMAPI MaterialLibrary::load_library( IFileSystem *IFS )
 		if( (hSearch = IFS->FindFirstFile( MaterialLibraryFileSpec, &SearchData )) != INVALID_HANDLE_VALUE ) {
 			
 			do {
-				if( SearchData.cFileName[0] == '.' || !(SearchData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ) {
+				if( SearchData.cFileName[0] == '.' ||
+					!(SearchData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+					strlen(SearchData.cFileName) >= IM_MAX_NAME_LEN ) {
 					continue;
 				}
 
@@ -289,7 +304,7 @@ GENRESULT COMAPI MaterialLibrary::load_library( IFileSystem *IFS )
 					//
 					if( IFS->SetCurrentDirectory( SearchData.cFileName ) ) {
 
-						if( SUCCEEDED( read_string( IFS, MaterialLibraryEntryTypeKey, MAX_PATH, type ) ) ) {
+						if( SUCCEEDED( read_string( IFS, MaterialLibraryEntryTypeKey, sizeof(type), type ) ) ) {
 							
 							if( FAILED( create_material( SearchData.cFileName, type, &material ) ) ) {
 								GENERAL_WARNING( TEMPSTR( "Unable to create material '%s' of type '%s'", SearchData.cFileName, type ) );
@@ -299,14 +314,20 @@ GENRESULT COMAPI MaterialLibrary::load_library( IFileSystem *IFS )
 								remove_material( SearchData.cFileName );	// Force material library to release their reference
 								DACOM_RELEASE( material );					// Release our reference
 							}
+							else if( FAILED( material->set_name( SearchData.cFileName ) ) ) {
+								remove_material( SearchData.cFileName );
+								DACOM_RELEASE( material );
+							}
 							else {
-								material->set_name( SearchData.cFileName );
 								DACOM_RELEASE( material );					// Release our reference
 							}
 						}
 						
 						IFS->SetCurrentDirectory( ".." );
 					}
+				}
+				else {
+					DACOM_RELEASE( material );	// Release the lookup reference.
 				}
 			
 			} while( IFS->FindNextFile( hSearch, &SearchData ) );
@@ -377,6 +398,9 @@ GENRESULT COMAPI MaterialLibrary::verify_library( U32 max_num_passes, float max_
 
 GENRESULT COMAPI MaterialLibrary::add_material_map( const char *material_class_spec, const char *clsid ) 
 {
+	if( !material_class_spec || !clsid ) {
+		return GR_INVALID_PARMS;
+	}
 	material_maps.push_front( material_map( material_class_spec, clsid ) );
 
 	return GR_OK;
@@ -386,6 +410,9 @@ GENRESULT COMAPI MaterialLibrary::add_material_map( const char *material_class_s
 
 GENRESULT COMAPI MaterialLibrary::find_material_map( const char *material_class_spec, U32 clsid_buffer_len, char *out_clsid ) 
 {
+	if( !material_class_spec || !out_clsid || clsid_buffer_len == 0 ) {
+		return GR_INVALID_PARMS;
+	}
 	const char *spec;
 	material_map_list::iterator beg = material_maps.begin();
 	material_map_list::iterator end = material_maps.end();
@@ -397,7 +424,10 @@ GENRESULT COMAPI MaterialLibrary::find_material_map( const char *material_class_
 		
 		if( (strcmp( spec, MaterialMapSpecAll ) == 0) || (stricmp( spec, material_class_spec ) == 0) ) {
 
-			strcpy( out_clsid, mm->second.c_str() );
+			if( mm->second.size() >= clsid_buffer_len ) {
+				return GR_INVALID_PARMS;
+			}
+			memcpy( out_clsid, mm->second.c_str(), mm->second.size() + 1 );
 			
 			return GR_OK;
 		}
@@ -431,8 +461,11 @@ GENRESULT COMAPI MaterialLibrary::remove_material_map( const char *material_clas
 
 GENRESULT COMAPI MaterialLibrary::create_material( const char *material_name, const char *material_class, IMaterial **out_material ) 
 {
-	char clsid[MAX_PATH];
+	char clsid[260];
 	DACOMDESC desc;
+	if( !material_name || !material_class || !out_material ) {
+		return GR_INVALID_PARMS;
+	}
 
 	if( SUCCEEDED( find_material( material_name, out_material ) ) ) {
 		return GR_OK;
@@ -440,7 +473,14 @@ GENRESULT COMAPI MaterialLibrary::create_material( const char *material_name, co
 
 	*out_material = NULL;
 
-	if( FAILED( find_material_map( material_class, MAX_PATH, clsid ) ) ) {
+	GENRESULT map_result = find_material_map( material_class, sizeof(clsid), clsid );
+	if( map_result == GR_INVALID_PARMS ) {
+		return map_result;
+	}
+	if( FAILED( map_result ) ) {
+		if( strlen(material_class) >= sizeof(clsid) ) {
+			return GR_INVALID_PARMS;
+		}
 		strcpy( clsid, material_class );
 	}
 
@@ -497,11 +537,8 @@ GENRESULT COMAPI MaterialLibrary::find_material( const char *material_name, IMat
 	lock ();
 
 	named_material_map::iterator nm ( named_materials.find( material_name ) );
-	bool ck = nm == named_materials.end();
-
-	unlock ();
-
-	if( ck ) {
+	if( nm == named_materials.end() ) {
+		unlock ();
 		return GR_GENERIC;
 	}
 
@@ -509,6 +546,7 @@ GENRESULT COMAPI MaterialLibrary::find_material( const char *material_name, IMat
 		*out_material = nm->second;
 		(*out_material)->AddRef();
 	}
+	unlock ();
 
 	return GR_OK;
 }
@@ -590,5 +628,3 @@ GENRESULT MaterialLibrary::get_material( U32 num_material, IMaterial **out_mater
 }
 
 // EOF
-
-

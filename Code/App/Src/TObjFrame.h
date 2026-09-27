@@ -21,6 +21,10 @@
 #include "CQTrace.h"
 #endif
 
+#if !defined(_WIN32)
+#include <cstring>
+#endif
+
 #define ObjectFrame _Cof
 
 //--------------------------------------------------------------------------//
@@ -693,7 +697,11 @@ public:
 						buffer[0] = (num << 3) | (pNode->count);	
 					else	// else two bit length
 					{
+#if defined(_WIN32)
 						rmemcpy(buffer+2, buffer+1, num);		// move the block up 1 byte
+#else
+						std::memmove(buffer+2, buffer+1, num);
+#endif
 						buffer[0] = pNode->count;
 						buffer[1] = num++;
 					}
@@ -727,7 +735,11 @@ public:
 						buffer[0] = (num << 3) | (pNode->count);	
 					else	// else two bit length
 					{
+#if defined(_WIN32)
 						rmemcpy(buffer+2, buffer+1, num);		// move the block up 1 byte
+#else
+						std::memmove(buffer+2, buffer+1, num);
+#endif
 						buffer[0] = pNode->count;
 						buffer[1] = num++;
 					}

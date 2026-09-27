@@ -22,7 +22,12 @@
 #endif
 
 #ifndef ENGINE_H
+#if !defined(_WIN32)
+#include <ICamera.h>
+#include <ENGINE.H>
+#else
 #include <Engine.h>
+#endif
 #endif
 
 #ifndef _3DMATH_H
@@ -58,12 +63,23 @@ private:
 	Vector instanceCenter;
 public:
 
+#if defined(_WIN32)
 	typename typedef Base::SAVEINFO TRANSSAVEINFO;
 	typename typedef Base::INITINFO TRANSINITINFO;
+#else
+	typedef typename Base::SAVEINFO TRANSSAVEINFO;
+	typedef typename Base::INITINFO TRANSINITINFO;
+#endif
 
+#if defined(_WIN32)
 	struct SaveNode			saveNode;
 	struct LoadNode         loadNode;
 	struct InitNode			initNode;
+#else
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::InitNode initNode;
+#endif
 
 	//----------------------------------
 	

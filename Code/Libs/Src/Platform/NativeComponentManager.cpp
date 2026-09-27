@@ -1,5 +1,6 @@
 #include "FrontierX/NativeComponentManager.h"
 #include "FrontierX/ProfileDocument.h"
+#include "IProfileParser.h"
 
 #include <algorithm>
 #include <cstring>
@@ -15,6 +16,7 @@ namespace FrontierX
 {
 NativeComponentManager::~NativeComponentManager()
 {
+    SetProfileParser(nullptr);
     if (ShutDown() != GR_OK)
     {
         // A module reported live objects. Keep its code mapped instead of
@@ -29,11 +31,27 @@ GENRESULT NativeComponentManager::QueryInterface(const C8 * interfaceName, void 
 {
     if (!instance) return GR_INVALID_PARMS;
     *instance = nullptr;
+    if (interfaceName && profileParser_ &&
+        (std::strcmp(interfaceName, IID_IProfileParser) == 0 ||
+         std::strcmp(interfaceName, "IProfileParser") == 0))
+    {
+        *instance = profileParser_;
+        profileParser_->AddRef();
+        return GR_OK;
+    }
     if (!interfaceName || std::strcmp(interfaceName, "ICOManager") != 0)
         return GR_INTERFACE_UNSUPPORTED;
     *instance = static_cast<ICOManager *>(this);
     AddRef();
     return GR_OK;
+}
+
+void NativeComponentManager::SetProfileParser(IProfileParser *parser) noexcept
+{
+    if (parser) parser->AddRef();
+    IProfileParser *previous = profileParser_;
+    profileParser_ = parser;
+    if (previous) previous->Release();
 }
 
 U32 NativeComponentManager::AddRef()

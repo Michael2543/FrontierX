@@ -1,6 +1,6 @@
 # SDL3 GPU Renderer-Backend Prototype
 
-Status snapshot: **2026-09-25**. This document records a focused backend experiment. It does not
+Status snapshot: **2026-09-27**. This document records a focused backend experiment. It does not
 select the production renderer, connect the game renderer, or claim a native Linux game build.
 
 ## Question and falsifiable check
@@ -641,6 +641,14 @@ loading works. Their interfaces and Windows ownership require a focused
 portability design before the production material library can drive a game
 scene.
 
+The 2026-09-26 production `MaterialLibrary` and `SimpleMaterial` CPU integration
+resolved the listed `MaterialLibrary` and `SimpleMaterial` compile blockers for
+the focused Linux target. `SimpleMaterial` now reads synthetic diffuse and
+opacity fields through the native UTF adapter. Its `apply` still receives
+`GR_NOT_IMPLEMENTED` from native `set_material`; production texture loading,
+material-driven GPU output and the native game scene remain open. See
+[STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md).
+
 ### Production StateMaterial visible submission (2026-09-24)
 
 The same SDL GPU probe now registers the production `StateMaterial` and
@@ -883,3 +891,197 @@ The equivalent command after `VsDevCmd.bat -arch=x86 -host_arch=x64` is:
 ```cmd
 cl /nologo /std:c++17 /EHsc /c /ICode\Libs\Include /I"%DXSDK_DIR%Include" /Fo:"%TEMP%\frontierx-render-fixture-win32.obj" Code\Libs\Src\Platform\RenderSmokeScene.cpp
 ```
+
+### Production UTF texture boundary, 2026-09-26
+
+The linked `frontierx_state_material_probe` now uses production
+`TextureLibrary::load_library` on a generated 2-by-2 RGB565 UTF texture.
+The native pipeline converts its four pixels to RGBA8 through the established
+texture callback, and `SimpleMaterial::verify`/`update` resolve that native
+frame. The same synthetic CPU check covers texture teardown, rejected-upload
+rollback and a missing-`MIP0` archive. GCC and Clang full debug presets passed
+their non-GPU CTests while the GPU CTest skipped; focused Clang
+ASan/UBSan execution passed. The existing SDL/Vulkan probe now loads the
+same generated UTF texture through production `TextureLibrary`, resolves the
+frame through a `SimpleMaterial` loaded by production `MaterialLibrary`, then
+binds it with `StateMaterial` and observes a changed 64-by-64 readback. Visible
+GCC, Clang and focused ASan/UBSan runs each reported UTF image checksum
+`9085705336011966884`, the same 2,496-pixel footprint and two scene runs.
+`SimpleMaterial::apply`, a game scene and this path on supported Windows
+remain unexecuted. Exact input, commands and remaining format gates are in
+[TEXTURE_LIBRARY_PORTABILITY.md](TEXTURE_LIBRARY_PORTABILITY.md).
+
+### Model/view and projection shader contract, 2026-09-26
+
+The native `IRenderPrimitive` now accepts optional model/view and projection
+callbacks. The SDL renderer registers both in the native shell and isolated
+GPU probe, retains finite row-major game matrices, and pushes a combined
+column-major vertex uniform. Both checked-in vertex shaders multiply input
+positions by it; identity remains the initial state for existing smoke
+geometry. The GPU probe adds a changed image centroid, projection checksum
+and restored checksum check. GCC/Clang full debug builds compiled both SPIR-V
+sources and linked the shell and GPU probe. In this command sandbox the SDL
+GPU CTest skipped before video/device initialization, so this change has no
+new Vulkan transform or bounded image evidence. The separate synthetic
+Engine/RenderMgr/PolyMesh CPU caller reaches a model/view callback; its exact
+data and remaining game-format gate are in [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+
+The same production `PolyMesh` caller now reaches a rejecting native CPU
+callback with its indexed 36-byte `MTVERTEX` format (diffuse, specular and
+two UV pairs). That callback failure now stops subsequent `PolyMesh` passes
+and face groups. The SDL GPU renderer now compiles a third pipeline for the
+same format, with a separate vertex shader, stage-zero UV selection and
+optional specular RGB in the fragment shader. The GPU probe registers the
+new submission callback and contains bounded image assertions for game-format
+geometry, UV-set switching and specular color. GCC and Clang full Linux
+debug builds compiled all four SPIR-V shaders and linked the probe; their
+CTest runs executed 40 passing checks and skipped only the GPU test before
+device creation. The game-format GPU assertions therefore have no execution
+or image evidence on this host. The synthetic production `PolyMesh` CPU call
+has not been connected to a GPU scene. Native Windows Debug/Final, module
+ABI, retail runtime and same-input game image comparison remain open; see
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+
+## Transactional stage-zero sampler and visible readback (2026-09-27)
+
+The active App diffuse setup needs linear minification and magnification,
+point mip selection, and per-axis wrap or clamp. The native primitive now
+validates these values on sampler stage zero and sends a complete candidate
+snapshot to the backend. Its cache advances only after callback success. The
+SDL GPU owner builds the corresponding sampler with `SDL_CreateGPUSampler`,
+waits for GPU idle, and swaps resources only after both operations succeed.
+The initial sampler remains point filtered and clamped, preserving the
+existing smoke fixture. Other filter/address modes and active later stages
+still fail explicitly. The production App helper's CPU call and the
+primitive rollback checks are recorded in
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+
+The existing GPU probe reads the repository 2-by-2 texture after a switch
+from point to linear filtering. It requires a different image checksum,
+then switches back and requires the original checksum. The same probe's
+previously unexecuted model/view test initially failed because its
+`structureValid` check assumes the original center/background pixel layout;
+a shifted image legitimately violates that shape. The transform check now
+uses RGB readback with changed pixels, horizontal image-moment displacement,
+a distinct projection checksum and exact checksum restoration. This retains
+the relevant assertions for movement and rollback without applying an
+unshifted-image rule to the moved frame.
+
+GCC 16.2.1 and Clang 22.1.8 builds compiled and linked the GPU probe and
+shell. In the command sandbox, the CTest skipped at SDL video initialization.
+The visible Wayland/Vulkan CTest then passed under GCC and Clang, and a
+focused Clang ASan/UBSan build also passed with LeakSanitizer disabled for
+this host. Each reported 12 presented frames, two scene runs, 2,496 changed
+pixels, final checksum `7951318278861886233`, material checksum
+`8289071695263040328`, and the same secondary texture checksums. The
+linear/point sampler comparison is asserted in the probe but its intermediate
+checksum is not printed. This is synthetic GPU runtime evidence; neither
+production App game geometry nor retail media was presented. The explicit
+commands are in [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md). Native
+Windows Debug/Final, module ABI, retail runtime and same-input game-image
+comparison remain open.
+
+## Visible production PolyMesh mesh (2026-09-27)
+
+The linked game-material check now has a visible SDL/Vulkan mode. Its
+production `Engine -> RenderMgr -> PolyMesh` path submits the generated
+six-index game `MTVERTEX` list through the real `IRenderPrimitive` callback,
+with game model/view, bounded projection and material state. The backend
+owns a white fallback for the production untextured handle-zero binding.
+The real game-format callback produced 496 changed RGB pixels and checksum
+`10105697032999492819` in a 64-by-64 readback and presented a frame under
+both GCC and Clang on the desktop Wayland/Vulkan session. The existing GPU
+fixture continued to pass after the fallback allocation. Exact commands,
+input provenance and remaining App/Windows/retail gates are in
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md). This is a generated game-mesh
+runtime check, not a game scene or retail compatibility result.
+
+The same generated game mesh now embeds a 2-by-2 RGB565 `Tile` in its
+production `Texture library`. Production `XMesh::read` and
+`TextureLibrary::load_library` resolve and upload it through the native
+pipeline's GPU texture callbacks; a production `PolyMesh` update binds the
+resulting live handle for its indexed draw. On visible GCC, Clang and focused
+Clang ASan/UBSan Wayland/Vulkan runs, the textured 64-by-64 readback checksum
+was `11826028615312451232` with 496 changed pixels. Rebinding handle zero
+against the same submitted geometry and state restored the white-fallback
+checksum `10105697032999492819`. This establishes sampling in the game
+mesh draw, while visible App mesh drawing, a full native game scene, same-input
+Windows game-mesh comparison and retail parity remain open. Focused commands
+are in [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+
+The production App `MeshRender::Render` path now executes in the linked
+generated game-material check. Both an older-format face group and a CQ2
+face group submit six indexed 68-byte vertices through the native pipeline
+to a CPU receiver; the latter invokes its resolved production
+`IMaterial::DrawVB`. The App caller's largest-index-as-count error was
+corrected at its three affected call sites. The older-format App branch
+now also submits through a 68-byte SDL/Vulkan pipeline and presents a
+distinct visible readback under GCC and Clang. The first image check
+was invalid because App `PIPE` still addressed a CPU-only primitive;
+the linked check now binds App `PIPE` and `BATCH` to one GPU primitive,
+reads back during the draw callback, and distinguishes the App image
+from white texture factor and opposite culling. The
+CQ2 material effect is still CPU-only. See
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md) for commands and remaining
+Windows/retail gates.
+
+## Fragment-uniform render-state update (2026-09-27)
+
+Source review of `SdlGpuRenderer::SetRenderState` found that every
+accepted state change rebuilt all available graphics pipelines and
+waited for GPU idle. The production App face-group path sets a texture
+factor, but that value and `specularEnabled` are read only from the
+fragment uniform; they do not alter depth, blend or rasterizer pipeline
+configuration. The renderer now validates the whole state first, then
+updates the snapshot directly when those are the only changed fields.
+Depth, blend and culling transitions retain the existing transactional
+pipeline rebuild. A `PipelineRebuilds` generation metric on the native
+SDL owner makes this decision falsifiable in the linked game-material
+check: its production App texture-factor setter must succeed without
+advancing the generation, while the visible draw still changes when the
+factor changes. No public game/Win32 interface or persistent layout was
+modified.
+
+The repository-generated older-format App draw retained its visible
+64-by-64 checksum `2133805298751023491` and 496 changed pixels under
+GCC 16.2.1 and Clang 22.1.8. Its white-factor checksum remained
+`12405162864621168803`; opposite culling still produced a distinct
+image. The existing visible SDL GPU regression passed under both
+compilers, and focused Clang ASan/UBSan visible game-material execution
+passed with leak detection disabled for this host. Both complete Linux
+debug builds and command-sandbox CTest presets passed; the GPU checks
+skipped in those presets and were executed separately on the desktop.
+Native Windows Debug/Final, affected ABI checks, same-input D3D9 game
+captures, retail runtime and a composed native game scene were not run.
+
+Commands executed:
+
+```text
+cmake --build --preset linux-gcc-debug --target frontierx_game_material_manager_probe frontierx_sdl3_gpu_probe
+cmake --build --preset linux-clang-debug --target frontierx_game_material_manager_probe frontierx_sdl3_gpu_probe
+ctest --test-dir out/build/linux-gcc-debug -R '^portability.(game_material_gpu|sdl3_gpu)$' --output-on-failure
+ctest --test-dir out/build/linux-clang-debug -R '^portability.(game_material_gpu|sdl3_gpu)$' --output-on-failure
+cmake --build /tmp/frontierx-texture-handle-asan --target frontierx_game_material_manager_probe
+env ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir /tmp/frontierx-texture-handle-asan -R '^portability.game_material_gpu$' --output-on-failure
+cmake --build --preset linux-gcc-debug
+ctest --preset linux-gcc-debug --output-on-failure
+cmake --build --preset linux-clang-debug
+ctest --preset linux-clang-debug --output-on-failure
+ctest --test-dir out/build/linux-gcc-debug -R '^portability.game_material_gpu$' -V
+```
+
+## Material vertex-register bridge (2026-09-27)
+
+`NativeRenderPipeline::set_vs_constants` now forwards only `c30` and `c31`
+through an optional native backend callback. The SDL owner stores finite
+UV offset/scale and vertex-color modulation values and pushes them alongside
+the existing clip matrix. Defaults are identity UV and white color. The
+`StandardVertex` shader applies them; other vertex formats preserve their
+previous results. Visible GCC and Clang game-material runs changed and
+restored bounded App images independently for the UV and color registers;
+both existing SDL GPU regressions also passed. This verifies the native
+register-to-uniform boundary, not production CQ2 effect execution. The
+`Material::DrawVB` effect remains unavailable, and native Windows, retail
+and same-input D3D9 checks were not run for this change. Exact commands
+and the production-owner distinction are in
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).

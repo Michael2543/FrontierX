@@ -3,9 +3,9 @@
 
 //
 
-#include "STDDat.h"
-#include "MNode.h"
-#include "fdump.h"
+#include "STDDAT.H"
+#include "mnode.h"
+#include "FDump.h"
 
 //
 

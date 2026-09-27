@@ -18,8 +18,17 @@
 */
 //--------------------------------------------------------------------------//
 
+// MSVC permits named type declarations inside anonymous unions. Native C++
+// keeps the same member fields and layout without declaring nested type names.
+#if defined(_WIN32)
+#define PARTICLE_UNION_MEMBER(type) struct type
+#else
+#define PARTICLE_UNION_MEMBER(type) struct
+#endif
+
 //encoding types are used for save load purposes.
 #include "stdio.h"
+#include <cstddef>
 
 struct EncodedRampEntry
 {
@@ -34,37 +43,37 @@ struct EncodedFloatTypeEntry
 	union
 	{
 		SINGLE constant;
-		struct Range
+		PARTICLE_UNION_MEMBER(Range)
 		{
 			U32 min;//index into floatEntry list
 			U32 max;//index into floatEntry list
 		}range;
-		struct Parameter
+		PARTICLE_UNION_MEMBER(Parameter)
 		{
 			char name[32];
 			U32 targetID;//0 for global parameter
 		}parameter;
-		struct Ramp
+		PARTICLE_UNION_MEMBER(Ramp)
 		{
 			S32 type;
 			U32  firstKey;//index into rampEntry list
 		}ramp;
-		struct Add
+		PARTICLE_UNION_MEMBER(Add)
 		{
 			U32 value1;//index into floatEntry list
 			U32 value2;//index into floatEntry list
 		}add;
-		struct Subtract
+		PARTICLE_UNION_MEMBER(Subtract)
 		{
 			U32 value1;//index into floatEntry list
 			U32 value2;//index into floatEntry list
 		}subtract;
-		struct Multiply
+		PARTICLE_UNION_MEMBER(Multiply)
 		{
 			U32 value1;//index into floatEntry list
 			U32 value2;//index into floatEntry list
 		}multiply;
-		struct Divide
+		PARTICLE_UNION_MEMBER(Divide)
 		{
 			U32 value1;//index into floatEntry list
 			U32 value2;//index into floatEntry list
@@ -86,13 +95,13 @@ struct EncodedTransformTypeEntry_Version1
 	S32 type;
 	union
 	{
-		struct TargetTrans
+		PARTICLE_UNION_MEMBER(TargetTrans)
 		{
 			U32 targetID;
 			U32 hpID;
 		}targetTrans;
 		char filterName[32];
-		struct Offset
+		PARTICLE_UNION_MEMBER(Offset)
 		{
 			U32 offX;//index into floatEntry list
 			U32 offY;//index into floatEntry list
@@ -107,39 +116,39 @@ struct EncodedTransformTypeEntry
 	S32 type;
 	union
 	{
-		struct TargetTrans
+		PARTICLE_UNION_MEMBER(TargetTrans)
 		{
 			U32 targetID;
 			U32 hpID;
 		}targetTrans;
-		struct TargetTrans_Str
+		PARTICLE_UNION_MEMBER(TargetTrans_Str)
 		{
 			U32 targetID;//upper 16 bits is the attachment id
 			char hpName[32];
 		}targetTrans_str;
 		char filterName[32];
-		struct Offset
+		PARTICLE_UNION_MEMBER(Offset)
 		{
 			U32 offX;//index into floatEntry list
 			U32 offY;//index into floatEntry list
 			U32 offZ;//index into floatEntry list
 			U32 baseTrans;//index into transEntry list
 		}offset;
-		struct OffsetIJK
+		PARTICLE_UNION_MEMBER(OffsetIJK)
 		{
 			U32 offI;//index into floatEntry list
 			U32 offJ;//index into floatEntry list
 			U32 offK;//index into floatEntry list
 			U32 baseTrans;//index into transEntry list
 		}offsetIJK;
-		struct RotateIJK
+		PARTICLE_UNION_MEMBER(RotateIJK)
 		{
 			U32 rotI;//index into floatEntry list
 			U32 rotJ;//index into floatEntry list
 			U32 rotK;//index into floatEntry list
 			U32 baseTrans;//index into transEntry list
 		}rotateIJK;
-		struct LookAtUp
+		PARTICLE_UNION_MEMBER(LookAtUp)
 		{
 			U32 look; //index into transEntry list
 			U32 at; //index into transEntry list
@@ -204,37 +213,37 @@ struct FloatType
 	union
 	{
 		SINGLE constant;
-		struct Range
+		PARTICLE_UNION_MEMBER(Range)
 		{
 			FloatType * min;
 			FloatType * max;
 		}range;
-		struct Parameter
+		PARTICLE_UNION_MEMBER(Parameter)
 		{
 			char name[32];
 			U32 targetID;//0 for global parameter
 		}parameter;
-		struct Ramp
+		PARTICLE_UNION_MEMBER(Ramp)
 		{
 			RampType type;
 			RampKey * firstKey;
 		}ramp;
-		struct Add
+		PARTICLE_UNION_MEMBER(Add)
 		{
 			FloatType * value1;
 			FloatType * value2;
 		}add;
-		struct Subtract
+		PARTICLE_UNION_MEMBER(Subtract)
 		{
 			FloatType * value1;
 			FloatType * value2;
 		}subtract;
-		struct Multiply
+		PARTICLE_UNION_MEMBER(Multiply)
 		{
 			FloatType * value1;
 			FloatType * value2;
 		}multiply;
-		struct Divide
+		PARTICLE_UNION_MEMBER(Divide)
 		{
 			FloatType * value1;
 			FloatType * value2;
@@ -586,39 +595,39 @@ struct TransformType
 	}type;
 	union
 	{
-		struct TargetTrans
+		PARTICLE_UNION_MEMBER(TargetTrans)
 		{
 			U32 targetID;
 			U32 hpID;
 		}targetTrans;
-		struct TargetTrans_Str
+		PARTICLE_UNION_MEMBER(TargetTrans_Str)
 		{
 			U32 targetID;//only realy 16 bit can be stored
 			char hpName[32];
 		}targetTrans_str;
 		char filterName[32];
-		struct Offset
+		PARTICLE_UNION_MEMBER(Offset)
 		{
 			FloatType * offX;
 			FloatType * offY;
 			FloatType * offZ;
 			TransformType * baseTrans;
 		}offset;
-		struct OffsetIJK
+		PARTICLE_UNION_MEMBER(OffsetIJK)
 		{
 			FloatType * offI;
 			FloatType * offJ;
 			FloatType * offK;
 			TransformType * baseTrans;
 		}offsetIJK;
-		struct RotateIJK
+		PARTICLE_UNION_MEMBER(RotateIJK)
 		{
 			FloatType * rotI;
 			FloatType * rotJ;
 			FloatType * rotK;
 			TransformType * baseTrans;
 		}rotateIJK;
-		struct LookAtUp
+		PARTICLE_UNION_MEMBER(LookAtUp)
 		{
 			TransformType * look;
 			TransformType * at;
@@ -980,5 +989,19 @@ inline RampKey * RampKey::CreateCopy() const
 		ramp->next = NULL;
 	return ramp;
 }
+
+#undef PARTICLE_UNION_MEMBER
+
+#if !defined(_WIN32)
+static_assert(sizeof(EncodedFloatTypeEntry) == 40, "particle float disk entry changed");
+static_assert(offsetof(EncodedFloatTypeEntry, parameter.targetID) + sizeof(U32) == 40,
+              "particle float disk final field changed");
+static_assert(sizeof(EncodedTransformTypeEntry_Version1) == 36, "particle v1 transform disk entry changed");
+static_assert(sizeof(EncodedTransformTypeEntry) == 40, "particle transform disk entry changed");
+static_assert(offsetof(EncodedTransformTypeEntry, targetTrans_str.hpName) + 32 == 40,
+              "particle transform disk final field changed");
+static_assert(sizeof(EncodedFloatTypeHeader) == 12, "particle float disk header changed");
+static_assert(sizeof(EncodedTransformTypeHeader) == 16, "particle transform disk header changed");
+#endif
 
 #endif

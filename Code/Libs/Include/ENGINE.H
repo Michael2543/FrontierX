@@ -16,15 +16,15 @@
 #define ENGINE_H
 
 #ifndef US_TYPEDEFS
-#include "typedefs.h"
+	#include "TYPEDEFS.H"
 #endif
 
 #ifndef DAVARIANT_H
-#include "davariant.h"
+	#include "DAVariant.h"
 #endif
 
 #ifndef DACOM_H
-#include "dacom.h"   
+	#include "DACOM.H"
 #endif
 
 #include "3dmath.h"

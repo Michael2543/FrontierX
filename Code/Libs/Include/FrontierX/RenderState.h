@@ -13,6 +13,9 @@ struct RenderStateSnapshot
     U32 alphaBlendEnabled = 0U;
     U32 sourceBlend = D3DBLEND_ONE;
     U32 destinationBlend = D3DBLEND_ZERO;
+    U32 specularEnabled = 0U;
+    U32 cullMode = D3DCULL_NONE;
+    U32 textureFactor = 0xFFFFFFFFU;
 };
 
 struct TextureStageSnapshot
@@ -23,12 +26,22 @@ struct TextureStageSnapshot
     U32 alphaOperation = D3DTOP_SELECTARG1;
     U32 alphaArgument1 = D3DTA_TEXTURE;
     U32 alphaArgument2 = D3DTA_CURRENT;
+    U32 textureCoordinateIndex = 0U;
+};
+
+struct SamplerStateSnapshot
+{
+    U32 addressU = D3DTADDRESS_CLAMP;
+    U32 addressV = D3DTADDRESS_CLAMP;
+    U32 minFilter = D3DTEXF_POINT;
+    U32 magFilter = D3DTEXF_POINT;
+    U32 mipFilter = D3DTEXF_POINT;
 };
 
 inline bool IsTextureStageArgument(U32 value) noexcept
 {
     return value == D3DTA_DIFFUSE || value == D3DTA_CURRENT ||
-           value == D3DTA_TEXTURE;
+           value == D3DTA_TEXTURE || value == D3DTA_TFACTOR;
 }
 
 inline bool IsTextureStageOperation(U32 value) noexcept

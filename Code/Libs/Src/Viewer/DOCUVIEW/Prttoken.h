@@ -19,7 +19,7 @@
 #define PRINTTOKEN_H
 
 #ifndef TOKENDEFS_H
-#include "tokendef.h"
+#include "Tokendef.h"
 #endif
 
 

@@ -10,10 +10,15 @@
 */			    
 //-------------------------------------------------------------------
 
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#endif
 
-#include "objwatch.h"
+#include "Objwatch.h"
 
 // 0 = NONSYSVOLATILEPTR
 // > SYSVOLATILEPTR == do not add to list

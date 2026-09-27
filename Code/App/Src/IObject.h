@@ -27,8 +27,18 @@
 #include "SuperTrans.h"
 #endif
 
+#include "Include/AppObjectContracts.h"
+
 #ifndef MGLOBALS_H
+#include "DMissionEnum.h"
 #include "MGlobals.h"
+#endif
+
+#if !defined(_WIN32)
+// The Windows PCH supplies the volatile object owner.
+#ifndef TOTALLYVOLATILEPTR
+#define TOTALLYVOLATILEPTR (0xFFFFFFFF)
+#endif
 #endif
 
 //--------------------------------------------------------------------------//

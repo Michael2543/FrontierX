@@ -7,7 +7,7 @@
 
 //
 
-#include "stddat.h"
+#include "STDDAT.H"
 #include "FaceProp.h"
 
 struct FaceGroup

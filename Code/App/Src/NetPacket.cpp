@@ -14,11 +14,37 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+#include <limits>
+static void unsupportedNativePacket(const char *operation)
+{
+	std::fprintf(stderr, "NetPacket: unsupported native multiplayer operation: %s\n", operation);
+	std::abort();
+}
+static U32 nativePacketEventValue(void *parameter)
+{
+	const auto encoded = reinterpret_cast<std::uintptr_t>(parameter);
+	if (encoded > std::numeric_limits<U32>::max())
+		unsupportedNativePacket("event value exceeds 32 bits");
+	return static_cast<U32>(encoded);
+}
+static void *nativePacketEventPointer(U32 value)
+{
+	return reinterpret_cast<void *>(static_cast<std::uintptr_t>(value));
+}
+#define _localprintf(...) std::fprintf(stderr, __VA_ARGS__)
+#endif
 
 #include "NetPacket.h"
-#include "Resource.h"
+#include "resource.h"
 #include "NetBuffer.h"
 #include "Startup.h"
 #include "CQTrace.h"
@@ -26,10 +52,10 @@
 #include "DrawAgent.h"
 #include "GRPackets.h"
 
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <EventSys.h>
 #include <IConnection.h>
 
@@ -37,8 +63,10 @@
 #include "DBHotkeys.h"
 #endif
 
+#if defined(_WIN32)
 #include <dplobby.h>
 #include <dplay.h>
+#endif
 
 #include <stdio.h>
 
@@ -58,13 +86,13 @@
 
 #else	//  !FINAL_RELEASE
 
-#define NETPRINT0(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick())
-#define NETPRINT1(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1)
-#define NETPRINT2(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2)
-#define NETPRINT3(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3)
-#define NETPRINT4(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4)
-#define NETPRINT5(exp,p1,p2,p3,p4,p5) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5)
-#define NETPRINT6(exp,p1,p2,p3,p4,p5,p6) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5, p6)
+#define NETPRINT0(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick())
+#define NETPRINT1(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1)
+#define NETPRINT2(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2)
+#define NETPRINT3(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3)
+#define NETPRINT4(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4)
+#define NETPRINT5(exp,p1,p2,p3,p4,p5) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5)
+#define NETPRINT6(exp,p1,p2,p3,p4,p5,p6) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5, p6)
 
 #endif
 
@@ -83,7 +111,9 @@
 #define PAUSE_TIME_ALLOWED  (4*60*1000)	// 4 minutes of pause per session
 #define PAUSE_BOOT_TIME		(5*60*1000)	// after minutes of pause, boot the player
 
+#if defined(_WIN32)
 #define DLG_UPDATE		(WM_USER+1)
+#endif
 
 namespace __NETPACKET
 {
@@ -303,6 +333,7 @@ struct NETPLAYER
 				wcscpy(name, L"LOCAL");
 			else
 			{
+#if defined(_WIN32)
 				//
 				// get player name from the id
 				//
@@ -316,6 +347,9 @@ struct NETPLAYER
 						wcsncpy(name, pName->lpszShortName, PLAYERNAMESIZE-1);
 					::free(pName);
 				}
+#else
+				unsupportedNativePacket("remote player name");
+#endif
 			}
 		}
 
@@ -655,7 +689,12 @@ struct DACOM_NO_VTABLE NetPacket : public INetPacket, IEventCallback
 
 	bool isSysMsg (BASE_PACKET * packet)
 	{
+#if defined(_WIN32)
 		return (PLAYERID != DPID_SYSMSG && packet->fromID == DPID_SYSMSG);
+#else
+		(void)packet;
+		return false;
+#endif
 	}
 
 	NETPLAYER * findPlayer (DPID dpid) const;
@@ -795,13 +834,16 @@ struct DACOM_NO_VTABLE NetPacket : public INetPacket, IEventCallback
 		return static_cast<INetPacket *>(this);
 	}
 
+#if defined(_WIN32)
 	static BOOL __stdcall dlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+#endif
 	static void __stdcall getPlayerName (DPID dpid, wchar_t * buffer, U32 bufferSize);
 
 	// thread stuff
 	void stopPollingThread (void);
 	void startPollingThread (void);
 	void pollingThreadMain (void);
+#if defined(_WIN32)
 	static DWORD WINAPI threadProc (LPVOID lpParameter)
 	{
 		struct NetPacket * _this = (NetPacket *) lpParameter;
@@ -809,6 +851,7 @@ struct DACOM_NO_VTABLE NetPacket : public INetPacket, IEventCallback
 		_this->pollingThreadMain();
 		return 0;
 	}
+#endif
 };
 //--------------------------------------------------------------------------//
 //
@@ -821,7 +864,11 @@ NetPacket::NetPacket (void)
 	hdesc.flags    = DAHEAPFLAG_PRIVATE | DAHEAPFLAG_DEBUGFILL | DAHEAPFLAG_GROWHEAP;
 	DACOM->CreateInstance(&hdesc, heap);
 	netheap = heap;
+#if defined(_WIN32)
 	netheap->SetErrorHandler(ICQImage::STANDARD_DUMP);
+#else
+	netheap->SetErrorHandler(FDUMP);
+#endif
 	
 	createLocalPlayer();
 	bHasFocus = 1;
@@ -834,13 +881,22 @@ NetPacket::~NetPacket (void)
 
 	reset();
 
+#if defined(_WIN32)
 	if (GS && GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
+#else
+	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+		connection->Unadvise(eventHandle);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void NetPacket::stopPollingThread (void)
 {
+#if !defined(_WIN32)
+	if (hThread)
+		unsupportedNativePacket("stop DirectPlay polling thread");
+#else
 	if (hThread)
 	{
 		bThreadCancel = true;
@@ -848,11 +904,15 @@ void NetPacket::stopPollingThread (void)
 		::CloseHandle(hThread);
 		hThread=0;
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void NetPacket::startPollingThread (void)
 {
+#if !defined(_WIN32)
+	unsupportedNativePacket("start DirectPlay polling thread");
+#else
 	DWORD dwThreadID;
 
 	CQASSERT(hThread==0);
@@ -861,11 +921,15 @@ void NetPacket::startPollingThread (void)
 
 	hThread = CreateThread(0,4096, threadProc, (LPVOID)this, 0, &dwThreadID);
 	CQASSERT(hThread);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void NetPacket::pollingThreadMain (void)
 {
+#if !defined(_WIN32)
+	unsupportedNativePacket("DirectPlay polling thread");
+#else
 	bMessageReceived = true;
 
 	while (bThreadCancel==false)
@@ -877,13 +941,16 @@ void NetPacket::pollingThreadMain (void)
 		}
 		Sleep(100);
 	}
+#endif
 }
 //-------------------------------------------------------------------
 // receive notifications from event system
 //
 GENRESULT NetPacket::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#endif
 	iRecursion++;
 
 	switch (message)
@@ -898,6 +965,7 @@ GENRESULT NetPacket::Notify (U32 message, void *param)
 		break;
 #endif
 
+#if defined(_WIN32)
 	case WM_ACTIVATEAPP:
 		if ((bActiveApp = (msg->wParam!=0)) == 0)
 		{
@@ -914,6 +982,7 @@ GENRESULT NetPacket::Notify (U32 message, void *param)
 		if (CQFLAGS.bGameActive && HOSTID && PLAYERID==HOSTID && hThread!=0 && numPlayers>1)
 			handleKeepAlive(msg->wParam);
 		break;
+#endif
 
 	case CQE_MISSION_CLOSE:
 		if (param!=0)
@@ -931,6 +1000,9 @@ GENRESULT NetPacket::Notify (U32 message, void *param)
 			{
 			case PT_HOST:
 				{
+#if !defined(_WIN32)
+					unsupportedNativePacket("host migration packet");
+#else
 					const NEWHOST_PACKET * pNewhost = (const NEWHOST_PACKET *) packet;
 					DWORD dwOldHost = HOSTID;
 					HOSTID = packet->fromID;
@@ -951,6 +1023,7 @@ GENRESULT NetPacket::Notify (U32 message, void *param)
 							NETPRINT0("BOOTING myself, received different amount of packets!");
 						CQERROR0("Host migration failed at the application level.");
 					}
+#endif
 				}
 				break;
 			case PT_PAUSEWARNING:
@@ -1124,12 +1197,20 @@ GENRESULT NetPacket::Notify (U32 message, void *param)
 		break;
 
 	case CQE_NETADDPLAYER:
+#if defined(_WIN32)
 		onAddPlayer((DPID)param);
+#else
+		onAddPlayer(nativePacketEventValue(param));
+#endif
 		break;
 
 	case CQE_NETDELETEPLAYER:
 		{
+#if defined(_WIN32)
 			NETPLAYER * player = findPlayer(DPID(param));
+#else
+			NETPLAYER * player = findPlayer(nativePacketEventValue(param));
+#endif
 			if (player)
 			{
 				if (HOSTID==PLAYERID && player->playerID == PLAYERID)
@@ -1146,22 +1227,29 @@ GENRESULT NetPacket::Notify (U32 message, void *param)
 
 	case CQE_UPDATE:
 		if (iRecursion==1)
+#if defined(_WIN32)
 			onUpdate(U32(param) >> 10);
+#else
+			onUpdate(nativePacketEventValue(param) >> 10);
+#endif
 		break;
 
 	case CQE_LOCALPAUSED:
 		onLocalPause(param!=0);
 		break;
 
+#if defined(_WIN32)
 	case CQE_DPLAY_MSGWAITING:
 		if (iRecursion==1)
 			onUpdate(msg->wParam);	// make sure packets are processed
 		break;
+#endif
 
 	case CQE_START3DMODE:
 		on3DEnable(true);
 		break;
 
+#if defined(_WIN32)
 	case CQE_ENDFRAME:
 		if (bRemotePlayerBlocked)
 		{
@@ -1173,6 +1261,7 @@ GENRESULT NetPacket::Notify (U32 message, void *param)
 			turtleShape->Draw(0, x, 0);
 		}
 		break;
+#endif
 	}
 
 	iRecursion--;
@@ -1259,6 +1348,12 @@ void NetPacket::receivePackets (void)
 //
 void NetPacket::Send (DPID idTo, DWORD dwFlags, const BASE_PACKET * packet)
 {
+#if !defined(_WIN32)
+	if (PLAYERID != 0 || HOSTID != 0)
+		unsupportedNativePacket("Send in remote session");
+	if (idTo != 0 || (dwFlags & ~(NETF_ALLREMOTE | NETF_ECHO)) != 0)
+		unsupportedNativePacket("Send to remote player or with unknown flags");
+#endif
 	CQASSERT((dwFlags & ~(NETF_ALLREMOTE|NETF_ECHO)) == 0 && "Invalid flags passed to Send()");
 	CQASSERT(packet->timeStamp==0);
 	CQASSERT(packet->sequenceID==0);
@@ -1452,6 +1547,13 @@ bool NetPacket::EnumeratePlayers (IPlayerStateCallback * callback, void * contex
 //
 void NetPacket::getPlayerName (DPID dpid, wchar_t * buffer, U32 bufferSize)
 {
+#if !defined(_WIN32)
+	if (dpid != PLAYERID)
+		unsupportedNativePacket("remote player name");
+	if (bufferSize < sizeof(wchar_t) * 6)
+		unsupportedNativePacket("undersized local player-name buffer");
+	std::wcscpy(buffer, L"LOCAL");
+#else
 	U32 size = 0;
 	DPLAY->GetPlayerName(dpid, NULL, &size);
 
@@ -1463,11 +1565,17 @@ void NetPacket::getPlayerName (DPID dpid, wchar_t * buffer, U32 bufferSize)
 			wcsncpy(buffer, pName->lpszShortName, bufferSize / sizeof(wchar_t));
 		::free(pName);
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void NetPacket::DEBUG_print (struct IDebugFontDrawAgent * DEBUGFONT)
 {
+#if !defined(_WIN32)
+	(void)DEBUGFONT;
+	if (PLAYERID != 0)
+		unsupportedNativePacket("multiplayer debug overlay");
+#else
 	if (PLAYERID != 0)
 	{
 		char buffer[256];
@@ -1528,6 +1636,7 @@ void NetPacket::DEBUG_print (struct IDebugFontDrawAgent * DEBUGFONT)
 			count++;
 		}
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1563,7 +1672,13 @@ void NetPacket::onNetStartup (void)
 
 	pPlayerList->playerID = PLAYERID;
 	gameStatePacketsReceived = 0;
+#if defined(_WIN32)
 	dwSendFlags = (CQFLAGS.bDPDelivery) ? (DPSEND_GUARANTEED | DPSEND_ASYNC | DPSEND_NOSENDCOMPLETEMSG) : 0;
+#else
+	if (PLAYERID != 0 || HOSTID != 0)
+		unsupportedNativePacket("DirectPlay network startup");
+	dwSendFlags = 0;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1628,6 +1743,10 @@ void NetPacket::onNetShutdown (void)
 //
 void NetPacket::receiveSystemPacket (DPMSG_GENERIC * packet)
 {
+#if !defined(_WIN32)
+	(void)packet;
+	unsupportedNativePacket("DirectPlay system message");
+#else
 	if (CQFLAGS.bTraceNetwork)
 		NETPRINT1("RCV System Packet type=%#X", packet->dwType);
 
@@ -1655,6 +1774,7 @@ void NetPacket::receiveSystemPacket (DPMSG_GENERIC * packet)
 		bProposedHost = true;		// begin migration
 		break;
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1729,6 +1849,10 @@ void NetPacket::receiveGamePacket (BASE_PACKET * packet)
 //
 void NetPacket::onAddPlayer (DPID param)
 {
+#if !defined(_WIN32)
+	if (param != PLAYERID)
+		unsupportedNativePacket("add remote player");
+#endif
 	if (pPlayerList && pPlayerList->playerID==0)
 		pPlayerList->playerID = PLAYERID;
 
@@ -1745,7 +1869,11 @@ void NetPacket::onAddPlayer (DPID param)
 
 		if (CQFLAGS.bTraceNetwork)
 			NETPRINT2("Adding player 0x%08X %s", param, player->getPlayerName());
+#if defined(_WIN32)
 		EVENTSYS->Send(CQE_ADDPLAYER, (void *)param);
+#else
+		EVENTSYS->Send(CQE_ADDPLAYER, nativePacketEventPointer(param));
+#endif
 	}
 
 	if (HOSTID == PLAYERID)		// are we the host
@@ -1780,7 +1908,11 @@ void NetPacket::deleteDeadPlayers (void)
 			}
 			if (CQFLAGS.bTraceNetwork)
 				NETPRINT1("Deleting player 0x%08X", id);
+#if defined(_WIN32)
 			EVENTSYS->Send(CQE_DELETEPLAYER, (void *)id);
+#else
+			EVENTSYS->Send(CQE_DELETEPLAYER, nativePacketEventPointer(id));
+#endif
 		}
 		else
 		{
@@ -1835,6 +1967,9 @@ void NetPacket::forceNetTurtle (void)
 //
 void NetPacket::handleSessionLost (void)
 {
+#if !defined(_WIN32)
+	unsupportedNativePacket("DirectPlay session loss");
+#else
 	CQASSERT(HOSTID!=PLAYERID);
 
 	onNetStartup();		// ensure that only one player remains
@@ -1846,6 +1981,7 @@ void NetPacket::handleSessionLost (void)
 		if (dwOldHost != HOSTID)
 			EVENTSYS->Send(CQE_NEWHOST, (void *)dwOldHost);
 	}
+#endif
 }
 //----------------------------------------------------------------------------------
 // we've been booted!
@@ -2059,7 +2195,11 @@ void NetPacket::onUpdate (U32 dt)
 		if (bOldNetPaused != (bRemotePlayerTurtled||bRemotePlayerPaused))			// has remote pause state changed?
 		{
 			int code = (bRemotePlayerTurtled||bRemotePlayerPaused) ? 1 : 0;
+#if defined(_WIN32)
 			EVENTSYS->Send(CQE_NETPAUSED, (void*)code);
+#else
+			EVENTSYS->Send(CQE_NETPAUSED, nativePacketEventPointer(code));
+#endif
 		}
 	}
 }
@@ -2242,6 +2382,9 @@ void NetPacket::receiveAck (NETPLAYER * player, const BASE_PACKET *packet)
 //
 void NetPacket::handleHostPending (void)
 {
+#if !defined(_WIN32)
+	unsupportedNativePacket("host migration pending");
+#else
 	NETPLAYER * player = pPlayerList;
 	bool bAllAcked = true;		// if this stays true, pending state is done
 
@@ -2296,7 +2439,7 @@ void NetPacket::handleHostPending (void)
 
 		bProposedHost = false;
 	}
-
+#endif
 }
 //----------------------------------------------------------------------------------
 //
@@ -2320,6 +2463,10 @@ void NetPacket::receiveUpdateFromClient (const HOSTPENDACK_PACKET * packet)
 //
 void NetPacket::sendHostPendAck (U32 dpid)
 {
+#if !defined(_WIN32)
+	(void)dpid;
+	unsupportedNativePacket("host migration acknowledgement");
+#else
 	//
 	// send a proposed host ack
 	//
@@ -2344,12 +2491,19 @@ void NetPacket::sendHostPendAck (U32 dpid)
 		if (CQFLAGS.bTraceNetwork)
 			NETPRINT2("Sending HOSTPENDACK(%d) to player %S", gameStatePacketsReceived, player->getPlayerName());
 	}
+#endif
 }
 //----------------------------------------------------------------------------------
 //
 void NetPacket::on3DEnable (bool bEnable)
 {
+#if !defined(_WIN32)
+	(void)bEnable;
+	if (PLAYERID != 0)
+		unsupportedNativePacket("multiplayer turtle overlay");
+#else
 	CreateDrawAgent("TurtleNet.bmp", TEXTURESDIR, DA::BMP, 0, turtleShape);
+#endif
 }
 //----------------------------------------------------------------------------------
 //
@@ -2365,8 +2519,18 @@ void NetPacket::init (void)	// called once at startup
 {
 	COMPTR<IDAConnectionPoint> connection;
 
+#if defined(_WIN32)
 	if (GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Advise(getBase(), &eventHandle);
+#else
+	if (!EVENTSYS ||
+		EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+		connection->Advise(getBase(), &eventHandle) != GR_OK)
+	{
+		std::fprintf(stderr, "NetPacket: required native EventSystem callback unavailable\n");
+		std::abort();
+	}
+#endif
 }
 //----------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------
@@ -2379,7 +2543,7 @@ struct _netpacket : GlobalComponent
 	virtual void Startup (void)
 	{
 		NETPACKET = net = new DAComponent<NetPacket>;
-		AddToGlobalCleanupList(&NETPACKET);
+		AddToGlobalCleanupList((IDAComponent **) &NETPACKET);
 	}
 
 	virtual void Initialize (void)

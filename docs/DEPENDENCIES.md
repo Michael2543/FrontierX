@@ -36,6 +36,11 @@ mismatched closing tags.
 
 ## SDL3
 
+The 2026-09-27 native `IStreamer` adapter also uses this SDL dependency for
+WAV decoding and audio-device/stream ownership. No additional decoder library
+is linked. SDL rejects the selected retail IAC speech; see
+[NATIVE_AUDIO_STREAMER.md](NATIVE_AUDIO_STREAMER.md).
+
 | Field | Verified record |
 |---|---|
 | Purpose | Native Linux window/input services and isolated GPU/Vulkan rendering prototype |
@@ -60,6 +65,20 @@ Clang builds. A fenced 64-by-64 download structurally validates clear/background
 and produced the same local diagnostic checksum in both builds. This is an isolated synthetic
 prototype, not a selected production backend or game-rendering result. See
 [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
+
+## LLVM resource compiler `llvm-rc`
+
+| Field | Verified record |
+|---|---|
+| Purpose | Compile the repository-owned `Sol_T.rc` string table for the selected native training-script resource |
+| Upstream | [LLVM project](https://llvm.org/) |
+| Local version | 22.1.8 (`llvm` system package 22.1.8-2) |
+| License | Apache-2.0 WITH LLVM-exception, per the system LLVM package |
+| Acquisition | Existing system installation; no source or binary was fetched or vendored |
+| Linux build role | Build-time executable for the `frontierx_sol_t_string_resource` target; its `.res` and generated C++ include remain out of tree |
+| Distribution status | Build-tool provenance and redistribution review remain necessary before packaging; no LLVM binary is linked or included |
+
+The source `Sol_T.rc` includes generated `DataDef.i`; native CMake supplies only the Win32 language constants needed by `llvm-rc`. The generated resource is decoded to counted native `wchar_t` strings at build time. This is source-resource compatibility evidence, not a retail string-table comparison.
 
 ## shaderc `glslc`
 
@@ -92,3 +111,36 @@ symbol lookup, failure state, move-only ownership, explicit DACOM registration a
 unload under GCC, Clang and focused
 sanitizers. It does not load or redistribute retail, SDK or third-party modules. See
 [DYNAMIC_LIBRARY_PORTABILITY.md](DYNAMIC_LIBRARY_PORTABILITY.md).
+
+
+## Optional native IAC decoder (FFmpeg 9.0.1)
+
+2026-09-27 local development integration; distribution remains unapproved.
+The installed FFmpeg 9.0.1 package enables GPL/version3 components and is
+rejected by the new configure-time library-license check. The optional
+`FRONTIERX_BUILD_FFMPEG_AUDIO` adapter instead targets replaceable shared
+LGPL-2.1-or-later `libavcodec`, `libavformat` and `libavutil`, with WAV demuxing
+and IAC decoding only. It does not copy FFmpeg implementation into the Program.
+The adapter independently marshals bounded memory input and planar float output
+through public APIs. SDL owns playback. No retail or proprietary codec binaries
+are included, and no new project license is attached.
+
+The unmodified official source was fetched from
+[FFmpeg's 9.0.1 source release](https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz),
+SHA-256 `cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635`.
+Its `LICENSE.md` and IAC/IMC decoder source notice specify LGPL 2.1 or later
+for the selected configuration. Source, build and prefix stay outside the
+repository. Configure disables GPL, nonfree, version3, autodetected external
+dependencies, programs, network, static libraries and all codecs/demuxers,
+then enables shared libraries, the IAC decoder and WAV demuxer. The local
+build disables x86 assembly because NASM is unavailable. No FFmpeg source
+modifications were made. This is a maintained upstream release dependency;
+future upgrades must repeat codec, output and license validation.
+
+Dynamic linking and retained library replacement are the intended integration
+basis. The [upstream legal guidance](https://ffmpeg.org/legal.html) describes
+additional source/notice requirements. A full package review must still resolve
+all LGPL obligations against the Conquest distribution terms before conveying
+an artifact. Local execution is not distribution approval. Neither a GPL-enabled
+system build nor a successful runtime test satisfies that gate. Exact build and
+execution evidence belongs in [NATIVE_AUDIO_STREAMER.md](NATIVE_AUDIO_STREAMER.md).

@@ -1,7 +1,7 @@
 #ifndef __PERSISTMISC_H
 #define __PERSISTMISC_H
 
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 
 #define MULTI_APPEARANCE_DIR "MultiLevel"
 #define SWITCH_DIST_FILE "Switch"

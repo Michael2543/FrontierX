@@ -25,7 +25,7 @@
 */
 
 #ifndef FILESYS_H
-#include "FileSys.h"
+#include "Filesys.h"
 #endif
 
 //--------------------------------------------------------------------------//

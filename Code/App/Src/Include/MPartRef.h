@@ -18,7 +18,11 @@
 //---------------------------------------------------------------------------
 //
 #undef CQEXTERN
-#ifdef BUILD_MISSION
+#undef MEXTERN
+#if !defined(_WIN32)
+#define CQEXTERN
+#define MEXTERN
+#elif defined(BUILD_MISSION)
 #define CQEXTERN __declspec(dllexport)
 #define MEXTERN  __declspec(dllexport)
 #else
@@ -29,14 +33,33 @@
 #ifndef _ADB
 //---------------------------------------------------------------------------
 //
+struct MISSION_DATA;
+struct MISSION_SAVELOAD;
+
 struct MPartRef
 {
 private:
 	mutable U32 index;
 	U32 dwMissionID;
 	// the following are for the debugger only!
+#if defined(_WIN32)
 	mutable const struct MISSION_SAVELOAD * pSave;
 	mutable const struct MISSION_DATA * pInit;	
+#else
+	// Native script state retains the Win32 16-byte save layout without
+	// narrowing runtime pointers into the debugger-only slots.
+	struct DebugPointerSlot
+	{
+		U32 reserved = 0;
+		template <class T> DebugPointerSlot & operator = (const T *)
+		{
+			reserved = 0;
+			return *this;
+		}
+	};
+	mutable DebugPointerSlot pSave;
+	mutable DebugPointerSlot pInit;
+#endif
 	// end debugging members
 	struct MCachedPart & getPartFromCache (void) const;		// internal use only
 
@@ -44,8 +67,10 @@ public:
 
 	MPartRef (void)
 	{
+#if defined(_WIN32)
 		pInit = 0;
 		pSave = 0;
+#endif
 		index = 0;
 		dwMissionID = 0;
 	}

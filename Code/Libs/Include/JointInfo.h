@@ -10,6 +10,23 @@
 
 #include <string.h>
 
+inline int joint_name_compare(const char *left, const char *right)
+{
+#if defined(_WIN32)
+	return stricmp(left, right);
+#else
+	for (;; ++left, ++right)
+	{
+		const unsigned char a = static_cast<unsigned char>(*left);
+		const unsigned char b = static_cast<unsigned char>(*right);
+		const unsigned char foldedA = a >= 'A' && a <= 'Z' ? a + ('a' - 'A') : a;
+		const unsigned char foldedB = b >= 'A' && b <= 'Z' ? b + ('a' - 'A') : b;
+		if (foldedA != foldedB || !a || !b)
+			return static_cast<int>(foldedA) - static_cast<int>(foldedB);
+	}
+#endif
+}
+
 //
 
 //
@@ -147,28 +164,28 @@ public: // Interface
 	static JointType get_type_from_name( const char *jointtypename )
 	{
 
-		if( stricmp( jointtypename, JT_FIXED_NAME ) == 0 ) {
+		if( joint_name_compare( jointtypename, JT_FIXED_NAME ) == 0 ) {
 			return JT_FIXED;
 		}
-		else if( stricmp( jointtypename, JT_PRISMATIC_NAME ) == 0 ) {
+		else if( joint_name_compare( jointtypename, JT_PRISMATIC_NAME ) == 0 ) {
 			return JT_PRISMATIC;
 		}
-		else if( stricmp( jointtypename, JT_REVOLUTE_NAME ) == 0 ) {
+		else if( joint_name_compare( jointtypename, JT_REVOLUTE_NAME ) == 0 ) {
 			return JT_REVOLUTE;
 		}
-		else if( stricmp( jointtypename, JT_DAMPED_SPRING_NAME ) == 0 ) {
+		else if( joint_name_compare( jointtypename, JT_DAMPED_SPRING_NAME ) == 0 ) {
 			return JT_DAMPED_SPRING;
 		}
-		else if( stricmp( jointtypename, JT_CYLINDRICAL_NAME ) == 0 ) {
+		else if( joint_name_compare( jointtypename, JT_CYLINDRICAL_NAME ) == 0 ) {
 			return JT_CYLINDRICAL;
 		}
-		else if( stricmp( jointtypename, JT_SPHERICAL_NAME ) == 0 ) {
+		else if( joint_name_compare( jointtypename, JT_SPHERICAL_NAME ) == 0 ) {
 			return JT_SPHERICAL;
 		}
-		else if( stricmp( jointtypename, JT_TRANSLATIONAL_NAME ) == 0 ) {
+		else if( joint_name_compare( jointtypename, JT_TRANSLATIONAL_NAME ) == 0 ) {
 			return JT_TRANSLATIONAL;
 		}
-		else if( stricmp( jointtypename, JT_LOOSE_NAME ) == 0 ) {
+		else if( joint_name_compare( jointtypename, JT_LOOSE_NAME ) == 0 ) {
 			return JT_LOOSE;
 		}
 

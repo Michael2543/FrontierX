@@ -54,7 +54,7 @@
 #endif
 
 #ifndef HKEVENT_H
-#include <hkevent.h>
+#include <HKEvent.h>
 #endif
 
 #ifndef TRESCLIENT_H

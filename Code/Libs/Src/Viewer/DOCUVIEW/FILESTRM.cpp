@@ -31,12 +31,14 @@
 // 4786: truncating function name (255 chars) in browser info
 #pragma warning (disable : 4514 4201 4100 4512 4245 4127 4355 4244 4710 4702 4786)
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #pragma warning (disable : 4355 4201)
 
-#include "FileSys.h"
-#include "filestrm.h"
-#include "ferror.h"
+#include "Filesys.h"
+#include "Filestrm.h"
+#include "Ferror.h"
 
 //#include <string.h>
 #include <malloc.h>
@@ -72,7 +74,7 @@ int FileStream::open(const char *filename, char fatal)
 		if (bOwnMemory)
 			free((void *)buffer);
 		buffer_index = 0;
-		tmp = (BYTE *) malloc(pFile->GetFileSize()+1);
+		tmp = (U8 *) malloc(pFile->GetFileSize()+1);
 		buffer = tmp;
 		bOwnMemory = true;
 		pFile->ReadFile(0, tmp, pFile->GetFileSize(), &dwRead, 0);
@@ -125,5 +127,4 @@ void FileStream::close(void)
 //--------------------------------------------------------------------------//
 //----------------------------End FileStrm.cpp------------------------------//
 //--------------------------------------------------------------------------//
-
 

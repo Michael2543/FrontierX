@@ -98,6 +98,7 @@ struct FIGHTER_SAVELOAD : BASE_FIGHTER_SAVELOAD
 };
 
 #ifndef _ADB
+struct IMeshArchetype;
 struct BASE_FIGHTER_INIT
 {
 	const BT_FIGHTER_DATA * pData;

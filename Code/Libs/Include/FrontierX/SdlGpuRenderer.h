@@ -11,6 +11,9 @@
 #include <memory>
 #include <string>
 
+class Transform;
+class Matrix4;
+
 namespace FrontierX
 {
 struct SdlGpuTextureView
@@ -45,11 +48,20 @@ public:
                     const char * fragmentShaderPath,
                     SdlGpuTextureView texture,
                     std::string & error,
-                    const char * extendedVertexShaderPath = nullptr);
+                    const char * extendedVertexShaderPath = nullptr,
+                    const char * gameVertexShaderPath = nullptr);
     GENRESULT Submit(const RenderSubmissionView & submission);
     GENRESULT Submit(const RenderSubmissionView2 & submission);
+    GENRESULT Submit(const RenderSubmissionView3 & submission);
+    GENRESULT Submit(const RenderSubmissionView4 & submission);
     GENRESULT SetRenderState(const RenderStateSnapshot & state);
+    GENRESULT SetModelview(const Transform & modelview);
+    GENRESULT SetProjection(const Matrix4 & projection);
+    GENRESULT SetVertexConstants(std::uint32_t firstRegister,
+                                 const float * values,
+                                 std::uint32_t registerCount);
     GENRESULT SetTextureStageState(const TextureStageSnapshot & state);
+    GENRESULT SetSamplerState(const SamplerStateSnapshot & state);
     GENRESULT RegisterTexture(SdlGpuTextureView texture, std::uint32_t & handle);
     GENRESULT CreateTexture(std::uint32_t width, std::uint32_t height,
                             std::uint32_t & handle);
@@ -65,10 +77,23 @@ public:
         void * context, const RenderSubmissionView & submission);
     static GENRESULT DACOM_CDECL Submission2Callback(
         void * context, const RenderSubmissionView2 & submission);
+    static GENRESULT DACOM_CDECL Submission3Callback(
+        void * context, const RenderSubmissionView3 & submission);
+    static GENRESULT DACOM_CDECL Submission4Callback(
+        void * context, const RenderSubmissionView4 & submission);
     static GENRESULT DACOM_CDECL RenderStateCallback(
         void * context, const RenderStateSnapshot & state);
+    static GENRESULT DACOM_CDECL ModelviewCallback(
+        void * context, const Transform & modelview);
+    static GENRESULT DACOM_CDECL ProjectionCallback(
+        void * context, const Matrix4 & projection);
+    static GENRESULT DACOM_CDECL VertexConstantsCallback(
+        void * context, UINT firstRegister, const FLOAT * values,
+        UINT registerCount);
     static GENRESULT DACOM_CDECL TextureStageCallback(
         void * context, const TextureStageSnapshot & state);
+    static GENRESULT DACOM_CDECL SamplerStateCallback(
+        void * context, const SamplerStateSnapshot & state);
     static GENRESULT DACOM_CDECL TextureBindCallback(
         void * context, std::uint32_t stage, std::uint32_t handle);
     static bool TextureLookupCallback(void * context, std::uint32_t handle);
@@ -85,17 +110,19 @@ public:
     std::uint32_t DepthWidth() const;
     std::uint32_t DepthHeight() const;
     std::uint32_t DepthRecreations() const;
+    std::uint32_t PipelineRebuilds() const;
     std::uint32_t VertexCount() const;
     std::uint32_t IndexCount() const;
     RenderStateSnapshot CurrentRenderState() const;
     TextureStageSnapshot CurrentTextureStageState() const;
+    SamplerStateSnapshot CurrentSamplerState() const;
     std::uint32_t CurrentTextureHandle() const;
     std::uint32_t FixtureTextureHandle() const;
 
 private:
     GENRESULT SubmitBytes(const void * vertices, std::size_t vertexCount,
                           std::size_t vertexStride, const std::uint16_t * indices,
-                          std::size_t indexCount, bool extended);
+                          std::size_t indexCount, unsigned vertexFormat);
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

@@ -336,6 +336,9 @@ GENRESULT StateMaterial::render( MaterialContext *context, D3DPRIMITIVETYPE Prim
 
 GENRESULT StateMaterial::set_name( const char *new_name ) 
 {
+	if( !new_name || strlen(new_name) >= sizeof(material_name) ) {
+		return GR_INVALID_PARMS;
+	}
 	strcpy( material_name, new_name );
 	return GR_OK;
 }
@@ -344,6 +347,9 @@ GENRESULT StateMaterial::set_name( const char *new_name )
 
 GENRESULT StateMaterial::get_name( char *out_name, U32 max_name_len ) 
 {
+	if( !out_name || max_name_len == 0 || strlen(material_name) >= max_name_len ) {
+		return GR_INVALID_PARMS;
+	}
 	strcpy( out_name, material_name );
 	return GR_OK;
 }
@@ -360,6 +366,9 @@ GENRESULT StateMaterial::get_num_passes( U32 *out_num_passes )
 
 GENRESULT StateMaterial::get_type( char *out_type, U32 max_type_len )
 {
+	if( !out_type || max_type_len == 0 ) {
+		return GR_INVALID_PARMS;
+	}
 	strncpy( out_type, CLSID_StateMaterial, max_type_len );
 	out_type[max_type_len-1] = 0;
 	return GR_OK;

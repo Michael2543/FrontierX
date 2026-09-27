@@ -20,7 +20,11 @@
 #endif
 
 #ifndef GRIDVECTOR_H
+#if !defined(_WIN32)
+#include "GridVector.h"
+#else
 #include "Gridvector.h"
+#endif
 #endif
 
 //--------------------------------------------------------------------------//

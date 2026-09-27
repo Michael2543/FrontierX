@@ -26,19 +26,25 @@
 // 4786: truncating function name (255 chars) in browser info
 #pragma warning (disable : 4514 4201 4100 4512 4245 4127 4355 4244 4710 4702 4786)
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #pragma warning (disable : 4355 4201)
 
 #include <DataParser.h>
-#include "SymTable.h"
+#include "Symtable.h"
+#include "ViewSymbolOperations.h"
+#ifdef _WIN32
 #include <Document.h>
 #include "DataView.h"
+#endif
 //#include "TokenDef.h"
 
 #include <HeapObj.h>
 #include <TComponent.h>
+#include <TSmartPointer.h>
 
-void __stdcall CreateDataParser (SYMBOL symbol, IDataParser ** pParser);
+void COMAPI CreateDataParser (SYMBOL symbol, IDataParser ** pParser);
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //  
@@ -66,10 +72,16 @@ struct DACOM_NO_VTABLE DataParser : public IDataParser
 	{
 		return HEAP->ClearAllocateMemory(size, "DataParser");
 	}
+#ifndef _WIN32
+	void operator delete (void * memory) noexcept
+	{
+		if (memory) HEAP->FreeMemory(memory);
+	}
+#endif
 
 	/* IDataParser methods */
 
-	virtual BOOL32 __stdcall Enumerate (IParserCallback * callback);
+	virtual BOOL32 COMAPI Enumerate (IParserCallback * callback);
 
 	
 	/* DataParser methods */
@@ -160,7 +172,11 @@ BOOL32 DataParser::Enumerate (IParserCallback * callback)
 
 			vdesc.offset = symbol->offset;
 			vdesc.size = symbol->size;
+#ifdef _WIN32
 			vdesc.arraySize = DataViewer::GetType(symbol)->arrayval;
+#else
+			vdesc.arraySize = ResolveViewSymbolType(symbol)->arrayval;
+#endif
 			vdesc.bitOffset = symbol->bit_offset;
 			vdesc.bitCount = symbol->bit_count;
 
@@ -180,9 +196,18 @@ BOOL32 DataParser::Enumerate (IParserCallback * callback)
 
 //--------------------------------------------------------------------------//
 //
-void __stdcall CreateDataParser (SYMBOL symbol, IDataParser ** pParser)
+void COMAPI CreateDataParser (SYMBOL symbol, IDataParser ** pParser)
 {
+	if (!pParser)
+		return;
+	*pParser = 0;
+	if (!symbol)
+		return;
+#ifdef _WIN32
 	symbol = DataViewer::GetType(symbol);
+#else
+	symbol = ResolveViewSymbolType(symbol);
+#endif
 
 	if (symbol->kind == ARRAYSYM || symbol->kind == RECORDSYM)
 	{

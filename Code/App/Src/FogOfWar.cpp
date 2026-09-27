@@ -10,41 +10,93 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "FrontierX/LegacyInput.h"
+#include <algorithm>
+#include <DMissionEnum.h>
+#include <ICamera.h>
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+using std::min;
+using std::max;
+#define __min(a,b) std::min((a),(b))
+#define __max(a,b) std::max((a),(b))
+#endif
 
+#if defined(_WIN32)
 #include "Resource.h"
+#else
+#include "resource.h"
+#endif
 #include "Startup.h"
 #include "TCPoint.h"
+#if defined(_WIN32)
 #include "Objlist.h"
 #include "sector.h"
+#else
+#include "ObjList.h"
+#include "Sector.h"
+#endif
 #include "IObject.h"
 #include "FogOfWar.h"
+#if defined(_WIN32)
 #include "camera.h"
+#else
+#include "Camera.h"
+#endif
 #include "TDocClient.h"
 #include "UserDefaults.h"
+#if defined(_WIN32)
 #include "menu.h"
+#else
+#include "Menu.h"
+#endif
 #include <DFog.h>
 #include "CQTrace.h"
 #include "SysMap.h"
 #include "Sector.h"
 #include "MGlobals.h"
+#if defined(_WIN32)
 #include "Gridvector.h"
+#else
+#include "GridVector.h"
+#endif
 #include "TManager.h"
 #include "Objwatch.h"
+#if defined(_WIN32)
 #include "ObjmapIterator.h"
+#else
+#include "ObjMapIterator.h"
+#endif
 #include "DEffectOpts.h"
 
 //#include <ITextureLibrary.h>
+#if defined(_WIN32)
 #include <FileSys.h>
+#else
+#include <Filesys.h>
+#endif
 #include <TComponent.h>
 #include <TSmartPointer.h>
+#if defined(_WIN32)
 #include <Heapobj.h>
+#else
+#include <HeapObj.h>
+#endif
 #include <Viewer.h>
 #include <EventSys.h>
 #include <3dmath.h>
+#if defined(_WIN32)
 #include <Engine.h>
 #include <RendPipeline.h>
+#else
+#include <ENGINE.H>
+#include <rendpipeline.h>
+#endif
 //#include <RPUL\PrimitiveBuilder.h>
 
 #include <malloc.h>
@@ -297,7 +349,11 @@ Done:
 		memset(buffer,fill,sizeof(U8)*height*width);
 	}
 
+#if defined(_WIN32)
 	BlackFog::~BlackFog()
+#else
+	~BlackFog()
+#endif
 	{
 		delete [] buffer;
 	}
@@ -484,7 +540,11 @@ Done:
 		memset(buffer,fill,sizeof(U32)*height*width);
 	}
 
+#if defined(_WIN32)
 	CircleBits::~CircleBits()
+#else
+	~CircleBits()
+#endif
 	{
 		delete [] buffer;
 	}
@@ -1479,10 +1539,10 @@ void FogOfWar::Render()
 									alpha = alpha>>16;  //magic shift to take alpha down to 0..256 - higher with average alpha
 
 									//capping on next 3 lines
-									color[w*3+c] |= ((min(alpha*(bbit&0xff),0xff00))>>8)<<16;
-									color[w*3+c] |= ((min(alpha*(bbit&0xff00),0xff0000))>>16)<<8;
+									color[w*3+c] |= ((min(alpha*(bbit&0xff),U32(0xff00)))>>8)<<16;
+									color[w*3+c] |= ((min(alpha*(bbit&0xff00),U32(0xff0000)))>>16)<<8;
 									//these calculations depend on overflow, so this one must be divided down before being multiplied
-									color[w*3+c] |= ((min(alpha*((bbit&0xff0000)>>16),0xff00))>>8);
+									color[w*3+c] |= ((min(alpha*((bbit&0xff0000)>>16),U32(0xff00)))>>8);
 									//different than below cause alpha is not coming out of bbit
 								//	color[w*3+c] = (bbit&0x0000ff00) | ((bbit&0xff)<<16) | ((bbit>>16)&0xff);
 									color[w*3+c] |= drawAlpha<<24;
@@ -2066,6 +2126,7 @@ GENRESULT FogOfWar::OnUpdate (struct IDocument *doc, const C8 *message, void *pa
 //
 BOOL32 FogOfWar::CreateViewer (void)
 {
+#if defined(_WIN32)
 	HMENU hMenu = MENU->GetSubMenu(MENUPOS_VIEW);
 	MENUITEMINFO minfo;
 
@@ -2079,6 +2140,7 @@ BOOL32 FogOfWar::CreateViewer (void)
 		
 	if (InsertMenuItem(hMenu, 0x7FFE, 1, &minfo))
 		menuID = IDS_VIEWFOG;
+#endif
 
 	if (DEFAULTS->GetDataFromRegistry(szRegKey, &fogData, sizeof(fogData)) != sizeof(fogData) || fogData.version != FOGDATA_VERSION)
 	{
@@ -2109,6 +2171,11 @@ BOOL32 FogOfWar::CreateViewer (void)
 
 	}
 	fogAlpha = fogData.softFog.a/255.0;
+
+#if !defined(_WIN32)
+	// The viewer is a nonfatal Windows debug panel; fog data remains active.
+	return FALSE;
+#else
 
 	if (CQFLAGS.bNoGDI)
 		return 1;
@@ -2143,13 +2210,18 @@ BOOL32 FogOfWar::CreateViewer (void)
 	}
 
 	return (viewer != 0);
+#endif
 }
 //--------------------------------------------------------------------------//
 // receive notifications from event system
 //
 GENRESULT FogOfWar::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	(void)param;
+#endif
 
 	switch (message)
 	{
@@ -2185,6 +2257,7 @@ GENRESULT FogOfWar::Notify (U32 message, void *param)
 		
 		break;
 		
+#if defined(_WIN32)
 	case WM_COMMAND:
 		if (LOWORD(msg->wParam) == menuID)
 		{
@@ -2201,6 +2274,11 @@ GENRESULT FogOfWar::Notify (U32 message, void *param)
 	case WM_CLOSE:
 		loadTextures(false);
 		break;
+#else
+	case FrontierX::LegacyMessage::Close:
+		loadTextures(false);
+		break;
+#endif
 	}
 
 	return GR_OK;

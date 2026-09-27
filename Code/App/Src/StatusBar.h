@@ -46,7 +46,7 @@ struct DACOM_NO_VTABLE IStatusBarResource : public IResource
 
 	DEFMETHOD_(void,SetToolbarHeight) (U32 height) = 0;
 
-	void SetRect (const struct tagRECT & rect) { }
+	void SetRect (const struct tagRECT &) { }
 };
 
 

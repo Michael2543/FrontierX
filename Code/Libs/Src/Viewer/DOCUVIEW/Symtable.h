@@ -1,5 +1,7 @@
 #ifndef SYMTABLE_H
 #define SYMTABLE_H
+#include <cstddef>
+#include <cstring>
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                                SymTable.h                                //
@@ -163,6 +165,9 @@ struct Symbol
 	}
 
 	void * operator new (size_t size);
+#ifndef _WIN32
+	void operator delete (void * memory) noexcept;
+#endif
 
 	unsigned long Release (void);
 
@@ -248,7 +253,7 @@ public:
 	
 	void push_namespace (SYMBOL name);
 
-	void pop_namespace (SYMBOL name)
+	void pop_namespace (SYMBOL)
 	{
 		dec_current_level();
 	}

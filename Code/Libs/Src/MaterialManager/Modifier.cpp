@@ -4,7 +4,11 @@
 //
 //----------------------------------------------------------------------------------------------
 
+#if defined(_WIN32)
 #include "stdafx.h"
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 #include <IMaterialManager.h>
 #include "Material.h"
 #include "InternalMaterialManager.h"
@@ -73,4 +77,3 @@ Modifier::~Modifier()
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
-

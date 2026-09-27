@@ -1,8 +1,9 @@
 #ifndef __ANIM_H
 #define __ANIM_H
 
-#include "Engine.h"
-#include "AnimTypes.h"
+#include "ICamera.h"
+#include "ENGINE.H"
+#include "animTypes.h"
 #include "channel.h"
 #include "TComponent.h"
 #include "IAnim.h"

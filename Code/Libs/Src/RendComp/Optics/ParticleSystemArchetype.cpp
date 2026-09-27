@@ -4,7 +4,11 @@
 //
 //
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 
 #include "ParticleSystemArchetype.h"
 
@@ -447,4 +451,3 @@ bool ParticleSystemArchetype::load_from_filesystem_old( IFileSystem *filesys, IT
 }
 
 #endif
-

@@ -87,7 +87,7 @@
 //------------------------------- #INCLUDES --------------------------------//
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
 typedef struct tagRECT RECT;

@@ -78,6 +78,7 @@ typedef wchar_t M_STRINGW[M_MAX_STRING];
 #endif
 
 #include <string.h>
+#include <wchar.h>
 
 struct M_STRING
 {

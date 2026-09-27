@@ -21,7 +21,7 @@
 
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 typedef void *HANDLE;
@@ -32,11 +32,11 @@ typedef Symbol *SYMBOL;
 //--------------------------------------------------------------------------//
 // Enumerate callback function. Return TRUE to continue the enumeration
 
-typedef BOOL32  (__stdcall * IVIEWCNST_ENUM_PROC) (struct IViewConstructor * cnst, 
+typedef BOOL32  (COMAPI * IVIEWCNST_ENUM_PROC) (struct IViewConstructor * cnst,
 												   const C8 *typeName,
 												   void *context);
 
-typedef BOOL32  (__stdcall * IVIEWCNST_ENUM_PROC2) (struct IViewConstructor2 * cnst, 
+typedef BOOL32  (COMAPI * IVIEWCNST_ENUM_PROC2) (struct IViewConstructor2 * cnst,
 												    const C8 *typeName,
 													SYMBOL symbol,
 												    void *context);

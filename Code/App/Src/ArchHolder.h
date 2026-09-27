@@ -15,7 +15,10 @@
 */
 
 #ifndef ENGINE_H
-#include <Engine.h>
+#if !defined(_WIN32)
+#include <ICamera.h>
+#endif
+#include <ENGINE.H>
 #endif
 
 //-------------------------------------------------------------------

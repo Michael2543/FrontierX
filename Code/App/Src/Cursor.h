@@ -43,7 +43,11 @@ struct DACOM_NO_VTABLE ICursorResource : public IResource
 
 	virtual void EnableCursor (bool bEnable) = 0;
 
+#if !defined(_WIN32)
+	virtual bool IsCursorEnabled (void) const = 0;
+#else
 	virtual const bool IsCursorEnabled (void) const = 0;
+#endif
 
 	virtual HCURSOR GetWindowsCursor (void) = 0;
 };

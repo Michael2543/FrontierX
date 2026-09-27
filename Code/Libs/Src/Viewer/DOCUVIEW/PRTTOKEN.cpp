@@ -12,15 +12,17 @@
 //--------------------------------------------------------------------------//
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include "HeapObj.h"
 
 #include <ctype.h>
 #include <malloc.h>
 
-#include "prttoken.h"
-#include "fdump.h"
+#include "Prttoken.h"
+#include "FDump.h"
 
 char* opprnt[]  = {" ", "+", "-", "*", "/", "=", "==", "!=", "<", "<=",
                           ">=", ">",  "->", ".", "&", "|", "!", "/",
@@ -39,7 +41,7 @@ char *resprnt[] = { " ", "struct", "class", "public", "private", "protected",
 
 TOKEN talloc()           /* allocate a new token record */
 {
-#if !defined(_XBOX)
+#if defined(_WIN32) && !defined(_XBOX)
 	return (TOKEN) HEAP->ClearAllocateMemory(sizeof(tokn), "DataViewer::Token struct");
 #else
 	return (TOKEN) calloc( 1, sizeof(tokn) );
@@ -87,7 +89,6 @@ void printtoken(TOKEN )
 //--------------------------------------------------------------------------//
 //-------------------------End PRTToken.cpp---------------------------------//
 //--------------------------------------------------------------------------//
-
 
 
 

@@ -4,18 +4,23 @@
 //
 //----------------------------------------------------------------------------------------------
 
+#if defined(_WIN32)
 #include "stdafx.h"
+#include "resource.h"
+#include <commctrl.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/NativeGameVertexBuffer.h"
+#include "FrontierX/NativeMaterialEffect.h"
+#endif
 #include <IMaterialManager.h>
 #include "Material.h"
 #include "InternalMaterialManager.h"
 #include "Modifier.h"
 
-#include "resource.h"
-
-#include <tcomponent.h>
+#include <TComponent.h>
 #include <da_heap_utility.h>
-#include <filesys.h>
-#include <commctrl.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
 
 #include <string>
@@ -30,10 +35,21 @@ char fullTexturePath[MAX_PATH];//used to return values out to the material in 3D
 void Material::DrawVB(IDirect3DVertexBuffer9* VB, IDirect3DIndexBuffer9* IB, int start_vertex, int num_verts, int start_index, int num_indices, IModifier * modList,SINGLE frameTime)
 {
 	UINT passCount = 1;
+#if !defined(_WIN32)
+	if( (shader && !shaderEffect) || (shaderEffect && !*shaderEffect) ||
+		!VB || VB->pipelineHandle == IRP_INVALID_VB_HANDLE )
+		return;
+	const IRP_VERTEXBUFFERHANDLE vbHandle = VB->pipelineHandle;
+#endif
 	if (shaderEffect)
 	{
+#if defined(_WIN32)
 		SetShaderConstants(modList,frameTime);
 		(*shaderEffect)->Begin(&passCount, 0);
+#else
+		if (!SetShaderConstants(modList,frameTime) ||
+			!(*shaderEffect)->Begin(&passCount, 0)) return;
+#endif
 	}
 	else
 	{
@@ -41,14 +57,30 @@ void Material::DrawVB(IDirect3DVertexBuffer9* VB, IDirect3DIndexBuffer9* IB, int
 	}
 	for (U32 i = 0; i < passCount; i++)
 	{
+#if !defined(_WIN32)
+		if (!PreparePass(i))
+		{
+			if (shaderEffect) (*shaderEffect)->End();
+			return;
+		}
+#else
 		PreparePass(i);
+#endif
 		if (IB)
 		{
+#if defined(_WIN32)
 			owner->GetPipe()->draw_indexed_primitive_vb( D3DPT_TRIANGLELIST, (U32)VB, start_vertex, num_verts,  IB, num_indices, 0);
+#else
+			owner->GetPipe()->draw_indexed_primitive_vb( D3DPT_TRIANGLELIST, vbHandle, start_vertex, num_verts,  IB, num_indices, 0);
+#endif
 		}
 		else
 		{
+#if defined(_WIN32)
 			owner->GetPipe()->draw_primitive_vb( D3DPT_TRIANGLELIST, (U32) VB, start_vertex, num_verts, 0);
+#else
+			owner->GetPipe()->draw_primitive_vb( D3DPT_TRIANGLELIST, vbHandle, start_vertex, num_verts, 0);
+#endif
 		}
 		EndPass(i);
 	}
@@ -62,18 +94,19 @@ void Material::DrawVB(IDirect3DVertexBuffer9* VB, IDirect3DIndexBuffer9* IB, int
 /////////////////////////////////////////////////////////////////////////////////////////////
 // prepares to render a pass
 
-void Material::SetShaderConstants(IModifier * modList,SINGLE frameTime)
+bool Material::SetShaderConstants(IModifier * modList,SINGLE frameTime)
 {
 	IRenderPipeline * PIPE = owner->GetPipe();
+	bool applied = true;
 
 	// default renderstates, moved here from MeshRender.cpp
-	PIPE->set_render_state(D3DRS_ZFUNC,D3DCMP_LESSEQUAL);
-	PIPE->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX, 0);
-	PIPE->set_render_state(D3DRS_LIGHTING,FALSE);
-	PIPE->set_render_state(D3DRS_ALPHABLENDENABLE,TRUE);
-	PIPE->set_render_state(D3DRS_ALPHATESTENABLE,FALSE);
-	PIPE->set_render_state(D3DRS_ALPHAREF,0x0000000A);
-	PIPE->set_render_state(D3DRS_CULLMODE,D3DCULL_CW);
+	applied &= PIPE->set_render_state(D3DRS_ZFUNC,D3DCMP_LESSEQUAL) == GR_OK;
+	applied &= PIPE->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX, 0) == GR_OK;
+	applied &= PIPE->set_render_state(D3DRS_LIGHTING,FALSE) == GR_OK;
+	applied &= PIPE->set_render_state(D3DRS_ALPHABLENDENABLE,TRUE) == GR_OK;
+	applied &= PIPE->set_render_state(D3DRS_ALPHATESTENABLE,FALSE) == GR_OK;
+	applied &= PIPE->set_render_state(D3DRS_ALPHAREF,0x0000000A) == GR_OK;
+	applied &= PIPE->set_render_state(D3DRS_CULLMODE,D3DCULL_CW) == GR_OK;
 
 
 	Modifier * mod = NULL;
@@ -83,7 +116,7 @@ void Material::SetShaderConstants(IModifier * modList,SINGLE frameTime)
 	MatTexture* tmp = textureList;
 	while (tmp)
 	{
-		PIPE->set_texture_stage_texture(tmp->channel, tmp->textureID);
+		applied &= PIPE->set_texture_stage_texture(tmp->channel, tmp->textureID) == GR_OK;
 		tmp = tmp->next;
 	}
 
@@ -96,14 +129,14 @@ void Material::SetShaderConstants(IModifier * modList,SINGLE frameTime)
 		{
 			if(modSearch->stateNode == sSearch)
 			{
-				PIPE->set_render_state((D3DRENDERSTATETYPE)(modSearch->stateValue),sSearch->value);
+				applied &= PIPE->set_render_state((D3DRENDERSTATETYPE)(modSearch->stateValue),sSearch->value) == GR_OK;
 				bPlaced = true;
 				break;
 			}
 			modSearch = modSearch->next;
 		}
 		if(!bPlaced)
-		PIPE->set_render_state((D3DRENDERSTATETYPE)(sSearch->state),sSearch->value);
+			applied &= PIPE->set_render_state((D3DRENDERSTATETYPE)(sSearch->state),sSearch->value) == GR_OK;
 		sSearch = sSearch->next;
 	}
 
@@ -186,11 +219,11 @@ void Material::SetShaderConstants(IModifier * modList,SINGLE frameTime)
 
 		if(bOverride)
 		{
-			PIPE->set_vs_constants(startVertexIndex/4, (float*)overRideConst,vertexConstCount/4);
+			applied &= PIPE->set_vs_constants(startVertexIndex/4, (float*)overRideConst,vertexConstCount/4) == GR_OK;
 		}
 		else
 		{
-			PIPE->set_vs_constants(startVertexIndex/4, (float*)vertexConst,vertexConstCount/4);
+			applied &= PIPE->set_vs_constants(startVertexIndex/4, (float*)vertexConst,vertexConstCount/4) == GR_OK;
 		}
 	}
 	if(pixelConst)
@@ -255,13 +288,14 @@ void Material::SetShaderConstants(IModifier * modList,SINGLE frameTime)
 
 		if(bOverride)
 		{
-			PIPE->set_ps_constants(startPixelIndex/4, (float*)overRideConst,pixelConstCount/4);
+			applied &= PIPE->set_ps_constants(startPixelIndex/4, (float*)overRideConst,pixelConstCount/4) == GR_OK;
 		}
 		else
 		{
-			PIPE->set_ps_constants(startPixelIndex/4, (float*)pixelConst,pixelConstCount/4);
+			applied &= PIPE->set_ps_constants(startPixelIndex/4, (float*)pixelConst,pixelConstCount/4) == GR_OK;
 		}
 	}
+	return applied;
 }
 
 bool Material::PreparePass(int pass)
@@ -269,7 +303,11 @@ bool Material::PreparePass(int pass)
 	//old version of directX needed this.
 	if (shaderEffect)
 	{
+#if defined(_WIN32)
 		(*shaderEffect)->BeginPass(pass);
+#else
+		return (*shaderEffect)->BeginPass(pass);
+#endif
 	}
 	
 	switch (pass)
@@ -292,7 +330,11 @@ bool Material::EndPass(int pass)
 	//old version of directX needed this.
 	if (shaderEffect)
 	{
+#if defined(_WIN32)
 		(*shaderEffect)->EndPass();
+#else
+		return (*shaderEffect)->EndPass();
+#endif
 	}
 	return true;
 }
@@ -1326,13 +1368,13 @@ Material::~Material()
 
 #define MAT_SAVE_VERSION 1
 
-void readLine(char * buffer, IFileSystem * file)
+bool readLine(char * buffer, IFileSystem * file)
 {
 	char read;
 	int index = 0;
 	U32 dwBytesRead = 0;
 
-	while((file->ReadFile(NULL, &read, 1, &dwBytesRead) == 1) && index < 254)
+	while(index < 254 && file->ReadFile(NULL, &read, 1, &dwBytesRead) == 1 && dwBytesRead == 1)
 	{
 		if(read == '\n')
 			break;
@@ -1340,6 +1382,7 @@ void readLine(char * buffer, IFileSystem * file)
 		++index;
 	}
 	buffer[index] = 0;
+	return index != 0 || dwBytesRead == 1;
 };
 
 #define MS_END "END"
@@ -1371,8 +1414,8 @@ void Material::Load(IFileSystem * matDir, const char * filename)
 			szShaderName = buffer;
 			shader = owner->FindShader(szShaderName.c_str());
 			//now read parameter info
-			readLine(buffer,matFile);
-			while(strncmp(buffer,MS_END,strlen(MS_END)) != 0)
+			bool hasLine = readLine(buffer,matFile);
+			while(hasLine && strncmp(buffer,MS_END,strlen(MS_END)) != 0)
 			{
 				if(strncmp(buffer,MS_FLOAT,strlen(MS_FLOAT))==0 )
 				{
@@ -1435,7 +1478,7 @@ void Material::Load(IFileSystem * matDir, const char * filename)
 					animUV = new MatAnimUV;
 					sscanf(buffer,"%s %d %d %d %f \"%[^\"]",token,&(animUV->reg),&(animUV->rows),&(animUV->columns),&(animUV->frameRate),animUV->name);
 				}
-				readLine(buffer,matFile);
+				hasLine = readLine(buffer,matFile);
 			}
 		}
 		RemapParameters();
@@ -1542,7 +1585,9 @@ void Material::Save(IFileSystem * matDir)
 		{
 			char buffer[512];
 			sprintf(buffer,"Could not create save file for %s",szFileName.c_str());
+#if defined(_WIN32)
 			::MessageBox(NULL,buffer,"Save Error",MB_OK);
+#endif
 		}
 	}
 }
@@ -1837,4 +1882,3 @@ void Material::RemapParameters()
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
-

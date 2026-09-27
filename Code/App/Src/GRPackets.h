@@ -22,7 +22,7 @@
 #endif
 
 #ifndef DCQGAME_H
-#include <DCQGAME.h>
+#include <DCQGame.h>
 #endif
 
 //--------------------------------------------------------------------------//

@@ -2,15 +2,17 @@
 
 #include <stdlib.h>
 #include <search.h>
+#include <limits.h>
+#include <stdint.h>
 
 /* prototypes for local routines */
-#ifdef SGI
+#if defined(SGI) || !defined(_WIN32)
 #ifndef __cdecl
 #define __cdecl
 #endif
 #endif
 
-static void __cdecl shortsort(char *base, char *lo, char *hi, unsigned width,
+static void __cdecl shortsort(char *base, char *lo, char *hi, size_t width,
                 int (__cdecl *comp)(const void *, const void *, const void *),
 				const void *comp_lib,
 				void (__cdecl *swap)(void *, const int id1, const int id2),
@@ -55,8 +57,8 @@ void  __cdecl sortQ(void *, size_t, size_t,
 /* sort the array between lo and hi (inclusive) */
 void __cdecl sortQ (
     void *base,
-    unsigned num,
-    unsigned width,
+    size_t num,
+    size_t width,
     int (__cdecl *comp)(const void *, const void *, const void *),
 	const void *comp_lib,
 	void (__cdecl *swap)(void *, const int id1, const int id2),
@@ -66,14 +68,15 @@ void __cdecl sortQ (
     char *lo, *hi;              /* ends of sub-array currently sorting */
     char *mid;                  /* points to middle of subarray */
     char *loguy, *higuy;        /* traveling pointers for partition step */
-    unsigned size;              /* size of the sub-array */
+    size_t size;                /* size of the sub-array */
     char *lostk[30], *histk[30];
     int stkptr;                 /* stack for saving sub-array to be processed */
 
     /* Note: the number of stack entries required is no more than
        1 + log2(size), so 30 is sufficient for any array */
 
-    if (num < 2 || width == 0)
+    if (num < 2 || width == 0 || num > INT_MAX ||
+        width > SIZE_MAX / (num - 1))
         return;                 /* nothing to do */
 
     stkptr = 0;                 /* initialize stack */
@@ -238,7 +241,7 @@ static void __cdecl shortsort (
 	char *base,
     char *lo,
     char *hi,
-    unsigned width,
+    size_t width,
     int (__cdecl *comp)(const void *, const void *, const void *),
 	const void * comp_lib,
 	void (__cdecl *swap)(void *, const int id1, const int id2),

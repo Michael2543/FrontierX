@@ -1,5 +1,670 @@
 # Windows build declarations and next portable slice
 
+Latest UTF-save-format matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 configured and built the complete Linux Debug presets with
+`NativeUtfWriter.cpp`. Both full CTest presets passed 48 executing
+checks and skipped the sandbox cursor/two GPU checks. The existing
+`portability.data_root` check encoded and reopened a generated
+save-shaped UTF archive through the platform `IFileSystem` reader;
+both compiler probes separately read the lawful external
+`Sol_Train.dmission` without modifying it. A temporary combined
+App/script link still fails on 70 references across 28 symbols.
+Native Windows Debug/Final, module ABI and hardware GPU checks were
+not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#native-utf-save-format-encoder-gate-2026-09-27).
+
+Latest mission-message matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built the complete Linux Debug presets with native scrolling
+text. Each full CTest preset passed 48 executing checks and skipped
+the sandbox cursor/two GPU checks. The existing shell CTest passed, and
+both compiler shells ran against lawful external `Sol_Train.dmission`
+with explicit movie/notification-cue skips and SDL dummy devices.
+They displayed the source `Disabled` message, exited zero and still
+reported "mission not started". A temporary GCC App/script link
+failed on 70 references across 28 symbols. Native Windows Debug/Final,
+module ABI and hardware GPU validation were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#native-scrolling-message-and-explicit-cue-policy-gate-2026-09-27).
+
+Latest App text-resource matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built `frontierx_native_app_text_resources` and the complete
+`linux-*-debug` presets. Each full CTest preset passed 48 executing
+checks and skipped the sandbox cursor/two GPU checks. The existing
+shell test exercised source-string display and reset; both compiler
+shells executed the same startup with lawful external
+`Sol_Train.dmission`, explicit movie skip and SDL dummy devices, then
+reported "mission not started". A temporary GCC combined App/script
+link failed on 85 references across 29 symbols; Windows Debug/Final,
+module ABI and hardware GPU checks were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#native-status-and-hint-resource-client-gate-2026-09-27).
+
+Latest load-progress/version matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built the native `IPANIM` and generated source-version owners,
+native shell and view-parser check. Both full Linux Debug builds and
+CTest presets passed (48 executed checks, three command-sandbox
+cursor/GPU skips each). Both lawful external training-mission shells
+executed progress updates and exited zero while reporting "mission not
+started"; both view-parser processes read saved build version zero.
+A temporary GCC combined App/script link failed on 115 references
+across 31 symbols; native Windows Debug/Final and module ABI checks
+were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#native-load-progress-and-source-build-version-gate-2026-09-27).
+
+Latest packet-search matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+built the native `dwordsearch` owner, the production packet check and
+native shell. Both full Linux Debug builds and CTest presets passed
+(48 executed checks, three command-sandbox cursor/GPU skips each).
+The existing offline packet check verified first-match pointer,
+duplicate, absent and zero-length cases. A temporary GCC App/script
+link still fails on 121 references across 33 missing symbols; it did
+not run. Native Windows Debug/Final and ABI checks were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#native-packet-selection-search-gate-2026-09-27).
+
+Latest App string-resource matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built the complete Linux Debug presets, including the generated
+`Globals.rc` English resource and native App lookup owner. Each CTest
+preset passed 48 executed checks with three command-sandbox cursor/GPU
+skips. Both external Steam-data training-mission shells executed wide
+and narrow lookup, exited zero and still reported "mission not started".
+A temporary GCC combined App/script link remained unsuccessful with
+126 references across 34 absent symbols. Windows Debug/Final and ABI
+checks were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#source-app-string-resource-link-gate-2026-09-27).
+
+Latest production music-owner matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built the original `MusicManager.cpp` as
+`frontierx_app_music_manager_owner`, linked it into the native shell,
+and completed both Linux Debug builds and CTest presets (48 executed
+passes, three command-sandbox cursor/GPU skips each). Both compiler
+shells with lawful external `Sol_Train.dmission`, source profile,
+explicit movie skip and SDL dummy audio printed `Native App
+MusicManager initialized`, exited zero, and still reported "mission
+not started". Native music `Load`, `Save` and `PlayMusic` did not run;
+native Windows Debug/Final, module ABI, hardware GPU/audio and
+integrated gameplay remain unperformed. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-music-manager-owner-startup-gate-2026-09-27).
+
+Latest mission audio-binding matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 completed both Linux Debug builds and CTest presets (48
+executed passes, three command-sandbox cursor/GPU skips each). Both
+native shells loaded the lawful external `Sol_Train.dmission`, bound
+the Music source, initialized required `IStreamer` on SDL dummy audio,
+and exited zero while reporting "mission not started". The existing
+shell test rejected a missing `IStreamer`. A separate GCC SDL/no-GPU,
+no-FFmpeg shell build compiled but failed to link at existing
+`TRANSFORM::get_roll/get_pitch/get_yaw` and `ICQImage::Assert`
+references; it was not executed. Native Windows Debug/Final, module
+ABI, hardware GPU/audio and integrated mission checks remain open.
+See [NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-mission-audio-ownership-gate-2026-09-27).
+
+Latest saved-music layout matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built the complete Linux Debug graph and executed the existing
+view-parser probe against the lawful external `Sol_Train.dmission`.
+Both converted four saved music songs to native records, discarded
+saved handles, and preserved flags, volume and names in a disk-format
+round trip. Both CTest presets executed 48 passes with three
+command-sandbox cursor/GPU skips. A clean GCC SDL/no-FFmpeg build of
+`frontierx_native_window_manager_probe` and its CTest passed. Native
+Windows Debug/Final, module ABI, hardware GPU/audio and integrated
+mission checks remain unperformed. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-music-save-layout-conversion-gate-2026-09-27).
+
+Latest selected-music matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+built the complete Linux Debug graph with the FFmpeg-enabled native
+streamer and each CTest preset executed 48 passes with three
+command-sandbox cursor/GPU skips. Both existing window-manager probes
+decoded the lawful external `solarian_game14.wav` to 160448512 F32
+bytes and briefly played/stopped it through SDL dummy audio; both
+short `STMG03.wav` probes completed playback. The external mission
+filesystem check read a 176-byte music save, and the parser check
+validated its 44-byte `SONG` schema. Both external-data shells
+initialized `IStreamer` and parsed the mission source but reported
+"mission not started". Host PulseAudio attempts did not complete in
+the command sandbox and were interrupted; native Windows Debug/Final
+and cross-module ABI checks did not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-training-music-decode-and-disk-layout-gate-2026-09-27).
+
+Latest selected-system-map matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 configured and built the complete Linux Debug graph with the
+native `ISystemMap` owner. Both executed the existing
+`frontierx_data_root_probe --mission-filesystem` on the lawful
+external `Sol_Train.dmission`, entering the fresh map-load branch.
+Each CTest preset executed 48 passes and skipped three host-dependent
+cursor/GPU checks. Both external-data shells initialized required
+`IStreamer` and parsed the mission source but reported "mission not
+started". A temporary GCC combined link resolved `SYSMAP` and still
+failed on 169 references across 37 distinct symbols with no multiple
+definitions. Native Windows Debug/Final and cross-module ABI checks
+did not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-system-map-fresh-load-gate-2026-09-27).
+
+Latest combined mission-script link diagnostic, 2026-09-27: GCC 16.2.1
+and Clang 22.1.8 built `frontierx_sol_t_script` after its native heap
+ownership correction; both complete Linux Debug builds passed. Each
+CTest preset executed 48 passes and skipped three host-dependent
+cursor/GPU checks. A temporary GCC link derived from the successful
+shell's Ninja command plus 19 compiled App/script objects, source
+string/schema resources and the native global-data format failed with
+194 unresolved references across 38 distinct symbols and no multiple
+definitions. It produced no executable and was not runtime evidence.
+Native Windows Debug/Final and cross-module ABI checks did not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#combined-mission-script-heap-link-gate-2026-09-27).
+
+Latest selected-script resource matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 each configured and built the complete Linux Debug graph
+with system `llvm-rc` 22.1.8 and executed `portability.app_schema` and
+`portability.sol_t_schema`, including native counted strings from source
+`Sol_T.rc`. Each complete CTest preset had 48 executed passes and three
+command-sandbox cursor/GPU skips. Both read-only external mission-schema
+checks passed the `Sol_T.dll` and zero-update fresh-load preconditions;
+both external-data shells exited zero but reported "mission not started".
+Native Windows Debug/Final and cross-module ABI checks did not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-localization-and-fresh-loader-gate-2026-09-27).
+
+Latest production script-owner matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 each built `frontierx_app_script_owner` from the original
+`MScript.cpp` in the complete Linux Debug graph. Both complete builds
+passed; each CTest preset executed 48 checks and skipped three
+host-dependent cursor/GPU checks. Separate lawfully external-data
+shell runs exited zero after parsing `Sol_Train.dmission`, but
+reported "mission not started" and did not link the new owner.
+Native Windows Debug/Final and cross-module ABI checks were not run.
+See [NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-mscript-owner-build-and-required-resource-gates-2026-09-27).
+
+Latest selected-script resource matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 generated and embedded the source `Sol_T` parser schema,
+built its native object/resource targets, and executed the existing
+`portability.sol_t_schema` and `portability.app_schema` checks. Both
+complete Linux Debug builds passed; each CTest preset executed 48
+checks and skipped three host-dependent cursor/GPU checks. Separate
+lawful external-data shell runs exited zero but reported "mission not
+started". Native Windows Debug/Final and script module ABI checks
+remain unperformed. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-native-schema-resource-gate-2026-09-27).
+
+Latest selected-script matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 each built the original `Sol_T.cpp` and helper as native object
+target `frontierx_sol_t_script`, generated `Sol_T_DataDef.i`, and ran
+the production parser check `portability.sol_t_schema`. Both complete
+Linux Debug builds passed; each CTest preset executed 48 checks and
+skipped three host-dependent cursor/GPU entries. Lawfully external
+training-mission shell runs under both compilers exited zero but
+reported "mission not started". Windows Debug/Final and script ABI
+checks were not performed. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-program-and-schema-build-gate-2026-09-27).
+
+Latest selected-script data matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 built and executed `frontierx_layout_probe` using the
+original `Sol_T/DataDef.h`. It observed a source-derived 292-byte
+`MissionData`, fixed unit-reference offsets and a four-byte saved
+movement state. Both compilers also built and executed the existing
+read-only `frontierx_data_root_probe --mission-filesystem` on the
+lawfully external training mission: four QuickSave objects opened and
+`Script/GlobalData` was absent. Both complete Linux Debug presets
+built; each CTest preset executed 47 passing checks with three
+host-dependent cursor/GPU skips. No native `MScript`/`Sol_T` gameplay,
+Windows Debug/Final or module ABI check ran. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-script-data-and-fresh-start-gate-2026-09-27).
+
+Latest training-script reference matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 built `frontierx_layout_probe` and executed
+`portability.layout`, proving native `MPartRef` is 16 bytes, aligned
+to four bytes, and zero-initializes all save bytes. Both complete
+Linux x86_64 Debug presets built; each CTest preset executed 47
+passing checks and skipped three host-dependent cursor/GPU checks.
+`MScript.cpp`, the `Sol_T` module, native Windows Debug/Final and
+module ABI checks were not executed. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#training-script-mpartref-save-layout-gate-2026-09-27).
+
+Latest spatial-iterator matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built `frontierx_app_object_map_owner` with the original
+`ObjMapIterator.cpp`, then both complete Linux x86_64 Debug presets.
+Each CTest preset executed 47 passing checks and skipped three
+host-dependent cursor/GPU checks. Both external-data shell processes
+parsed `Sol_Train.dmission` and reported "mission not started"; the
+iterator is not in that executable's active mission path. Native
+Windows Debug/Final and module ABI checks were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-spatial-iterator-build-gate-2026-09-27).
+
+Latest movie-camera manager matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 built the new production manager/Objwatch objects and
+complete Linux x86_64 Debug presets. The focused
+`portability.net_buffer` check executed manager registration, event
+callback, camera `Save`/`Load` byte round trip with malformed-input
+rejection, and cleanup in a synthetic offline App process. Each full
+CTest preset executed 47 passing checks and skipped three host-dependent
+cursor/GPU checks. Both external-data native shells ran and parsed
+`Sol_Train.dmission` but stopped before mission startup. A temporary
+combined App link still lacked 50 production symbols. Native Windows
+Debug/Final, module ABI and full mission save/reload were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-movie-camera-manager-gate-2026-09-27).
+
+Latest camera-template matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 built the shared `TObjFrame`/`TObjTrans`/`TObjRender` header
+closure in `frontierx_app_object_list_owner` and completed both Linux
+x86_64 Debug presets. Each CTest preset executed 47 passing checks
+and skipped three command-sandbox cursor/GPU entries. A direct GCC
+`MovieCamera.cpp` syntax diagnosis still fails on Win32 UI/editor
+contracts; the camera owner did not execute. Native Windows
+Debug/Final and module ABI checks were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#camera-object-template-closure-2026-09-27).
+
+Latest selection-ring table matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 built `frontierx_app_circle_lines_owner` and executed
+its original static initializer through `portability.math_core`.
+Both complete Linux x86_64 Debug presets built; each CTest preset
+executed 47 passing checks and skipped three command-sandbox
+cursor/GPU entries. A temporary combined GCC App link resolved
+`circleLines` but still lacked 51 distinct production symbols.
+Native Windows Debug/Final and module ABI checks were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-selection-ring-table-gate-2026-09-27).
+
+Latest simulation event-owner matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 built `frontierx_app_event_scheduler_owner` and both
+complete Linux x86_64 Debug presets. Each CTest preset executed 47
+passing checks and skipped three command-sandbox cursor/GPU entries.
+The owner did not execute in the successful shell. A temporary
+combined GCC App link resolved `SCHEDULER` but still lacked 52
+distinct production symbols. Native Windows Debug/Final and module
+ABI checks were not run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-event-scheduler-build-gate-2026-09-27).
+
+Latest spatial-object map matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 built `frontierx_app_object_map_owner` and complete
+Linux x86_64 Debug presets. Each full CTest preset executed 47
+passing checks and skipped three command-sandbox cursor/GPU entries.
+The owner did not execute in the successful shell. A temporary
+combined GCC App link resolved `OBJMAP` but still lacked 53 distinct
+production symbols. Both lawfully external Steam-data shells reported
+"mission not started". Windows Debug/Final and ABI checks were not
+run. See [NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-spatial-object-map-build-gate-2026-09-27).
+
+Latest fog-owner matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+built the production `frontierx_app_fog_owner` and complete Linux
+x86_64 Debug presets. Each full CTest preset passed 47 executing
+checks and skipped three command-sandbox cursor/GPU entries. Its
+mission `New/Save/Load`, update and render symbols were confirmed in
+the GCC object, but the owner did not execute in the successful
+shell. A temporary combined GCC App link including fog still lacks
+54 distinct production symbols without multiple definitions. Both
+lawfully external Steam-data shells report "mission not started".
+Native Windows Debug/Final and module ABI checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-fog-of-war-native-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest nugget-owner matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+built the production `frontierx_app_nugget_owner` and complete Linux
+x86_64 Debug presets. Both full CTest presets passed 47 executing
+checks and skipped three command-sandbox cursor/GPU entries; the
+nugget owner did not execute. Both lawfully external Steam-data shells
+parsed `Sol_Train.dmission` but reported "mission not started". A
+temporary GCC combined App link including the owner lacked 53
+distinct production symbols and had no multiple definitions. Native
+Windows Debug/Final and module ABI checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-nugget-manager-native-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest native cursor-service matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 built `frontierx_app_cursor_probe` and the complete
+Linux x86_64 Debug presets. The focused cursor processes executed on
+the visible Wayland host under both compilers, checking SDL shape,
+busy, resource update and cleanup. Each full CTest preset passed 47
+executing checks and skipped three host-dependent entries in the
+command sandbox (cursor and two GPU); these skips are not runtime
+evidence. Both external-data shells parsed `Sol_Train.dmission` but
+reported "mission not started". A temporary GCC combined App link
+still lacks 50 distinct production symbols without multiple
+definitions. Native Windows Debug/Final and module ABI checks were
+not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-cursor-service-2026-09-27).
+Entries below are historical.
+
+Latest App primitive-builder matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 configured and built the native builder owner and
+`frontierx_render_submission_probe`; the existing CPU test executed
+the real App quad draw with six vertices and checked 32-byte alignment.
+Both full Linux x86_64 Debug builds passed; each CTest preset executed
+47 passing checks and skipped two command-sandbox GPU checks. Both
+lawfully external Steam-data shell processes parsed `Sol_Train.dmission`
+but reported "mission not started". A temporary GCC combined App link
+still lacks 51 distinct production symbols. Native Windows Debug/Final
+and module ABI checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-primitive-builder-owner-2026-09-27).
+Entries below are historical.
+
+Latest production grid-distance matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 configured and built the production
+`frontierx_app_grid_vector_owner` and linked it into
+`frontierx_math_core_probe`. Both direct processes and CTest ran;
+the 4096-position fingerprint matched at `10760374359831800577`.
+Both complete Linux x86_64 Debug builds passed; each full CTest
+preset executed 47 passing checks and skipped two command-sandbox
+GPU checks. Both external-data shells reported "mission not started".
+A temporary combined GCC App link still lacks 54 distinct production
+symbols. Native Windows Debug/Final and module ABI checks were not
+run. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-grid-distance-owner-for-mission-objects-2026-09-27).
+Entries below are historical.
+
+Latest base-object matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+configured and built `frontierx_app_object_list_owner` with both
+`ObjList.cpp` and `BaseObject.cpp`, plus the complete native shell and
+Linux x86_64 Debug presets. Each full CTest preset executed 47
+passing checks and skipped two command-sandbox GPU checks. Lawful
+external-data shells under both compilers still reported "mission not
+started". A temporary GCC combined App link failed at 55 distinct
+unresolved production symbols without multiple definitions. Native
+Windows Debug/Final and module ABI checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-base-object-owner-in-the-native-link-graph-2026-09-27).
+Entries below are historical.
+
+Latest native save-cleanup matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 configured and built `frontierx_data_root_probe`, compiled
+`frontierx_app_mission_owner`, and built both complete Linux x86_64
+Debug presets. Each full CTest preset executed 47 passing checks and
+skipped two command-sandbox GPU checks. The generated UTF data-root
+check kept its marker intact after native save cleanup rejected its
+read-only archive. Both external-data shells reported "mission not
+started". A temporary GCC combined App link still lacks 80 distinct
+production symbols; native Windows Debug/Final and ABI checks were not
+run. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-save-archive-cleanup-2026-09-27).
+Entries below are historical.
+
+Latest offline packet-dispatch matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 configured and built `frontierx_app_net_packet_owner`,
+the linked packet/heap checks, and both full Linux x86_64 Debug
+presets. The focused process delivered one `NETF_ECHO` envelope to
+`CQE_NETPACKET` through production packet owners and the real
+EventSystem; private heaps balanced without the former false leak
+warning. Each full CTest preset executed 47 passing checks and
+skipped two command-sandbox GPU checks. Both lawful external-data
+shells exited 0 after mission schema loading and reported "mission
+not started". Native Windows Debug/Final and ABI checks were not run.
+A temporary combined GCC App link failed on 87 unique required symbols
+without multiple definitions; the packet owners are not yet in the
+successful shell link.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-offline-packet-dispatch-2026-09-27).
+Entries below are historical.
+
+Latest local packet execution matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 configured and built the production
+`frontierx_app_net_buffer_owner`, `frontierx_net_buffer_probe` and
+both complete Linux x86_64 Debug presets. The focused process and
+CTest each delivered two ordered offline packets through the original
+queue. Each full CTest preset executed 47 passing checks and skipped
+two command-sandbox GPU checks. Both lawful external-data shells
+exited 0 after mission schema loading and explicitly reported
+"mission not started". `NetPacket` is not yet a native object target;
+native Windows Debug/Final and ABI checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-local-packet-buffer-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest packet-buffer matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+configured and built `frontierx_app_net_buffer_owner` and both complete
+Linux x86_64 Debug presets. Each CTest preset executed 46 passing
+checks and skipped two command-sandbox GPU checks. Both lawful
+external-data shell runs exited 0 after source loading and explicitly
+reported "mission not started"; the new owner was not linked or
+executed. Native Windows Debug/Final and ABI checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-local-packet-buffer-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest operation-owner build matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 configured and built the production
+`frontierx_app_op_agent_owner` object target and both complete Linux
+x86_64 Debug presets. Each full CTest preset passed 46 executing
+checks with two sandbox GPU skips. Separate lawful external-data shell
+runs exited 0 but did not start a mission. A temporary GCC shell link
+with `Mission`, `ObjList`, `MGlobals`, `Objwatch` and `OpAgent` found 91
+unresolved production App symbols and no multiple definitions. Native
+Windows Debug/Final and module ABI checks were not executed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-operation-owner-native-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest shared App-startup build matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 configured and built `frontierx_app_global_startup_owner`,
+the linked `frontierx_native_shell` and the focused startup probe on
+Linux x86_64. Both complete Debug builds succeeded; each CTest preset
+passed 46 executing checks and skipped two GPU checks in the command
+sandbox. Both lawful external-data shell runs exited 0 but expressly
+did not start a mission. A temporary GCC link adding the production
+mission/object/global owners found 89 unresolved App symbols. Native
+Windows Debug/Final and DLL ABI checks were not executed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#shared-app-global-startup-and-cleanup-owner-2026-09-27).
+Entries below are historical.
+
+Latest production object-owner build matrix, 2026-09-27: GCC 16.2.1
+and Clang 22.1.8 configured and built the new
+`frontierx_app_object_list_owner` CMake object target and both complete
+Linux x86_64 Debug presets. Both full CTest presets passed 45 executing
+checks with two sandbox GPU skips. A temporary GCC shell link of that
+object failed with 80 unique unresolved production App symbols, including
+global startup, `MGlobals`, mission and object support. The temporary
+link was removed; the successful shell still loads only external
+GameTypes/GenData/mission schema and does not run `ObjectList`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-object-owner-build-and-link-closure-2026-09-27).
+Entries below are historical.
+
+Latest App event-owner matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+full Linux x86_64 Debug builds succeeded after binding the production
+`IEventSystem` in the mission-source shell path. Each full CTest preset
+passed 45 executing checks and skipped two GPU checks; the final
+`frontierx_native_shell` targets and focused shell CTests were rebuilt/
+rerun after a binding error-path cleanup. Both final external-data
+shells exited 0 after executing the event-owner identity check and
+mission-schema load, explicitly without starting the mission.
+Direct `ObjList.cpp` source checks still exit 1 at further App services;
+the owner is not in the native graph. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-object-list-event-owner-contract-2026-09-27).
+
+Latest object frame-clock source matrix, 2026-09-27: GCC 16.2.1 and
+Clang 22.1.8 full Linux x86_64 Debug builds completed after the shared
+native App timing-global changes. Each full CTest preset passed 45
+executing checks and skipped two GPU checks in the command sandbox;
+the existing `portability.platform_time` test passed explicitly under
+both compilers. Direct `ObjList.cpp` syntax checks still exit 1 on
+App event/nugget/camera/scheduler services; it remains outside the
+native graph. Both external-data shells exited 0 after parsing
+`Sol_Train.dmission` but did not start it. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#object-list-native-frame-clock-source-contract-2026-09-27).
+
+Latest object-debug source matrix, 2026-09-27: direct GCC 16.2.1 and
+Clang 22.1.8 C++17 syntax checks of `ObjList.cpp` on Linux x86_64 now
+first fail at `FULLSCREEN` ownership and `BeginFrame` timing after the optional
+performance-report, editor dialog and `__int64` source barriers were removed. Both
+full Debug build presets succeeded with no rebuild work; the object
+owner is not in either graph, and no CTest or external-data runtime was
+executed for this source-only change. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#object-list-debug-and-clock-declarations-2026-09-27).
+
+Latest object-owner source matrix, 2026-09-27: direct C++17 syntax
+compilation of production `ObjList.cpp` under GCC 16.2.1 and Clang 22.1.8
+on Linux x86_64 now reaches its body and exits 1 on Win32 debug/UI/timing
+dependencies. It is not a native target. Both full Debug builds succeeded
+after shared header/template changes; each CTest preset passed 45
+executing checks and skipped two GPU checks in the command sandbox.
+No retail mission runtime ran in this change. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#object-list-native-source-boundary-2026-09-27).
+
+Latest mission-input matrix, 2026-09-27: the existing
+`frontierx_data_root_probe` built under GCC 16.2.1 and Clang 22.1.8
+on Linux x86_64 and each process opened four selected lawfully external
+`Sol_Train.dmission` QuickSave object records through nested DOS views
+(exit 0). Both full Debug builds succeeded and each CTest preset passed
+45 executing checks; two GPU checks skipped in the command sandbox.
+Separate external native shells loaded GenData and parsed the mission
+schema with exit 0, explicitly without starting the mission. Direct
+`Mission.cpp` syntax compilation still fails on App services. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mission-quicksave-object-input-boundary-2026-09-27).
+
+Latest mission platform matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+full Linux x86_64 Debug builds completed after adding the native
+`AvailableDiskBytes` platform source. Each full CTest preset passed 45
+executing checks and skipped two sandbox GPU checks. The existing
+`portability.data_root` check executed the new free-space success and
+failure cases with temporary synthetic filesystem input. Separate
+lawfully external-data shell processes loaded GenData and the selected
+mission schema with exit 0, but `Mission.cpp` remains source-only and
+did not execute. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mission-save-space-platform-contract-2026-09-27).
+
+Latest mission-global owner matrix, 2026-09-27: both full Linux x86_64
+Debug builds now include `frontierx_app_mglobals_owner` with production
+`MGlobals.cpp` and `Objwatch.cpp`; GCC 16.2.1 and Clang 22.1.8 completed
+those builds. Each full CTest preset passed 45 executing checks and
+skipped two sandbox GPU checks. The App owner is an object target, not
+linked into the native shell; a direct shell link experiment measured
+unresolved App service symbols. Both final external-data shell processes
+continued to load GenData and the selected mission schema with exit 0,
+but did not start the mission. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#complete-mglobals-compile-and-link-closure-2026-09-27).
+
+Latest general-data matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+full Linux x86_64 Debug builds completed after linking production
+`GenData.cpp` and correcting the native UTF enumeration contract. Each
+full CTest preset passed 45 executing checks and skipped two sandbox GPU
+checks. Separate external-data shell processes under both compilers loaded
+the real `gendata.db` `GlobalValues` (1640 bytes) and parsed the selected
+mission schema with exit 0. Neither process started a mission or produced
+visible gameplay. Direct `MGlobals.cpp` syntax compiles still fail on the
+App service/window/Engine declaration closure. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-general-data-owner-2026-09-27).
+
+Latest App-global compile gate, 2026-09-27: after opening the native
+`MGlobals.cpp` include chain, GCC 16.2.1 and Clang 22.1.8 full Linux
+x86_64 Debug builds completed. Each CTest preset passed 45 executing
+checks and skipped two GPU checks in the command sandbox. Separate direct
+C++17 syntax compiles of `MGlobals.cpp` failed in its body on missing App
+globals, Win32 `GlobalViewer` window state and an Engine forward enum;
+that owner is not part of the successful native graph. No retail-data
+mission startup or visible GPU gameplay was executed in this change.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mglobals-native-owner-compile-boundary-2026-09-27).
+
+Latest mission schema matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8
+completed full Linux x86_64 Debug builds after connecting the production
+DOCUVIEW secondary parse contract to the native App adapter and shell.
+Each full CTest preset passed 45 executing checks; the two GPU checks
+skipped in the command sandbox and are not runtime evidence. Separate
+GCC and Clang shell processes parsed the lawful external selected
+mission's 160633-byte ParseData and opened its 3236-byte Globals record
+with exit 0. `Mission.cpp` still fails direct native syntax compilation
+on missing App globals; no mission gameplay or visible GPU runtime ran.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-parsedata-owner-contract-2026-09-27).
+
+Latest native App resource matrix, 2026-09-27: GCC 16.2.1 and Clang
+22.1.8 completed full Linux x86_64 Debug builds after embedding the
+corrected repository `data.i` and tightening native DOCUVIEW error
+reporting. Each full CTest preset passed 45 executing checks and skipped
+two GPU checks in the command sandbox. The first full test attempt exposed
+an outdated minimal-profile shell assertion: mission-source startup now
+correctly fails when required `IViewConstructor` is absent. The existing
+shell test now checks that failure, then adds the real parser aggregate and
+checks subsequent missing-global and successful source-open paths; both
+focused and repeated full CTests pass. Separate lawful external-data shell
+processes under both compilers loaded the App schema and opened
+`Sol_Train.dmission` with exit 0. This is not visible GPU gameplay or
+`Mission::ReloadMission`; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-parser-resource-binding-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: after adding the repository App-schema
+mode to the existing view-parser check, GCC 16.2.1 and Clang 22.1.8 full
+Linux x86_64 Debug builds completed. Each CTest preset executed 45 passing
+checks and skipped two GPU checks in the command sandbox. The new
+`portability.app_schema` check parsed `Code/App/Src/data.i` and found a
+3236-byte `MT_GlobalData` under both compilers. `Mission.cpp` and
+`MGlobals.cpp` remain outside the native build; no mission or visible GPU
+gameplay ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#repository-app-schema-and-mission-source-body-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: after sharing the App packet enum and
+adding native script-registration layout checks, GCC 16.2.1 and Clang
+22.1.8 full Linux x86_64 Debug builds completed. Each CTest preset ran 44
+passing checks; the two GPU checks were skipped in the command sandbox.
+Separate bounded external-data shells under both compilers opened
+`Sol_Train.dmission` and created/destroyed the Forger Engine instance with
+13 face groups, exit 0. `Mission.cpp` and `MGlobals.cpp` are not part of
+this graph; no gameplay or visible GPU path ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#app-declarations-and-script-registration-abi-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: after the native App data-source binding
+and physical child-directory root repair, GCC 16.2.1 and Clang 22.1.8 full
+Linux x86_64 Debug build presets completed. Each CTest preset executed 44
+passing checks and skipped the two command-sandbox GPU checks. Separate
+external-data shells under both compilers opened `Sol_Train.dmission` through
+`SPMAPDIR`, created/destroyed the external Forger instance using bound
+`OBJECTDIR`/`MATERIALDIR`, reported 13 face groups and exited 0. No mission
+gameplay or visible GPU runtime occurred; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-mission-source-bindings-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: both GCC 16.2.1 and Clang 22.1.8 Linux
+x86_64 Debug build presets now include the existing `frontierx_view_parser_probe`
+target and its native global-data format library. Full builds completed;
+each CTest preset executed 44 passing checks and skipped the two GPU checks
+in the command sandbox. Separate compiler processes correlated and
+round-tripped the 3236-byte lawful external `Sol_Train.dmission` global
+record. The App `MGlobals.cpp` owner, save output, mission and GPU gameplay
+did not run. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-global-data-format-and-owner-call-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: after the native filesystem's mission
+root-path repair and extension of existing data-root, view-parser and material
+checks, GCC 16.2.1 and Clang 22.1.8 full Linux x86_64 Debug builds completed.
+Each CTest preset discovered 46 checks, executed 44 successfully and skipped
+the two GPU checks in the command sandbox. Separate GCC and Clang processes
+opened lawful external `Sol_Train.dmission` loader files and parsed its
+schema through production interfaces; no mission or visible GPU gameplay
+ran. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mission-loader-paths-and-global-schema-2026-09-27).
+
+Latest animation-data matrix, 2026-09-27: GCC 16.2.1 and Clang 22.1.8 full
+Linux Debug build presets completed after linking the original Channel
+owner and its narrow shell validation caller. Each full CTest preset passed
+44 executing checks with two command-sandbox GPU skips. The focused Clang
+ASan/UBSan shell check passed with LeakSanitizer disabled, as did the GCC
+SDL/no-GPU shell check (which cannot execute animation). Both compiler
+shells separately loaded a Forger animation script from ten lawfully external
+Steam archives with exit 0; no mission or visible GPU gameplay ran. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-channel-and-forger-animation-data-2026-09-27).
+
+Latest render-component gate, 2026-09-27: the native GPU shell now links the
+three production Optics source files. Native `RenderMgr` rejects a missing
+named render component and ignores blank profile lines. GCC and Clang shells
+each executed the unchanged source profile with the original `PolyMesh` and
+`Optics` entries on external data (exit 0). The existing generated-profile
+shell check passed for Optics creation and missing-component rejection.
+Both full Debug builds and CTest presets passed with 44 executing checks and
+two command-sandbox GPU skips each. Particle rendering and GPU mission runtime
+remain unexecuted. Focused Clang ASan/UBSan shell execution passed with
+LeakSanitizer disabled; see
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-animation-and-hardpoint-startup-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: after linking the original Anim and
+HardPoint Engine owners, GCC 16.2.1 and Clang 22.1.8 completed the full Linux
+Debug build presets. Each full CTest preset passed 44 executed checks and
+skipped the two command-sandbox GPU checks (`game_material_gpu`, `sdl3_gpu`).
+The existing shell check now includes an Engine animation/hardpoint aggregate
+startup and teardown case; focused Clang ASan/UBSan passed with LeakSanitizer
+disabled. The GCC SDL/no-GPU shell process check passed without Engine
+aggregate execution. Separately, both compiler shells executed the
+unchanged source profile with ten lawful external Steam archives and explicit
+movie skip under SDL's dummy video driver, exiting 0 after
+`GameSystem::startup`. No visible GPU mission execution occurred; see
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-animation-and-hardpoint-startup-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: after linking the three production
+MeshManager classes and moving RenderMgr/PolyMesh registration before startup,
+GCC 16.2.1 and Clang 22.1.8 completed full Debug preset builds. Each CTest
+preset executed 44 passing checks and skipped two GPU checks in the command
+sandbox. Focused Clang ASan/UBSan and GCC SDL/no-GPU native-shell checks
+passed. The unchanged external-data profile now stops at required Engine
+`IAnimation`; no game or mission ran. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-mesh-manager-owner-2026-09-27).
+
+Latest matrix repeat, 2026-09-27: after linking the production particle owner
+into the GPU-enabled shell, both GCC 16.2.1 and Clang 22.1.8 full Debug preset
+builds completed. Each CTest preset ran 44 passing checks and skipped the two
+sandbox GPU checks; the existing native-shell process check exercised actual
+point-emitter program creation. The GCC SDL/no-GPU shell build and process
+check also passed. The new external-data startup reaches required
+`IMeshManager`, but no native mission or GPU gameplay executed. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-particle-owner-2026-09-27).
+
 Original inventory evidence: source review and automated inventory, 2026-09-13. It did not run
 MSBuild or the retail game. A separate native-Windows rebuild is recorded below.
 
@@ -8,11 +673,288 @@ This build-declaration view is complemented by the 2026-09-16 lexical
 pointer-width, graphics, audio, and video candidates by source owner. Neither inventory evaluates
 MSBuild imports or establishes a native game target.
 
-Native matrix status, 2026-09-25: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets
+Latest native matrix status, 2026-09-27: the checked-in GCC 16.2.1 and
+Clang 22.1.8 full debug builds completed after adding the production game
+material-manager, game-texture-manager, `PolyMesh`, `Engine`, `RenderMgr` and
+scalar `I3DMathEngine` objects and their separate
+script-and-CQ2-mesh executable. Each
+CTest preset now discovers 46 checks, executes 44 successfully and skips
+`portability.game_material_gpu` and `portability.sdl3_gpu` before SDL video
+initialization in the command sandbox. The same full result passed after
+nested UTF mission-file support and its extended StringTable owner check,
+after packed startup-source detection and native mount ownership, and after
+physical material-directory support and explicit shell source selection,
+native IStreamer integration in the existing window owner/check, and the
+optional shared-LGPL FFmpeg IAC adapter and explicit full-screen movie
+exclusion through the existing App flag;
+the focused Clang ASan/UBSan owner run also passed. No new GPU execution
+was performed for that filesystem-only change. This full result was repeated after
+connecting the GPU shell to `GameSystem::startup`, after linking the
+production `IViewConstructor` owner, and after profile registration of the
+production `TextureLibrary`, and after linking the production `LightManager`
+owner and its factory into the GPU shell, then after adding the bounded
+StringTable UTF-16LE file-format check, then after linking the production
+StringTable owner into the GPU shell and after the StringTable failed-load
+rollback change, then after pre-startup registration of the production game
+material/texture factories and profile-owner reuse/cleanup. The latter full
+runs again executed 44 checks successfully and skipped the two sandbox GPU
+checks. Separate visible GCC/Clang and Clang ASan/UBSan profile-created
+material/texture shell runs passed; see
+[GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md#profile-created-game-material-and-texture-owners-2026-09-27).
+The generated owner check executes
+DACOM aggregation, XML save/load, and a UTF archive load under both compilers.
+The generated nine-service system
+profile and focused production light aggregate check execute under both
+compilers; the latter also passes Clang ASan/UBSan with LeakSanitizer disabled.
+The no-GPU shell process suite and
+focused Clang ASan/UBSan constructor check passed, with LeakSanitizer
+disabled on this host. Both GPU checks separately executed
+under GCC and Clang on the desktop Wayland/Vulkan session. The native shell
+now links the production game material, texture, Engine, RenderMgr, PolyMesh
+and math owners, and its explicit repeated `--game-scene` mode draws a
+supplied UTF mesh through those owners. The production App
+`frontierx_app_system_container_owner` object now also links into the shell
+and loads its EventSystem and WindowManager aggregates from synthetic
+`[System]` entries through `LoadSystemComponents`; see
+[APP_SYSTEM_CONTAINER.md](APP_SYSTEM_CONTAINER.md). The GPU-enabled shell now
+also compiles the launcher adapter for the real `GameSystem::startup` caller,
+and the production Engine it creates now draws the repository CQ2 fixture
+after a later synthetic component load. The fixture's four temporary render
+and material services reach that Engine through the App container's real
+`AddComponent` and interface forwarding path. The SDL3/no-GPU shell retains direct
+App container composition; see
+[GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md). GCC, Clang and focused Clang
+ASan/UBSan visible runs produced 496 changed pixels and checksum
+`11826028615312451232`; GCC/Clang shell P6 captures matched each other
+and the linked PolyMesh probe byte for byte. A native-only compile-time
+rename separates the CQ2 and legacy mesh `Material` destructor symbols in
+that combined ELF. The shell now also links the App mesh owner: its CQ2
+`VertexColor.fx` material branch applied `c30`/`c31`, bound a production
+TGA and presented a second 496-pixel image with checksum
+`1466864583390317354` under visible GCC, Clang and focused sanitizer runs.
+The GCC/Clang P6 files were byte-identical; an unsupported `Synthetic.fx`
+mesh was rejected. See [NATIVE_SHELL.md](NATIVE_SHELL.md). The new game
+material check extends the linked production Engine/RenderMgr/PolyMesh
+executable and observed 496 changed readback pixels and a presented frame;
+see [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+The same executable now also calls production App `MeshRender::Render` for
+generated older-format and CQ2 material instances. Its `IMaterial::DrawVB`
+branch sends six U16 indices through the 68-byte native CPU receiver after
+the App caller's D3D vertex-count argument was corrected from `maxVert` to
+`maxVert + 1`. Both full debug builds and CTest presets passed after this
+extension; the visible game-mesh GPU check was rerun under GCC, Clang and
+focused Clang ASan/UBSan. The older-format App branch now also presents
+through the 68-byte SDL GPU pipeline under GCC and Clang. The first
+App readback was a false positive from split `PIPE`/`BATCH` ownership;
+the corrected check reads back during the App draw with texture factor
+and clockwise culling active. The existing GPU executable can now
+write 64-by-64 P6 captures of the production PolyMesh and App synthetic
+draws; GCC and Clang files were byte-identical for each draw (see
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md)). The CQ2 `VertexColor.fx`
+App material subsequently reached visible GPU presentation in that linked
+check and the native shell; Windows comparison remains open.
+The earlier 41-entry
+matrix was rerun after the native `RP_TEXTURE` pipeline state
+and explicit `PolyMesh` model/view rejection; both focused GCC and Clang
+render-pipeline and game-material checks passed. The same 40-execution
+matrix was rerun after the production `MTVERTEX` indexed CPU callback and
+its 36-byte adapter were added. It was rerun again after local `PolyMesh`
+draw-failure propagation, stage-zero UV/specular state handling and a third
+SDL graphics pipeline for that vertex format. The GPU test still skipped;
+the new game-format readback assertions compiled but did not execute.
+The later App `StandardVertex` boundary added native allocation and checked
+CPU forwarding for the exact 68-byte `XYZ | NORMAL | DIFFUSE | TEX5` layout,
+plus an optional fourth primitive callback. On 2026-09-27 the native U16
+index-buffer object and renderer overload allowed the production
+`Material::DrawVB` method to reach that callback with a nonzero vertex-base
+slice and exact byte comparison. GCC and Clang full builds and CTest presets
+retained the same 40 executions and one GPU skip; focused Clang ASan/UBSan
+executed the synthetic material method in all three generated UTF variants.
+The App `MeshRender.cpp` caller and material effect execution remain open;
+see [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+On 2026-09-27, after exact-case include and native declaration repairs along
+that App caller's dependency path, GCC and Clang full debug preset builds
+again executed 40 passing checks and skipped the GPU check. A separate
+temporary `MeshRender.cpp` syntax preflight passed the native `IObject`,
+`GridVector` and `DBaseData` declarations and reached further PCH/D3DX
+blockers in `ObjList.h` and `MeshRender.cpp`; it is not a CMake object or
+game draw.
+After moving the unchanged `ObjList` contracts into a shared App header
+and adding a native App-global declaration subset, GCC and Clang directly
+syntax-checked production `MeshRender.cpp`. A bounded D3DX math helper then
+passed `portability.math_core` under both compilers. The remaining
+material-pointer batching cast now uses a reserved native `U32` state-ID
+range; native texture handles are capped below it and the existing pipeline
+probe checks rejection/cleanup at the boundary. Native D3DX effect branches
+stop before their effect-dependent draws. GCC and Clang now compile
+`MeshRender.cpp` in the `frontierx_app_mesh_render_owner` CMake object target.
+Both full debug builds and CTest presets passed after this addition: each
+executed 40 checks and skipped `portability.sdl3_gpu` before device creation.
+The App object is not linked or executed, and its face-storage changes have
+no runtime evidence yet.
+The same App object target now also compiles production `MeshInfo.cpp` and
+`SuperTrans.cpp`. A native `get_angle` owner linked into the existing math
+check passes analytic quadrants and the legacy axis/origin convention under
+GCC and Clang; no Windows numeric oracle was run. A manual link against the
+existing game-material fixture still fails at 23 distinct App globals,
+diagnostic and blend-helper symbols, with no duplicate definitions. Both
+full debug builds and CTest presets passed after this expansion, with 40
+executions and the same GPU skip per preset. See
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md) for the owner and link audit.
+The 2026-09-27 App composition step supplied native owners for process
+globals, diagnostics and the active diffuse-state helper while leaving the
+supported Windows definitions in place. The production `MeshRender.cpp`,
+`MeshInfo.cpp` and `SuperTrans.cpp` objects now link into the generated
+game-material executable without unresolved or duplicate App symbols. That
+executable creates and destroys a real App `MeshInfoTree` around a generated
+Engine/RenderMgr/PolyMesh instance and checks that the borrowed instance
+survives. The same fixture now also executes production `MeshRender::Init`,
+`RestoreVertexBuffers` and `SetupMeshInfo` with the existing native pipeline
+and a narrow test registration manager, checking nonempty geometry and
+balanced registration/release. GCC and Clang full debug builds each completed; their CTest presets
+again executed 40 checks successfully and skipped `portability.sdl3_gpu`
+before device initialization. All three game-material variants passed a
+focused Clang ASan/UBSan run. At that point no App mesh draw or native game
+scene executed, and the helper still stopped on unsupported render states.
+The later stage-zero sampler and fixed vertex-color/unlit state work let
+the production App `SetupDiffuseBlend` function execute in the generated
+game-material CPU fixture, including clamp and wrap. The full GCC and Clang
+debug builds again completed; each command-sandbox CTest preset ran 40
+checks and skipped the GPU check at video initialization. The focused
+render-submission check and three material variants passed Clang ASan/UBSan.
+With desktop-session access, the SDL/Vulkan CTest passed under GCC, Clang
+and focused Clang ASan/UBSan: 12 presented frames, two scene lifecycles,
+2,496 changed pixels and final checksum `7951318278861886233` in each run.
+Its new linear-versus-point sampler image assertion and existing transform
+and material checks executed. This is synthetic hardware evidence, not an
+App game scene. See [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md) and
+[RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
+Two game-manager checks use
+CRLF and CR versions of a generated UTF
+script and resolve a second generated mesh through the production `XMesh`,
+`TextureLibrary`, game `ITManager` and material manager. The script's
+`Tile.tga` now reaches a 4-by-4 native pipeline CPU upload with all 64
+expected RGBA bytes and a matched `ITManager::Flush` release; a third
+generated material has no
+`END` line and verifies that the production reader terminates at EOF. The
+native TGA file path now rejects a truncated mapped pixel payload before
+decode in that same probe. GCC and Clang full debug builds and CTest presets
+were rerun after the Engine/RenderMgr instance change with the same 40 executions and one sandbox
+GPU skip. The production `PolyMesh`, `Engine` and `RenderMgr` objects link into
+that probe. The component factory initializes with production engine and game
+services and creates a generated CQ2 mesh archetype; a fixed-width property
+conversion rejects pointer-shaped data on native LP64.
+The same executable also verifies rejection and cleanup of an unclaimed
+production Engine archetype after correcting an invalidated-iterator read;
+the production Engine now also loads `RenderMgr` and `PolyMesh` from a generated
+profile, creates an instance, and exposes its mesh through `IRenderer`. Both
+full presets were rerun after this integration with the matrix result above.
+With the scalar provider registered, the same synthetic CPU check enters
+production `render_instance`, reads native `RP_TEXTURE`, and forwards
+model/view to a test primitive receiver. The production `PolyMesh` indexed
+`MTVERTEX` call now reaches a rejecting native CPU callback with six U16
+indices and matching first/second UV pairs. The SDL GPU transform path and
+all four shaders compile but their runtime image check skipped. A test camera
+records the inverse-transform query. The full presets were rerun after
+this render-entry change with the matrix result above.
+Both fixed build-preset target lists now include the game-material executable;
+the GCC and Clang full builds rebuilt it before the latest 41-entry CTest
+run, so these results do not rely on a stale focused binary.
+This does not draw or present a game component. The
+existing material check also verifies implicit UTF file views and their
+bounded read-only mapping contract. Focused Clang ASan/UBSan game-manager
+runs passed for all three inputs; the mapped-file material check passed with
+focused sanitizers too.
+These are synthetic CPU results, not GPU, Windows or game-scene execution;
+see [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+
+Earlier native matrix status, 2026-09-26: the checked-in GCC 16.2.1 and Clang 22.1.8 debug build presets
 completed. Their CTest presets each discovered 38 tests, executed 37 successfully and skipped only
 `portability.sdl3_gpu` because this sandbox exposed no graphical/GPU runtime. The focused render
 submission and pipeline tests executed in both matrices; the skipped GPU test is not runtime
-evidence. No Windows, retail or native game execution was performed in this matrix. Separate
+evidence. The 2026-09-26 rerun followed the production `MaterialLibrary` link into the
+`frontierx_state_material_probe`; both full builds had no remaining work, and both CTest
+matrices again reported 37 executed passes and the same GPU skip. No Windows, retail or
+native game execution was performed in this matrix. After the read-only UTF
+directory and material discovery integration, both full presets were rebuilt
+and their CTest suites rerun with the same 37 executed passes and one GPU skip.
+The changed `frontierx_state_material_probe` now loads two material classes
+from a generated UTF fixture. Exact commands and limits are in
+[STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md).
+An audit on 2026-09-26 found that the two full build presets omitted five
+executables registered in CTest: vertex-buffer manager, state material, math
+accessor, render-batcher runtime and `BMPOOLJR`. Thus earlier full CTest runs
+could use stale binaries for those checks. Both presets now build every
+directly named CTest executable; a source-to-preset comparison reports no
+missing target. Fresh GCC and Clang configure/build/CTest runs rebuilt the
+changed material target, executed 37 passing checks and skipped only the GPU
+test. This supersedes the stale-binary risk in earlier preset results.
+After the native UTF child-factory addition, both full presets were rebuilt
+and again executed 37 passing CTests with the same GPU skip. The focused
+Clang ASan/UBSan material executable also exercised nested read-only UTF
+views without a reported finding; see the focused material document.
+The production `TextureLibrary.cpp` owner was then added as a Linux object
+target and linked into the material probe. A clean GCC configure, 37-step
+focused build and direct execution passed. GCC and Clang full presets each
+executed 37 passing CTests with the GPU check skipped; focused Clang
+ASan/UBSan also passed. This verifies owner compilation and a synthetic
+runtime-ID lifecycle, not UTF image loading; exact evidence is in
+[TEXTURE_LIBRARY_PORTABILITY.md](TEXTURE_LIBRARY_PORTABILITY.md).
+The subsequent RGB565 UTF integration uses that same production owner and
+material target. GCC and Clang full debug presets again built and executed
+37 passing CTests with the GPU test skipped; the focused Clang ASan/UBSan
+material executable passed. The CPU check verifies four converted pixels,
+the material texture frame and failed-upload rollback. It is not native GPU
+or game-scene evidence; see the focused texture document for commands.
+The existing SDL GPU probe now also links the production `TextureLibrary`
+owner and a shared generated UTF fixture writer. GCC and Clang full presets
+again executed 37 passing CTests while the sandbox GPU CTest skipped before
+SDL video initialization. Separate direct visible Wayland/Vulkan runs of GCC,
+Clang and focused ASan/UBSan builds executed the production RGB565 load,
+reported identical UTF image checksum `9085705336011966884` and repeated
+scene teardown/presentation. These are synthetic GPU results, not a native
+game scene or current Windows comparison; focused commands and boundaries are
+in [TEXTURE_LIBRARY_PORTABILITY.md](TEXTURE_LIBRARY_PORTABILITY.md).
+The GPU target now also compiles production `MaterialLibrary.cpp` and
+`SimpleMaterial.cpp`. Its visible GCC, Clang and focused ASan/UBSan runs loaded
+the UTF material through the process DACOM factory, resolved the texture
+reference with `SimpleMaterial::verify`/`update` and preserved the same
+`9085705336011966884` GPU checksum and repeated teardown evidence. Both
+full Linux debug presets again executed 37 passing CTests with the sandbox
+GPU entry skipped. This does not execute `SimpleMaterial::apply` or a game
+scene; the focused material and texture documents record the remaining gate.
+On 2026-09-26 the focused target additionally linked production
+`SimpleMaterial`, read its diffuse and opacity fields from the generated UTF
+fixture, and rejected an unknown material type without replacing those values.
+A clean GCC configure and 36-step focused build passed. The subsequent full
+GCC and Clang debug presets each executed 37 passing CTests and skipped the
+same GPU test; the focused Clang ASan/UBSan material executable passed. These
+are synthetic CPU results, with no Windows or retail execution for this change.
+The active game `PolyMesh/Mesh.cpp` owner now has the isolated
+`frontierx_polymesh_mesh_owner` object target. GCC 16.2.1 and Clang 22.1.8
+focused target builds and both full debug preset builds succeeded on
+2026-09-26; each preset CTest run executed 37 passing non-GPU checks and
+skipped the sandbox GPU check. This initial mesh-owner result compiled one
+production game-mesh source; the later component and game-material links are
+recorded in the latest matrix status above. No game scene executed.
+The source boundary and unperformed Windows/ABI checks are in
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+That object now also links with its production `sortQ` source, the native
+math accessor and the existing texture owner in the material CPU check.
+A generated mesh UTF with one legacy material loads through production
+`XMesh::read` under GCC and
+Clang; the focused Clang ASan/UBSan executable also passed. Both full debug
+presets again executed 37 passing non-GPU checks and skipped the sandbox GPU
+check. The old-format material also resolves a production texture frame;
+this is synthetic CPU geometry and material loading, not a
+native game component or renderer result; exact input and commands are in
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+The same check now runs a second generated mesh archive whose legacy material
+names an absent texture. It observes no frame or alpha flag and releases the
+production texture owner's temporary placeholder after mesh teardown. GCC,
+Clang and focused Clang ASan/UBSan passed; both full preset CTest matrices
+again had 37 non-GPU passes and one sandbox GPU skip.
+Separate
 required visible GCC and Clang probe and shell runs exercised the current shared scene through
 Wayland/Vulkan. The 2026-09-23 visible shell runs additionally traversed the production App-side
 `RenderBatcher` direct and U16-indexed branches under GCC, Clang and focused Clang ASan/UBSan; their separate GPU
@@ -306,6 +1248,64 @@ and repeated initialization. The production EventSystem ELF additionally proves 
 queue-node ownership through the host heap, exact final accounting and unload. Descriptor capacity
 is diagnostic, private COMHeap pass-through slots are unsupported, and further owners need their
 own proof. See [NATIVE_HEAP.md](NATIVE_HEAP.md).
+
+The graph now also compiles the production `DOCUVIEW` scanner, parser,
+symbol-table, file-stream and `DataParser` sources as `frontierx_view_parser_core`. The
+linked `frontierx_view_parser_probe` uses the native heap and parses a
+generated Win32-shaped record through those production sources. It verifies
+four-byte `long` and pointer fields, a 12-byte record, four-byte alignment
+and offsets 0/4/8. It then enumerates those fields through the real
+`IDataParser`/`IParserCallback` vtables; a nested 16-byte record also
+creates a child parser for its embedded record and enumerates its inner
+fields before a trailing field at offset 12. GCC and Clang focused CTests passed, as did a focused
+Clang ASan/UBSan run with LeakSanitizer disabled. The parser owner initially
+failed ASan because `Symbol` used heap allocation with standard delete; its
+Linux release now returns memory to the same heap. Native scanner tokens now
+use `calloc` because the production parser frees them with `free`; the check
+observes exact final native-heap capacity after nested parser teardown.
+The same generated parser input now checks the shared viewer symbol rules
+for recursive equality, unequal records and a zero-length trailing array;
+the Windows viewer forwards its corresponding methods to those rules but
+has not been rebuilt in this Linux run. The graph now links the production
+`ViewCnst.cpp` with its native scalar/bitfield/enum value-copy owner as
+`frontierx_view_constructor`. The existing parser probe creates the real
+factory and `IViewConstructor2`, compares independently parsed same and
+changed schemas, correlates reordered fields and nested record arrays,
+exercises bitfield and enum values, creates `IDataParser` through the
+constructor, rejects the unavailable native GUI factory, and observes exact
+heap balance after unregister. The native shell registers the constructor;
+its generated five-service profile succeeds, while the checked-in
+`Conquest.ini` reports five successful components and stops at `IStreamer`.
+The shell also registers the already compiled production `TextureLibrary`
+factory in its GPU configuration. A generated six-service profile including
+that owner passes `GameSystem::startup` in the dummy SDL process suite under
+GCC and Clang. An explicitly diagnostic copy of `Conquest.ini` with only
+`IStreamer` omitted reports six successful creations and next stops at
+`LightManager`; the original profile and audio service remain unchanged.
+The subsequent production `LightManager` object, native factory and linked
+CPU shading check now execute in GCC and Clang Debug. A generated seven-service
+profile also passes native shell startup. The checked-in profile still stops
+first at `IStreamer`; see [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+The linked game-material check now executes the same LightManager through
+production PolyMesh and observes different submitted vertex colors under
+two ambient settings. Its first sanitizer run found and led to removal of
+a one-past-end strided normal-index read. The GPU shell now reuses a
+profile-owned TextureLibrary instead of adding a duplicate, so the generated
+seven-service profile presents both the older-format PolyMesh and CQ2 App
+scenes; GCC, Clang and focused sanitizer evidence is recorded in the
+startup document.
+The production `VertexBufferManager` now has a shared object target used by
+its existing lifecycle check and the GPU shell. Its native factory matches
+the Windows aggregate shape, so an eight-service generated profile loads
+it through the App system container. The scene initializes it after
+pipeline binding and cleans up before unbinding. GCC, Clang and focused
+sanitizer visible PolyMesh runs retain 496 changed pixels and checksum
+`3422507570980372643`. With only IStreamer omitted, the checked-in
+source profile now advances through eight successful services and stops at
+`IStringTable`; see [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+These are synthetic constructor and startup results, not `MScript`
+execution, an audio implementation or retail data. See
+[GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
 
 Both native EventSystem targets compile with `DA_HEAP_ENABLED`. The static library has an explicit
 transitive dependency on `frontierx_native_heap`; its production probe and SDL integration acquire

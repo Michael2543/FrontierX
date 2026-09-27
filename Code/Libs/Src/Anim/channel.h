@@ -1,8 +1,9 @@
 #ifndef __CHANNEL_H
 #define __CHANNEL_H
 
-#include "Engine.h"
-#include "IChannel.h"
+#include "ICamera.h"
+#include "ENGINE.H"
+#include "ichannel.h"
 #include "IChannel2.h"
 #include "TSmartPointer.h"
 

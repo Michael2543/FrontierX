@@ -10,9 +10,14 @@
 */
 //------------------------------- #INCLUDES --------------------------------//
 
+#if defined(_WIN32)
 #include "stdafx.h"
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/LegacyWindowTypes.h"
+#endif
 #include "IImageReader.h"
-#include <vfx.h>
+#include <VFX.H>
 #include <pixel.h>
 
 #include <TComponent.h>
@@ -123,9 +128,8 @@ struct DACOM_NO_VTABLE TGAREADER : IImageReader
 
 	U16 readShort (U8 * & fileImage)
 	{
-		U16 result;
-
-		result = *((U16 *)fileImage);
+		const U16 result = static_cast<U16>(fileImage[0]) |
+			(static_cast<U16>(fileImage[1]) << 8);
 		fileImage += sizeof(U16);
 
 		return result;
@@ -133,9 +137,10 @@ struct DACOM_NO_VTABLE TGAREADER : IImageReader
 	
 	U32 readLong (U8 * & fileImage)
 	{
-		U32 result;
-		
-		result = *((U32 *)fileImage);
+		const U32 result = static_cast<U32>(fileImage[0]) |
+			(static_cast<U32>(fileImage[1]) << 8) |
+			(static_cast<U32>(fileImage[2]) << 16) |
+			(static_cast<U32>(fileImage[3]) << 24);
 		fileImage += sizeof(U32);
 
 		return result;
@@ -174,6 +179,28 @@ GENRESULT TGAREADER::LoadImage (void *fileImage, U32 fileSize, U32 imageNumber)
 	U8 * pixelImage;
 
 	free();
+	if (!fileImage)
+		return GR_INVALID_PARMS;
+
+#if !defined(_WIN32)
+	// The mapped native file path supplies its length. This reader currently
+	// bounds the uncompressed true-color form used by the game-material gate.
+	if (fileSize)
+	{
+		const U8 *bytes = static_cast<const U8 *>(fileImage);
+		if (fileSize < sizeof(TGAHEADER) || bytes[1] != 0 || bytes[2] != 2 ||
+			(bytes[16] != 24 && bytes[16] != 32))
+			return GR_GENERIC;
+		const U32 width = static_cast<U32>(bytes[12]) | (static_cast<U32>(bytes[13]) << 8);
+		const U32 height = static_cast<U32>(bytes[14]) | (static_cast<U32>(bytes[15]) << 8);
+		const U32 offset = static_cast<U32>(sizeof(TGAHEADER)) + bytes[0];
+		const U32 bytesPerPixel = bytes[16] / 8;
+		if (!width || !height || width > 2048U || height > 2048U ||
+			bytes[8] || bytes[9] || bytes[10] || bytes[11] ||
+			offset > fileSize || width > (fileSize - offset) / bytesPerPixel / height)
+			return GR_GENERIC;
+	}
+#endif
 
 	pixelImage = readHeader(fileImage);
 
@@ -771,7 +798,7 @@ void TGAREADER::getIndexFormat (U8 *buffer, const RECT * rect) const
 //-------------------------------------------------------------------------//
 //-------------------------------------------------------------------------//
 //
-void __stdcall CreateTGAReader (struct IImageReader ** reader)
+void COMAPI CreateTGAReader (struct IImageReader ** reader)
 {
 	*reader = new DAComponent<TGAREADER>;
 }

@@ -3,7 +3,7 @@
 
 //
 
-#include "Stddat.h"
+#include "STDDAT.H"
 #include "channel.h"
 
 using namespace Channel;

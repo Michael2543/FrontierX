@@ -7,23 +7,33 @@
 #pragma warning( disable : 4530 )
 
 #define WINDOWS_LEAN_AND_MEAN
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/NativeHardpoint.h"
+#include <strings.h>
+#define _strnicmp strncasecmp
+#endif
 #include <list>
 
 //
 
-#include "DACOM.h"
+#include "DACOM.H"
 #include "TComponent.h"
-#include "fdump.h"
-#include "tempstr.h"
-#include "Matrix.h"
-#include "Vector.h"
+#include "FDump.h"
+#include "TempStr.h"
+#include "matrix.h"
+#include "vector.h"
 #include "da_heap_utility.h"
 #include "SysConsumerDesc.h"
 #include "FileSys_Utility.h"
-#include "Engine.h"
-#include "EngComp.h"
-#include "IHardpoint.h"
+#if !defined(_WIN32)
+#include "ICamera.h"
+#endif
+#include "ENGINE.H"
+#include "engcomp.h"
+#include "IHardPoint.h"
 #include "ICamera.h"
 
 //
@@ -33,7 +43,7 @@
 
 //
 
-#include "PersistHardpoint.h"
+#include "PERSISTHARDPOINT.H"
 
 //
 
@@ -570,6 +580,7 @@ JointType HardPointComponent::jointtypename_to_jointtype( const char *jointtypen
 
 //
 
+#if defined(_WIN32)
 BOOL COMAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	switch (fdwReason)
@@ -594,4 +605,17 @@ BOOL COMAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	return TRUE;
 }
-
+#else
+namespace FrontierX
+{
+bool RegisterNativeHardpoint(ICOManager * manager)
+{
+	if (!manager) return false;
+	IComponentFactory * factory =
+		new DAComponentFactory2<DAComponentAggregate<HardPointComponent>, SYSCONSUMERDESC>("IHardpoint");
+	const GENRESULT result = manager->RegisterComponent(factory, "IHardpoint", DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

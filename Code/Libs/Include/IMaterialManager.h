@@ -7,14 +7,15 @@
 #ifndef _MATERIAL_MANAGER_HEADER_FILE_H_
 #define _MATERIAL_MANAGER_HEADER_FILE_H_
 
-#include "dacom.h"
+#include "DACOM.H"
 
 #include "da_d3dtypes.h"
-#include "Vector.h"
+#include "vector.h"
 
 //#include "rendpipeline.h"
 
 struct IMaterial;
+struct IDirect3DVertexBuffer9;
 
 enum MatRegisterType
 {
@@ -170,4 +171,3 @@ struct DACOM_NO_VTABLE IMaterialManager : IDAComponent
 #define IID_IMaterialManager MAKE_IID("MaterialManager",1)
 
 #endif
-

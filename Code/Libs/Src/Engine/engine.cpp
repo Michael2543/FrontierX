@@ -13,19 +13,26 @@
 #pragma warning( disable : 4786 )
 #pragma warning( disable : 4530 )
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/LegacyWindowTypes.h"
+#endif
 
 #include <functional>
 #include <list>
 #include <vector>
 #include <map>
+#include <cstdio>
+#include <new>
 #include <stdio.h>
 
-#include "dacom.h"                    // DA component manager
+#include "DACOM.H"                    // DA component manager
 #include "TComponent.h"
 #include "TSmartPointer.h"
-#include "stddat.h"
+#include "STDDAT.H"
 #include "FDump.h"
 #include "TempStr.h"
 #include "da_heap_utility.h"
@@ -35,9 +42,9 @@
 #include "FileSys_Utility.h"
 #include "IProfileParser.h"
 #include "ICamera.h"
-#include "engine.h"
+#include "ENGINE.H"
 #include "engcomp.h"
-#include "engine2.h"
+#include "Engine2.h"
 
 #include "Tfuncs.h"
 #include "handlemap.h"
@@ -45,6 +52,9 @@
 #include "EngineArchetype.h"
 #include "EngineInstance.h"
 #include "LocalEngineInstance.h"
+#if !defined(_WIN32)
+#include "FrontierX/NativeEngine.h"
+#endif
 
 //
 
@@ -430,7 +440,9 @@ GENRESULT ENGINE::load_engine_components( struct IDAComponent *system )
 	}
 
 	if( (hSection = parser->CreateSection( "Engine" )) == 0 ) {
+#if defined(_WIN32)
 		have_loaded_components = true;
+#endif
 		return GR_OK;
 	}
 
@@ -487,7 +499,8 @@ GENRESULT ENGINE::load_engine_components( struct IDAComponent *system )
 
 		DEBUG_REF_CNT_GET( start_ref_cnt );
 
-		if( SUCCEEDED( dacom->CreateInstance( &info, (void **)&discard ) ) ) {
+		const bool created = SUCCEEDED( dacom->CreateInstance( &info, (void **)&discard ) );
+		if( created ) {
 			ASSERT( inner );
 			response = "[OK]";
 			loaded_components.push_back( LoadedDacomComponent( info.interface_name, inner ) );
@@ -499,10 +512,17 @@ GENRESULT ENGINE::load_engine_components( struct IDAComponent *system )
 		DEBUG_REF_CNT_TEST_EQUAL( start_ref_cnt, end_ref_cnt, 
 								  TEMPSTR( "Creation of '%s' caused possible Engine ref count leak.", info.interface_name ) );
 
+#if defined(_WIN32)
 		GENERAL_NOTICE( TEMPSTR( "ENGINE::load_engine_components: aggregation of '%s' [%s] returned %s\n", 
 					   info.interface_name, 
 					   info.description ? info.description : "",
 					   response ) );
+#else
+		GENERAL_NOTICE( TEMPSTR( "ENGINE::load_engine_components: aggregation returned %s\n",
+					   response ) );
+		if( !created )
+			return GR_GENERIC;
+#endif
 
 	} // end while( ReadLine() )
 			
@@ -528,10 +548,19 @@ GENRESULT ENGINE::load_engine_components( struct IDAComponent *system )
 
 			if( FAILED( agg->Initialize() ) ) {
 
+#if defined(_WIN32)
 				GENERAL_WARNING( TEMPSTR( "ENGINE::load_engine_components: initialization of '%s' failed, removing from aggregate\n", (*nec).component_name ) ) ;
+#else
+				GENERAL_WARNING( "ENGINE::load_engine_components: aggregate initialization failed\n" );
+#endif
 
 				DEBUG_REF_CNT_TEST_EQUAL( start_ref_cnt, end_ref_cnt, 
 										  TEMPSTR( "Failed initialization of '%s' caused possible Engine ref count leak.", (*nec).component_name ) );
+
+#if !defined(_WIN32)
+				agg->Release();
+				return GR_GENERIC;
+#endif
 
 				loaded_components.erase( nec );
 
@@ -582,7 +611,12 @@ GENRESULT ENGINE::load_engine_components( struct IDAComponent *system )
 
 	DEBUG_REF_CNT_TEST_EQUAL( before_load, after_load, "Loading engine components caused possible ref count leak." );
 	
+#if defined(_WIN32)
 	have_loaded_components = true;
+#else
+	// Native startup may load an empty profile before render services exist.
+	have_loaded_components = !loaded_components.empty();
+#endif
 
 	return GR_OK;
 }
@@ -704,7 +738,11 @@ ARCHETYPE_INDEX ENGINE::allocate_archetype( const C8 *arch_name )
 		static int anonymous_name_counter = 0;
 		
 		do {
+#if defined(_WIN32)
 			wsprintf( buf, "Anonymous-%d", anonymous_name_counter++ );		// get a unique name
+#else
+			std::snprintf( buf, sizeof(buf), "Anonymous-%d", anonymous_name_counter++ );
+#endif
 		} while( get_arch_index( buf ) != INVALID_ARCHETYPE_INDEX );
 
 		arch_name = buf;
@@ -1015,8 +1053,9 @@ ARCHETYPE_INDEX COMAPI ENGINE::create_archetype( const C8 *arch_name, IFileSyste
 			//
 			EngineArchetypeMap::iterator arch;
 			if( (arch = engine_archetypes.find( arch_index )) != engine_archetypes.end() ) {
+				EngineArchetype *unclaimed_archetype = arch->second;
 				engine_archetypes.erase( arch_index );
-				delete arch->second;
+				delete unclaimed_archetype;
 			}
 			return INVALID_ARCHETYPE_INDEX;
 		}
@@ -1286,7 +1325,7 @@ HRESULT ENGINE::destroy_instance_tree( EngineInstance *instance )
 	}
 	
 	if( instance->ei_f_flags & EI_F_DELETE_INSTANCE_HANDLER ) {
-		delete instance->instance_handler;
+		delete static_cast<LocalEngineInstance *>(instance->instance_handler);
 	}
 	instance->instance_handler = NULL;
 
@@ -1401,7 +1440,7 @@ void ENGINE::set_instance_handler( INSTANCE_INDEX inst_index, IEngineInstance *n
 	}
 
 	if( old_ei_f_flags & EI_F_DELETE_INSTANCE_HANDLER ) {
-		delete old_instance_handler;
+		delete static_cast<LocalEngineInstance *>(old_instance_handler);
 		old_instance_handler = NULL;
 	}
 
@@ -1713,6 +1752,7 @@ GENRESULT Engine_Impl::QueryInterface( const C8 *interface_name, void **instance
 // 
 // 
 
+#if defined(_WIN32)
 BOOL COMAPI DllMain( HINSTANCE hinstDLL, S32 fdwReason, LPVOID lpvReserved )
 {
 	IComponentFactory *server;
@@ -1734,6 +1774,24 @@ BOOL COMAPI DllMain( HINSTANCE hinstDLL, S32 fdwReason, LPVOID lpvReserved )
 	
 	return TRUE;
 }
+#endif
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool RegisterNativeEngine(ICOManager *manager)
+{
+	if (!manager) return false;
+	IComponentFactory *factory = new (std::nothrow)
+		DAComponentFactory<Engine_Impl, DACOMDESC>(CLSID_Engine);
+	if (!factory) return false;
+	const GENRESULT result = manager->RegisterComponent(
+		factory, CLSID_Engine, DACOM_LOW_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif
 
 //
 // Convert all relative coordinates to absolute Cartesian coordinates.

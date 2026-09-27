@@ -1,5 +1,22 @@
 #include <DMissionDataLayout.h>
 #include <DMissionEnum.h>
+#include <MPartRef.h>
+
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunknown-pragmas"
+#pragma GCC diagnostic ignored "-Wextra"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#endif
+#include <DataDef.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +35,14 @@ static_assert(sizeof(S32) == 4, "S32 must remain a 32-bit storage type");
 static_assert(sizeof(BOOL32) == 4, "BOOL32 must remain a 32-bit storage type");
 static_assert(sizeof(U64) == 8, "U64 must remain a 64-bit storage type");
 static_assert(sizeof(S64) == 8, "S64 must remain a 64-bit storage type");
+static_assert(sizeof(MPartRef) == 16,
+	"MPartRef in script mission data must retain its Win32 save stride");
+static_assert(alignof(MPartRef) == 4,
+	"MPartRef in script mission data must retain four-byte alignment");
+static_assert(sizeof(MissionData) == 292,
+	"Sol_T MissionData must retain its source-derived Win32 save size");
+static_assert(sizeof(SolTrain_SelectAndMoveForger_Save) == 4,
+	"Sol_T movement checkpoint must retain its four-byte saved enum");
 static_assert(std::is_unsigned<U32>::value, "U32 must remain unsigned");
 static_assert(std::is_signed<S32>::value, "S32 must remain signed");
 static_assert(sizeof(HYBRID) == sizeof(void *), "HYBRID must retain native pointer width");
@@ -71,6 +96,28 @@ bool checkMissionHeaderBits()
 	return encoded == expected;
 }
 
+bool checkScriptReferenceBytes()
+{
+	MPartRef reference;
+	unsigned char bytes[sizeof(reference)] = {};
+	std::memcpy(bytes, &reference, sizeof(bytes));
+	for (unsigned char byte : bytes)
+		if (byte != 0) return false;
+	return true;
+}
+
+bool checkSolTrainMissionOffsets()
+{
+	MissionData data = {};
+	const auto *start = reinterpret_cast<const unsigned char *>(&data);
+	return reinterpret_cast<const unsigned char *>(&data.Forger) - start == 168 &&
+		reinterpret_cast<const unsigned char *>(&data.Taos1) - start == 184 &&
+		reinterpret_cast<const unsigned char *>(&data.Taos2) - start == 200 &&
+		reinterpret_cast<const unsigned char *>(&data.Acropolis) - start == 216 &&
+		reinterpret_cast<const unsigned char *>(
+			&data.displayObjectiveHandlerParams_teletypeHandle) - start == 288;
+}
+
 bool checkResourceCostBits()
 {
 	ResourceCost resourceCost = {};
@@ -104,6 +151,16 @@ bool checkCapabilityBits()
 
 int main()
 {
+	if (!checkScriptReferenceBytes())
+	{
+		std::cerr << "MPartRef retained pointer bytes in a new script reference\n";
+		return 4;
+	}
+	if (!checkSolTrainMissionOffsets())
+	{
+		std::cerr << "Sol_T mission reference offsets changed\n";
+		return 5;
+	}
 	if (!checkMissionHeaderBits())
 	{
 		std::cerr << "MISSION_DATA_BIN header bitfield layout mismatch\n";

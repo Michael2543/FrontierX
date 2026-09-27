@@ -13,8 +13,18 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "MyVertex.h"
+#include <TComponent.h>
+#include <cstdlib>
+#include <cstdio>
+#include <cstddef>
+#include <EventSys.h>
+#endif
 
 #include "TObjFrame.h"
 #include "TObject.h"
@@ -25,20 +35,30 @@
 #include "UserDefaults.h"
 #include "Camera.h"
 #include "IMovieCamera.h"
+#if defined(_WIN32)
 #include "DBHotKeys.h"
+#else
+#include "DBHotkeys.h"
+#endif
 #include "TResClient.h"
 #include "Sector.h"
 #include "MGlobals.h"
 #include "DrawAgent.h"
 #include "Mission.h"
 #include "DQuickSave.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include <MovieCameraFlags.h>
 
 #include "DMovieCamera.h"
 #include "Startup.h"
 
+#if defined(_WIN32)
 #include <FileSys.h>
+#else
+#include <Filesys.h>
+#endif
 #include <ITextureLibrary.h>
 #include <WindowManager.h>
 
@@ -48,6 +68,7 @@ static struct MovieCamera * firstMovieCamera = NULL;
 static struct MovieCamera * lookCam;
 static bool bViewingCam;
 
+#if defined(_WIN32)
 struct MOVIECAMERA_INIT : RenderArch
 {
 	PARCHETYPE pArchetype;
@@ -1016,6 +1037,7 @@ struct _movieCam : GlobalComponent
 };
 
 static _movieCam __movieCam;
+#endif
 
 
 //--------------------------------------------------------------------------------------
@@ -1032,7 +1054,8 @@ struct CamSpot
 
     void * operator new (size_t size)
 	{
-		void * result = calloc(size, 1);
+	void * result = calloc(size, 1);
+	#if defined(_WIN32)
 		{
 			DWORD dwAddr;
 			__asm
@@ -1042,6 +1065,7 @@ struct CamSpot
 			}
 			HEAP->SetBlockOwner(result, dwAddr);
 		}
+	#endif
 		return result;
 	}
 
@@ -1050,6 +1074,27 @@ struct CamSpot
 		::free(ptr);
 	}
 };
+#if !defined(_WIN32)
+// MovieManager saves this entire Win32 CamSpot, including its unused pointer slot.
+// Keep the 44-byte disk record separate from the 64-bit runtime object.
+struct MovieManagerSavePos
+{
+	U32 nextSpot;
+	SINGLE duration;
+	U32 flags;
+	SINGLE position[3];
+	SINGLE lookAt[3];
+	U32 systemID;
+	U8 regularMetrics;
+	U8 padding[3];
+};
+static_assert(sizeof(MovieManagerSavePos) == 44, "Win32 MovieManager savePos size");
+static_assert(sizeof(Vector) == 12 && sizeof(SINGLE) == 4 && sizeof(bool) == 1,
+	"MovieManager scalar save widths");
+static_assert(offsetof(MovieManagerSavePos, duration) == 4, "Win32 MovieManager duration offset");
+static_assert(offsetof(MovieManagerSavePos, position) == 12, "Win32 MovieManager position offset");
+static_assert(offsetof(MovieManagerSavePos, systemID) == 36, "Win32 MovieManager system offset");
+#endif
 //--------------------------------------------------------------------------------------
 //
 struct DACOM_NO_VTABLE MovieCameraManager : public IMovieCameraManager, IEventCallback
@@ -1182,11 +1227,19 @@ MovieCameraManager::~MovieCameraManager()
 	delete lastSpot;
 	lastSpot = 0;
 
+	#if defined(_WIN32)
 	if (TOOLBAR)
+	#else
+	if (EVENTSYS)
+	#endif
 	{
 		COMPTR<IDAConnectionPoint> connection;
 		
+	#if defined(_WIN32)
 		if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+	#else
+		if (EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+	#endif
 			connection->Unadvise(eventHandle);
 	}
 };
@@ -1196,6 +1249,11 @@ MovieCameraManager::~MovieCameraManager()
   	//for switching to a specific camera object
 void MovieCameraManager::ChangeCamera(IBaseObject * camera, SINGLE time, U32 flags)
 {
+#if !defined(_WIN32)
+	// The selected training mission has no movie-camera objects. Fail if one is requested.
+	std::fputs("MovieCameraManager: cinematic camera objects are unavailable in the native mission path\n", stderr);
+	std::abort();
+#else
 	if(!camera)
 	{
 		CQASSERT(camera);
@@ -1225,6 +1283,7 @@ void MovieCameraManager::ChangeCamera(IBaseObject * camera, SINGLE time, U32 fla
 		CreateLastSpot();
 		PhysUpdate(0.01);		// do it now!
 	}
+#endif
 };
 //--------------------------------------------------------------------------//
 //
@@ -1539,14 +1598,31 @@ void MovieCameraManager::PhysUpdate(SINGLE dt)
 //
 BOOL32 MovieCameraManager::Save (struct IFileSystem * outFile)
 {
+	#if !defined(_WIN32)
+	if (!outFile || !outFile->SetCurrentDirectory("\\")) return FALSE;
+	#else
 	outFile->SetCurrentDirectory("\\");
-	U32 dwWritten;
+	#endif
 	U8 lastOn;
 	U32 i = 0;
 
 	CamSpot * search;
 	
 	COMPTR<IFileSystem> file;
+	auto writeField = [&file](const void * field, U32 size) -> bool
+	{
+		U32 written = 0;
+		const BOOL32 result = file->WriteFile(0, field, size, &written);
+	#if defined(_WIN32)
+		(void)result;
+		return true;
+	#else
+		return result && written == size;
+	#endif
+	};
+	#if !defined(_WIN32)
+	MovieManagerSavePos diskPos = {};
+	#endif
 
 	DAFILEDESC fdesc;
 
@@ -1560,12 +1636,26 @@ BOOL32 MovieCameraManager::Save (struct IFileSystem * outFile)
 	if (outFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
-	file->WriteFile(0,&savePos,sizeof(savePos),&dwWritten);
-	file->WriteFile(0,&timer,sizeof(timer),&dwWritten);
-	file->WriteFile(0,&sourceShipID,sizeof(sourceShipID),&dwWritten);
-	file->WriteFile(0,&sourceOffset,sizeof(sourceOffset),&dwWritten);
-	file->WriteFile(0,&targetShipID,sizeof(targetShipID),&dwWritten);
-	file->WriteFile(0,&bTracking,sizeof(bTracking),&dwWritten);
+	#if defined(_WIN32)
+	if (!writeField(&savePos, sizeof(savePos))) goto Done;
+	#else
+	diskPos.duration = savePos.duration;
+	diskPos.flags = savePos.flags;
+	diskPos.position[0] = savePos.position.x;
+	diskPos.position[1] = savePos.position.y;
+	diskPos.position[2] = savePos.position.z;
+	diskPos.lookAt[0] = savePos.lookAt.x;
+	diskPos.lookAt[1] = savePos.lookAt.y;
+	diskPos.lookAt[2] = savePos.lookAt.z;
+	diskPos.systemID = savePos.systemID;
+	diskPos.regularMetrics = savePos.regularMetrics;
+	if (!writeField(&diskPos, sizeof(diskPos))) goto Done;
+	#endif
+	if (!writeField(&timer, sizeof(timer)) ||
+		!writeField(&sourceShipID, sizeof(sourceShipID)) ||
+		!writeField(&sourceOffset, sizeof(sourceOffset)) ||
+		!writeField(&targetShipID, sizeof(targetShipID)) ||
+		!writeField(&bTracking, sizeof(bTracking))) goto Done;
 
 	search = spotListStart;
 	while(search)
@@ -1574,17 +1664,17 @@ BOOL32 MovieCameraManager::Save (struct IFileSystem * outFile)
 		search = search->nextSpot;
 	}
 
-	file->WriteFile(0,&i,sizeof(i),&dwWritten);
+	if (!writeField(&i, sizeof(i))) goto Done;
 
 	search = spotListStart;
 	while(search)
 	{
-		file->WriteFile(0,&(search->duration),sizeof(search->duration),&dwWritten);
-		file->WriteFile(0,&(search->flags),sizeof(search->flags),&dwWritten);
-		file->WriteFile(0,&(search->position),sizeof(search->position),&dwWritten);
-		file->WriteFile(0,&(search->lookAt),sizeof(search->lookAt),&dwWritten);
-		file->WriteFile(0,&(search->systemID),sizeof(search->systemID),&dwWritten);
-		file->WriteFile(0,&(search->regularMetrics),sizeof(search->regularMetrics),&dwWritten);
+		if (!writeField(&(search->duration), sizeof(search->duration)) ||
+			!writeField(&(search->flags), sizeof(search->flags)) ||
+			!writeField(&(search->position), sizeof(search->position)) ||
+			!writeField(&(search->lookAt), sizeof(search->lookAt)) ||
+			!writeField(&(search->systemID), sizeof(search->systemID)) ||
+			!writeField(&(search->regularMetrics), sizeof(search->regularMetrics))) goto Done;
 		
 		search = search->nextSpot;
 	}
@@ -1593,15 +1683,15 @@ BOOL32 MovieCameraManager::Save (struct IFileSystem * outFile)
 		lastOn = 1;
 	else
 		lastOn = 0;
-	file->WriteFile(0,&lastOn,sizeof(lastOn),&dwWritten);
+	if (!writeField(&lastOn, sizeof(lastOn))) goto Done;
 	if(lastSpot)
 	{
-		file->WriteFile(0,&(lastSpot->duration),sizeof(search->duration),&dwWritten);
-		file->WriteFile(0,&(lastSpot->flags),sizeof(search->flags),&dwWritten);
-		file->WriteFile(0,&(lastSpot->position),sizeof(search->position),&dwWritten);
-		file->WriteFile(0,&(lastSpot->lookAt),sizeof(search->lookAt),&dwWritten);
-		file->WriteFile(0,&(lastSpot->systemID),sizeof(search->systemID),&dwWritten);
-		file->WriteFile(0,&(lastSpot->regularMetrics),sizeof(search->regularMetrics),&dwWritten);
+		if (!writeField(&(lastSpot->duration), sizeof(lastSpot->duration)) ||
+			!writeField(&(lastSpot->flags), sizeof(lastSpot->flags)) ||
+			!writeField(&(lastSpot->position), sizeof(lastSpot->position)) ||
+			!writeField(&(lastSpot->lookAt), sizeof(lastSpot->lookAt)) ||
+			!writeField(&(lastSpot->systemID), sizeof(lastSpot->systemID)) ||
+			!writeField(&(lastSpot->regularMetrics), sizeof(lastSpot->regularMetrics))) goto Done;
 	}
 	return TRUE;
 	
@@ -1612,25 +1702,61 @@ Done:
 //
 BOOL32 MovieCameraManager::Load (struct IFileSystem * inFile)
 {
+	#if !defined(_WIN32)
+	if (!inFile || !inFile->SetCurrentDirectory("\\")) return FALSE;
+	#else
 	inFile->SetCurrentDirectory("\\");
+	#endif
 	DAFILEDESC fdesc = "MovieManager";
 	COMPTR<IFileSystem> file;
+	auto readField = [&file](void * field, U32 size) -> bool
+	{
+		U32 read = 0;
+		const BOOL32 result = file->ReadFile(0, field, size, &read);
+	#if defined(_WIN32)
+		(void)result;
+		return true;
+	#else
+		return result && read == size;
+	#endif
+	};
 	U32 result = FALSE;
-	U32 dwRead;
 	U32 numSpots;
+	U32 totalSpots = 0;
 	U8 lastOn;
+	#if !defined(_WIN32)
+	MovieManagerSavePos diskPos = {};
+	U32 fileSize = 0;
+	#endif
 
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
-	file->ReadFile(0,&savePos,sizeof(savePos),&dwRead);
-	file->ReadFile(0,&timer,sizeof(timer),&dwRead);
-	file->ReadFile(0,&sourceShipID,sizeof(sourceShipID),&dwRead);
-	file->ReadFile(0,&sourceOffset,sizeof(sourceOffset),&dwRead);
-	file->ReadFile(0,&targetShipID,sizeof(targetShipID),&dwRead);
-	file->ReadFile(0,&bTracking,sizeof(bTracking),&dwRead);
+	#if !defined(_WIN32)
+	ClearQueue();
+	fileSize = file->GetFileSize();
+	if (fileSize < 74 || !readField(&diskPos, sizeof(diskPos))) goto Done;
+	savePos.nextSpot = NULL;
+	savePos.duration = diskPos.duration;
+	savePos.flags = diskPos.flags;
+	savePos.position = Vector(diskPos.position[0], diskPos.position[1], diskPos.position[2]);
+	savePos.lookAt = Vector(diskPos.lookAt[0], diskPos.lookAt[1], diskPos.lookAt[2]);
+	savePos.systemID = diskPos.systemID;
+	savePos.regularMetrics = diskPos.regularMetrics != 0;
+	#else
+	if (!readField(&savePos, sizeof(savePos))) goto Done;
+	#endif
+	if (!readField(&timer, sizeof(timer)) ||
+		!readField(&sourceShipID, sizeof(sourceShipID)) ||
+		!readField(&sourceOffset, sizeof(sourceOffset)) ||
+		!readField(&targetShipID, sizeof(targetShipID)) ||
+		!readField(&bTracking, sizeof(bTracking))) goto Done;
 
-	file->ReadFile(0,&numSpots,sizeof(numSpots),&dwRead);
+	if (!readField(&numSpots, sizeof(numSpots))) goto Done;
+	totalSpots = numSpots;
+	#if !defined(_WIN32)
+	if (numSpots > (fileSize - 74) / 37) goto Done;
+	#endif
 
 	while(numSpots)
 	{
@@ -1646,27 +1772,31 @@ BOOL32 MovieCameraManager::Load (struct IFileSystem * inFile)
 			spotListEnd = newSpot;
 			spotListStart = newSpot;
 		}
-		file->ReadFile(0,&(newSpot->duration),sizeof(newSpot->duration),&dwRead);
-		file->ReadFile(0,&(newSpot->flags),sizeof(newSpot->flags),&dwRead);
-		file->ReadFile(0,&(newSpot->position),sizeof(newSpot->position),&dwRead);
-		file->ReadFile(0,&(newSpot->lookAt),sizeof(newSpot->lookAt),&dwRead);
-		file->ReadFile(0,&(newSpot->systemID),sizeof(newSpot->systemID),&dwRead);
-		file->ReadFile(0,&(newSpot->regularMetrics),sizeof(newSpot->regularMetrics),&dwRead);
+		if (!readField(&(newSpot->duration), sizeof(newSpot->duration)) ||
+			!readField(&(newSpot->flags), sizeof(newSpot->flags)) ||
+			!readField(&(newSpot->position), sizeof(newSpot->position)) ||
+			!readField(&(newSpot->lookAt), sizeof(newSpot->lookAt)) ||
+			!readField(&(newSpot->systemID), sizeof(newSpot->systemID)) ||
+			!readField(&(newSpot->regularMetrics), sizeof(newSpot->regularMetrics))) goto Done;
 
 		--numSpots;
 	}
 
-	file->ReadFile(0,&lastOn,sizeof(lastOn),&dwRead);
+	if (!readField(&lastOn, sizeof(lastOn))) goto Done;
+	#if !defined(_WIN32)
+	if (lastOn > 1 || static_cast<U64>(fileSize) !=
+		74 + static_cast<U64>(totalSpots) * 37 + static_cast<U64>(lastOn) * 37) goto Done;
+	#endif
 	if(lastOn)
 	{
 		lastSpot = new CamSpot;
 		lastSpot->nextSpot = NULL;
-		file->ReadFile(0,&(lastSpot->duration),sizeof(lastSpot->duration),&dwRead);
-		file->ReadFile(0,&(lastSpot->flags),sizeof(lastSpot->flags),&dwRead);
-		file->ReadFile(0,&(lastSpot->position),sizeof(lastSpot->position),&dwRead);
-		file->ReadFile(0,&(lastSpot->lookAt),sizeof(lastSpot->lookAt),&dwRead);
-		file->ReadFile(0,&(lastSpot->systemID),sizeof(lastSpot->systemID),&dwRead);
-		file->ReadFile(0,&(lastSpot->regularMetrics),sizeof(lastSpot->regularMetrics),&dwRead);
+		if (!readField(&(lastSpot->duration), sizeof(lastSpot->duration)) ||
+			!readField(&(lastSpot->flags), sizeof(lastSpot->flags)) ||
+			!readField(&(lastSpot->position), sizeof(lastSpot->position)) ||
+			!readField(&(lastSpot->lookAt), sizeof(lastSpot->lookAt)) ||
+			!readField(&(lastSpot->systemID), sizeof(lastSpot->systemID)) ||
+			!readField(&(lastSpot->regularMetrics), sizeof(lastSpot->regularMetrics))) goto Done;
 	}
 	else
 	{
@@ -1675,6 +1805,9 @@ BOOL32 MovieCameraManager::Load (struct IFileSystem * inFile)
 	
 	result = TRUE;
 Done:
+	#if !defined(_WIN32)
+	if (!result) ClearQueue();
+	#endif
 	return result;
 }
 //--------------------------------------------------------------------------//
@@ -1747,8 +1880,17 @@ void MovieCameraManager::init()
 	bTracking = false;
 
 	COMPTR<IDAConnectionPoint> connection;
+	#if defined(_WIN32)
 	if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Advise(getBase(), &eventHandle);
+	#else
+	if (!EVENTSYS || EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+		connection->Advise(getBase(), &eventHandle) != GR_OK)
+	{
+		std::fputs("Native MovieCameraManager requires the active EventSystem callback\n", stderr);
+		std::abort();
+	}
+	#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1759,7 +1901,11 @@ struct _camMang : GlobalComponent
 	virtual void Startup (void)
 	{
 		CAMERAMANAGER = manager = new DAComponent<MovieCameraManager>;
+	#if defined(_WIN32)
 		AddToGlobalCleanupList(&manager);
+	#else
+		AddToGlobalCleanupList((IDAComponent **) &CAMERAMANAGER);
+	#endif
 	}
 
 	virtual void Initialize (void)
@@ -1776,5 +1922,3 @@ static _camMang globalCamMang;
 //---------------------------------------------------------------------------
 //------------------------End MovieCamera.cpp----------------------------------------
 //---------------------------------------------------------------------------
-
-

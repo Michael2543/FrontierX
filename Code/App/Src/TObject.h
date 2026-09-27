@@ -25,12 +25,21 @@
 #endif
 
 #ifndef OBJWATCH_H
+#if defined(_WIN32)
 #include "ObjWatch.h"
+#else
+#include "Objwatch.h"
+#endif
 #endif
 
 //----------------------------------//
 
+#if !defined(_WIN32)
+#include <cstdint>
+#define cqoffsetofclass(base, derived) (static_cast<U32>(reinterpret_cast<std::uintptr_t>(static_cast<base*>((derived*)8)) - 8))
+#else
 #define cqoffsetofclass(base, derived) ((U32)(static_cast<base*>((derived*)8))-8)
+#endif
 #define cqoffsetofmember(base, member) (size_t)((&(((base *)0)->member))+0)
 #define cqsizeofmember(base,member) (size_t)((&(((base *)0)->member))+1)-(size_t)((&(((base *)0)->member))+0)
 
@@ -98,7 +107,7 @@ template <class Base>
 void * ObjectImpl< Base >::QueryInterface (OBJID objid, OBJPTR<IBaseObject> & pInterface, U32 playerID)
 {
 	int i;
-	const _INTMAP_ENTRY * interfaces = _CQGetEntriesIn();
+	const _INTMAP_ENTRY * interfaces = Base::_CQGetEntriesIn();
 
 	for (i = 0; interfaces[i].objid; i++)
 	{

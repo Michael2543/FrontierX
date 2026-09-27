@@ -21,8 +21,9 @@
 #endif
 
 #ifndef VFX_H
-#include "vfx.h"
+#include "VFX.H"
 #endif
+#include <string.h>
 
 #define INVALID_SYSTEM_ID 0
 #define HYPER_SYSTEM_ID   0
@@ -31,6 +32,7 @@
 #define S_LOCKED  0x00000002
 
 struct IBaseObject;
+class Transform;
 
 struct SectorEffects
 {

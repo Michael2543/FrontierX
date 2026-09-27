@@ -11,17 +11,29 @@
     $Header: /Conquest/App/Src/BaseObject.cpp 25    6/30/00 4:48p Tmauer $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#endif
 
 #include "IObject.h"
 #include "SuperTrans.h"
 #include "UserDefaults.h"
 #include "GridVector.h"
 #include "Camera.h"
+#include "MyVertex.h"
 
-#include <View2D.h>
+#include <View2d.h>
+#include <algorithm>
 #include <stdlib.h>
+
+#if !defined(_WIN32)
+static constexpr U8 GetRValue(COLORREF color) { return static_cast<U8>(color); }
+static constexpr U8 GetGValue(COLORREF color) { return static_cast<U8>(color >> 8); }
+static constexpr U8 GetBValue(COLORREF color) { return static_cast<U8>(color >> 16); }
+#endif
 
 extern Vector circleLines[NUM_CIRCLE_SEGS];
 
@@ -305,8 +317,13 @@ BOOL32 __stdcall RectIntersects (const RECT & _rect, struct ViewPoint * points, 
 	// now compare the strips
 	//
 
+#if defined(_WIN32)
 	i = __max(rect.top, points[tleft].y);
 	j = __min(rect.bottom, points[bleft].y);
+#else
+	i = std::max(rect.top, points[tleft].y);
+	j = std::min(rect.bottom, points[bleft].y);
+#endif
 
 	for ( ; i <= j; i++)
 	{

@@ -3,7 +3,7 @@
 
 //
 
-#include "PersistCompound.h"
+#include "PERSISTCOMPOUND.H"
 
 //
 

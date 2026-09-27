@@ -94,11 +94,11 @@ protected:	// protected data
 
 	char					material_name[IM_MAX_NAME_LEN];
 
-	char					texture_name[MAX_PATH];
+	char					texture_name[260];
 	ITL_TEXTURE_REF_ID		texture_ref_id;
 	ITL_TEXTUREFRAME_IRP	texture_frame;
 	U32						texture_flags;
-	D3DMATERIAL7			d3d_material;
+	D3DMATERIAL9			d3d_material;
 
 	//
 };
@@ -197,27 +197,27 @@ GENRESULT SimpleMaterial::initialize( IDAComponent *system_container )
 	texture_ref_id = ITL_INVALID_REF_ID;
 	texture_flags = 0;
 
-	d3d_material.ambient.r = 1.0f;
-	d3d_material.ambient.g = 1.0f;
-	d3d_material.ambient.b = 1.0f;
-	d3d_material.ambient.a = 1.0f;
+	d3d_material.Ambient.r = 1.0f;
+	d3d_material.Ambient.g = 1.0f;
+	d3d_material.Ambient.b = 1.0f;
+	d3d_material.Ambient.a = 1.0f;
 
-	d3d_material.diffuse.r = 1.0f;
-	d3d_material.diffuse.g = 1.0f;
-	d3d_material.diffuse.b = 1.0f;
-	d3d_material.diffuse.a = 1.0f;
+	d3d_material.Diffuse.r = 1.0f;
+	d3d_material.Diffuse.g = 1.0f;
+	d3d_material.Diffuse.b = 1.0f;
+	d3d_material.Diffuse.a = 1.0f;
 
-	d3d_material.emissive.r = 0.0f;
-	d3d_material.emissive.g = 0.0f;
-	d3d_material.emissive.b = 0.0f;
-	d3d_material.emissive.a = 0.0f;
+	d3d_material.Emissive.r = 0.0f;
+	d3d_material.Emissive.g = 0.0f;
+	d3d_material.Emissive.b = 0.0f;
+	d3d_material.Emissive.a = 0.0f;
 
-	d3d_material.specular.r = 0.0f;
-	d3d_material.specular.g = 0.0f;
-	d3d_material.specular.b = 0.0f;
-	d3d_material.specular.a = 0.0f;
+	d3d_material.Specular.r = 0.0f;
+	d3d_material.Specular.g = 0.0f;
+	d3d_material.Specular.b = 0.0f;
+	d3d_material.Specular.a = 0.0f;
 	
-	d3d_material.power = 0.0f;
+	d3d_material.Power = 0.0f;
 
 	return GR_OK;
 }
@@ -261,12 +261,17 @@ GENRESULT SimpleMaterial::clone( IMaterial **out_material )
 
 GENRESULT SimpleMaterial::load_from_filesystem( IFileSystem *IFS ) 
 {
+	if( IFS == NULL ) {
+		return GR_INVALID_PARMS;
+	}
 	Vector color;
 	char material_type[IM_MAX_TYPE_LEN];
 
 	// determine the type
 	//
-	read_string( IFS, "Type", IM_MAX_TYPE_LEN, material_type );
+	if( FAILED( read_string( IFS, "Type", sizeof(material_type), material_type ) ) ) {
+		return GR_GENERIC;
+	}
 
 	if( strcmp( material_type, CLSID_DcDtMaterial ) == 0 ) {
 		type = SMC_DcDt;
@@ -280,34 +285,37 @@ GENRESULT SimpleMaterial::load_from_filesystem( IFileSystem *IFS )
 	else if( strcmp( material_type, CLSID_DcDtOcOtMaterial ) == 0 ) {
 		type = SMC_DcDtOcOt;
 	}
+	else {
+		return GR_INVALID_PARMS;
+	}
 
 	// read constants
 	//
 	if( SUCCEEDED( read_type<Vector>( IFS, "C0", &color ) ) ) {
-		d3d_material.diffuse.r = color.x;
-		d3d_material.diffuse.g = color.y;
-		d3d_material.diffuse.b = color.z;
+		d3d_material.Diffuse.r = color.x;
+		d3d_material.Diffuse.g = color.y;
+		d3d_material.Diffuse.b = color.z;
 
-		d3d_material.ambient.r = color.x;
-		d3d_material.ambient.g = color.y;
-		d3d_material.ambient.b = color.z;
+		d3d_material.Ambient.r = color.x;
+		d3d_material.Ambient.g = color.y;
+		d3d_material.Ambient.b = color.z;
 	}
 
 	if( type == SMC_DcDtEc ) {
 		if( SUCCEEDED( read_type<Vector>( IFS, "C1", &color ) ) ) {
-			d3d_material.emissive.r = color.x;
-			d3d_material.emissive.g = color.y;
-			d3d_material.emissive.b = color.z;
+			d3d_material.Emissive.r = color.x;
+			d3d_material.Emissive.g = color.y;
+			d3d_material.Emissive.b = color.z;
 		}
 	}
 	else {
 		// opacity types
 		if( SUCCEEDED( read_type<float>( IFS, "C1", &color.x ) ) ) {
-			d3d_material.diffuse.a = color.x;
+			d3d_material.Diffuse.a = color.x;
 		}
 	}
 
-	if( FAILED( read_string( IFS, "T0_name", MAX_PATH, texture_name ) ) ) {
+	if( FAILED( read_string( IFS, "T0_name", sizeof(texture_name), texture_name ) ) ) {
 		texture_name[0] = 0;
 	}
 
@@ -364,33 +372,49 @@ GENRESULT SimpleMaterial::update( float dt )
 
 GENRESULT SimpleMaterial::apply( void ) 
 {
-	render_pipeline->set_material( &d3d_material );
+	GENRESULT result = render_pipeline->set_material( &d3d_material );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_render_state( D3DRS_LIGHTING, TRUE );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_render_state( D3DRS_SPECULARENABLE, FALSE );
+	if( FAILED(result) ) return result;
 
-	render_pipeline->set_render_state( D3DRS_LIGHTING, TRUE );
-	render_pipeline->set_render_state( D3DRS_SPECULARENABLE, FALSE );
-
-	if( d3d_material.diffuse.a < 0.999f ) {
-		render_pipeline->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE );
-		render_pipeline->set_render_state( D3DRS_SRCBLEND, D3DBLEND_SRCALPHA );
-		render_pipeline->set_render_state( D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA );
+	if( d3d_material.Diffuse.a < 0.999f ) {
+		result = render_pipeline->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE );
+		if( FAILED(result) ) return result;
+		result = render_pipeline->set_render_state( D3DRS_SRCBLEND, D3DBLEND_SRCALPHA );
+		if( FAILED(result) ) return result;
+		result = render_pipeline->set_render_state( D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA );
+		if( FAILED(result) ) return result;
 	}
 	else {
-		render_pipeline->set_render_state( D3DRS_ALPHABLENDENABLE, FALSE );
+		result = render_pipeline->set_render_state( D3DRS_ALPHABLENDENABLE, FALSE );
+		if( FAILED(result) ) return result;
 	}
 
-	render_pipeline->set_texture_stage_texture( 0, texture_frame.rp_texture_id );
+	result = render_pipeline->set_texture_stage_texture( 0, texture_frame.rp_texture_id );
+	if( FAILED(result) ) return result;
 	
-	render_pipeline->set_texture_stage_state( 0, D3DTSS_COLOROP, D3DTOP_MODULATE );
-	render_pipeline->set_texture_stage_state( 0, D3DTSS_COLORARG1, D3DTA_DIFFUSE );
-	render_pipeline->set_texture_stage_state( 0, D3DTSS_COLORARG2, D3DTA_TEXTURE );
+	result = render_pipeline->set_texture_stage_state( 0, D3DTSS_COLOROP, D3DTOP_MODULATE );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_texture_stage_state( 0, D3DTSS_COLORARG1, D3DTA_DIFFUSE );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_texture_stage_state( 0, D3DTSS_COLORARG2, D3DTA_TEXTURE );
+	if( FAILED(result) ) return result;
 
-	render_pipeline->set_texture_stage_state( 0, D3DTSS_ALPHAOP, D3DTOP_MODULATE );
-	render_pipeline->set_texture_stage_state( 0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE );
-	render_pipeline->set_texture_stage_state( 0, D3DTSS_ALPHAARG2, D3DTA_TEXTURE );
+	result = render_pipeline->set_texture_stage_state( 0, D3DTSS_ALPHAOP, D3DTOP_MODULATE );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_texture_stage_state( 0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_texture_stage_state( 0, D3DTSS_ALPHAARG2, D3DTA_TEXTURE );
+	if( FAILED(result) ) return result;
 
-	render_pipeline->set_texture_stage_texture( 1, 0 );
-	render_pipeline->set_texture_stage_state( 1, D3DTSS_COLOROP, D3DTOP_DISABLE );
-	render_pipeline->set_texture_stage_state( 1, D3DTSS_ALPHAOP, D3DTOP_DISABLE );
+	result = render_pipeline->set_texture_stage_texture( 1, 0 );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_texture_stage_state( 1, D3DTSS_COLOROP, D3DTOP_DISABLE );
+	if( FAILED(result) ) return result;
+	result = render_pipeline->set_texture_stage_state( 1, D3DTSS_ALPHAOP, D3DTOP_DISABLE );
+	if( FAILED(result) ) return result;
 
 	return GR_OK;
 }
@@ -399,6 +423,7 @@ GENRESULT SimpleMaterial::apply( void )
 
 GENRESULT SimpleMaterial::render( MaterialContext *context, D3DPRIMITIVETYPE PrimitiveType, VertexBufferDesc *Vertices, U32 StartVertex, U32 NumVertices, U16 *FaceIndices, U32 NumFaceIndices, U32 im_rf_flags ) 
 {
+	if (!context) return GR_INVALID_PARMS;
 	IRP_VERTEXBUFFERHANDLE vb;
 	void *vbmem;
 	U32 vertex_format;
@@ -407,8 +432,9 @@ GENRESULT SimpleMaterial::render( MaterialContext *context, D3DPRIMITIVETYPE Pri
 	if( context->vertex_buffer != IRP_INVALID_VB_HANDLE ) {
 		return render_pipeline->draw_indexed_primitive_vb( PrimitiveType, context->vertex_buffer, StartVertex, NumVertices, FaceIndices, NumFaceIndices, 0 );
 	}
+	if (!Vertices) return GR_INVALID_PARMS;
 
-	if( SUCCEEDED( vbuffer_manager->acquire_vertex_buffer( Vertices->vertex_format, 
+	GENRESULT result = vbuffer_manager->acquire_vertex_buffer( Vertices->vertex_format,
 														   Vertices->num_vertices, 
 														   0, 
 														   DDLOCK_DISCARDCONTENTS|DDLOCK_WRITEONLY,
@@ -416,24 +442,25 @@ GENRESULT SimpleMaterial::render( MaterialContext *context, D3DPRIMITIVETYPE Pri
 														   &vb,
 														   &vbmem,
 														   &vertex_format,
-														   &num_verts ) ) ) {
-		
-		vbuffer_manager->copy_vertex_data( vbmem, vertex_format, Vertices );
-		
-		render_pipeline->unlock_vertex_buffer( vb );
-
-		render_pipeline->draw_indexed_primitive_vb( PrimitiveType, vb, StartVertex, NumVertices, FaceIndices, NumFaceIndices, 0 );
-		
-		vbuffer_manager->release_vertex_buffer( vb );
-	}
-
-	return GR_OK;
+										   &num_verts );
+	if (result != GR_OK) return result;
+	result = vbuffer_manager->copy_vertex_data(vbmem, vertex_format, Vertices);
+	GENRESULT unlockResult = render_pipeline->unlock_vertex_buffer(vb);
+	if (result == GR_OK) result = unlockResult;
+	if (result == GR_OK)
+		result = render_pipeline->draw_indexed_primitive_vb(PrimitiveType, vb,
+			StartVertex, NumVertices, FaceIndices, NumFaceIndices, 0);
+	GENRESULT releaseResult = vbuffer_manager->release_vertex_buffer(vb);
+	return result == GR_OK ? releaseResult : result;
 }
 
 //
 
 GENRESULT SimpleMaterial::set_name( const char *new_name ) 
 {
+	if( !new_name || strlen(new_name) >= sizeof(material_name) ) {
+		return GR_INVALID_PARMS;
+	}
 	strcpy( material_name, new_name );
 	return GR_OK;
 }
@@ -442,6 +469,9 @@ GENRESULT SimpleMaterial::set_name( const char *new_name )
 
 GENRESULT SimpleMaterial::get_name( char *out_name, U32 max_name_len ) 
 {
+	if( !out_name || max_name_len == 0 || strlen(material_name) >= max_name_len ) {
+		return GR_INVALID_PARMS;
+	}
 	strcpy( out_name, material_name );
 	return GR_OK;
 }
@@ -458,6 +488,9 @@ GENRESULT SimpleMaterial::get_num_passes( U32 *out_num_passes )
 
 GENRESULT SimpleMaterial::get_type( char *out_type, U32 max_type_len )
 {
+	if( !out_type || max_type_len == 0 ) {
+		return GR_INVALID_PARMS;
+	}
 	switch( type ) {
 	case SMC_DcDt:	strncpy( out_type, CLSID_DcDtMaterial, max_type_len );			break;
 	case SMC_DcDtEc:	strncpy( out_type, CLSID_DcDtEcMaterial, max_type_len );	break;
@@ -510,7 +543,7 @@ GENRESULT SimpleMaterial::set_texture( U32 texture_num, ITL_TEXTURE_REF_ID trid 
 			texture_library->add_ref_texture_ref( texture_ref_id );
 
 			texture_library->get_texture_ref_texture_id( texture_ref_id, &tid );
-			texture_library->get_texture_name( tid, texture_name, MAX_PATH );
+			texture_library->get_texture_name( tid, texture_name, sizeof(texture_name) );
 		}
 		
 		return GR_OK;
@@ -602,9 +635,9 @@ GENRESULT SimpleMaterial::set_constant( U32 constant_num, U32 num_values, float 
 		
 		ASSERT( num_values >= 3 );
 		
-		d3d_material.diffuse.r = values[0];
-		d3d_material.diffuse.g = values[1];
-		d3d_material.diffuse.b = values[2];
+		d3d_material.Diffuse.r = values[0];
+		d3d_material.Diffuse.g = values[1];
+		d3d_material.Diffuse.b = values[2];
 
 		return GR_OK;
 	}
@@ -614,9 +647,9 @@ GENRESULT SimpleMaterial::set_constant( U32 constant_num, U32 num_values, float 
 		
 			ASSERT( num_values >= 3 );
 			
-			d3d_material.emissive.r = values[0];
-			d3d_material.emissive.g = values[1];
-			d3d_material.emissive.b = values[2];
+			d3d_material.Emissive.r = values[0];
+			d3d_material.Emissive.g = values[1];
+			d3d_material.Emissive.b = values[2];
 
 			return GR_OK;
 		}
@@ -624,7 +657,7 @@ GENRESULT SimpleMaterial::set_constant( U32 constant_num, U32 num_values, float 
 			
 			ASSERT( num_values >= 1 );
 			
-			d3d_material.diffuse.a = values[0];
+			d3d_material.Diffuse.a = values[0];
 
 			return GR_OK;
 		}
@@ -645,9 +678,9 @@ GENRESULT SimpleMaterial::get_constant( U32 constant_num, U32 max_num_values, fl
 		
 		ASSERT( max_num_values >= 3 );
 
-		out_values[0] = d3d_material.diffuse.r;
-		out_values[1] = d3d_material.diffuse.g;
-		out_values[2] = d3d_material.diffuse.b;
+		out_values[0] = d3d_material.Diffuse.r;
+		out_values[1] = d3d_material.Diffuse.g;
+		out_values[2] = d3d_material.Diffuse.b;
 
 		return GR_OK;
 	}
@@ -657,9 +690,9 @@ GENRESULT SimpleMaterial::get_constant( U32 constant_num, U32 max_num_values, fl
 
 			ASSERT( max_num_values >= 3 );
 	
-			out_values[0] = d3d_material.emissive.r;
-			out_values[1] = d3d_material.emissive.g;
-			out_values[2] = d3d_material.emissive.b;
+			out_values[0] = d3d_material.Emissive.r;
+			out_values[1] = d3d_material.Emissive.g;
+			out_values[2] = d3d_material.Emissive.b;
 
 			return GR_OK;
 		}
@@ -667,7 +700,7 @@ GENRESULT SimpleMaterial::get_constant( U32 constant_num, U32 max_num_values, fl
 			
 			ASSERT( max_num_values >= 1 );
 			
-			out_values[0] = d3d_material.diffuse.a;
+			out_values[0] = d3d_material.Diffuse.a;
 
 			return GR_OK;
 		}

@@ -9,8 +9,11 @@
 
 //
 
-#include "dacom.h"
-#include "FileSys.h"
+#include "DACOM.H"
+#include "Filesys.h"
+#if !defined(_WIN32)
+#include "FrontierX/LegacyWindowTypes.h"
+#endif
 
 //
 
@@ -85,4 +88,3 @@ struct DACOM_NO_VTABLE IVideoStreamControl : public IDAComponent
 
 
 #endif // EOF
-

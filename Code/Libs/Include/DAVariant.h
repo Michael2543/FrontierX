@@ -13,7 +13,7 @@
 //--------------------------------------------------------------------------//
 
 #ifndef US_TYPEDEFS
-#include "typedefs.h"      // General type definitions
+#include "TYPEDEFS.H"      // General type definitions
 #endif
 
 #ifndef _INC_MEMORY
@@ -383,6 +383,7 @@ struct DACOM_VARIANT
 	}
 
 
+#if defined(_WIN32)
 	DACOM_VARIANT (int _intVal)
 	{
 		longVal = _intVal;
@@ -396,6 +397,7 @@ struct DACOM_VARIANT
 		dwReserved1 = 0;
 		variantType = DAVT_U32;
 	}
+#endif
 
 	DACOM_VARIANT (const PROPERTY & property)
 	{
@@ -403,8 +405,20 @@ struct DACOM_VARIANT
 		dwReserved1 = 0;
 		if (variantType == DAVT_SINGLE)
 			singleVal = property.value2;
+#if defined(_WIN32)
 		else
 			pVoid = (void *) property.value;
+#else
+		else if ((variantType & DAVT_INTEGER) && !(variantType & DAVT_BYREF) &&
+			(variantType & DAVT_TYPEMASK) <= 3)
+			longVal = property.value;
+		else
+		{
+			// PROPERTY has a 32-bit value field and cannot carry a native pointer.
+			variantType = DAVT_EMPTY;
+			pVoid = nullptr;
+		}
+#endif
 	}
 
 	//---------------------

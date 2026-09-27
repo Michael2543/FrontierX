@@ -25,17 +25,19 @@
 // 4786: truncating function name (255 chars) in browser info
 #pragma warning (disable : 4514 4201 4100 4512 4245 4127 4355 4244 4710 4702 4786)
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #pragma warning (disable : 4355 4201)
 
-#include "FileSys.h"
-#include "tokendef.h"
-#include "filestrm.h"
-#include "lxtables.h"
-#include "symtable.h"
-#include "ferror.h"
-#include "parserrs.h"
-#include "fdump.h"
+#include "Filesys.h"
+#include "Tokendef.h"
+#include "Filestrm.h"
+#include "Lxtables.h"
+#include "Symtable.h"
+#include "Ferror.h"
+#include "Parserrs.h"
+#include "FDump.h"
 
 #include <malloc.h>
 

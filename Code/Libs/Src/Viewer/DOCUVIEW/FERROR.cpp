@@ -12,11 +12,13 @@
 //--------------------------------------------------------------------------//
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
-#include "ferror.h"
-#include "ParsErrs.h"
-#include "fdump.h"
+#include "Ferror.h"
+#include "Parserrs.h"
+#include "FDump.h"
 
 //#include <stdio.h>
 //#include <stdarg.h>

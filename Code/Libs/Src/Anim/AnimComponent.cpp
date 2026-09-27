@@ -5,14 +5,21 @@ EMAURER Thread-safe creation of archetypes is achieved via the fact that there i
 database of archetypes which must be protected.
 */
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/NativeAnimation.h"
+#endif
 #pragma warning (disable : 4786)
 #include "IAnim.h"
 #include "Anim.h"
 #include "TComponent.h"
 #include "SysConsumerDesc.h"
 #include "da_heap_utility.h"
-#include "tempstr.h"
+#include "TempStr.h"
+#include <cstddef>
+#include <cstdint>
 #include <map>
 #include <set>
 
@@ -43,20 +50,41 @@ struct TargetAffectors
 
 struct TargetLess
 {
+#if defined(_WIN32)
 	int build_val (const Target& n0) const
+#else
+	std::uintptr_t build_val (const Target& n0) const
+#endif
+
 	{
+#if defined(_WIN32)
 		int val0;
+#else
+		std::uintptr_t val0 = 0;
+#endif
 
 		switch (n0.type)
 		{
 			case OBJECT:
+#if defined(_WIN32)
 				val0 = OBJECT | (n0.object << 3);
+#else
+				val0 = OBJECT | (static_cast<std::uintptr_t>(static_cast<std::uint32_t>(n0.object)) << 3);
+#endif
 			break;
 			case JOINT:
+#if defined(_WIN32)
 				val0 = JOINT | (n0.joint << 3);
+#else
+				val0 = JOINT | (static_cast<std::uintptr_t>(static_cast<std::uint32_t>(n0.joint)) << 3);
+#endif
 			break;
 			case EVENT:
+#if defined(_WIN32)
 				val0 = (int)n0.event_handler;
+#else
+				val0 = reinterpret_cast<std::uintptr_t>(n0.event_handler);
+#endif
 			break;
 			default:
 				GENERAL_FATAL("Unknown Animation target type!\n");
@@ -1622,7 +1650,12 @@ AnimComponent::~AnimComponent (void)
 	{
 		const char* name = NULL;
 		get_instance_name ((*rit).first, name);
+#if defined(_WIN32)
 		GENERAL_TRACE_1 (TEMPSTR("Anim script %d (%s) [refers to arch %d] is still active\n", (*rit).first, name, (*rit).second.archset));
+#else
+		GENERAL_TRACE_1 (TEMPSTR("Anim script %d (%s) [refers to arch %p] is still active\n", (*rit).first, name,
+			static_cast<void*>((*rit).second.archset)));
+#endif
 	}
 
 /*
@@ -1662,6 +1695,7 @@ GENRESULT AnimComponent::enumerate_channels2 (CHANNEL_INSTANCE_ENUM_CALLBACK cb,
 
 //
 
+#if defined(_WIN32)
 BOOL COMAPI DllMain(HINSTANCE hinstDLL,
                     DWORD     fdwReason,
                     LPVOID    lpvReserved)
@@ -1686,5 +1720,19 @@ BOOL COMAPI DllMain(HINSTANCE hinstDLL,
 	}
 	return TRUE;
 }
+#endif
 
-
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool RegisterNativeAnimation(ICOManager * manager)
+{
+	if (!manager) return false;
+	IComponentFactory * factory =
+		new DAComponentFactory2<DAComponentAggregate<AnimComponent>, SYSCONSUMERDESC>("IAnimation");
+	const GENRESULT result = manager->RegisterComponent(factory, "IAnimation", DACOM_LOW_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

@@ -10,8 +10,15 @@
 */			    
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
+#if defined(_WIN32)
 #include "pch.h"
 #include "globals.h"
+#else
+#include "Include/NativeAppGlobals.h"
+#include "MyVertex.h"
+#include <3dmath.h>
+#include <cmath>
+#endif
 
 Vector circleLines[NUM_CIRCLE_SEGS];
 

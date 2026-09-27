@@ -18,8 +18,10 @@
 //-------------------------------------------------------------------
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
+
+#include "Include/AppObjectContracts.h"
 
 #ifndef OBJCLASS_H
 #include "ObjClass.h"

@@ -19,7 +19,13 @@
 struct IFileSystem;
 struct IChannel2;
 
+#if defined(_WIN32)
 typedef unsigned int CHANNEL_INSTANCE_INDEX;
+#else
+#include <cstdint>
+typedef std::uintptr_t CHANNEL_INSTANCE_INDEX;
+static_assert(sizeof(CHANNEL_INSTANCE_INDEX) == sizeof(void *), "native channel index is a runtime pointer token");
+#endif
 
 const CHANNEL_INSTANCE_INDEX INVALID_CHANNEL_INSTANCE_INDEX = -1;
 

@@ -7,7 +7,7 @@
 #define __MeshInstance_h__
 
 #include "Mesh.h"
-#include "XMesh.h"
+#include "xmesh.h"
 
 // ................................................................................
 //

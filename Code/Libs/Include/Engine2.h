@@ -1,7 +1,7 @@
 #ifndef ENGINE2_H
 #define ENGINE2_H
 
-#include "Engine.h"
+#include "ENGINE.H"
 
 // NOTE: Due to the macro nature of MAKE_IID, you cannot use another macro in place of the version
 // number. Keep the second parameter in sync with the value of the explicit version macro, and increment

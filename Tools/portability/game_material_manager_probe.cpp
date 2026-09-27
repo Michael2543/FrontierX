@@ -1,0 +1,1746 @@
+#include "CQTrace.h"
+#include "FrontierX/GameMaterialManager.h"
+#include "FrontierX/GameTextureManager.h"
+#include "FrontierX/NativeEngine.h"
+#include "FrontierX/LegacyRenderSubmission.h"
+#include "FrontierX/NativeGameVertexBuffer.h"
+#include "FrontierX/NativeGameIndexBuffer.h"
+#include "FrontierX/NativeComponentManager.h"
+#include "FrontierX/NativeMathEngine.h"
+#include "FrontierX/NativeRenderPipeline.h"
+#include "FrontierX/NativeRenderPrimitive.h"
+#include "FrontierX/NativeRenderManager.h"
+#include "FrontierX/NativePolyMesh.h"
+#include "FrontierX/NativeUtfFileSystem.h"
+#include "FrontierX/UtfMetadata.h"
+#include "Include/NativeAppGlobals.h"
+#include "MeshRender.h"
+#include "IVertexBuffer.h"
+#include "3dmath.h"
+#include "FDump.h"
+#include "ICamera.h"
+#include "ENGINE.H"
+#include "IMaterialManager.h"
+#include "IImageReader.h"
+#include "IProfileParser.h"
+#include "ITextureLibrary.h"
+#include "lightman.h"
+#include "IRenderPrimitive.h"
+#include "renderer.h"
+#include "IRenderComponent.h"
+#include "RPUL/MTPrimitiveBuilder.h"
+#include "PolyMeshFixture.h"
+#include "TComponent.h"
+#include "TManager.h"
+#include "View2d.h"
+#include "xmesh.h"
+#include "matrix4.h"
+#if defined(FRONTIERX_GAME_GPU)
+#include "FrontierX/RenderSmokeScene.h"
+#include "FrontierX/SdlGpuRenderer.h"
+#include <SDL3/SDL.h>
+#endif
+
+#include <array>
+#include <cstddef>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <iterator>
+#include <string>
+#include <vector>
+
+void COMAPI CreateTGAReader(IImageReader **reader);
+
+namespace
+{
+struct ProbeAppVertexBufferManager : ICQ_VB_Manager
+{
+    IVertexBufferOwner *owner = nullptr;
+    unsigned adds = 0U;
+    unsigned deletes = 0U;
+
+    void Add(IVertexBufferOwner *value) override
+    {
+        owner = value;
+        ++adds;
+    }
+
+    void Delete(IVertexBufferOwner *value) override
+    {
+        if (owner == value) owner = nullptr;
+        ++deletes;
+    }
+};
+
+struct AppStateCapture
+{
+    FrontierX::RenderStateSnapshot render{};
+    FrontierX::TextureStageSnapshot stage{};
+    FrontierX::SamplerStateSnapshot sampler{};
+    U32 texture = 0U;
+    unsigned stageCalls = 0U;
+    unsigned samplerCalls = 0U;
+};
+
+GENRESULT DACOM_CDECL CaptureAppRenderState(
+    void * context, const FrontierX::RenderStateSnapshot & value)
+{
+    static_cast<AppStateCapture *>(context)->render = value;
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL CaptureAppTextureStage(
+    void * context, const FrontierX::TextureStageSnapshot & value)
+{
+    auto &capture = *static_cast<AppStateCapture *>(context);
+    capture.stage = value;
+    ++capture.stageCalls;
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL CaptureAppTextureBind(void * context, U32 stage, U32 texture)
+{
+    auto &capture = *static_cast<AppStateCapture *>(context);
+    if (stage > 1U || (stage == 1U && texture != 0U)) return GR_NOT_IMPLEMENTED;
+    if (stage == 0U) capture.texture = texture;
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL CaptureAppSamplerState(
+    void * context, const FrontierX::SamplerStateSnapshot & value)
+{
+    auto &capture = *static_cast<AppStateCapture *>(context);
+    capture.sampler = value;
+    ++capture.samplerCalls;
+    return GR_OK;
+}
+
+struct TextureCapture
+{
+    std::array<std::uint8_t, 64> pixels{};
+    unsigned creates = 0U;
+    unsigned uploads = 0U;
+    unsigned destroys = 0U;
+    U32 firstHandle = 0U;
+#if defined(FRONTIERX_GAME_GPU)
+    FrontierX::SdlGpuRenderer * gpu = nullptr;
+#endif
+};
+
+GENRESULT CreateTexture(void *context, U32 width, U32 height, U32 &handle)
+{
+    auto & capture = *static_cast<TextureCapture *>(context);
+#if defined(FRONTIERX_GAME_GPU)
+    if (capture.gpu)
+    {
+        const GENRESULT result = capture.gpu->CreateTexture(width, height, handle);
+        if (result != GR_OK) return result;
+        if (capture.firstHandle == 0U) capture.firstHandle = handle;
+        ++capture.creates;
+        return GR_OK;
+    }
+#endif
+    if (width != 4U || height != 4U) return GR_INVALID_PARMS;
+    ++capture.creates;
+    handle = capture.firstHandle = 64U;
+    return GR_OK;
+}
+
+GENRESULT UploadTexture(void *context, U32 handle, const std::uint8_t *pixels,
+                        U32 width, U32 height, std::size_t byteCount)
+{
+    auto &capture = *static_cast<TextureCapture *>(context);
+#if defined(FRONTIERX_GAME_GPU)
+    if (capture.gpu)
+    {
+        const GENRESULT result = capture.gpu->ReplaceTexture(handle,
+            {pixels, width, height, byteCount});
+        if (result != GR_OK) return result;
+        ++capture.uploads;
+        if (width == 4U && height == 4U && byteCount == 64U)
+            std::memcpy(capture.pixels.data(), pixels, byteCount);
+        return GR_OK;
+    }
+#endif
+    if (handle != 64U || width != 4U || height != 4U || byteCount != 64U)
+        return GR_INVALID_PARMS;
+    ++capture.uploads;
+    std::memcpy(capture.pixels.data(), pixels, byteCount);
+    return GR_OK;
+}
+
+GENRESULT DestroyTexture(void *context, U32 handle)
+{
+    auto & capture = *static_cast<TextureCapture *>(context);
+#if defined(FRONTIERX_GAME_GPU)
+    if (capture.gpu)
+    {
+        const GENRESULT result = capture.gpu->DestroyTexture(handle);
+        if (result == GR_OK) ++capture.destroys;
+        return result;
+    }
+#endif
+    if (handle != 64U) return GR_INVALID_PARMS;
+    ++capture.destroys;
+    return GR_OK;
+}
+
+unsigned gameDrawCalls = 0;
+unsigned gameMeshDrawCalls = 0;
+unsigned gameStandardDrawCalls = 0;
+std::size_t gameMeshIndices = 0U;
+bool gameMeshSecondUvMatches = false;
+std::vector<U32> gameMeshDiffuse;
+std::vector<FrontierX::RenderVertexP3N3DiffuseT5> gameStandardVertices;
+std::vector<U16> gameStandardIndices;
+
+static_assert(sizeof(MTVERTEX) ==
+                  sizeof(FrontierX::RenderVertexP3DiffuseSpecularT4));
+static_assert(offsetof(MTVERTEX, pos) ==
+                  offsetof(FrontierX::RenderVertexP3DiffuseSpecularT4, x));
+static_assert(offsetof(MTVERTEX, color) ==
+                  offsetof(FrontierX::RenderVertexP3DiffuseSpecularT4, diffuseBgra));
+static_assert(offsetof(MTVERTEX, scolor) ==
+                  offsetof(FrontierX::RenderVertexP3DiffuseSpecularT4, specularBgra));
+static_assert(offsetof(MTVERTEX, u) ==
+                  offsetof(FrontierX::RenderVertexP3DiffuseSpecularT4, u));
+static_assert(offsetof(MTVERTEX, u2) ==
+                  offsetof(FrontierX::RenderVertexP3DiffuseSpecularT4, u2));
+static_assert(offsetof(MTVERTEX, v2) + sizeof(float) == sizeof(MTVERTEX));
+static_assert(MTVERTEX_FVFFLAGS == FrontierX::LegacyD3d9::kMtVertexFvf);
+
+GENRESULT DACOM_CDECL CaptureGameMeshDraw(
+    void *, const FrontierX::RenderSubmissionView3 & submission)
+{
+    if (!submission.IsValid()) return GR_INVALID_PARMS;
+    ++gameMeshDrawCalls;
+    gameMeshIndices = submission.indexCount;
+    gameMeshSecondUvMatches = true;
+    gameMeshDiffuse.clear();
+    for (std::size_t index = 0U; index < submission.vertexCount; ++index)
+    {
+        gameMeshDiffuse.push_back(submission.vertices[index].diffuseBgra);
+        gameMeshSecondUvMatches &=
+            submission.vertices[index].u2 == submission.vertices[index].u &&
+            submission.vertices[index].v2 == submission.vertices[index].v;
+    }
+    return GR_NOT_IMPLEMENTED;
+}
+
+GENRESULT DACOM_CDECL CaptureGameStandardDraw(
+    void *, const FrontierX::RenderSubmissionView4 & submission)
+{
+    if (!submission.IsValid()) return GR_INVALID_PARMS;
+    ++gameStandardDrawCalls;
+    gameStandardVertices.assign(submission.vertices,
+                                submission.vertices + submission.vertexCount);
+    gameStandardIndices.assign(submission.indices,
+                               submission.indices + submission.indexCount);
+    return GR_OK;
+}
+struct GameTransformCapture
+{
+    unsigned modelviewCalls = 0U;
+    unsigned projectionCalls = 0U;
+    Vector translation{};
+    float projectionX = 0.0F;
+#if defined(FRONTIERX_GAME_GPU)
+    FrontierX::SdlGpuRenderer * gpu = nullptr;
+    bool submitAppGpu = false;
+    unsigned rejectStageAfter = 0U;
+    IRenderPrimitive * primitive = nullptr;
+    bool appStateAtSubmit = false;
+    FrontierX::SdlGpuReadback appImageAtSubmit;
+    bool appPresentedAtSubmit = false;
+    std::string appGpuError;
+#endif
+};
+
+#if defined(FRONTIERX_GAME_GPU)
+GENRESULT DACOM_CDECL SubmitGameStandardGpu(
+    void * context, const FrontierX::RenderSubmissionView4 & submission)
+{
+    const GENRESULT captured = CaptureGameStandardDraw(context, submission);
+    if (captured != GR_OK) return captured;
+    auto * capture = static_cast<GameTransformCapture *>(context);
+    if (capture && capture->submitAppGpu && capture->primitive)
+    {
+        U32 cull = 0U;
+        U32 factor = 0U;
+        U32 colorArgument = 0U;
+        U32 alphaArgument = 0U;
+        capture->appStateAtSubmit =
+            capture->primitive->get_render_state(D3DRS_CULLMODE, &cull) == GR_OK &&
+            capture->primitive->get_render_state(D3DRS_TEXTUREFACTOR, &factor) == GR_OK &&
+            capture->primitive->get_texture_stage_state(
+                0U, D3DTSS_COLORARG1, &colorArgument) == GR_OK &&
+            capture->primitive->get_texture_stage_state(
+                0U, D3DTSS_ALPHAARG1, &alphaArgument) == GR_OK &&
+            cull == D3DCULL_CW && factor == 0xFF40A0E0U &&
+            colorArgument == D3DTA_TFACTOR && alphaArgument == D3DTA_TFACTOR;
+    }
+    if (!capture || !capture->gpu || !capture->submitAppGpu) return GR_OK;
+    const GENRESULT result = capture->gpu->Submit(submission);
+    if (result != GR_OK) return result;
+    return capture->gpu->Readback64(capture->appImageAtSubmit,
+                                   capture->appGpuError) &&
+                   capture->gpu->Present(capture->appPresentedAtSubmit,
+                                         capture->appGpuError)
+               ? GR_OK : GR_GENERIC;
+}
+
+GENRESULT DACOM_CDECL SubmitGameMeshGpu(
+    void * context, const FrontierX::RenderSubmissionView3 & submission)
+{
+    const GENRESULT captured = CaptureGameMeshDraw(context, submission);
+    if (captured == GR_INVALID_PARMS) return captured;
+    auto * capture = static_cast<GameTransformCapture *>(context);
+    return capture && capture->gpu ? capture->gpu->Submit(submission) : GR_INVALID_PARMS;
+}
+
+GENRESULT DACOM_CDECL ApplyGameStateGpu(
+    void * context, const FrontierX::RenderStateSnapshot & state)
+{
+    return static_cast<GameTransformCapture *>(context)->gpu->SetRenderState(state);
+}
+
+GENRESULT DACOM_CDECL ApplyGameStageGpu(
+    void * context, const FrontierX::TextureStageSnapshot & state)
+{
+    auto * capture = static_cast<GameTransformCapture *>(context);
+    if (capture->rejectStageAfter && --capture->rejectStageAfter == 0U)
+    {
+        return GR_GENERIC;
+    }
+    return capture->gpu->SetTextureStageState(state);
+}
+
+GENRESULT DACOM_CDECL ApplyGameTextureGpu(void * context, U32 stage, U32 texture)
+{
+    return static_cast<GameTransformCapture *>(context)->gpu->BindTexture(stage, texture);
+}
+
+GENRESULT DACOM_CDECL ApplyGameSamplerGpu(
+    void * context, const FrontierX::SamplerStateSnapshot & state)
+{
+    return static_cast<GameTransformCapture *>(context)->gpu->SetSamplerState(state);
+}
+
+struct GameGpuRuntime
+{
+    SDL_Window * window = nullptr;
+    bool videoInitialized = false;
+    FrontierX::SdlGpuRenderer renderer;
+    ~GameGpuRuntime()
+    {
+        renderer.Shutdown();
+        if (window) SDL_DestroyWindow(window);
+        if (videoInitialized) SDL_Quit();
+    }
+};
+
+bool WriteP6(const std::filesystem::path & path,
+             const FrontierX::SdlGpuReadback & image)
+{
+    if (!image.rgbValid) return false;
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output << "P6\n" << FrontierX::SdlGpuReadback::Width << ' '
+           << FrontierX::SdlGpuReadback::Height << "\n255\n";
+    output.write(reinterpret_cast<const char *>(image.rgb8.data()),
+                 static_cast<std::streamsize>(image.rgb8.size()));
+    output.close();
+    return output.good();
+}
+#endif
+
+GENRESULT DACOM_CDECL CaptureGameModelview(void * context,
+                                            const Transform & modelview)
+{
+    if (!context) return GR_INVALID_PARMS;
+    auto & capture = *static_cast<GameTransformCapture *>(context);
+    ++capture.modelviewCalls;
+    capture.translation = modelview.translation;
+#if defined(FRONTIERX_GAME_GPU)
+    if (capture.gpu) return capture.gpu->SetModelview(modelview);
+#endif
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL CaptureGameProjection(void * context,
+                                             const Matrix4 & projection)
+{
+    if (!context) return GR_INVALID_PARMS;
+    auto & capture = *static_cast<GameTransformCapture *>(context);
+    ++capture.projectionCalls;
+    capture.projectionX = projection.d[0][0];
+#if defined(FRONTIERX_GAME_GPU)
+    if (capture.gpu) return capture.gpu->SetProjection(projection);
+#endif
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL RejectGameDraw(void *, const FrontierX::RenderSubmissionView &)
+{
+    ++gameDrawCalls;
+    return GR_NOT_IMPLEMENTED;
+}
+
+struct ProbeCamera final : ICamera
+{
+    U32 references = 1U;
+    mutable unsigned inverseQueries = 0U;
+    Transform transform;
+    Transform inverse;
+    Vector position{0.0F, 0.0F, 5.0F};
+    Vector look{0.0F, 0.0F, 0.0F};
+    ViewRect pane{0, 0, 63, 63};
+
+    ProbeCamera()
+    {
+        transform.translation.z = 5.0F;
+        inverse.translation.z = -5.0F;
+    }
+
+    GENRESULT COMAPI QueryInterface(const C8 *name, void **result) override
+    {
+        if (!result) return GR_INVALID_PARMS;
+        *result = nullptr;
+        if (!name || std::strcmp(name, IID_ICamera) != 0) return GR_INTERFACE_UNSUPPORTED;
+        *result = static_cast<ICamera *>(this);
+        AddRef();
+        return GR_OK;
+    }
+    U32 COMAPI AddRef() override { return ++references; }
+    U32 COMAPI Release() override { return --references; }
+    const Vector & COMAPI get_position() const override { return position; }
+    const Transform & COMAPI get_transform() const override { return transform; }
+    const Vector & COMAPI get_look_pos() const override { return look; }
+    const ViewRect * COMAPI get_pane() const override { return &pane; }
+    SINGLE COMAPI get_fovx() const override { return 1.0F; }
+    SINGLE COMAPI get_fovy() const override { return 1.0F; }
+    SINGLE COMAPI get_znear() const override { return 1.0F; }
+    SINGLE COMAPI get_zfar() const override { return 100.0F; }
+    SINGLE COMAPI get_aspect() const override { return 1.0F; }
+    SINGLE COMAPI get_hpc() const override { return 32.0F; }
+    SINGLE COMAPI get_vpc() const override { return -32.0F; }
+    bool COMAPI point_to_screen(float &, float &, float &, const Vector &) const override
+    {
+        return false;
+    }
+    void COMAPI screen_to_point(Vector &point, float, float) const override
+    {
+        point = look;
+    }
+    vis_state COMAPI object_visibility(const Vector &, float) const override
+    {
+        return VS_FULLY_VISIBLE;
+    }
+    Transform COMAPI get_inverse_transform() const override
+    {
+        ++inverseQueries;
+        return inverse;
+    }
+};
+
+void Word(std::vector<unsigned char> &bytes, U32 value)
+{
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        bytes.push_back(static_cast<unsigned char>(value >> shift));
+}
+
+// MaterialManager consumes the same generated input from unpacked source data.
+bool WriteDirectoryFixture(const std::filesystem::path &archive, const std::filesystem::path &root)
+{
+    std::string error;
+    for (const char *directory : {"shaders", "textures", "materials"})
+    {
+        std::filesystem::create_directories(root / directory);
+        std::vector<FrontierX::UtfDirectoryEntry> entries;
+        if (!FrontierX::ListUtfDirectory(archive, directory, entries, error)) return false;
+        for (const auto &entry : entries)
+        {
+            if (entry.directory) return false;
+            std::vector<unsigned char> bytes;
+            if (!FrontierX::ReadUtfEntry(archive, std::string(directory) + "/" + entry.name,
+                    bytes, error)) return false;
+            std::ofstream output(root / directory / entry.name, std::ios::binary | std::ios::trunc);
+            output.write(reinterpret_cast<const char *>(bytes.data()),
+                static_cast<std::streamsize>(bytes.size()));
+            if (!output) return false;
+        }
+    }
+    return true;
+}
+
+bool WriteFixture(const std::filesystem::path &path, bool crlf, bool materialEnd)
+{
+    const char *names[] = {"/", "shaders", "textures", "materials",
+                           "Synthetic.fx", "Base.txt", "Tile.tga",
+                           "VertexColor.fx", "VertexColor.txt"};
+    constexpr U32 recordSize = 44U;
+    constexpr U32 headerSize = 56U;
+    constexpr U32 count = 9U;
+    const std::string ending = crlf ? "\r\n" : "\r";
+    const std::string shader = "BEGIN_MAT_SCRIPT" + ending +
+        "NAME \"Synthetic\"" + ending +
+        "PARAM \"Gain\" FLOATC 0 0 1 0.25" + ending +
+        "PARAM \"Diffuse\" TEXTURE 0" + ending +
+        "END_MAT_SCRIPT" + ending;
+    const std::string material = "1\nSynthetic\nFLOAT 0 0.75 0 \"Gain\"\n"
+        "TEXTURE 0 \"Tile.tga\" \"Diffuse\"\n" +
+        std::string(materialEnd ? "END\n" : "");
+    const std::string vertexColorMaterial =
+        "1\nVertex Color with Texture\n"
+        "TEXTURE 0 \"Tile.tga\" \"Diffuse + Opacity\"\nEND\n";
+    std::ifstream vertexColorInput(FRONTIERX_VERTEX_COLOR_SOURCE,
+                                   std::ios::binary);
+    if (!vertexColorInput) return false;
+    const std::string vertexColorSource{
+        std::istreambuf_iterator<char>(vertexColorInput),
+        std::istreambuf_iterator<char>()};
+    if (vertexColorInput.bad() || vertexColorSource.empty()) return false;
+    std::string vertexColor;
+    for (char value : vertexColorSource)
+    {
+        if (value == '\n') vertexColor += ending;
+        else vertexColor += value;
+    }
+    std::vector<unsigned char> tga(18U, 0U);
+    tga[2] = 2U;
+    tga[12] = 4U;
+    tga[14] = 4U;
+    tga[16] = 32U;
+    tga[17] = 0x20U;
+    for (U32 pixel = 0; pixel < 16U; ++pixel)
+        tga.insert(tga.end(), {51U, 34U, 17U, 255U});
+    std::vector<unsigned char> nameBytes;
+    U32 nameOffsets[count]{};
+    for (U32 index = 0; index < count; ++index)
+    {
+        nameOffsets[index] = static_cast<U32>(nameBytes.size());
+        const char *name = names[index];
+        nameBytes.insert(nameBytes.end(), name, name + std::strlen(name) + 1);
+    }
+    std::vector<unsigned char> bytes;
+    for (U32 value : {0x20465455U, 0x101U, headerSize, count * recordSize,
+                      0U, recordSize, headerSize + count * recordSize,
+                      static_cast<U32>(nameBytes.size()),
+                      static_cast<U32>(nameBytes.size()),
+                      headerSize + count * recordSize + static_cast<U32>(nameBytes.size()),
+                      0U, 0U, 0U, 0U}) Word(bytes, value);
+    for (U32 index = 0; index < count; ++index)
+    {
+        const bool directory = index < 4U;
+        const U32 next = index == 1U || index == 2U ? (index + 1U) * recordSize :
+            index == 4U ? 7U * recordSize :
+            index == 5U ? 8U * recordSize : 0U;
+        const U32 child = index == 0U ? recordSize :
+            index == 1U ? 4U * recordSize : index == 2U ? 6U * recordSize :
+            index == 3U ? 5U * recordSize :
+            index == 5U ? static_cast<U32>(shader.size()) :
+            index == 6U ? static_cast<U32>(shader.size() + material.size()) :
+            index == 7U ? static_cast<U32>(shader.size() + material.size() +
+                                           tga.size()) :
+            index == 8U ? static_cast<U32>(shader.size() + material.size() +
+                                           tga.size() + vertexColor.size()) : 0U;
+        const U32 size = directory ? 0U : index == 4U ?
+            static_cast<U32>(shader.size()) :
+            index == 5U ? static_cast<U32>(material.size()) :
+            index == 6U ? static_cast<U32>(tga.size()) :
+            index == 7U ? static_cast<U32>(vertexColor.size()) :
+            static_cast<U32>(vertexColorMaterial.size());
+        for (U32 value : {next, nameOffsets[index], directory ? 0x10U : 0U,
+                          0U, child, size, size, size, 0U, 0U, 0U}) Word(bytes, value);
+    }
+    bytes.insert(bytes.end(), nameBytes.begin(), nameBytes.end());
+    bytes.insert(bytes.end(), shader.begin(), shader.end());
+    bytes.insert(bytes.end(), material.begin(), material.end());
+    bytes.insert(bytes.end(), tga.begin(), tga.end());
+    bytes.insert(bytes.end(), vertexColor.begin(), vertexColor.end());
+    bytes.insert(bytes.end(), vertexColorMaterial.begin(),
+                 vertexColorMaterial.end());
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output.write(reinterpret_cast<const char *>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    return output.good();
+}
+
+bool Expect(bool condition, const char *message)
+{
+    if (!condition) std::cerr << message << '\n';
+    return condition;
+}
+
+struct VertexConstantCapture
+{
+    UINT firstRegister = 0U;
+    UINT registerCount = 0U;
+#if defined(FRONTIERX_GAME_GPU)
+    FrontierX::SdlGpuRenderer * gpu = nullptr;
+#endif
+};
+
+GENRESULT DACOM_CDECL CaptureVertexConstants(
+    void * context, UINT firstRegister, const FLOAT * values,
+    UINT registerCount)
+{
+    auto * capture = static_cast<VertexConstantCapture *>(context);
+    if (!capture || !values || !registerCount) return GR_INVALID_PARMS;
+    capture->firstRegister = firstRegister;
+    capture->registerCount = registerCount;
+#if defined(FRONTIERX_GAME_GPU)
+    if (capture->gpu)
+        return capture->gpu->SetVertexConstants(firstRegister, values,
+                                                registerCount);
+#endif
+    return GR_OK;
+}
+
+struct ProbeOuter : IDAComponent
+{
+    U32 references = 1U;
+    IRenderPipeline *pipe = nullptr;
+    IRenderPrimitive *primitive = nullptr;
+    ITextureLibrary *textureLibrary = nullptr;
+    IMaterialManager *materialManager = nullptr;
+    ILightManager *lightManager = nullptr;
+    GENRESULT COMAPI QueryInterface(const C8 *name, void **result) override
+    {
+        if (!result) return GR_INVALID_PARMS;
+        *result = nullptr;
+        if (name && std::strcmp(name, IID_IRenderPipeline) == 0 && pipe)
+        {
+            *result = pipe;
+            pipe->AddRef();
+            return GR_OK;
+        }
+        if (name && std::strcmp(name, IID_IRenderPrimitive) == 0 && primitive)
+        {
+            *result = primitive;
+            primitive->AddRef();
+            return GR_OK;
+        }
+        if (name && std::strcmp(name, IID_ITextureLibrary) == 0 && textureLibrary)
+        {
+            *result = textureLibrary;
+            textureLibrary->AddRef();
+            return GR_OK;
+        }
+        if (name && std::strcmp(name, IID_IMaterialManager) == 0 && materialManager)
+        {
+            *result = materialManager;
+            materialManager->AddRef();
+            return GR_OK;
+        }
+        if (name && std::strcmp(name, IID_ILightManager) == 0 && lightManager)
+        {
+            *result = lightManager;
+            lightManager->AddRef();
+            return GR_OK;
+        }
+        return GR_INTERFACE_UNSUPPORTED;
+    }
+    U32 COMAPI AddRef() override { return ++references; }
+    U32 COMAPI Release() override { return --references; }
+};
+int DACOM_CDECL IgnoreDiagnostic(ErrorCode, const C8 *, ...) { return 0; }
+}
+
+extern "C"
+{
+DA_ERROR_HANDLER FDUMP = IgnoreDiagnostic;
+}
+extern bool RegisterNativeTextureLibrary(ICOManager *manager);
+extern bool RegisterNativeLightManager(ICOManager *manager);
+
+int main(int argc, char **argv)
+{
+	PROPERTY numericProperty{"NativeCount", 42U, 0.0F, DAVT_U32};
+	DACOM_VARIANT numericVariant(numericProperty);
+	PROPERTY pointerProperty{"LegacyPointer", 0x1234U, 0.0F, DAVT_PVOID};
+	DACOM_VARIANT pointerVariant(pointerProperty);
+	if (!Expect(numericVariant.variantType == DAVT_U32 && numericVariant.longVal == 42U &&
+			pointerVariant.variantType == DAVT_EMPTY && pointerVariant.pVoid == nullptr,
+			"native 32-bit property values cannot manufacture pointers")) return 1;
+	std::array<unsigned char, 18> truncatedTga{};
+	truncatedTga[2] = 2U;
+	truncatedTga[12] = 4U;
+	truncatedTga[14] = 4U;
+	truncatedTga[16] = 32U;
+	IImageReader *boundedReader = nullptr;
+	CreateTGAReader(&boundedReader);
+	if (!Expect(boundedReader && boundedReader->LoadImage(truncatedTga.data(),
+			static_cast<U32>(truncatedTga.size()), 0U) != GR_OK,
+			"production TGA reader rejects truncated mapped pixels")) return 1;
+	boundedReader->Release();
+    const bool cr = argc == 3 && std::strcmp(argv[2], "cr") == 0;
+    const bool missingEnd = argc == 3 && std::strcmp(argv[2], "missing-end") == 0;
+#if defined(FRONTIERX_GAME_GPU)
+    const bool captureRequested = argc == 9 &&
+        std::strcmp(argv[7], "--capture-prefix") == 0 && argv[8][0] != '\0';
+    const bool gpuMode = (argc == 7 || captureRequested) &&
+        std::strcmp(argv[2], "--gpu") == 0;
+    GameGpuRuntime gpu;
+    if (gpuMode)
+    {
+        if (!SDL_Init(SDL_INIT_VIDEO))
+        {
+            std::cerr << "SDL video unavailable: " << SDL_GetError() << '\n';
+            return 77;
+        }
+        gpu.videoInitialized = true;
+        gpu.window = SDL_CreateWindow("FrontierX game mesh probe", 640, 360,
+            SDL_WINDOW_RESIZABLE | SDL_WINDOW_NOT_FOCUSABLE);
+        if (!gpu.window)
+        {
+            std::cerr << "SDL window unavailable: " << SDL_GetError() << '\n';
+            return 77;
+        }
+        const FrontierX::SdlGpuTextureView smokeTexture{
+            FrontierX::RenderSmokeTextureRgba.data(),
+            FrontierX::RenderSmokeTextureWidth,
+            FrontierX::RenderSmokeTextureHeight,
+            FrontierX::RenderSmokeTextureRgba.size()};
+        std::string gpuError;
+        if (!gpu.renderer.Initialize(SDL_GetWindowID(gpu.window), argv[3], argv[4],
+                smokeTexture, gpuError, argv[5], argv[6]))
+        {
+            std::cerr << "SDL GPU unavailable: " << gpuError << '\n';
+            return 77;
+        }
+    }
+#else
+    constexpr bool gpuMode = false;
+#endif
+    if (!Expect((argc == 2 || cr || missingEnd || gpuMode) &&
+                WriteFixture(argv[1], !cr, !missingEnd), "material fixture creation")) return 1;
+    IFileSystem *archive = nullptr;
+    std::string error;
+    if (!Expect(FrontierX::OpenNativeUtfFileSystem(argv[1], &archive, error) && archive,
+                "native material UTF open"))
+    {
+        std::cerr << error << '\n';
+        return 1;
+    }
+
+    ICOManager *components = DACOM_Acquire();
+    if (!Expect(components && FrontierX::RegisterNativeMathEngine(components) &&
+                FrontierX::RegisterNativeGameMaterialManager(components) &&
+                FrontierX::RegisterNativeGameTextureManager(components) &&
+                RegisterNativeTextureLibrary(components) &&
+                FrontierX::RegisterNativePolyMesh(components) &&
+                FrontierX::RegisterNativeEngine(components) &&
+                FrontierX::RegisterNativeRenderManager(components),
+                "production game material manager registration")) return 1;
+    const Transform mathLeft(Vector(1.0F, 2.0F, 3.0F));
+    const Transform mathRight(Vector(4.0F, 5.0F, 6.0F));
+    const Transform mathCombined = mathLeft * mathRight;
+    if (!Expect(MATH_ENGINE() != nullptr &&
+                mathCombined.translation.x == 5.0F &&
+                mathCombined.translation.y == 7.0F &&
+                mathCombined.translation.z == 9.0F,
+                "production math provider composes engine transforms")) return 1;
+    RendCompDesc polyMeshDescriptor;
+    polyMeshDescriptor.interface_name = "PolyMesh";
+    IRenderComponent *polyMesh = nullptr;
+    if (!Expect(components->CreateInstance(&polyMeshDescriptor,
+                    reinterpret_cast<void **>(&polyMesh)) == GR_INVALID_PARMS && !polyMesh,
+                "production PolyMesh factory rejects missing engine services")) return 1;
+    AGGDESC descriptor("IMaterialManager");
+    ProbeOuter outer;
+    AGGDESC lightDescriptor("LightManager");
+    ILightManager *lights = nullptr;
+    IAggregateComponent *lightAggregate = nullptr;
+    if (!Expect(RegisterNativeLightManager(components) &&
+                components->CreateInstance(&lightDescriptor,
+                    reinterpret_cast<void **>(&lights)) == GR_OK && lights &&
+                lights->QueryInterface(IID_IAggregateComponent,
+                    reinterpret_cast<void **>(&lightAggregate)) == GR_OK &&
+                lightAggregate && lightAggregate->Initialize() == GR_OK,
+                "production PolyMesh light service creation")) return 1;
+    lights->set_ambient_light(255, 255, 255);
+    outer.lightManager = lights;
+    TextureCapture textureCapture;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) textureCapture.gpu = &gpu.renderer;
+#endif
+    FrontierX::NativeTextureOperations textureOperations{};
+    textureOperations.context = &textureCapture;
+    textureOperations.create = CreateTexture;
+    textureOperations.upload = UploadTexture;
+    textureOperations.destroy = DestroyTexture;
+    FrontierX::RegisterNativeRenderPrimitive(components);
+    FrontierX::NativeRenderPrimitiveDesc materialPrimitiveDescriptor(
+        RejectGameDraw, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, CaptureGameStandardDraw);
+    IRenderPrimitive * materialPrimitive = nullptr;
+    if (!Expect(components->CreateInstance(&materialPrimitiveDescriptor,
+                    reinterpret_cast<void **>(&materialPrimitive)) == GR_OK &&
+                    materialPrimitive,
+                "native game material draw receiver creation")) return 1;
+    auto *pipeline = new FrontierX::NativeRenderPipeline(materialPrimitive, textureOperations);
+    outer.pipe = pipeline;
+    AGGDESC gameTextureDescriptor("ITManager");
+    gameTextureDescriptor.outer = &outer;
+    IDAComponent *gameTextureInner = nullptr;
+    gameTextureDescriptor.inner = &gameTextureInner;
+    void *rawGameTextures = nullptr;
+    if (!Expect(components->CreateInstance(&gameTextureDescriptor, &rawGameTextures) == GR_OK &&
+                rawGameTextures && gameTextureInner,
+                "production game texture manager creation")) return 1;
+    ITManager *gameTextures = nullptr;
+    if (!Expect(gameTextureInner->QueryInterface(IID_ITManager,
+                    reinterpret_cast<void **>(&gameTextures)) == GR_OK && gameTextures,
+                "production game texture manager interface")) return 1;
+    ITManager::InitInfo gameTextureInit{};
+    gameTextureInit.PIPE = pipeline;
+    gameTextures->Initialize(gameTextureInit);
+    descriptor.outer = &outer;
+    IDAComponent *inner = nullptr;
+    descriptor.inner = &inner;
+    void *raw = nullptr;
+    const GENRESULT createResult = components->CreateInstance(&descriptor, &raw);
+    if (!Expect(createResult == GR_OK && raw && inner,
+                "production game material manager creation"))
+    {
+        std::cerr << "result=" << createResult << " raw=" << raw
+                  << " inner=" << inner << '\n';
+        return 1;
+    }
+    IMaterialManager *materials = nullptr;
+    if (!Expect(inner->QueryInterface(IID_IMaterialManager,
+                    reinterpret_cast<void **>(&materials)) == GR_OK && materials,
+                "production game material manager interface")) return 1;
+    IMaterialManager::InitInfo init{};
+    init.MATDIR = archive;
+    init.PIPE = pipeline;
+    init.TMANAGER = gameTextures;
+    if (!Expect(materials->Initialize(init) == GR_OK,
+                "production game material directory initialization")) return 1;
+    const std::filesystem::path materialDirectoryPath = std::string(argv[1]) + ".directory";
+    IFileSystem *materialDirectory = nullptr;
+    if (!Expect(WriteDirectoryFixture(argv[1], materialDirectoryPath) &&
+                FrontierX::OpenNativeDirectoryFileSystem(materialDirectoryPath, &materialDirectory, error),
+                "native physical material source")) return 1;
+    DAFILEDESC traversal("../unused");
+    if (!Expect(materialDirectory->OpenChild(&traversal) == INVALID_HANDLE_VALUE,
+                "physical source rejects parent traversal")) return 1;
+    std::error_code linkError;
+    const auto escape = materialDirectoryPath / "escape";
+    std::filesystem::remove(escape, linkError);
+    std::filesystem::create_symlink(std::filesystem::absolute(argv[1]), escape, linkError);
+    DAFILEDESC escapeDescriptor("escape");
+    if (!Expect(!linkError && materialDirectory->OpenChild(&escapeDescriptor) == INVALID_HANDLE_VALUE,
+                "physical source rejects a symlink outside its root")) return 1;
+    std::filesystem::remove(escape, linkError);
+    DAFILEDESC absoluteMaterial("\\materials\\Base.txt");
+    DAFILEDESC escapedMaterial("\\materials\\..\\Base.txt");
+    if (!Expect(materialDirectory->SetCurrentDirectory("shaders") &&
+                materialDirectory->OpenChild(&escapedMaterial) == INVALID_HANDLE_VALUE,
+                "physical source rejects absolute-path traversal")) return 1;
+    const HANDLE absoluteFile = materialDirectory->OpenChild(&absoluteMaterial);
+    if (!Expect(absoluteFile != INVALID_HANDLE_VALUE &&
+                materialDirectory->GetFileSize(absoluteFile, nullptr) > 0 &&
+                materialDirectory->CloseHandle(absoluteFile) &&
+                materialDirectory->SetCurrentDirectory("\\materials") &&
+                materialDirectory->SetCurrentDirectory("\\"),
+                "physical source resolves a root-absolute child within its root")) return 1;
+    init.MATDIR = materialDirectory;
+    // Profile-owned managers outlive a temporary GPU scene. Detach its resources,
+    // then reload through the same owner before any mesh borrows a material.
+    if (!Expect(!FrontierX::ResetNativeGameMaterialManager(nullptr) &&
+                FrontierX::ResetNativeGameMaterialManager(materials) &&
+                materials->FindMaterial("Base.txt") == nullptr &&
+                FrontierX::ResetNativeGameMaterialManager(materials) &&
+                materials->Initialize(init) == GR_OK,
+                "profile material owner reset and reuse")) return 1;
+    IMaterial *material = materials->FindMaterial("Base.txt");
+    if (!Expect(material && std::strcmp(material->GetName(), "Base.txt") == 0 &&
+                material->GetFloat("Gain") == 0.75F &&
+                materials->FindMaterial("Missing.txt") == nullptr,
+                "production game material script lookup"))
+    {
+        IMaterial *first = nullptr;
+        const GENRESULT firstResult = materials->FindFirstMaterial(&first);
+        std::cerr << "first=" << firstResult << " material=" << first
+                  << " name=" << (first ? first->GetName() : "")
+                  << " gain=" << (first ? first->GetFloat("Gain") : -1.0F)
+                  << " register=" << (first ? first->GetFloat(MRT_CODE, 0U) : -1.0F)
+                  << '\n';
+        return 1;
+    }
+    const std::filesystem::path meshPath = std::string(argv[1]) + ".mesh";
+    if (!Expect(FrontierXTest::WriteGameMeshFixture(meshPath),
+                "CQ2 game mesh fixture creation")) return 1;
+    IFileSystem *meshArchive = nullptr;
+    if (!Expect(FrontierX::OpenNativeUtfFileSystem(meshPath, &meshArchive, error) &&
+                meshArchive, "CQ2 game mesh UTF open")) return 1;
+    DAFILEDESC meshDirectoryDescriptor("openFLAME 3D N-mesh");
+    IFileSystem *meshDirectory = nullptr;
+    if (!Expect(meshArchive->CreateInstance(&meshDirectoryDescriptor,
+                    reinterpret_cast<void **>(&meshDirectory)) == GR_OK && meshDirectory,
+                "production PolyMesh directory view")) return 1;
+
+    AGGDESC textureDescriptor("TextureLibrary");
+    textureDescriptor.outer = &outer;
+    IDAComponent *textureInner = nullptr;
+    textureDescriptor.inner = &textureInner;
+    void *rawTextures = nullptr;
+    if (!Expect(components->CreateInstance(&textureDescriptor, &rawTextures) == GR_OK &&
+                rawTextures && textureInner, "production game texture creation")) return 1;
+    IAggregateComponent *textureAggregate = nullptr;
+    ITextureLibrary *textures = nullptr;
+    if (!Expect(textureInner->QueryInterface(IID_IAggregateComponent,
+                    reinterpret_cast<void **>(&textureAggregate)) == GR_OK &&
+                textureAggregate && textureAggregate->Initialize() == GR_OK &&
+                textureInner->QueryInterface(IID_ITextureLibrary,
+                    reinterpret_cast<void **>(&textures)) == GR_OK && textures,
+                "production game texture initialization")) return 1;
+    {
+        XMesh mesh;
+        if (!Expect(mesh.read(meshDirectory, textures, materials, 0U) &&
+                    mesh.object_vertex_cnt == 5 && mesh.face_cnt == 2 &&
+                    mesh.face_group_cnt == 1 && mesh.face_groups &&
+                    mesh.face_groups[0].material == 0 &&
+                    mesh.imaterial_cnt == 1 && mesh.imaterial_list &&
+                    mesh.imaterial_list[0] == material && material->IsRealized() &&
+                    material->GetFloat("Gain") == 0.75F &&
+                    std::strcmp(material->GetTextureName("Diffuse"), "Tile.tga") == 0 &&
+                    gameTextures->GetFirstTexture() == textureCapture.firstHandle &&
+                    textureCapture.creates == 1U && textureCapture.uploads == 1U &&
+                    textureCapture.pixels[0] == 17U &&
+                    textureCapture.pixels[1] == 34U &&
+                    textureCapture.pixels[2] == 51U &&
+                    textureCapture.pixels[3] == 255U,
+                    "production XMesh resolves the actual game material")) return 1;
+        for (std::size_t pixel = 0; pixel < 16U; ++pixel)
+        {
+            const std::size_t offset = pixel * 4U;
+            if (!Expect(textureCapture.pixels[offset] == 17U &&
+                        textureCapture.pixels[offset + 1U] == 34U &&
+                        textureCapture.pixels[offset + 2U] == 51U &&
+                        textureCapture.pixels[offset + 3U] == 255U,
+                        "production TGA owner uploads every RGBA pixel")) return 1;
+        }
+    }
+    IRP_VERTEXBUFFERHANDLE materialBuffer = 0U;
+    void * materialBytes = nullptr;
+    U32 materialCapacity = 0U;
+    std::array<StandardVertex, 4U> materialVertices{};
+    materialVertices[1].pos.set(-1.0F, -1.0F, 0.5F);
+    materialVertices[1].norm.set(0.0F, 0.0F, 1.0F);
+    materialVertices[1].r = 0x12U;
+    materialVertices[1].u = 0.25F;
+    materialVertices[2].u2 = 0.5F;
+    materialVertices[3].tanZ = 0.75F;
+    const U16 materialIndices[3] = {0U, 1U, 2U};
+    IDirect3DIndexBuffer9 * materialIndexBuffer = nullptr;
+    void * materialIndexBytes = nullptr;
+    if (!Expect(pipeline->create_vertex_buffer(D3DFVF_STANDARD, 4, 0U,
+                    &materialBuffer) == GR_OK && materialBuffer != 0U &&
+                    pipeline->lock_vertex_buffer(materialBuffer, 0U,
+                        &materialBytes, &materialCapacity) == GR_OK &&
+                    materialCapacity == materialVertices.size(),
+                "production material StandardVertex buffer creation")) return 1;
+    std::memcpy(materialBytes, materialVertices.data(), sizeof(materialVertices));
+    if (!Expect(pipeline->unlock_vertex_buffer(materialBuffer) == GR_OK &&
+                    pipeline->create_index_buffer(sizeof(materialIndices),
+                        &materialIndexBuffer) == GR_OK && materialIndexBuffer &&
+                    materialIndexBuffer->Lock(0U, 0U, &materialIndexBytes, 0U) == GR_OK,
+                "production material index buffer creation")) return 1;
+    std::memcpy(materialIndexBytes, materialIndices, sizeof(materialIndices));
+    if (!Expect(materialIndexBuffer->Unlock() == GR_OK,
+                "production material index buffer unlock")) return 1;
+    IDirect3DVertexBuffer9 materialVertexBuffer{materialBuffer};
+    material->DrawVB(&materialVertexBuffer, materialIndexBuffer,
+                     1, 3, 0, 3, nullptr);
+    if (!Expect(gameStandardDrawCalls == 0U,
+                "CQ2 material rejects draw without a realized native effect")) return 1;
+    if (!Expect(pipeline->draw_indexed_primitive_vb(D3DPT_TRIANGLELIST,
+                    materialBuffer, 1, 3, materialIndexBuffer, 3, 0U) == GR_OK &&
+                    gameStandardDrawCalls == 1U &&
+                    gameStandardVertices.size() == 3U &&
+                    gameStandardIndices == std::vector<U16>({0U, 1U, 2U}) &&
+                    std::memcmp(gameStandardVertices.data(),
+                                materialVertices.data() + 1U,
+                                3U * sizeof(StandardVertex)) == 0,
+                "native StandardVertex geometry remains separately executable") ||
+        !Expect(materialIndexBuffer->Release() == 0U &&
+                    pipeline->destroy_vertex_buffer(materialBuffer) == GR_OK,
+                "production material draw buffers released")) return 1;
+    gameTextures->Flush();
+    if (!Expect(textureCapture.destroys == 1U,
+                "production game texture manager releases the uploaded texture")) return 1;
+    DAFILEDESC textureDirectoryDescriptor("textures");
+    IFileSystem *textureDirectory = nullptr;
+    if (!Expect(archive->CreateInstance(&textureDirectoryDescriptor,
+                    reinterpret_cast<void **>(&textureDirectory)) == GR_OK &&
+                textureDirectory, "production game texture directory view")) return 1;
+    const U32 reloaded = gameTextures->CreateTextureFromFile(
+        "Tile.tga", textureDirectory, DA::UNKTYPE, PF_4CC_DAA8);
+    textureDirectory->Release();
+    if (!Expect(reloaded != 0U &&
+                (gpuMode || reloaded == 64U) && textureCapture.creates == 2U &&
+                textureCapture.uploads == 2U,
+                "production game texture manager infers the TGA suffix")) return 1;
+    gameTextures->Flush();
+    if (!Expect(textureCapture.destroys == 2U,
+                "production game texture manager releases the inferred texture")) return 1;
+    DACOMDESC engineDescriptor("IEngine");
+    IEngine *engine = nullptr;
+    if (!Expect(components->CreateInstance(&engineDescriptor,
+                    reinterpret_cast<void **>(&engine)) == GR_OK && engine,
+                "production native engine service creation")) return 1;
+    if (!Expect(engine->create_archetype("unclaimed.3db", meshArchive) ==
+                    INVALID_ARCHETYPE_INDEX &&
+                engine->get_archetype_by_name("unclaimed.3db") ==
+                    INVALID_ARCHETYPE_INDEX,
+                "production engine releases an unclaimed archetype")) return 1;
+    GameTransformCapture transformCapture;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) transformCapture.gpu = &gpu.renderer;
+#endif
+    FrontierX::NativeRenderPrimitiveDesc primitiveDescriptor(
+        RejectGameDraw, &transformCapture, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, CaptureGameModelview, CaptureGameProjection,
+        CaptureGameMeshDraw, CaptureGameStandardDraw);
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        primitiveDescriptor.callback3 = SubmitGameMeshGpu;
+        primitiveDescriptor.callback4 = SubmitGameStandardGpu;
+        primitiveDescriptor.state = ApplyGameStateGpu;
+        primitiveDescriptor.textureStage = ApplyGameStageGpu;
+        primitiveDescriptor.textureBind = ApplyGameTextureGpu;
+        primitiveDescriptor.sampler = ApplyGameSamplerGpu;
+    }
+#endif
+    IRenderPrimitive *primitive = nullptr;
+    if (!Expect(components->CreateInstance(&primitiveDescriptor,
+                    reinterpret_cast<void **>(&primitive)) == GR_OK && primitive,
+                "native render primitive service creation")) return 1;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) transformCapture.primitive = primitive;
+#endif
+    outer.primitive = primitive;
+    Matrix4 testProjection(true);
+    testProjection.d[0][0] = gpuMode ? 0.5F : 0.75F;
+    if (gpuMode)
+    {
+        testProjection.d[1][1] = 0.5F;
+        testProjection.d[2][2] = -0.1F;
+    }
+    Matrix4 observedProjection(true);
+    if (!Expect(primitive->set_projection(testProjection) == GR_OK &&
+                    primitive->get_projection(observedProjection) == GR_OK &&
+                    observedProjection.d[0][0] == testProjection.d[0][0] &&
+                    transformCapture.projectionCalls == 1U &&
+                    transformCapture.projectionX == testProjection.d[0][0],
+                "native primitive forwards and caches projection")) return 1;
+    outer.textureLibrary = textures;
+    outer.materialManager = materials;
+    PROFPARSEDESC2 profileDescriptor;
+    IAggregateComponent *profileAggregate = nullptr;
+    if (!Expect(components->CreateInstance(&profileDescriptor,
+                    reinterpret_cast<void **>(&profileAggregate)) == GR_OK &&
+                profileAggregate, "production engine profile creation")) return 1;
+    IProfileParser2 *profile2 = nullptr;
+    IProfileParser *profile = nullptr;
+    constexpr char engineProfile[] = "[Engine]\nIRenderer\n[RenderManager]\n  PolyMesh\n";
+    if (!Expect(profileAggregate->QueryInterface(IID_IProfileParser2,
+                    reinterpret_cast<void **>(&profile2)) == GR_OK && profile2 &&
+                profile2->Initialize2(engineProfile, sizeof(engineProfile) - 1U) == GR_OK &&
+                profileAggregate->QueryInterface(IID_IProfileParser,
+                    reinterpret_cast<void **>(&profile)) == GR_OK && profile,
+                "production engine profile initialization")) return 1;
+    static_cast<FrontierX::NativeComponentManager *>(components)->SetProfileParser(profile);
+    profile->Release();
+    profile2->Release();
+    profileAggregate->Release();
+    polyMeshDescriptor.system_services = &outer;
+    polyMeshDescriptor.engine_services = engine;
+    if (!Expect(components->CreateInstance(&polyMeshDescriptor,
+                    reinterpret_cast<void **>(&polyMesh)) == GR_OK && polyMesh,
+                "production PolyMesh initializes with engine and material services")) return 1;
+    if (!Expect(polyMesh->create_archetype(1, meshArchive) &&
+                    polyMesh->get_archetype_mesh(1) != nullptr,
+                "production PolyMesh creates the CQ2 game mesh archetype")) return 1;
+    polyMesh->destroy_archetype(1);
+    polyMesh->Release();
+    if (!Expect(engine->load_engine_components(&outer) == GR_OK &&
+                engine->enumerate_engine_components(nullptr) == 1,
+                "production engine loads RenderMgr and PolyMesh from profile")) return 1;
+    const auto legacyMeshPath = meshPath.parent_path() / "legacy_game_mesh_fixture.utf";
+    IFileSystem *legacyMeshArchive = nullptr;
+    if (!Expect(FrontierXTest::WriteLegacyGameMeshFixture(legacyMeshPath, gpuMode) &&
+                    FrontierX::OpenNativeUtfFileSystem(legacyMeshPath,
+                        &legacyMeshArchive, error) && legacyMeshArchive,
+                "legacy PolyMesh render fixture open")) return 1;
+    const ARCHETYPE_INDEX engineArchetype =
+        engine->create_archetype("fixture.3db", legacyMeshArchive);
+    if (!Expect(engineArchetype != INVALID_ARCHETYPE_INDEX &&
+                std::strcmp(engine->get_archetype_name(engineArchetype), "fixture.3db") == 0,
+                "production engine dispatches the game mesh archetype")) return 1;
+    const INSTANCE_INDEX engineInstance = engine->create_instance2(engineArchetype, nullptr);
+    if (!Expect(engineInstance != INVALID_INSTANCE_INDEX &&
+                engine->get_instance_archetype(engineInstance) == engineArchetype,
+                "production engine creates a PolyMesh instance")) return 1;
+    IRenderer *renderer = nullptr;
+    if (!Expect(engine->QueryInterface(IID_IRenderer,
+                    reinterpret_cast<void **>(&renderer)) == GR_OK && renderer &&
+                renderer->get_instance_mesh(engineInstance, nullptr) != nullptr,
+                "production RenderMgr exposes the PolyMesh instance")) return 1;
+    ENGINE = engine;
+    REND = renderer;
+    IMeshInfoTree *meshInfoTree = CreateMeshInfoTree(engineInstance);
+    MeshInfo *meshInfo = meshInfoTree ? meshInfoTree->GetMeshInfo() : nullptr;
+    const bool meshInfoValid = meshInfo && meshInfo->instanceIndex == engineInstance &&
+        meshInfo->bHasMesh && meshInfo->bWhole && !meshInfo->bOwnsInstance &&
+        meshInfo->radius > 0.0F;
+    if (meshInfoTree) DestroyMeshInfoTree(meshInfoTree);
+    ENGINE = nullptr;
+    REND = nullptr;
+    if (!Expect(meshInfoValid &&
+                engine->get_instance_archetype(engineInstance) == engineArchetype,
+                "production App MeshInfo tree preserves borrowed Engine instance")) return 1;
+    ProbeCamera camera;
+    U32 primitiveStateId = 0U;
+    U32 cullMode = 0U;
+    if (!Expect((!gpuMode ||
+                (primitive->set_render_state(D3DRS_CULLMODE, D3DCULL_NONE) == GR_OK &&
+                 primitive->get_render_state(D3DRS_CULLMODE, &cullMode) == GR_OK &&
+                 cullMode == D3DCULL_NONE)) &&
+                primitive->set_state(RPR_STATE_ID, 73U) == GR_OK &&
+                primitive->get_state(RPR_STATE_ID, &primitiveStateId) == GR_OK &&
+                primitiveStateId == 73U &&
+                primitive->set_state(RPR_STATE_ID, 0U) == GR_OK,
+                "production PolyMesh fixed culling and immediate state key")) return 1;
+    if (gpuMode)
+    {
+        engine->update(0.0F);
+        if (!Expect(textureCapture.creates >= 3U &&
+                    textureCapture.uploads >= 3U,
+                    "production game mesh texture library uploads RGB565 frame"))
+        {
+            std::cerr << "creates=" << textureCapture.creates
+                      << " uploads=" << textureCapture.uploads << '\n';
+            return 1;
+        }
+    }
+    engine->render_instance(&camera, engineInstance, EN_DONT_RECURSE, 1.0F,
+        RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
+    const std::vector<U32> fullAmbientDiffuse = gameMeshDiffuse;
+    if (!gpuMode)
+    {
+        lights->set_ambient_light(32, 48, 64);
+        engine->render_instance(&camera, engineInstance, EN_DONT_RECURSE, 1.0F,
+            RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
+        if (!Expect(!fullAmbientDiffuse.empty() &&
+                    gameMeshDiffuse.size() == fullAmbientDiffuse.size() &&
+                    gameMeshDiffuse != fullAmbientDiffuse,
+                    "production PolyMesh submits ambient-dependent vertex colors")) return 1;
+        lights->set_ambient_light(255, 255, 255);
+    }
+    Transform observedModelview(false);
+    if (!Expect(camera.inverseQueries != 0U &&
+                    transformCapture.modelviewCalls != 0U &&
+                    transformCapture.translation.z == -5.0F &&
+                    primitive->get_modelview(observedModelview) == GR_OK &&
+                    observedModelview.translation.z == -5.0F &&
+                    gameDrawCalls == 0U && gameMeshDrawCalls != 0U &&
+                    gameMeshIndices == 6U && gameMeshSecondUvMatches,
+                "production PolyMesh indexed draw reaches the native format boundary")) return 1;
+#if defined(FRONTIERX_GAME_GPU)
+    std::uint64_t gameGpuChecksum = 0U;
+    if (gpuMode)
+    {
+        FrontierX::SdlGpuReadback image;
+        FrontierX::SdlGpuReadback untexturedImage;
+        std::string gpuError;
+        bool presented = false;
+        const U32 gameTextureHandle = gpu.renderer.CurrentTextureHandle();
+        if (!Expect(gameTextureHandle != 0U &&
+                    gpu.renderer.IsTexture(gameTextureHandle) &&
+                    gpu.renderer.Readback64(image, gpuError) && image.rgbValid &&
+                    image.changedPixels > 0U &&
+                    gpu.renderer.BindTexture(0U, 0U) == GR_OK &&
+                    gpu.renderer.Readback64(untexturedImage, gpuError) &&
+                    untexturedImage.rgbValid &&
+                    untexturedImage.checksum != image.checksum &&
+                    gpu.renderer.BindTexture(0U, gameTextureHandle) == GR_OK &&
+                    gpu.renderer.Present(presented, gpuError) && presented,
+                    "production Engine PolyMesh texture reaches visible Vulkan output"))
+        {
+            std::cerr << gpuError << " handle=" << gameTextureHandle
+                      << " changed=" << image.changedPixels
+                      << " plain=" << untexturedImage.checksum
+                      << " texture=" << image.checksum << '\n';
+            return 1;
+        }
+        std::cout << "game_gpu checksum=" << image.checksum
+                  << " untextured=" << untexturedImage.checksum
+                  << " changed=" << image.changedPixels
+                  << " texture=" << gameTextureHandle << '\n';
+        gameGpuChecksum = image.checksum;
+        if (captureRequested && !Expect(WriteP6(
+                std::string(argv[8]) + "-game.ppm", image),
+                "bounded production PolyMesh P6 capture")) return 1;
+    }
+#endif
+    ProbeAppVertexBufferManager appBuffers;
+    VertexConstantCapture appVertexConstants;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) appVertexConstants.gpu = &gpu.renderer;
+#endif
+    auto * appPipeline = new FrontierX::NativeRenderPipeline(
+        primitive, textureOperations, CaptureVertexConstants,
+        &appVertexConstants);
+    ENGINE = engine;
+    REND = renderer;
+    PIPE = appPipeline;
+    TEXLIB = textures;
+    MATMAN = materials;
+    vb_mgr = &appBuffers;
+    CQFLAGS.b3DEnabled = -1;
+    IMeshRender *appRender = CreateMeshRender();
+    appRender->AddRef();
+    appRender->Init(engineArchetype);
+    IMeshInfoTree *appTree = CreateMeshInfoTree(engineInstance);
+    appRender->SetupMeshInfo(appTree->GetMeshInfo());
+    const unsigned appDrawsBefore = gameStandardDrawCalls;
+    BATCH = primitive;
+    MAINCAM = &camera;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        const U32 rebuildsBeforeFactor = gpu.renderer.PipelineRebuilds();
+        if (!Expect(primitive->set_render_state(
+                        D3DRS_TEXTUREFACTOR, 0xFF40A0E0U) == GR_OK &&
+                    gpu.renderer.PipelineRebuilds() == rebuildsBeforeFactor,
+                    "native App texture factor updates a uniform without pipeline rebuild"))
+            return 1;
+        transformCapture.submitAppGpu = true;
+    }
+#endif
+    appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) transformCapture.submitAppGpu = false;
+#endif
+    MAINCAM = nullptr;
+    BATCH = nullptr;
+    std::size_t appMaximumIndex = 0U;
+    for (U16 index : gameStandardIndices)
+        if (index > appMaximumIndex) appMaximumIndex = index;
+    const bool appDrawSubmitted = gameStandardDrawCalls == appDrawsBefore + 1U &&
+        gameStandardIndices.size() == 6U &&
+        gameStandardVertices.size() == appMaximumIndex + 1U;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode && !Expect(transformCapture.appStateAtSubmit,
+                           "production App draw selects culling and texture factor"))
+        return 1;
+#endif
+    const bool appMeshInitialized = appTree->GetMeshInfo()->mr == appRender &&
+        appTree->GetMeshInfo()->faceGroupCnt != 0U &&
+        appTree->GetMeshInfo()->faceRenders != nullptr &&
+        appRender->pos_cnt != 0U && appRender->face_cnt != 0U;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        FrontierX::SdlGpuReadback whiteFactorImage;
+        FrontierX::SdlGpuReadback oppositeCullImage;
+        std::string gpuError;
+        const auto & appImage = transformCapture.appImageAtSubmit;
+        if (!Expect(transformCapture.appPresentedAtSubmit &&
+                    appImage.rgbValid && appImage.changedPixels > 0U &&
+                    appImage.checksum != gameGpuChecksum &&
+                    primitive->set_render_state(D3DRS_CULLMODE, D3DCULL_CCW) == GR_OK &&
+                    gpu.renderer.Readback64(oppositeCullImage, gpuError) &&
+                    oppositeCullImage.rgbValid &&
+                    oppositeCullImage.checksum != appImage.checksum &&
+                    primitive->set_render_state(D3DRS_CULLMODE, D3DCULL_CW) == GR_OK &&
+                    primitive->set_render_state(
+                        D3DRS_TEXTUREFACTOR, 0xFFFFFFFFU) == GR_OK &&
+                    gpu.renderer.Readback64(whiteFactorImage, gpuError) &&
+                    whiteFactorImage.rgbValid &&
+                    whiteFactorImage.checksum != appImage.checksum &&
+                    primitive->set_render_state(D3DRS_CULLMODE, D3DCULL_NONE) == GR_OK,
+                    "production App legacy MeshRender reaches visible Vulkan output"))
+        {
+            std::cerr << gpuError << ' ' << transformCapture.appGpuError
+                      << " changed=" << appImage.changedPixels << '\n';
+            return 1;
+        }
+        FrontierX::SdlGpuReadback constantBaseline;
+        FrontierX::SdlGpuReadback constantImage;
+        FrontierX::SdlGpuReadback constantRestored;
+        const float materialConstants[8] = {
+            0.25F, 0.0F, 1.0F, 1.0F,
+            1.0F, 0.25F, 0.25F, 1.0F};
+        const float defaultConstants[8] = {
+            0.0F, 0.0F, 1.0F, 1.0F,
+            1.0F, 1.0F, 1.0F, 1.0F};
+        if (!Expect(primitive->set_texture_stage_state(
+                        0U, D3DTSS_COLOROP, D3DTOP_SELECTARG1) == GR_OK &&
+                    primitive->set_texture_stage_state(
+                        0U, D3DTSS_COLORARG1, D3DTA_DIFFUSE) == GR_OK &&
+                    primitive->set_texture_stage_state(
+                        0U, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1) == GR_OK &&
+                    primitive->set_texture_stage_state(
+                        0U, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE) == GR_OK &&
+                    gpu.renderer.Readback64(constantBaseline, gpuError) &&
+                    constantBaseline.rgbValid &&
+                    appPipeline->set_vs_constants(30U, materialConstants, 2U) == GR_OK &&
+                    gpu.renderer.Readback64(constantImage, gpuError) &&
+                    constantImage.rgbValid &&
+                    constantImage.checksum != constantBaseline.checksum &&
+                    appPipeline->set_vs_constants(29U, materialConstants, 1U) ==
+                        GR_NOT_IMPLEMENTED &&
+                    appPipeline->set_vs_constants(30U, defaultConstants, 2U) == GR_OK &&
+                    gpu.renderer.Readback64(constantRestored, gpuError) &&
+                    constantRestored.rgbValid &&
+                    constantRestored.checksum == constantBaseline.checksum,
+                    "native pipeline c30/c31 reach the SDL vertex shader with rollback"))
+        {
+            std::cerr << gpuError << " baseline=" << constantBaseline.checksum
+                      << " changed=" << constantImage.checksum
+                      << " restored=" << constantRestored.checksum << '\n';
+            return 1;
+        }
+        FrontierX::SdlGpuReadback uvBaseline;
+        FrontierX::SdlGpuReadback uvShifted;
+        FrontierX::SdlGpuReadback uvRestored;
+        const float shiftedUv[4] = {0.5F, 0.0F, 1.0F, 1.0F};
+        if (!Expect(gpu.renderer.BindTexture(
+                        0U, gpu.renderer.FixtureTextureHandle()) == GR_OK &&
+                    primitive->set_texture_stage_state(
+                        0U, D3DTSS_COLORARG1, D3DTA_TEXTURE) == GR_OK &&
+                    gpu.renderer.Readback64(uvBaseline, gpuError) &&
+                    uvBaseline.rgbValid &&
+                    appPipeline->set_vs_constants(30U, shiftedUv, 1U) == GR_OK &&
+                    gpu.renderer.Readback64(uvShifted, gpuError) &&
+                    uvShifted.rgbValid &&
+                    uvShifted.checksum != uvBaseline.checksum &&
+                    appPipeline->set_vs_constants(30U, defaultConstants, 1U) == GR_OK &&
+                    gpu.renderer.Readback64(uvRestored, gpuError) &&
+                    uvRestored.rgbValid &&
+                    uvRestored.checksum == uvBaseline.checksum,
+                    "native pipeline c30 shifts texture coordinates and restores them"))
+        {
+            std::cerr << gpuError << " uv=" << uvBaseline.checksum
+                      << " shifted=" << uvShifted.checksum
+                      << " restored=" << uvRestored.checksum << '\n';
+            return 1;
+        }
+        std::cout << "app_gpu checksum=" << appImage.checksum
+                  << " opposite_cull=" << oppositeCullImage.checksum
+                  << " white_factor=" << whiteFactorImage.checksum
+                  << " changed=" << appImage.changedPixels << '\n';
+        if (captureRequested && !Expect(WriteP6(
+                std::string(argv[8]) + "-app.ppm", appImage),
+                "bounded production App P6 capture")) return 1;
+    }
+#endif
+    DAFILEDESC effectDirectoryDescriptor("shaders");
+    IFileSystem * effectDirectory = nullptr;
+    if (!Expect(archive->CreateInstance(&effectDirectoryDescriptor,
+                    reinterpret_cast<void **>(&effectDirectory)) == GR_OK &&
+                    effectDirectory,
+                "production shader directory view for native effect")) return 1;
+    ID3DXEffect ** nativeEffect = appPipeline->load_effect(
+        "VertexColor.fx", effectDirectory);
+    UINT nativePassCount = 0U;
+    if (!Expect(nativeEffect && *nativeEffect &&
+                    appPipeline->load_effect("VertexColor.fx", effectDirectory) ==
+                        nativeEffect &&
+                    appPipeline->load_effect("Synthetic.fx", effectDirectory) ==
+                        nullptr &&
+                    (*nativeEffect)->Begin(&nativePassCount, 0U) &&
+                    nativePassCount == 1U,
+                "native effect accepts the exact repository VertexColor source"))
+        return 1;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        FrontierX::SdlGpuReadback beforeRejectedPass;
+        FrontierX::SdlGpuReadback afterRejectedPass;
+        std::string rollbackError;
+        U32 addressU = 0U;
+        U32 addressV = 0U;
+        U32 colorOperation = 0U;
+        U32 colorArgument = 0U;
+        if (!Expect(primitive->set_sampler_state(
+                        0U, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP) == GR_OK &&
+                    primitive->set_sampler_state(
+                        0U, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP) == GR_OK &&
+                    primitive->set_texture_stage_state(
+                        0U, D3DTSS_COLOROP, D3DTOP_SELECTARG1) == GR_OK &&
+                    primitive->set_texture_stage_state(
+                        0U, D3DTSS_COLORARG1, D3DTA_DIFFUSE) == GR_OK &&
+                    gpu.renderer.Readback64(beforeRejectedPass, rollbackError) &&
+                    beforeRejectedPass.rgbValid,
+                    "native effect rollback baseline")) return 1;
+        transformCapture.rejectStageAfter = 4U;
+        if (!Expect(!(*nativeEffect)->BeginPass(0U) &&
+                    transformCapture.rejectStageAfter == 0U &&
+                    primitive->get_sampler_state(
+                        0U, D3DSAMP_ADDRESSU, &addressU) == GR_OK &&
+                    addressU == D3DTADDRESS_CLAMP &&
+                    primitive->get_sampler_state(
+                        0U, D3DSAMP_ADDRESSV, &addressV) == GR_OK &&
+                    addressV == D3DTADDRESS_CLAMP &&
+                    primitive->get_texture_stage_state(
+                        0U, D3DTSS_COLOROP, &colorOperation) == GR_OK &&
+                    colorOperation == D3DTOP_SELECTARG1 &&
+                    primitive->get_texture_stage_state(
+                        0U, D3DTSS_COLORARG1, &colorArgument) == GR_OK &&
+                    colorArgument == D3DTA_DIFFUSE &&
+                    gpu.renderer.Readback64(afterRejectedPass, rollbackError) &&
+                    afterRejectedPass.rgbValid &&
+                    afterRejectedPass.checksum == beforeRejectedPass.checksum,
+                    "failed VertexColor pass restores sampler and bounded image"))
+        {
+            std::cerr << rollbackError << '\n';
+            return 1;
+        }
+    }
+#endif
+    const bool nativePassApplied = (*nativeEffect)->BeginPass(0U);
+    U32 nativeColorArgument = 0U;
+    if (!Expect(nativePassApplied == gpuMode &&
+                    (!gpuMode ||
+                     (primitive->get_texture_stage_state(
+                          0U, D3DTSS_COLORARG1, &nativeColorArgument) == GR_OK &&
+                      nativeColorArgument == D3DTA_TEXTURE)) &&
+                    (!nativePassApplied || (*nativeEffect)->EndPass()) &&
+                    (*nativeEffect)->End(),
+                "native VertexColor pass applies only with a live backend"))
+        return 1;
+    effectDirectory->Release();
+    ProbeOuter effectOuter;
+    effectOuter.pipe = appPipeline;
+    effectOuter.primitive = primitive;
+    AGGDESC effectManagerDescriptor("IMaterialManager");
+    effectManagerDescriptor.outer = &effectOuter;
+    IDAComponent * effectInner = nullptr;
+    effectManagerDescriptor.inner = &effectInner;
+    void * rawEffectManager = nullptr;
+    if (!Expect(components->CreateInstance(&effectManagerDescriptor,
+                    &rawEffectManager) == GR_OK && rawEffectManager && effectInner,
+                "production manager creation for VertexColor material")) return 1;
+    IMaterialManager * effectMaterials = nullptr;
+    if (!Expect(effectInner->QueryInterface(IID_IMaterialManager,
+                    reinterpret_cast<void **>(&effectMaterials)) == GR_OK &&
+                    effectMaterials,
+                "production VertexColor material manager interface")) return 1;
+    IMaterialManager::InitInfo effectInit{};
+    effectInit.MATDIR = archive;
+    effectInit.PIPE = appPipeline;
+    effectInit.TMANAGER = gameTextures;
+    if (!Expect(effectMaterials->Initialize(effectInit) == GR_OK,
+                "production VertexColor material manager initialization")) return 1;
+    IMaterial * vertexColorMaterial = effectMaterials->FindMaterial(
+        "VertexColor.txt");
+    const char * vertexColorTexture = vertexColorMaterial ?
+        vertexColorMaterial->GetTextureName("Diffuse + Opacity") : nullptr;
+    if (!Expect(vertexColorMaterial &&
+                    vertexColorTexture &&
+                    std::strcmp(vertexColorTexture, "Tile.tga") == 0,
+                "production VertexColor script and saved texture lookup"))
+    {
+        std::cerr << "material=" << vertexColorMaterial << " texture="
+                  << (vertexColorTexture ? vertexColorTexture : "(null)") << '\n';
+        return 1;
+    }
+    vertexColorMaterial->Realize();
+    if (!Expect(vertexColorMaterial->IsRealized(),
+                "production VertexColor material realization")) return 1;
+    IRP_VERTEXBUFFERHANDLE effectBuffer = 0U;
+    void * effectBytes = nullptr;
+    U32 effectCapacity = 0U;
+    std::array<StandardVertex, 3U> effectVertices{};
+    effectVertices[0].pos.set(-1.0F, -1.0F, 0.5F);
+    effectVertices[1].pos.set(1.0F, -1.0F, 0.5F);
+    effectVertices[2].pos.set(0.0F, 1.0F, 0.5F);
+    effectVertices[0].u = 0.0F;
+    effectVertices[0].v = 0.0F;
+    effectVertices[1].u = 1.0F;
+    effectVertices[1].v = 0.0F;
+    effectVertices[2].u = 0.5F;
+    effectVertices[2].v = 1.0F;
+    for (StandardVertex & vertex : effectVertices)
+    {
+        vertex.norm.set(0.0F, 0.0F, 1.0F);
+        vertex.r = vertex.g = vertex.b = vertex.a = 255U;
+    }
+    if (!Expect(appPipeline->create_vertex_buffer(D3DFVF_STANDARD, 3, 0U,
+                    &effectBuffer) == GR_OK &&
+                    appPipeline->lock_vertex_buffer(effectBuffer, 0U,
+                        &effectBytes, &effectCapacity) == GR_OK &&
+                    effectCapacity == effectVertices.size(),
+                "production VertexColor material buffer ownership")) return 1;
+    std::memcpy(effectBytes, effectVertices.data(), sizeof(effectVertices));
+    if (!Expect(appPipeline->unlock_vertex_buffer(effectBuffer) == GR_OK,
+                "production VertexColor material buffer upload")) return 1;
+    IDirect3DVertexBuffer9 effectVertexBuffer{effectBuffer};
+    const unsigned vertexColorDrawsBefore = gameStandardDrawCalls;
+    appVertexConstants.registerCount = 0U;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        transformCapture.appPresentedAtSubmit = false;
+        transformCapture.appImageAtSubmit = {};
+        transformCapture.submitAppGpu = true;
+    }
+#endif
+    vertexColorMaterial->DrawVB(&effectVertexBuffer, nullptr, 0, 3, 0, 0,
+                                nullptr, 0.0F);
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) transformCapture.submitAppGpu = false;
+#endif
+    if (!Expect(gameStandardDrawCalls == vertexColorDrawsBefore +
+                    (gpuMode ? 1U : 0U) &&
+                    appVertexConstants.firstRegister == 30U &&
+                    appVertexConstants.registerCount == 2U &&
+                    appPipeline->destroy_vertex_buffer(effectBuffer) == GR_OK,
+                "production VertexColor constants and gated DrawVB submission"))
+        return 1;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        const auto effectImage = transformCapture.appImageAtSubmit;
+        const U32 effectTexture = gpu.renderer.CurrentTextureHandle();
+        FrontierX::SdlGpuReadback effectWithoutTexture;
+        std::string effectGpuError;
+        if (!Expect(transformCapture.appPresentedAtSubmit &&
+                    effectImage.rgbValid && effectImage.changedPixels > 0U &&
+                    effectImage.checksum != gameGpuChecksum &&
+                    effectTexture != 0U &&
+                    effectTexture == gameTextures->GetFirstTexture() &&
+                    gpu.renderer.BindTexture(0U, 0U) == GR_OK &&
+                    gpu.renderer.Readback64(effectWithoutTexture,
+                                            effectGpuError) &&
+                    effectWithoutTexture.rgbValid &&
+                    effectWithoutTexture.checksum != effectImage.checksum &&
+                    gpu.renderer.BindTexture(0U, effectTexture) == GR_OK,
+                    "production VertexColor texture changes visible Vulkan output"))
+        {
+            std::cerr << effectGpuError << " material=" << effectImage.checksum
+                      << " plain=" << effectWithoutTexture.checksum
+                      << " texture=" << effectTexture << '\n';
+            return 1;
+        }
+        std::cout << "cq2_material_gpu checksum=" << effectImage.checksum
+                  << " untextured=" << effectWithoutTexture.checksum
+                  << " changed=" << effectImage.changedPixels
+                  << " texture=" << effectTexture << '\n';
+        if (captureRequested && !Expect(WriteP6(
+                std::string(argv[8]) + "-cq2.ppm", effectImage),
+                "bounded production CQ2 Material P6 capture")) return 1;
+    }
+#endif
+    DestroyMeshInfoTree(appTree);
+    appRender->Release();
+    PIPE = pipeline;
+    // The App caller must select and draw through the production IMaterial.
+    const ARCHETYPE_INDEX appMaterialArchetype =
+        engine->create_archetype("app_material_fixture.3db", meshArchive);
+    if (!Expect(appMaterialArchetype != INVALID_ARCHETYPE_INDEX,
+                "production App material archetype creation")) return 1;
+    const INSTANCE_INDEX appMaterialInstance =
+        engine->create_instance2(appMaterialArchetype, nullptr);
+    if (!Expect(appMaterialInstance != INVALID_INSTANCE_INDEX,
+                "production App material instance creation")) return 1;
+    IMeshRender * appMaterialRender = CreateMeshRender();
+    appMaterialRender->AddRef();
+    appMaterialRender->Init(appMaterialArchetype);
+    IMeshInfoTree * appMaterialTree = CreateMeshInfoTree(appMaterialInstance);
+    appMaterialRender->SetupMeshInfo(appMaterialTree->GetMeshInfo());
+    if (!Expect(appMaterialTree->GetMeshInfo()->faceGroupCnt == 1U &&
+                appMaterialTree->GetMeshInfo()->fgi[0].iMat == material,
+                "production App face group resolves its CQ2 IMaterial")) return 1;
+    const unsigned materialDrawsBefore = gameStandardDrawCalls;
+    BATCH = primitive;
+    MAINCAM = &camera;
+    appMaterialRender->Render(appMaterialTree->GetMeshInfo(), camera.inverse);
+    MAINCAM = nullptr;
+    BATCH = nullptr;
+    const bool appMaterialSubmitted =
+        gameStandardDrawCalls == materialDrawsBefore;
+    DestroyMeshInfoTree(appMaterialTree);
+    appMaterialRender->Release();
+    engine->destroy_instance(appMaterialInstance);
+    engine->release_archetype(appMaterialArchetype);
+    const std::filesystem::path effectMeshPath =
+        std::string(argv[1]) + ".vertexcolor.mesh";
+    if (!Expect(FrontierXTest::WriteVertexColorGameMeshFixture(effectMeshPath),
+                "CQ2 VertexColor game mesh fixture creation")) return 1;
+    IFileSystem * effectMeshArchive = nullptr;
+    if (!Expect(FrontierX::OpenNativeUtfFileSystem(effectMeshPath,
+                    &effectMeshArchive, error) && effectMeshArchive,
+                "CQ2 VertexColor game mesh UTF open")) return 1;
+    effectOuter.textureLibrary = textures;
+    effectOuter.materialManager = effectMaterials;
+    IEngine * effectEngine = nullptr;
+    if (!Expect(components->CreateInstance(&engineDescriptor,
+                    reinterpret_cast<void **>(&effectEngine)) == GR_OK &&
+                    effectEngine &&
+                    effectEngine->load_engine_components(&effectOuter) == GR_OK,
+                "production Engine loads VertexColor material services")) return 1;
+    IRenderer * effectRenderer = nullptr;
+    if (!Expect(effectEngine->QueryInterface(IID_IRenderer,
+                    reinterpret_cast<void **>(&effectRenderer)) == GR_OK &&
+                    effectRenderer,
+                "production VertexColor Engine renderer lookup")) return 1;
+    ENGINE = effectEngine;
+    REND = effectRenderer;
+    MATMAN = effectMaterials;
+    PIPE = appPipeline;
+    const ARCHETYPE_INDEX effectArchetype = effectEngine->create_archetype(
+        "app_vertexcolor_fixture.3db", effectMeshArchive);
+    if (!Expect(effectArchetype != INVALID_ARCHETYPE_INDEX,
+                "production App VertexColor archetype creation")) return 1;
+    const INSTANCE_INDEX effectInstance = effectEngine->create_instance2(
+        effectArchetype, nullptr);
+    if (!Expect(effectInstance != INVALID_INSTANCE_INDEX,
+                "production App VertexColor instance creation")) return 1;
+    IMeshRender * effectRender = CreateMeshRender();
+    effectRender->AddRef();
+    effectRender->Init(effectArchetype);
+    IMeshInfoTree * effectTree = CreateMeshInfoTree(effectInstance);
+    effectRender->SetupMeshInfo(effectTree->GetMeshInfo());
+    if (!Expect(effectTree->GetMeshInfo()->faceGroupCnt == 1U &&
+                    effectTree->GetMeshInfo()->fgi[0].iMat ==
+                        vertexColorMaterial,
+                "production App resolves its VertexColor IMaterial"))
+    {
+        std::cerr << "groups=" <<
+            static_cast<unsigned>(effectTree->GetMeshInfo()->faceGroupCnt)
+                  << " expected=" << vertexColorMaterial
+                  << " old=" << material
+                  << " other=" << materials->FindMaterial("VertexColor.txt")
+                  << " actual=" << effectTree->GetMeshInfo()->fgi[0].iMat << '\n';
+        return 1;
+    }
+    const unsigned effectDrawsBefore = gameStandardDrawCalls;
+    BATCH = primitive;
+    MAINCAM = &camera;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        transformCapture.appPresentedAtSubmit = false;
+        transformCapture.appImageAtSubmit = {};
+        transformCapture.submitAppGpu = true;
+    }
+#endif
+    effectRender->Render(effectTree->GetMeshInfo(), camera.inverse);
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) transformCapture.submitAppGpu = false;
+#endif
+    MAINCAM = nullptr;
+    BATCH = nullptr;
+    const bool appEffectSubmitted =
+        gameStandardDrawCalls == effectDrawsBefore + (gpuMode ? 1U : 0U);
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        const auto & effectAppImage = transformCapture.appImageAtSubmit;
+        if (!Expect(transformCapture.appPresentedAtSubmit &&
+                    effectAppImage.rgbValid &&
+                    effectAppImage.changedPixels > 0U &&
+                    effectAppImage.checksum != gameGpuChecksum,
+                    "production App CQ2 VertexColor draw reaches visible Vulkan"))
+            return 1;
+        std::cout << "cq2_app_gpu checksum=" << effectAppImage.checksum
+                  << " changed=" << effectAppImage.changedPixels << '\n';
+        if (captureRequested && !Expect(WriteP6(
+                std::string(argv[8]) + "-cq2-app.ppm", effectAppImage),
+                "bounded production CQ2 App P6 capture")) return 1;
+    }
+#endif
+    DestroyMeshInfoTree(effectTree);
+    effectRender->Release();
+    effectEngine->destroy_instance(effectInstance);
+    effectEngine->release_archetype(effectArchetype);
+    effectMeshArchive->Release();
+    ENGINE = engine;
+    REND = renderer;
+    MATMAN = materials;
+    PIPE = pipeline;
+    effectRenderer->Release();
+    effectEngine->Release();
+    effectMaterials->Release();
+    effectInner->Release();
+    appPipeline->Release();
+    AppStateCapture appState;
+    FrontierX::NativeRenderPrimitiveDesc appStateDescriptor(
+        RejectGameDraw, &appState, nullptr, CaptureAppRenderState,
+        nullptr, nullptr, CaptureAppTextureStage, CaptureAppTextureBind,
+        nullptr, nullptr, nullptr, nullptr, CaptureAppSamplerState);
+    IRenderPrimitive *appPrimitive = nullptr;
+    if (!Expect(components->CreateInstance(&appStateDescriptor,
+                    reinterpret_cast<void **>(&appPrimitive)) == GR_OK && appPrimitive,
+                "production App diffuse-state primitive creation")) return 1;
+    BATCH = appPrimitive;
+    SetupDiffuseBlend(64U, true);
+    const bool clampedDiffuseState = appState.texture == 64U &&
+        appState.stageCalls == 6U && appState.samplerCalls == 5U &&
+        appState.stage.colorOperation == D3DTOP_MODULATE &&
+        appState.stage.colorArgument1 == D3DTA_TEXTURE &&
+        appState.stage.colorArgument2 == D3DTA_DIFFUSE &&
+        appState.stage.alphaOperation == D3DTOP_MODULATE &&
+        appState.stage.alphaArgument1 == D3DTA_TEXTURE &&
+        appState.stage.alphaArgument2 == D3DTA_DIFFUSE &&
+        appState.sampler.minFilter == D3DTEXF_LINEAR &&
+        appState.sampler.magFilter == D3DTEXF_LINEAR &&
+        appState.sampler.mipFilter == D3DTEXF_POINT &&
+        appState.sampler.addressU == D3DTADDRESS_CLAMP &&
+        appState.sampler.addressV == D3DTADDRESS_CLAMP;
+    SetupDiffuseBlend(64U, false);
+    const bool wrappedDiffuseState = appState.sampler.addressU == D3DTADDRESS_WRAP &&
+        appState.sampler.addressV == D3DTADDRESS_WRAP && appState.samplerCalls == 10U;
+    BATCH = nullptr;
+    appPrimitive->Release();
+    ENGINE = nullptr;
+    REND = nullptr;
+    PIPE = nullptr;
+    TEXLIB = nullptr;
+    MATMAN = nullptr;
+    vb_mgr = nullptr;
+    if (!Expect(appMeshInitialized && appDrawSubmitted && appMaterialSubmitted &&
+                appEffectSubmitted &&
+                clampedDiffuseState && wrappedDiffuseState &&
+                appBuffers.adds == 3U &&
+                appBuffers.deletes == 3U && appBuffers.owner == nullptr &&
+                engine->get_instance_archetype(engineInstance) == engineArchetype,
+                "production App mesh ownership and CQ2 effect draw")) return 1;
+    renderer->Release();
+    engine->set_instance_handler(engineInstance, nullptr);
+    if (!Expect(engine->get_instance_archetype(engineInstance) == engineArchetype,
+                "production engine replaces its owned instance handler")) return 1;
+    engine->destroy_instance(engineInstance);
+    engine->release_archetype(engineArchetype);
+    legacyMeshArchive->Release();
+    static_cast<FrontierX::NativeComponentManager *>(components)->SetProfileParser(nullptr);
+    primitive->Release();
+    engine->Release();
+    outer.lightManager = nullptr;
+    lightAggregate->Release();
+    lights->Release();
+    textures->Release();
+    textureAggregate->Release();
+    textureInner->Release();
+    meshDirectory->Release();
+    meshArchive->Release();
+    materials->Release();
+    gameTextures->Release();
+    gameTextureInner->Release();
+    inner->Release();
+    materialDirectory->Release();
+    archive->Release();
+    pipeline->Release();
+    materialPrimitive->Release();
+    std::cout << "production game material load passed\n";
+    return 0;
+}

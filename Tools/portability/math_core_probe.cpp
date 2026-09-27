@@ -1,7 +1,15 @@
 #include "FrontierX/MathCore.h"
+#include "FrontierX/NativeD3dxMath.h"
+#include "FrontierX/NativeAppMath.h"
+#include "Include/NativeAppGlobals.h"
+#include "vector.h"
+#include "GridVector.h"
 
 #include <cmath>
+#include <cstring>
 #include <iostream>
+
+extern Vector circleLines[NUM_CIRCLE_SEGS];
 
 namespace {
 
@@ -78,6 +86,83 @@ int main()
 	multiply(product, Quaternion4{1.0F, 0.0F, 0.0F, 0.0F}, quarter_turn);
 	if (!close(product.w, quarter_turn.w) || !close(product.z, quarter_turn.z)) return 15;
 	if (!close(inverse_sqrt(4.0F), 0.5F, 1.0e-6F) || !close(legacy_sqrt(9.0F), 3.0F, 1.0e-5F)) return 9;
+
+	// The App mesh's D3DX replacement must preserve row-vector ordering and in-place calls.
+	D3DXMATRIX mesh_scale{};
+	D3DXMATRIX mesh_translation{};
+	D3DXMatrixScaling(&mesh_scale, 2.0F, 3.0F, 4.0F);
+	D3DXMatrixTranslation(&mesh_translation, 5.0F, -2.0F, 1.0F);
+	D3DXMatrixMultiply(&mesh_scale, &mesh_scale, &mesh_translation);
+	if (!close(mesh_scale.m[0][0], 2.0F) || !close(mesh_scale.m[1][1], 3.0F) ||
+		!close(mesh_scale.m[2][2], 4.0F) || !close(mesh_scale.m[3][0], 5.0F) ||
+		!close(mesh_scale.m[3][1], -2.0F) || !close(mesh_scale.m[3][2], 1.0F)) return 16;
+	D3DXMatrixTranspose(&mesh_scale, &mesh_scale);
+	if (!close(mesh_scale.m[0][3], 5.0F) || !close(mesh_scale.m[3][0], 0.0F)) return 17;
+	D3DXMATRIX mesh_rotation{};
+	D3DXMatrixRotationX(&mesh_rotation, 1.57079632679F);
+	if (!close(mesh_rotation.m[1][2], 1.0F) || !close(mesh_rotation.m[2][1], -1.0F)) return 18;
+	D3DXMatrixRotationY(&mesh_rotation, 1.57079632679F);
+	if (!close(mesh_rotation.m[0][2], -1.0F) || !close(mesh_rotation.m[2][0], 1.0F)) return 19;
+	D3DXMatrixRotationZ(&mesh_rotation, 1.57079632679F);
+	if (!close(mesh_rotation.m[0][1], 1.0F) || !close(mesh_rotation.m[1][0], -1.0F)) return 20;
+	D3DXVECTOR3 mesh_x(1.0F, 0.0F, 0.0F);
+	const D3DXVECTOR3 mesh_y(0.0F, 1.0F, 0.0F);
+	D3DXVec3Cross(&mesh_x, &mesh_x, &mesh_y);
+	if (!close(mesh_x.x, 0.0F) || !close(mesh_x.y, 0.0F) || !close(mesh_x.z, 1.0F)) return 21;
+	D3DXVec3Normalize(&mesh_x, &mesh_x);
+	if (!close(D3DXVec3LengthSq(&mesh_x), 1.0F)) return 22;
+	D3DXVECTOR3 mesh_zero(0.0F, 0.0F, 0.0F);
+	D3DXVec3Normalize(&mesh_zero, &mesh_zero);
+	if (!close(D3DXVec3LengthSq(&mesh_zero), 0.0F)) return 23;
+	const float quarter = std::atan2(1.0F, 1.0F);
+	if (!close(get_angle(1.0F, 1.0F), quarter) ||
+		!close(get_angle(-1.0F, 1.0F), -quarter) ||
+		!close(get_angle(1.0F, -1.0F), 3.0F * quarter) ||
+		!close(get_angle(-1.0F, -1.0F), -3.0F * quarter)) return 24;
+	if (get_angle(1.0F, 0.0F) != static_cast<float>(1.570796) ||
+		get_angle(-1.0F, 0.0F) != static_cast<float>(-1.570796) ||
+		get_angle(0.0F, 0.0F) != static_cast<float>(-1.570796)) return 25;
+
+	// ObjectList's proximity path consumes the production quarter-grid table.
+	GRIDVECTOR origin{};
+	GRIDVECTOR point{};
+	origin.zero();
+	point.init(0.75F, 1.0F);
+	if ((point - origin) != 1.25F || (origin - point) != 1.25F)
+	{
+		std::cerr << "grid distance 3-4: " << (point - origin) << '\n';
+		return 26;
+	}
+	point.init(16.0F, 0.0F);
+	if ((point - origin) != 16.0F) return 27;
+	std::uint64_t grid_hash = 14695981039346656037ULL;
+	for (int x = 0; x < 64; ++x)
+		for (int y = 0; y < 64; ++y)
+		{
+			point.init(static_cast<float>(x) * 0.25F,
+				static_cast<float>(y) * 0.25F);
+			const float distance = point - origin;
+			std::uint32_t bits = 0;
+			std::memcpy(&bits, &distance, sizeof(bits));
+			grid_hash ^= bits;
+			grid_hash *= 1099511628211ULL;
+		}
+	std::cout << "production grid-distance table hash: " << grid_hash << '\n';
+	if (grid_hash != 10760374359831800577ULL) return 28;
+
+	// BaseObject selection/range rings consume this original static table.
+	for (int segment = 0; segment < NUM_CIRCLE_SEGS; ++segment)
+	{
+		const Vector &point_on_ring = circleLines[segment];
+		if (!close(point_on_ring.x * point_on_ring.x +
+			point_on_ring.y * point_on_ring.y, 1.0F, 2.0e-5F) ||
+			point_on_ring.z != 0.0F) return 29;
+	}
+	if (!close(circleLines[0].x, 1.0F) || !close(circleLines[0].y, 0.0F) ||
+		!close(circleLines[NUM_CIRCLE_SEGS / 4].x, 0.0F) ||
+		!close(circleLines[NUM_CIRCLE_SEGS / 4].y, 1.0F) ||
+		!close(circleLines[NUM_CIRCLE_SEGS / 2].x, -1.0F) ||
+		!close(circleLines[NUM_CIRCLE_SEGS / 2].y, 0.0F)) return 30;
 
 	std::cout << "portable math core: ok\n";
 	return 0;

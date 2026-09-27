@@ -11,14 +11,24 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#endif
 
 #include "TComponent.h"
+#if defined(_WIN32)
 #include "TObjFrame.h"
-#include "TObject.h"
 #include "TObjTrans.h"
 #include "TObjMission.h"
+#endif
+#include "TObject.h"
+#if !defined(_WIN32)
+#include "MyVertex.h"
+#include <rendpipeline.h>
+#endif
 #include "ObjList.h"
 #include "Camera.h"
 #include "ICamera.h"
@@ -30,7 +40,18 @@
 #include "Startup.h"
 #include "DrawAgent.h"
 #include "TerrainMap.h"
+#if !defined(_WIN32)
+#include <ENGINE.H>
+#include "Sector.h"
+#endif
+#if defined(_WIN32)
 #include "Anim2d.h"
+#else
+#include "anim2d.h"
+#endif
+#if !defined(_WIN32)
+#include <DNugget.h>
+#endif
 #include "INugget.h"
 #include "GenData.h"
 #include <DNugget.h>
@@ -40,16 +61,31 @@
 #include "CQBatch.h"
 #include "DQuickSave.h"
 #include "ObjMap.h"
+#if defined(_WIN32)
 #include "TObjPhys.h"
+#endif
 #include "SysMap.h"
 #include <ITextureLibrary.h>
 
 #include <WindowManager.h>
+#if defined(_WIN32)
 #include <Engine.h>
+#else
+#include <ENGINE.H>
+#endif
 #include <TSmartPointer.h>
+#if defined(_WIN32)
 #include <Physics.h>
 #include <3DMath.h>
+#else
+#include <physics.h>
+#include <3dmath.h>
+#endif
+#if defined(_WIN32)
 #include <FileSys.h>
+#else
+#include <Filesys.h>
+#endif
 #include <IConnection.h>
 #include <EventSys.h>
 #include <stdio.h>
@@ -282,7 +318,12 @@ void AnimNugget::TestVisible (const USER_DEFAULTS & defaults, const U32 currentS
 		_rect.top = screenY - 15;
 		_rect.bottom = screenY + 15;
 		
+#if defined(_WIN32)
 		RECT screenRect = { 0, 0, SCREENRESX, SCREENRESY };
+#else
+		RECT screenRect = { 0, 0, static_cast<LONG>(SCREENRESX),
+			static_cast<LONG>(SCREENRESY) };
+#endif
 		
 		bVisible = RectIntersects(_rect, screenRect);
 	}
@@ -1642,7 +1683,11 @@ struct _nuggetManager : GlobalComponent
 	virtual void Startup (void)
 	{
 		NUGGETMANAGER = nManager = new DAComponent<NuggetManager>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList((IDAComponent **) &nManager);
+#else
+		AddToGlobalCleanupList((IDAComponent **) &NUGGETMANAGER);
+#endif
 	}
 
 	virtual void Initialize (void)
@@ -1815,7 +1860,9 @@ BOOL32 NuggetFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -1831,8 +1878,14 @@ IBaseObject * NuggetFactory::CreateInstance (HANDLE hArchetype)
 //
 void NuggetFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
+#if defined(_WIN32)
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)hArchetype;
+	(void)info;
+	CQBOMB0("Nugget editor insertion is unavailable in the native game.");
+#endif
 }
 
 //---------------------------------------------------------------------------

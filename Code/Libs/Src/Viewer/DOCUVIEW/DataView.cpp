@@ -40,6 +40,7 @@
 #include "DataView.h"
 #include "Document.h"
 #include "SymTable.h"
+#include "ViewSymbolOperations.h"
 #include "TokenDef.h"
 #include "HeapObj.h"
 #include "IConnection.h"
@@ -504,15 +505,7 @@ BOOL32 DataViewer::WriteNewData (void)
 //
 SYMBOL DataViewer::GetType (SYMBOL sym)
 {
-	switch (sym->kind)
-	{
-	case TYPESYM:
-	case VARSYM:
-		if (sym->datatype)
-			return GetType(sym->datatype);
-	}
-
-	return sym;
+	return ResolveViewSymbolType(sym);
 }
 //--------------------------------------------------------------------------
 // is char or wchar_t
@@ -2129,111 +2122,13 @@ BOOL32 DataViewer::CopySymValue (SYMBOL _src, U32 srcModifiers, const char *srcD
 //
 BOOL32 DataViewer::IsEqual (SYMBOL pOldSymbol, SYMBOL pNewSymbol)
 {
-	BOOL32 result;
-	pNewSymbol = GetType(pNewSymbol);
-	pOldSymbol = GetType(pOldSymbol);
-
-	result = ((pNewSymbol->size == pOldSymbol->size) && 
-			  (pNewSymbol->name == pOldSymbol->name) &&
-			  (pNewSymbol->kind == pOldSymbol->kind) &&
-			  (pNewSymbol->bit_count == pOldSymbol->bit_count));
-
-	if (result)
-	switch (pNewSymbol->kind)
-	{
-	case BASICTYPE:
-		break;
-
-	case ENUMSYM:
-	{
-		pOldSymbol = pOldSymbol->datatype;	// this should be a CONSTSYM
-		pNewSymbol = pNewSymbol->datatype;	// this should be a CONSTSYM
-		while (pNewSymbol && pOldSymbol)
-		{
-			result = ((pNewSymbol->name == pOldSymbol->name) && 
-					 (pNewSymbol->constval.intnum == pOldSymbol->constval.intnum));
-			if (result==0)
-				break;
-			pNewSymbol = pNewSymbol->link;
-			pOldSymbol = pOldSymbol->link;
-		}
-		if ((pNewSymbol!=0) ^ (pOldSymbol!=0))
-			result=0;
-	}
-		break;
-
-	case RECORDSYM:
-	{
-		pOldSymbol = pOldSymbol->datatype;	// this should be a VARSYM
-		pNewSymbol = pNewSymbol->datatype;	// this should be a VARSYM
-		while (pNewSymbol && pOldSymbol)
-		{
-			result = (pNewSymbol->name == pOldSymbol->name);	// check the variable name
-			if (result==0 || (result = IsEqual(pOldSymbol->datatype, pNewSymbol->datatype)) == 0)
-				break;
-
-			pNewSymbol = pNewSymbol->link;
-			pOldSymbol = pOldSymbol->link;
-		}
-		if ((pNewSymbol!=0) ^ (pOldSymbol!=0))
-			result=0;
-	}
-		break;
-
-	case ARRAYSYM:
-	{
-		if (pNewSymbol->arrayval != pOldSymbol->arrayval)
-			result = 0;
-		else
-			result = IsEqual(pOldSymbol->datatype, pNewSymbol->datatype);
-	}
-	break;
-	} // end of switch
-
-
-	return result;
+	return EqualViewSymbols(pOldSymbol, pNewSymbol);
 }
 //--------------------------------------------------------------------------
 //
 BOOL32 DataViewer::HasVariableSize (SYMBOL symbol)
 {
-	BOOL32 result = 0;
-	symbol = GetType(symbol);
-
-	switch (symbol->kind)
-	{
-	case BASICTYPE:
-	case ENUMSYM:
-		break;
-
-	case RECORDSYM:
-	{
-		symbol = symbol->datatype;	// this should be a VARSYM
-		if (symbol)		// can be an empty structure
-		{
-			ASSERT(symbol->kind == VARSYM);
-			while (symbol)
-			{
-				if (symbol->link == 0)	// can only happen on last element of a structure
-				{
-					if (result || (result = HasVariableSize(symbol->datatype)) != 0)
-						break;
-				}
-
-				symbol = symbol->link;
-			}
-		}
-	}
-	break;
-
-	case ARRAYSYM:
-	{
-		result = (symbol->arrayval == 0);		// has variable size if array has no official elements
-	}
-	break;
-	} // end of switch
-
-	return result;
+	return HasVariableViewSymbolSize(symbol);
 }
 //--------------------------------------------------------------------------
 //

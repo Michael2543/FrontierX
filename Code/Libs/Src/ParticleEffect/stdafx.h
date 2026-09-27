@@ -9,7 +9,11 @@
 // Insert your headers here
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 #include <stdio.h>
 #include <3dmath.h>
 
@@ -18,7 +22,9 @@
 extern "C" {
 #endif 
 
+#if defined(_WIN32)
 #include <Srv.h>		// Main header file that includes all other header files
+#endif
 
 #ifdef __cplusplus
 }

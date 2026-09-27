@@ -10,13 +10,19 @@
 #include <IMaterialManager.h>
 #include "IInternalMeshManager.h"
 #include "MeshArch.h"
-#include <Renderer.h>
+#include <renderer.h>
 #include <rendpipeline.h>
-#include <mesh.h>
-#include <IHardpoint.h>
+#include <Mesh.h>
+#include <IHardPoint.h>
 #include <IChannel2.h>
 #include <ChannelEventTypes.h>
 #include "MeshInstance.h"
+#include <algorithm>
+
+#if !defined(_WIN32)
+namespace FrontierXMeshManager
+{
+#endif
 
 MeshArch::MeshArch(ARCHETYPE_INDEX _archIndex, SCRIPT_SET_ARCH _animArchIndex)
 {
@@ -869,7 +875,7 @@ U32 MeshArch::GetVertexBufferForType(CQ_VertexType vType)
 		newNode = new VertexBufferNode;
 		newNode->vType = vType;
 		newNode->next = vertexBuffers;
-		newNode->vertexBuffer = NULL;
+		newNode->vertexBuffer = 0;
 		vertexBuffers = newNode;
 	}
 
@@ -944,12 +950,12 @@ U16 addDecodedVertex(const Vector & pos,const Vector & norm,const SINGLE & u,con
 	}
 	else
 	{
-		minBox.x = __min(minBox.x,pos.x);
-		minBox.y = __min(minBox.y,pos.y);
-		minBox.z = __min(minBox.z,pos.z);
-		maxBox.x = __max(maxBox.x,pos.x);
-		maxBox.y = __max(maxBox.y,pos.y);
-		maxBox.z = __max(maxBox.z,pos.z);
+		minBox.x = (std::min)(minBox.x,pos.x);
+		minBox.y = (std::min)(minBox.y,pos.y);
+		minBox.z = (std::min)(minBox.z,pos.z);
+		maxBox.x = (std::max)(maxBox.x,pos.x);
+		maxBox.y = (std::max)(maxBox.y,pos.y);
+		maxBox.z = (std::max)(maxBox.z,pos.z);
 	}
 
 	//this can be spee up by usingthe fact that the positions all have the same reference number in the calling function
@@ -1265,4 +1271,6 @@ void MeshArch::overrideVerts()
 	}
 }
 
-
+#if !defined(_WIN32)
+}
+#endif

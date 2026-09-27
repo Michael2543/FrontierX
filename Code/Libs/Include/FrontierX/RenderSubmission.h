@@ -31,6 +31,55 @@ struct RenderVertexP3DiffuseT4
     float v2;
 };
 
+// Runtime transfer layout for PolyMesh's MTVERTEX FVF.
+struct RenderVertexP3DiffuseSpecularT4
+{
+    float x;
+    float y;
+    float z;
+    std::uint32_t diffuseBgra;
+    std::uint32_t specularBgra;
+    float u;
+    float v;
+    float u2;
+    float v2;
+};
+
+// Runtime transfer layout for the App MeshRender StandardVertex FVF.
+struct RenderVertexP3N3DiffuseT5
+{
+    float x, y, z;
+    float nx, ny, nz;
+    std::uint32_t diffuseBgra;
+    float u, v;
+    float u2, v2;
+    float tanX, tanY;
+    float binX, binY;
+    float tanZ, binZ;
+};
+
+static_assert(std::is_standard_layout<RenderVertexP3N3DiffuseT5>::value,
+              "game standard render vertex must remain standard layout");
+static_assert(sizeof(RenderVertexP3N3DiffuseT5) == 68U &&
+                  offsetof(RenderVertexP3N3DiffuseT5, nx) == 12U &&
+                  offsetof(RenderVertexP3N3DiffuseT5, diffuseBgra) == 24U &&
+                  offsetof(RenderVertexP3N3DiffuseT5, u) == 28U &&
+                  offsetof(RenderVertexP3N3DiffuseT5, tanX) == 44U &&
+                  offsetof(RenderVertexP3N3DiffuseT5, binZ) + sizeof(float) == 68U,
+              "unexpected game standard vertex layout");
+
+static_assert(std::is_standard_layout<RenderVertexP3DiffuseSpecularT4>::value,
+              "game render vertex must remain standard layout");
+static_assert(sizeof(RenderVertexP3DiffuseSpecularT4) == 36U,
+              "unexpected game render vertex size");
+static_assert(offsetof(RenderVertexP3DiffuseSpecularT4, diffuseBgra) == 12U &&
+                  offsetof(RenderVertexP3DiffuseSpecularT4, specularBgra) == 16U &&
+                  offsetof(RenderVertexP3DiffuseSpecularT4, u) == 20U &&
+                  offsetof(RenderVertexP3DiffuseSpecularT4, u2) == 28U &&
+                  offsetof(RenderVertexP3DiffuseSpecularT4, v2) + sizeof(float) ==
+                      sizeof(RenderVertexP3DiffuseSpecularT4),
+              "unexpected game render vertex offsets");
+
 static_assert(std::is_standard_layout<RenderVertexP3DiffuseT4>::value,
               "extended render vertex must remain standard layout");
 static_assert(sizeof(RenderVertexP3DiffuseT4) == 32U,
@@ -157,6 +206,36 @@ struct RenderSubmissionView2
 {
     PrimitiveTopology topology;
     const RenderVertexP3DiffuseT4 *vertices;
+    std::size_t vertexCount;
+    const std::uint16_t *indices;
+    std::size_t indexCount;
+
+    bool IsValid() const noexcept
+    {
+        return vertices != nullptr &&
+               AreRenderElementsValid(topology, vertexCount, indices, indexCount);
+    }
+};
+
+struct RenderSubmissionView3
+{
+    PrimitiveTopology topology;
+    const RenderVertexP3DiffuseSpecularT4 *vertices;
+    std::size_t vertexCount;
+    const std::uint16_t *indices;
+    std::size_t indexCount;
+
+    bool IsValid() const noexcept
+    {
+        return vertices != nullptr &&
+               AreRenderElementsValid(topology, vertexCount, indices, indexCount);
+    }
+};
+
+struct RenderSubmissionView4
+{
+    PrimitiveTopology topology;
+    const RenderVertexP3N3DiffuseT5 *vertices;
     std::size_t vertexCount;
     const std::uint16_t *indices;
     std::size_t indexCount;

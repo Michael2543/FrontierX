@@ -4,7 +4,7 @@
 //$Header: /Conquest/Libs/Include/IHardPoint.h 5     4/28/00 11:57p Rmarr $
 //Copyright (c) 1997 Digital Anvil, Inc.
 
-#include "Engine.h"
+#include "ENGINE.H"
 
 #ifndef DACOM_H
 #include "DACOM.h"
@@ -34,7 +34,11 @@ struct HardpointInfo
 	float rest_length;
 };
 
+#if defined(_WIN32)
 typedef void (__cdecl * HARDPOINT_ENUM_CALLBACK)(const char* hardpoint_name, void* misc);
+#else
+typedef void (* HARDPOINT_ENUM_CALLBACK)(const char* hardpoint_name, void* misc);
+#endif
 
 // NOTE: Due to the macro nature of MAKE_IID, you cannot use another macro in place of the version
 // number. Keep the second parameter in sync with the value of the explicit version macro, and increment

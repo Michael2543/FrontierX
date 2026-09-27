@@ -3,7 +3,9 @@
 #include "HeapObj.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -30,6 +32,17 @@ struct Block
 class NativeHeap final : public IHeap
 {
 public:
+	NativeHeap() = default;
+	explicit NativeHeap(bool private_heap) : private_heap_(private_heap) {}
+	~NativeHeap()
+	{
+		if (!private_heap_) return;
+		if (!blocks_.empty())
+			std::fprintf(stderr, "NativeHeap: releasing %zu live private blocks\n", blocks_.size());
+		for (const auto &entry : blocks_)
+			std::free(entry.first);
+	}
+
     GENRESULT QueryInterface(const C8 * requested, void ** instance) override
     {
         if (!instance) return GR_INVALID_PARMS;
@@ -42,8 +55,17 @@ public:
         return GR_OK;
     }
 
-    U32 AddRef() override { return 1; }
-    U32 Release() override { return 1; }
+    U32 AddRef() override
+    {
+        return private_heap_ ? ++references_ : 1;
+    }
+    U32 Release() override
+    {
+        if (!private_heap_) return 1;
+        const U32 remaining = --references_;
+        if (!remaining) delete this;
+        return remaining;
+    }
 
     GENRESULT CreateInstance(DACOMDESC * descriptor, void ** instance) override
     {
@@ -53,6 +75,15 @@ public:
             !descriptor->interface_name || std::strcmp(descriptor->interface_name, "IHeap") != 0)
             return GR_INTERFACE_UNSUPPORTED;
         const auto & heap_descriptor = *static_cast<DAHEAPDESC *>(descriptor);
+		if (heap_descriptor.flags & DAHEAPFLAG_PRIVATE)
+		{
+			auto *private_heap = new (std::nothrow) NativeHeap(true);
+			if (!private_heap) return GR_OUT_OF_MEMORY;
+			private_heap->flags_ = heap_descriptor.flags;
+			private_heap->configured_size_ = heap_descriptor.heapSize;
+			*instance = static_cast<IHeap *>(private_heap);
+			return GR_OK;
+		}
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         flags_ = heap_descriptor.flags;
         const std::uint64_t expanded =
@@ -291,6 +322,8 @@ private:
     U32 flags_ = 0;
     DA_ERROR_HANDLER error_handler_ = nullptr;
     std::string default_message_;
+	bool private_heap_ = false;
+	std::atomic<U32> references_{1};
 };
 
 NativeHeap & HeapOwner()

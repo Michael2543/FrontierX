@@ -1,0 +1,109 @@
+#include "MaterialTextureFixture.h"
+
+#include "DACOM.H"
+
+#include <cstring>
+#include <fstream>
+#include <vector>
+
+namespace FrontierXTest
+{
+bool WriteMaterialFixture(const std::filesystem::path & path,
+                          const std::string & simpleType,
+                          const std::string & mipDirectory)
+{
+    std::string names("/", 2);
+    const U32 materialName = static_cast<U32>(names.size());
+    names.append("Material library", sizeof("Material library"));
+    const U32 entryName = static_cast<U32>(names.size());
+    names.append("Loaded", sizeof("Loaded"));
+    const U32 typeName = static_cast<U32>(names.size());
+    names.append("Type", sizeof("Type"));
+    const U32 otherName = static_cast<U32>(names.size());
+    names.append("Other", sizeof("Other"));
+    const U32 otherTypeName = static_cast<U32>(names.size());
+    names.append("Type", sizeof("Type"));
+    const U32 colorName = static_cast<U32>(names.size());
+    names.append("C0", sizeof("C0"));
+    const U32 alphaName = static_cast<U32>(names.size());
+    names.append("C1", sizeof("C1"));
+    const U32 textureReferenceName = static_cast<U32>(names.size());
+    names.append("T0_name", sizeof("T0_name"));
+    const U32 textureLibraryName = static_cast<U32>(names.size());
+    names.append("Texture library", sizeof("Texture library"));
+    const U32 tileName = static_cast<U32>(names.size());
+    names.append("Tile", sizeof("Tile"));
+    const U32 widthName = static_cast<U32>(names.size());
+    names.append("Image X size", sizeof("Image X size"));
+    const U32 heightName = static_cast<U32>(names.size());
+    names.append("Image Y size", sizeof("Image Y size"));
+    const U32 rgbName = static_cast<U32>(names.size());
+    names.append("True RGB 565", sizeof("True RGB 565"));
+    const U32 mipName = static_cast<U32>(names.size());
+    names.append(mipDirectory.c_str(), mipDirectory.size() + 1U);
+    const U32 pixelsName = static_cast<U32>(names.size());
+    names.append("Image colors", sizeof("Image colors"));
+    const std::string type("StateMaterial");
+    std::vector<unsigned char> bytes;
+    auto word = [&](U32 value) {
+        for (unsigned shift = 0; shift != 32; shift += 8)
+            bytes.push_back(static_cast<unsigned char>(value >> shift));
+    };
+    constexpr U32 directoryOffset = 56U;
+    constexpr U32 recordSize = 44U;
+    constexpr U32 nameOffset = directoryOffset + 16U * recordSize;
+    for (U32 value : {0x20465455U, 0x101U, directoryOffset, 16U * recordSize,
+                      0U, recordSize, nameOffset, static_cast<U32>(names.size()),
+                      static_cast<U32>(names.size()),
+                      nameOffset + static_cast<U32>(names.size()), 0U, 0U, 0U, 0U})
+        word(value);
+    auto record = [&](U32 next, U32 name, U32 attributes, U32 child, U32 size) {
+        for (U32 value : {next, name, attributes, 0U, child, size, size, size,
+                          0U, 0U, 0U}) word(value);
+    };
+    record(0U, 0U, 0x10U, recordSize, 0U);
+    record(9U * recordSize, materialName, 0x10U, 2U * recordSize, 0U);
+    record(4U * recordSize, entryName, 0x10U, 3U * recordSize, 0U);
+    record(0U, typeName, 0U, 0U, static_cast<U32>(type.size()));
+    record(0U, otherName, 0x10U, 5U * recordSize, 0U);
+    record(6U * recordSize, otherTypeName, 0U, static_cast<U32>(type.size()),
+           static_cast<U32>(simpleType.size()));
+    record(7U * recordSize, colorName, 0U,
+           static_cast<U32>(type.size() + simpleType.size()), 12U);
+    record(8U * recordSize, alphaName, 0U,
+           static_cast<U32>(type.size() + simpleType.size() + 12U), 4U);
+    const U32 textureReferenceData = static_cast<U32>(type.size() + simpleType.size() + 16U);
+    record(0U, textureReferenceName, 0U, textureReferenceData, 5U);
+    const U32 textureData = textureReferenceData + 5U;
+    record(0U, textureLibraryName, 0x10U, 10U * recordSize, 0U);
+    record(0U, tileName, 0x10U, 11U * recordSize, 0U);
+    record(12U * recordSize, widthName, 0U, textureData, 4U);
+    record(13U * recordSize, heightName, 0U, textureData + 4U, 4U);
+    record(0U, rgbName, 0x10U, 14U * recordSize, 0U);
+    record(0U, mipName, 0x10U, 15U * recordSize, 0U);
+    record(0U, pixelsName, 0U, textureData + 8U, 8U);
+    bytes.insert(bytes.end(), names.begin(), names.end());
+    bytes.insert(bytes.end(), type.begin(), type.end());
+    bytes.insert(bytes.end(), simpleType.begin(), simpleType.end());
+    auto floatValue = [&](float value) {
+        U32 bits = 0;
+        std::memcpy(&bits, &value, sizeof(bits));
+        word(bits);
+    };
+    floatValue(0.25F);
+    floatValue(0.5F);
+    floatValue(0.75F);
+    floatValue(0.5F);
+    bytes.insert(bytes.end(), {'T', 'i', 'l', 'e', '\0'});
+    word(2U);
+    word(2U);
+    for (U32 pixel : {0xf800U, 0x07e0U, 0x001fU, 0xffffU}) {
+        bytes.push_back(static_cast<unsigned char>(pixel));
+        bytes.push_back(static_cast<unsigned char>(pixel >> 8U));
+    }
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file.write(reinterpret_cast<const char *>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
+    return file.good();
+}
+}

@@ -14,7 +14,11 @@
 
 //
 
+#if defined(_WIN32)
 template< class _Hnd, class _Ty, class _Pr = std::less<_Hnd>, class _A = std::allocator<_Ty> >
+#else
+template< class _Hnd, class _Ty, class _Pr = std::less<_Hnd>, class _A = std::allocator<std::pair<const _Hnd, _Ty>> >
+#endif
 class handlemap 
 {
 public:	// Interface

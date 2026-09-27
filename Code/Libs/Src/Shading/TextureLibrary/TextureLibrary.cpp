@@ -8,24 +8,32 @@
 #define TL_LOG(s) do{FILE*_tlf=fopen("debug/texlib_diag.txt","a");if(_tlf){fputs((s),_tlf);fclose(_tlf);}}while(0)
 #define TL_LOGF(fmt,...) do{FILE*_tlf=fopen("debug/texlib_diag.txt","a");if(_tlf){fprintf(_tlf,fmt,__VA_ARGS__);fclose(_tlf);}}while(0)
 //#define INITGUID
+#if defined(_WIN32)
 #include <windows.h>
-#include <stdio.h>
 #include <ddraw.h>
+#include <mmsystem.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include <strings.h>
+#define __min(a,b) ((a) < (b) ? (a) : (b))
+#define __max(a,b) ((a) > (b) ? (a) : (b))
+#define strnicmp strncasecmp
+#endif
+#include <stdio.h>
 #include <map>
+#include <new>
 #include <string>
 #pragma warning( disable: 4018 4245 4663 )	// for some reason this is required *right here* again
 #include <vector>
-#include <mmsystem.h>
 
-#include "dacom.h"
+#include "DACOM.H"
 #include "FDump.h"
 #include "TempStr.h"
 #include "TSmartPointer.h"
-#include "tcomponent.h"
+#include "TComponent.h"
 #include "da_d3dtypes.h"
 #include "da_heap_utility.h"
 #include "pixel.h"
-#include "RPUL.h"
 //#include "AllocLite.h"
 #include "FileSys_Utility.h"
 #include "IProfileParser_Utility.h"
@@ -536,7 +544,8 @@ HRESULT ITL_TEXTUREOBJECTREF::update( float dt_ms )
 {
 	int num_texture_frames = texture->frames.size();
 
-	if( (num_texture_frames > 1) || (texture->_IVideoStreamControl != NULL) ) {
+	if( (num_texture_frames > 1) ||
+		(texture->_IVideoStreamControl != static_cast<IVideoStreamControl *>(NULL)) ) {
 		
 		double new_running_time = 0.0f;
 		double diff_time_s = dt_ms * 0.001f;
@@ -594,7 +603,8 @@ HRESULT ITL_TEXTUREOBJECTREF::get_frame( U32 the_frame_num, ITL_TEXTUREFRAME_IRP
 	}
 
 	if( the_frame_num == ITL_FRAME_CURRENT ) {
-		if( (num_texture_frames > 1) || (texture->_IVideoStreamControl != NULL) ) {
+		if( (num_texture_frames > 1) ||
+			(texture->_IVideoStreamControl != static_cast<IVideoStreamControl *>(NULL)) ) {
 			the_frame_num = frame_num;
 		}
 		else {
@@ -611,7 +621,7 @@ HRESULT ITL_TEXTUREOBJECTREF::get_frame( U32 the_frame_num, ITL_TEXTUREFRAME_IRP
 	ASSERT( the_frame_num < num_texture_frames );
 	ASSERT( texture->frame_texture_objs[ texture->frames[the_frame_num].texture_id_idx ] );
 
-	if( texture->_IVideoStreamControl == NULL ) {
+	if( texture->_IVideoStreamControl == static_cast<IVideoStreamControl *>(NULL) ) {
 		out_frame->rp_texture_id = texture->frame_texture_objs[ texture->frames[the_frame_num].texture_id_idx ]->rp_texture_id;
 		out_frame->u0 = texture->frames[the_frame_num].u0;
 		out_frame->v0 = texture->frames[the_frame_num].v0;
@@ -1036,6 +1046,13 @@ protected:	// protected data
 
 TextureLibrary::TextureLibrary(void)
 {
+	memset(library_state, 0, sizeof(library_state));
+	library_state[ITL_STATE_TEXTURE_LOD_LOAD] = 1;
+	library_state[ITL_STATE_TEXTURE_DIM_SQUARE] = 1;
+	library_state[ITL_STATE_TEXTURE_DIM_POW2] = 1;
+	float lod_scale = 1.0f;
+	memcpy(&library_state[ITL_STATE_TEXTURE_LOD_LOAD_SCALE], &lod_scale,
+		sizeof(lod_scale));
 #ifdef DATHREADSAFE
 	InitializeCriticalSection (&archetype_lock);
 	InitializeCriticalSection (&instance_lock);
@@ -1338,6 +1355,17 @@ HRESULT TextureLibrary::massage_texture_dimension( U32 width, U32 height, U32 &o
 
 HRESULT TextureLibrary::choose_texture_format( ITL_TEXTUREIMAGEDATA *data, PixelFormat *out_pf )
 {
+#if !defined(_WIN32)
+	// The native pipeline converts this retail source format into its RGBA8 owner.
+	if( data->format.ddpf.dwRGBBitCount == 16 &&
+		data->format.ddpf.dwRBitMask == 0xf800 &&
+		data->format.ddpf.dwGBitMask == 0x07e0 &&
+		data->format.ddpf.dwBBitMask == 0x001f && !data->alphas ) {
+		out_pf->init( PF_RGBA8 );
+		return S_OK;
+	}
+	return E_FAIL;
+#else
 #if 1
 	int bit_count = 0;
 
@@ -1500,6 +1528,8 @@ HRESULT TextureLibrary::choose_texture_format( ITL_TEXTUREIMAGEDATA *data, Pixel
 
 #endif
 
+#endif
+
 }
 
 //
@@ -1585,6 +1615,12 @@ HRESULT TextureLibrary::load_texture_image( IFileSystem *IFS, ITL_TEXTUREIMAGEDA
 	}
 
 	image_bpp = (img->format.ddpf.dwRGBBitCount + 7) >> 3;
+	// Bound untrusted archive dimensions before allocating or multiplying sizes.
+	if( !img->width || !img->height || !image_bpp ||
+		img->width > (64U * 1024U * 1024U) / image_bpp ||
+		img->height > (64U * 1024U * 1024U) / (img->width * image_bpp) ) {
+		goto load_texture_image_failed;
+	}
 	img->stride = img->width * image_bpp;
 	image_size = img->height * img->stride;
 
@@ -1689,10 +1725,16 @@ HRESULT TextureLibrary::load_guts (U32 uMipLevelSet, IFileSystem* IFS, ITL_TEXTU
 		PixelFormat texture_pf;
 
 		if( uMipLevelSet == 0 ) {
-			choose_texture_format( image_data, &texture_pf );
+			if( FAILED( choose_texture_format( image_data, &texture_pf ) ) ) {
+				delete image_data;
+				return E_FAIL;
+			}
 
 			U32 w, h;
-			massage_texture_dimension( image_data->width, image_data->height, w, h );
+			if( FAILED( massage_texture_dimension( image_data->width, image_data->height, w, h ) ) ) {
+				delete image_data;
+				return E_FAIL;
+			}
 
 			TL_LOGF("load_guts: before create_texture %dx%d mips=%d\n", w, h, uM);
 			if( FAILED( render_pipe->create_texture( w, h, texture_pf, uM, 0, rp_id) ) ) {
@@ -1705,12 +1747,14 @@ HRESULT TextureLibrary::load_guts (U32 uMipLevelSet, IFileSystem* IFS, ITL_TEXTU
 		}
 
 		TL_LOG("load_guts: before set_texture_level_data\n");
-		render_pipe->set_texture_level_data( rp_id, uMipLevelSet, image_data->width, image_data->height, image_data->stride, image_data->format, image_data->colors, image_data->alphas, image_data->palette );
+		GENRESULT upload = render_pipe->set_texture_level_data( rp_id, uMipLevelSet, image_data->width, image_data->height, image_data->stride, image_data->format, image_data->colors, image_data->alphas, image_data->palette );
 		TL_LOG("load_guts: after set_texture_level_data\n");
 
 		delete image_data;
+		if( FAILED( upload ) ) return E_FAIL;
 	} else {
 		TL_LOG("load_guts: load_texture_image FAILED\n");
+		return E_FAIL;
 	}
 
 	return S_OK;
@@ -1808,7 +1852,7 @@ HRESULT TextureLibrary::load_texture_normal_old( IFileSystem *IFS, const char* t
 		return E_FAIL;
 	}
 
-	for( uMipLevelSet=0; (uMipLevelSet==0) || (uMipLevelRead<uMipCount); uMipLevelRead++ ) {
+	for( uMipLevelSet=0; uMipLevelRead<uMipCount; uMipLevelRead++ ) {
 
 		char dir_name[20+1];
 		sprintf( dir_name, "MIP%d", uMipLevelRead ); 
@@ -1831,7 +1875,12 @@ HRESULT TextureLibrary::load_texture_normal_old( IFileSystem *IFS, const char* t
 				return E_FAIL;
 			}
 
-			load_guts (uMipLevelSet, IFS, overrides, uMipCount-uMipLevelRead, rp_id);
+			if( FAILED( load_guts (uMipLevelSet, IFS, overrides, uMipCount-uMipLevelRead, rp_id) ) ) {
+				IFS->SetCurrentDirectory( ".." );
+				IFS->SetCurrentDirectory( ".." );
+				if( rp_id != HTX_INVALID ) render_pipe->destroy_texture( rp_id );
+				return E_FAIL;
+			}
 		}
 
 		IFS->SetCurrentDirectory( ".." );	
@@ -1842,6 +1891,7 @@ HRESULT TextureLibrary::load_texture_normal_old( IFileSystem *IFS, const char* t
 			continue;
 		}
 	} // for each mip level
+	if( rp_id == HTX_INVALID ) return E_FAIL;
 
 	if (!build_normal_object (rp_id, tname, hndl, boost_ref))
 		render_pipe->destroy_texture (rp_id);
@@ -1881,6 +1931,7 @@ HRESULT TextureLibrary::load_texture_normal_new( IFileSystem *IFS, const char* t
 
 	if( uMipCount == 0 ) {
 		GENERAL_WARNING( TEMPSTR( "Texture '%s' has no valid mipmap levels", tname ) );
+		IFS->SetCurrentDirectory( ".." );
 		return E_FAIL;
 	}
 
@@ -1906,7 +1957,7 @@ HRESULT TextureLibrary::load_texture_normal_new( IFileSystem *IFS, const char* t
 	//EMAURER the renderpipe id for this texture.
 	U32 rp_id = HTX_INVALID;
 
-	for( uMipLevelSet=0; (uMipLevelSet==0) || (uMipLevelRead<uMipCount); uMipLevelRead++ ) {
+	for( uMipLevelSet=0; uMipLevelRead<uMipCount; uMipLevelRead++ ) {
 
 		if( (overrides.width <= irp_max_texture_width) && (overrides.height <= irp_max_texture_height) ) {
 			
@@ -1916,7 +1967,12 @@ HRESULT TextureLibrary::load_texture_normal_new( IFileSystem *IFS, const char* t
 				continue;
 			}
 
-			load_guts (uMipLevelSet, IFS, overrides, uMipCount-uMipLevelRead, rp_id);
+			if( FAILED( load_guts (uMipLevelSet, IFS, overrides, uMipCount-uMipLevelRead, rp_id) ) ) {
+				IFS->SetCurrentDirectory( ".." );
+				IFS->SetCurrentDirectory( ".." );
+				if( rp_id != HTX_INVALID ) render_pipe->destroy_texture( rp_id );
+				return E_FAIL;
+			}
 
 			uMipLevelSet++;
 
@@ -1935,6 +1991,7 @@ HRESULT TextureLibrary::load_texture_normal_new( IFileSystem *IFS, const char* t
 	} // for each mip level
 	
 	IFS->SetCurrentDirectory( ".." );
+	if( rp_id == HTX_INVALID ) return E_FAIL;
 
 	if (!build_normal_object (rp_id, tname, hndl, boost_ref))
 		render_pipe->destroy_texture (rp_id);
@@ -2398,6 +2455,7 @@ HRESULT TextureLibrary::load_texture_animated( IFileSystem *Parent_IFS, IFileSys
 
 HRESULT TextureLibrary::load_texture_extref( IFileSystem *IFS, const char* texture_name, ITL_TEXTURE_ID& hndl, bool boost_ref)
 {
+#if defined(_WIN32)
 	char filename[MAX_PATH+1];
 	char pathname[MAX_PATH+1], *fn;
 
@@ -2415,6 +2473,10 @@ HRESULT TextureLibrary::load_texture_extref( IFileSystem *IFS, const char* textu
 	}
 
 	return load_texture_extref_normal( filename, pathname, IFS, texture_name, hndl, boost_ref);
+#else
+	hndl = ITL_INVALID_ID;
+	return E_FAIL;
+#endif
 }
 
 //
@@ -2580,10 +2642,20 @@ void TextureLibrary::dump (void)
 
 GENRESULT TextureLibrary::load_texture( IFileSystem *_IFS, const char *full_texture_name, ITL_TEXTURE_ID& out, bool boost_ref)
 {
+#if defined(_WIN32)
 	char texture_name[MAX_PATH], fname[_MAX_FNAME], ext[_MAX_EXT];
 
 	_splitpath( full_texture_name, NULL, NULL, fname, ext );
 	_makepath( texture_name, NULL, NULL, fname, ext );
+#else
+	char texture_name[260];
+	if( !full_texture_name ) return GR_INVALID_PARMS;
+	const char *base = full_texture_name;
+	for( const char *p = full_texture_name; *p; ++p )
+		if( *p == '/' || *p == '\\' ) base = p + 1;
+	if( !*base || strlen(base) >= sizeof(texture_name) ) return GR_INVALID_PARMS;
+	strcpy(texture_name, base);
+#endif
 
 	out = ITL_INVALID_ID;
 
@@ -3760,6 +3832,7 @@ HRESULT TextureLibrary::initialize_texture_format_maps( void )
 // DLL Related code
 // ------------------------------------------------------------------
 //--------------------------------------------------------------------------
+#if defined(_WIN32)
 // linker bug
 void main (void)
 {
@@ -3797,6 +3870,21 @@ BOOL COMAPI DllMain (HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	return TRUE;
 }
+#endif
+
+#if !defined(_WIN32)
+bool RegisterNativeTextureLibrary(ICOManager *manager)
+{
+	if (!manager) return false;
+	IComponentFactory *factory = new (std::nothrow)
+		DAComponentFactory2<DAComponentAggregate<TextureLibrary>, AGGDESC>(CLSID_TextureLibrary);
+	if (!factory) return false;
+	GENRESULT result = manager->RegisterComponent(factory, CLSID_TextureLibrary,
+		DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+#endif
 
 
 // EO

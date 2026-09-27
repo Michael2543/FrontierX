@@ -13,7 +13,7 @@
 //---------------------------------------------------------------------------
 
 #ifndef DACOM_H
-#include <Dacom.h>
+#include <DACOM.H>
 #endif
 
 #ifndef DBASEDATA_H
@@ -34,6 +34,10 @@ struct DACOM_NO_VTABLE ICQFactory : public IDAComponent
 //
 struct DACOM_NO_VTABLE IGeneralData : public IDAComponent
 {
+#ifndef _WIN32
+	using IDAComponent::AddRef;
+	using IDAComponent::Release;
+#endif
 	virtual PGENTYPE GetArchetype (const C8 *name) = 0;
 
 	virtual PGENTYPE LoadArchetype (const C8 *name) = 0;

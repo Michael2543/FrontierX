@@ -1,14 +1,24 @@
 
 #define WIN32_LEAN_AND_MEAN
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/NativeChannel.h"
+#endif
 #include "IChannel2.h"
-#include "tcomponent.h"
-#include "typedefs.h"
+#include "TComponent.h"
+#include "TYPEDEFS.H"
 #include "quat.h"
 #include <malloc.h>
-#include "persistchannel.h"
-#include "filesys.h"
+#include "PersistChannel.h"
+#include "Filesys.h"
 #include "da_heap_utility.h"
+#include <cstddef>
+#include <cstring>
+
+static_assert(sizeof(PersistChannelHeader) == 12, "channel header disk layout must remain Win32-sized");
+static_assert(offsetof(PersistChannelHeader, type) == 8, "channel header type offset must remain fixed");
 
 struct Header
 {
@@ -133,6 +143,12 @@ GENRESULT ChannelArch::load (IFileSystem* fs)
 		header.type = hdr.type;
 
 		frame_size = GetFrameSize (header.type);
+#if !defined(_WIN32)
+		if (header.frames == 0 || frame_size == 0 ||
+			(header.type & ~(DT_FLOAT | DT_VECTOR | DT_QUATERNION | DT_EVENT)) != 0 ||
+			((header.type & DT_EVENT) != 0 && header.type != DT_EVENT))
+			return GR_GENERIC;
+#endif
 
 		//if the capture rate is less than 0.0 then the data is not periodic.
 		//in that case each frame consists of a time value of type float and
@@ -150,8 +166,14 @@ GENRESULT ChannelArch::load (IFileSystem* fs)
 		unsigned int malloc_size = fs->GetFileSize (hndl);
 
 		//sanity check on the data size
+#if !defined(_WIN32)
+		const size_t frame_bytes = frame_size * header.frames;
+		if ((header.type != DT_EVENT && malloc_size != frame_bytes) ||
+			(header.type == DT_EVENT && malloc_size < frame_bytes))
+#else
 		if ((header.type != DT_EVENT) &&
 			(malloc_size != frame_size * header.frames))
+#endif
 		{
 			fs->CloseHandle (hndl);
 			return GR_GENERIC;
@@ -160,7 +182,10 @@ GENRESULT ChannelArch::load (IFileSystem* fs)
 		data = malloc (malloc_size);
 
 		if (!data)
+		{
+			fs->CloseHandle (hndl);
 			return GR_OUT_OF_MEMORY;
+		}
 
 		r = fs->ReadFile (hndl, data, malloc_size, &bytes_read);
 
@@ -168,6 +193,22 @@ GENRESULT ChannelArch::load (IFileSystem* fs)
 
 		if (!r || (bytes_read != malloc_size))
 			return GR_FILE_ERROR;
+
+#if !defined(_WIN32)
+		if (header.type == DT_EVENT)
+		{
+			for (U32 frame = 0; frame < header.frames; ++frame)
+			{
+				const size_t offset_in_frame = frame_size * frame +
+					(header.capture_rate < 0.0f ? sizeof(SINGLE) : 0);
+				PersistOffset offset;
+				std::memcpy(&offset, static_cast<const char *>(data) + offset_in_frame,
+					sizeof(offset));
+				if (offset >= malloc_size - frame_bytes)
+					return GR_GENERIC;
+			}
+		}
+#endif
 
 		if (header.capture_rate < 0.0f ) // using 0.0 causes VS 6.0 to emit bad code -ms
 		{
@@ -422,6 +463,7 @@ GENRESULT ChannelArch::get_events (SINGLE t0,
 
 //
 
+#if defined(_WIN32)
 BOOL COMAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	switch (fdwReason)
@@ -445,3 +487,17 @@ BOOL COMAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	return TRUE;
 }
+#else
+namespace FrontierX
+{
+bool RegisterNativeChannel(ICOManager * manager)
+{
+	if (!manager) return false;
+	IComponentFactory * factory =
+		new DAComponentFactory<DAComponent<ChannelArch>, DACOMDESC>(IID_IChannel2);
+	const GENRESULT result = manager->RegisterComponent(factory, IID_IChannel2, DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

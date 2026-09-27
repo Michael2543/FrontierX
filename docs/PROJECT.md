@@ -1,6 +1,61 @@
 # FrontierX Project Charter
 
-Status: incremental native bring-up, 2026-09-25. The supported VS2022 Win32 Debug and Final
+Native mission-map status (2026-09-27): the selected external
+`Sol_Train.dmission` has no saved system-map child. A bounded native
+`ISystemMap` owner now executes that fresh-load branch and is linked
+into the shell, but the App mission still cannot link or run; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-system-map-fresh-load-gate-2026-09-27).
+
+Native selected-script status (2026-09-27): the original `Sol_T.rc`
+now builds into checked native objective/subtitle resources with
+`llvm-rc`; the source training program and production `MScript` owner
+compile under GCC/Clang. The lawful external mission names `Sol_T.dll`
+and has a zero update count, matching the bounded fresh-load contract.
+The native shell still does not link or execute the script or mission;
+see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-localization-and-fresh-loader-gate-2026-09-27).
+The Linux Debug presets require Python 3 and `llvm-rc` for this
+source-resource target in addition to SDL3 and `glslc`.
+
+Native operation-owner status (2026-09-27): production `OpAgent.cpp`
+now builds under GCC and Clang with its required event callback and
+native millisecond clock contracts, but the App mission link still
+lacks player/host and packet services. No mission operation or unit
+movement has run; see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-operation-owner-native-build-gate-2026-09-27).
+
+Native App startup contract status (2026-09-27): the original
+`GlobalComponent` registration and cleanup functions now compile once
+for Windows `Trim` and native Linux, and link into the GCC/Clang shell.
+A focused check executed their order across 30 registrars. The mission
+and object owners still do not link into that shell, so no mission has
+started; see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#shared-app-global-startup-and-cleanup-owner-2026-09-27).
+
+Native animation-data status (2026-09-27): the production `IAnimation` and
+`IChannel2` owners loaded the external Forger `Sc_build` script through the
+mounted Steam `objects` archive under GCC and Clang (one script, 1.6 seconds).
+This does not create an object instance or run the mission; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-channel-and-forger-animation-data-2026-09-27).
+
+Native startup status (2026-09-27): the unchanged source `Conquest.ini`
+completes production `GameSystem::startup` with source-profile Optics under
+GCC and Clang on lawfully
+external Steam archives with explicit full-screen movie skip. This is a
+bounded SDL dummy-window startup, not App global-owner initialization or
+mission gameplay. The next production gate is the post-startup App sequence
+in `Conquest.cpp`; see [the focused startup record](NATIVE_SINGLEPLAYER_SLICE.md#production-animation-and-hardpoint-startup-2026-09-27).
+
+Native audio status (2026-09-27): the existing window-manager check now also
+executes `IStreamer` PCM playback and notifications. Retail training speech
+executes with the optional external shared-LGPL FFmpeg IAC decoder; see [the audio contract](NATIVE_AUDIO_STREAMER.md).
+This is not mission execution. For IAC, configure either Linux preset with
+`-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON -DCMAKE_PREFIX_PATH=/external/lgpl-prefix`
+after building the reviewed dependency as documented there. The default stays
+SDL-only and rejects IAC; GPL-enabled FFmpeg libraries are rejected at configure.
+Existing build/test commands are unchanged.
+The explicit `--skip-movies` option excludes full-screen cinematics for the
+training checkpoint through the existing App flag; it preserves audio and
+animation requirements. The source profile now completes `GameSystem::startup`.
+
+Status: incremental native bring-up, 2026-09-27. The supported VS2022 Win32 Debug and Final
 no-deploy builds were rebuilt on physical Windows 11, including the 18 campaign modules.
 Fresh modules passed the original campaign import check. On the physical Windows host, the
 restored Final D3D9 path reached the main menu, first Terran campaign briefing and a visible,
@@ -77,7 +132,7 @@ platform, renderer, ABI, and gameplay changes in one step.
 | Build | CMake presets with Ninja; preserve existing MSBuild path | Isolated probes, platform services, a configured production EventSystem ELF module, production event/profile owners and native lifecycle shell build; game graph planned |
 | Hotkey input | Existing DAHOTKEY event processor behind legacy-message and `IFileSystem` contracts | Production factory, read-only UTF adapter, checked-in source tables and optional shell/EventSystem composition work natively; packaging, SDL joystick, recorder and Windows parity remain open |
 | Window/input/time | SDL3 plus standard C++ behind a FrontierX platform boundary | A native SDL-backed DACOM `IWindowManager` owns the shell window, callback pump, focus/cursor state and close-veto lifecycle; application cadence, Windows parity, renderer and game integration remain |
-| Graphics | Keep D3D9-facing code for bring-up; evaluate maintained native Vulkan paths | The native shell can explicitly send the repository scene from production `PrimitiveBuilder` through the actual App-side `RenderBatcher`, native `IRenderPipeline` vtable and registered `IRenderPrimitive` to Vulkan presentation/readback. The adapter owns checked RPVertex/RPVERTEX2 CPU buffers through create/lock/unlock/destroy, routes direct/indexed draws into the registered owner and supports six transactional depth/blend states; unsupported pipeline slots fail explicitly. The production `BMPOOLJR` arena owner, vertex-buffer manager CPU lifecycle and neighboring vertex-descriptor copier execute in focused native targets. The batcher direct and U16-indexed branches plus opaque and alpha-depth queued-pool CPU paths have linked synthetic checks; the alpha-depth pool has visible GCC/Clang and focused sanitizer GPU evidence using repository geometry. A separate GPU probe draws indexed RPVERTEX2 geometry, observes the second UV pair through readback and verifies two GPU scene lifecycles plus preservation after an invalid upload. Six stage-zero color/alpha combine fields traverse the batcher and primitive to the fragment shader, with bounded image-change and rollback evidence. Production `StateMaterial` submits a cached indexed draw in visible GCC/Clang and focused sanitizer Vulkan probes. Production texture loading/material-library ownership, other queued pool modes, production global/diagnostic services, Windows oracle, backend selection and game rendering remain open |
+| Graphics | Keep D3D9-facing code for bring-up; evaluate maintained native Vulkan paths | The native shell can explicitly send the repository scene from production `PrimitiveBuilder` through the actual App-side `RenderBatcher`, native `IRenderPipeline` vtable and registered `IRenderPrimitive` to Vulkan presentation/readback. The adapter owns checked RPVertex/RPVERTEX2 CPU buffers through create/lock/unlock/destroy, routes direct/indexed draws into the registered owner and supports six transactional depth/blend states; unsupported pipeline slots fail explicitly. The production `BMPOOLJR` arena owner, vertex-buffer manager CPU lifecycle and neighboring vertex-descriptor copier execute in focused native targets. The batcher direct and U16-indexed branches plus opaque and alpha-depth queued-pool CPU paths have linked synthetic checks; the alpha-depth pool has visible GCC/Clang and focused sanitizer GPU evidence using repository geometry. A separate GPU probe draws indexed RPVERTEX2 geometry, observes the second UV pair through readback and verifies two GPU scene lifecycles plus preservation after an invalid upload. Six stage-zero color/alpha combine fields traverse the batcher and primitive to the fragment shader, with bounded image-change and rollback evidence. Production `StateMaterial` submits a cached indexed draw in visible GCC/Clang and focused sanitizer Vulkan probes; `MaterialLibrary` creates it in a linked Linux CPU check. A generated RGB565 UTF texture now loads through production `TextureLibrary`, is resolved by a `SimpleMaterial` loaded from production `MaterialLibrary`, and reaches visible Vulkan output via `StateMaterial`; `SimpleMaterial::apply`, other texture formats, other queued pool modes, production global/diagnostic services, backend selection and a running game scene remain open |
 
 | D3DX9 | Inventory and replace effects, texture helpers, and math dependencies | Required |
 | Audio | Portable backend, selected after dependency and behavior evaluation | Undecided |
@@ -86,10 +141,136 @@ platform, renderer, ABI, and gameplay changes in one step.
 
 The SDL owner now registers two repository RGBA8 textures under monotonic runtime `U32` handles;
 the production `RenderBatcher` binds both through the existing texture-stage slot, with bounded
-image-change, exact restoration and stale-handle checks. The production texture library and
-material loading remain unported; see
+image-change, exact restoration and stale-handle checks. The production texture
+library's one-level RGB565 path and `StateMaterial`-driven synthetic rendering
+now execute natively; see
 [RENDERER_BACKEND_PROTOTYPE.md](RENDERER_BACKEND_PROTOTYPE.md).
-The production `StateMaterial` now runs through DACOM initialization, native
+The production `MaterialLibrary` now discovers two material classes from a
+repository-owned UTF fixture through the native `IFileSystem` directory path,
+creates and indexes `StateMaterial` instances, and drives one indexed CPU draw.
+The production `SimpleMaterial` reads diffuse color, opacity and a named
+texture from the same synthetic UTF fixture and submits one cached indexed
+draw in a focused CPU check; native `set_material` remains open.
+The supported game uses separate `PolyMesh` and App `IMaterialManager`/`DrawVB`
+mesh paths. At this initial object-compile gate the App draw remained
+unported; the
+production `PolyMesh/Mesh.cpp`, `polymesh.cpp`, `Engine/engine.cpp` and
+`RenderMgr/RenderMgr.cpp` owners now compile as isolated GCC/Clang objects. The linked native
+CPU check loads `IRenderer` and `PolyMesh` through the production Engine
+profile, creates a generated CQ2 mesh archetype and an engine instance, and
+retrieves that instance's mesh through `IRenderer`. A synthetic CPU call now
+enters production `render_instance` with the scalar `I3DMathEngine` provider,
+then reads native `RP_TEXTURE` and forwards model/view through a registered
+primitive receiver. Its indexed `MTVERTEX` draw reaches a rejecting CPU
+callback with six U16 indices; no game image is produced. The SDL GPU
+renderer now compiles a 36-byte game-vertex pipeline with specular color and
+UV-set selection, and the production component stops its remaining passes
+after a rejected draw. A separate synthetic game-format GPU probe has
+visible GCC, Clang and focused sanitizer Vulkan readback. The production
+generated `PolyMesh` instance now presents a production-loaded RGB565 texture
+on SDL/Vulkan under GCC and Clang, with 496 changed pixels in a bounded
+readback. A white fallback produces a different checksum on the same draw. This
+remains a synthetic mesh fixture rather than an App scene or retail game
+frame; see [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+The App `StandardVertex` format now has a checked 68-byte native CPU
+vertex-buffer and primitive-callback path. A native U16 index-buffer object
+lets a direct pipeline call send a generated indexed slice through that path
+with exact byte comparison. Production App
+`MeshRender::Init`, `RestoreVertexBuffers`, `SetupMeshInfo` and
+`SetupDiffuseBlend` now execute in a generated CPU fixture. The App
+`MeshRender::Render` caller selects a generated CQ2 `IMaterial` and rejects
+its unsupported `Synthetic.fx` effect. A separate generated mesh and a
+source-pinned native `VertexColor.fx` pass now drive that same App caller
+to visible Vulkan through production `Material::DrawVB`.
+Stage-zero SDL sampler switching has visible Vulkan image-change and
+rollback evidence. The older-format App draw now reaches a separate
+visible 68-byte SDL/Vulkan pipeline, with 496 changed readback pixels
+while its texture-factor and clockwise culling states are active.
+The native `set_vs_constants` adapter now carries the `VertexColor.fx`
+`c30` UV and `c31` color registers into independently changed and restored
+visible App readbacks using synthetic input. The supported CQ2
+`VertexColor.fx` material now invokes this constant path. Other D3DX
+effect techniques and fixed-function states remain open.
+`XMesh::read` executes on a generated UTF mesh with one legacy
+material in the linked CPU check; the old-format material resolves a
+production texture frame. A separate native check now compiles and executes
+the actual game `MaterialManager` and `Material` owners on a generated UTF
+script and saved float parameter, then connects them to `XMesh::read` and
+the production `TextureLibrary` through a generated CQ2 mesh. The manager's
+script texture now also loads through the production game `ITManager` and
+TGA reader, reaches a checked 4-by-4 native pipeline CPU upload and is
+released through the texture manager. The unsupported synthetic material
+still rejects its draw. The source-pinned `VertexColor.fx` script and its
+saved TGA now produce a visible direct production material draw and a
+separate CQ2 App mesh draw through the production Engine profile. The
+native shell now accepts supplied material and mesh UTF files for a
+repeated production Engine/RenderMgr/PolyMesh scene through SDL/Vulkan. It
+keeps the game owners alive while pumping window and EventSystem messages,
+redraws until close or a bounded deadline, and requires a stable 64-by-64
+image on each frame. Its
+legacy branch's GCC/Clang bounded captures match the linked PolyMesh
+fixture. The CQ2 branch now also calls production App `MeshRender::Render`
+with the source-pinned `VertexColor.fx` effect and TGA; both compilers
+produced the same bounded image in that shell mode. A playable native
+game scene and wider effect formats remain open. Their
+ownership and integration gates are in
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+The active App `SysContainer.cpp` also compiles on Linux and now owns the
+native shell's EventSystem and WindowManager aggregates through its real
+`ISystemContainer` interfaces. Its `LoadSystemComponents` now executes with
+synthetic EventSystem/WindowManager profile entries by default. The shell can
+also pass a bounded external profile into that production loader; missing
+sections and uncreatable native components fail explicitly. A lawfully
+supplied retail profile has not been executed. The Windows `CQPipeline`
+wrapper remains a separate gate; see
+[APP_SYSTEM_CONTAINER.md](APP_SYSTEM_CONTAINER.md).
+The GPU-enabled shell now also executes the production `GameSystem::startup`
+caller with an empty synthetic `[Engine]` section and releases it through
+`GameSystem::shut_down`. Its Engine now draws the fixture after a later
+synthetic renderer-component load. The App container now owns the production
+`ITManager`, `IMaterialManager` and `TextureLibrary` aggregates. An external
+profile can create a dormant `IRenderPrimitive` aggregate there; the scene
+binds it after GPU startup and unbinds it after Engine teardown. A supplied profile can also create an `IRenderPipeline` aggregate that
+binds after GPU startup. The production `IViewConstructor` and
+`TextureLibrary`, `LightManager`, `VertexBufferManager` and `IStringTable`
+factories now also aggregate from a supplied profile. A generated nine-service profile
+starts successfully; its vertex-buffer manager initializes after the
+scene pipeline binds and cleans up before it unbinds.
+The production StringTable's `ISaverLoader` also reads a generated UTF
+archive through the DOS-root child interface requested by `MScript` in a
+linked CPU check. The App `MScript.cpp` caller and the linked check now share
+that small load function; the `MScript` translation unit remains unexecuted.
+The checked-in `Conquest.ini` still stops first at the unported audio
+`IStreamer`. The production light owner also shades generated vertices in
+a focused CPU check. A generated legacy mesh now reaches its strided
+lighting method through the production PolyMesh system-service lookup, and
+the supplied eight-service profile produces visible Vulkan output through
+that caller. The CQ2 App fixture uses a separate draw branch;
+see
+[GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+The production `DOCUVIEW` scanner, parser and symbol-table core now compiles
+and executes a synthetic Linux layout check. A parsed `long` and pointer
+remain four bytes, and the generated record has the expected Win32 offsets.
+The production `IDataParser` also enumerates those fields through its public
+callback interface.
+`IViewConstructor2` now compares and correlates generated record schemas in
+a linked Linux check. Its production `MScript` caller has not run natively;
+see [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+The native UTF `IFileSystem` factory now returns read-only, exact-case child
+directory and implicit file views for the production texture and game
+material loader call patterns.
+Its nested-view contract executes with a repository-owned synthetic archive;
+the production `TextureLibrary` owner now also compiles and initializes in the
+linked Linux material check. It decodes a generated 2-by-2 RGB565 UTF image,
+uploads RGBA8 through the native pipeline, exposes the frame to `SimpleMaterial`
+and rolls back an injected upload failure. The existing SDL/Vulkan probe now
+loads `SimpleMaterial` through production `MaterialLibrary`, binds its resolved
+texture through `StateMaterial`, observes a bounded
+image change, restores the original image and repeats the scene under GCC,
+Clang and focused ASan/UBSan. Other formats, `SimpleMaterial` GPU application
+and native game scene composition remain open.
+See [TEXTURE_LIBRARY_PORTABILITY.md](TEXTURE_LIBRARY_PORTABILITY.md).
+The production `StateMaterial` runs through DACOM initialization, native
 state/texture callbacks and a cached indexed draw in a synthetic CPU target
 and visible Vulkan probe; its ownership checks and remaining material-library
 and game-composition gates are in
@@ -99,7 +280,7 @@ shell. A 2026-09-24 synthetic regression rejects duplicate live backend handles 
 the first texture's metadata. Its one-level CPU lock/unlock path now preserves a writable
 shadow and retries a failed backend upload. Visible GCC, Clang and focused ASan/UBSan
 Wayland/Vulkan probe runs observed the resulting alternate texture. Production material
-ownership and further formats remain open.
+file loading and further formats remain open.
 
 ### Verified Linux Layout Probe
 
@@ -151,6 +332,9 @@ calls. A native DACOM component implements the real `IUserDefaults` vtable, maps
 `USER_DEFAULTS` view to the fixed-width schema, performs transactional immediate and shutdown
 saves, and runs in the native shell. Native game-startup selection, file dialogs, document/viewer
 editing, installation metadata, EULA presentation and Windows comparison remain open.
+The shell now executes the live component's `LoadDefaults` before the
+production `GameSystem::startup` caller, matching the App's relative owner
+order; the actual `Conquest.cpp` entry point remains Windows-only.
 `StartupPreferences` now executes the isolated player/global lifecycle for both headless startup
 and the native shell through `NativeUserSettingsOwner`:
 it selects player/global/default settings, scopes player keys by hex-encoded name bytes, removes

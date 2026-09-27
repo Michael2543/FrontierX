@@ -9,8 +9,12 @@
     $Header: /Conquest/App/Src/GenData.cpp 24    8/31/00 6:42p Jasony $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#endif
 
 #include "GenData.h"
 #include "UserDefaults.h"
@@ -21,13 +25,17 @@
 #include <TSmartPointer.h>
 #include <TComponent.h>
 #include <IConnection.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TConnPoint.h>
 #include <TConnContainer.h>
 #include <HeapObj.h>
 #include <MemFile.h>
 #include <Document.h>
 #include <EventSys.h>
+#ifndef _WIN32
+#include <DGlobalData.h>
+#include "Include/NativeGenData.h"
+#endif
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -153,7 +161,7 @@ struct DACOM_NO_VTABLE GenData : public IGeneralData, ConnectionPointContainer<G
 
 	void unloadArchetype (GENNODE * node);
 
-	BOOL32 loadTypesData (void);
+	BOOL32 loadTypesData (IFileSystem * nativeSource = 0);
 
 	ARCHDATATYPE * getArchDataType (const C8 * name);
 
@@ -180,6 +188,7 @@ GenData::~GenData (void)
 	free(archData);
 	archData = 0;
 
+#ifdef _WIN32
 Retry:
 	if (pDoc != 0 && pDoc->IsModified() && MessageBox(hMainWindow, "Save GenData?", "Data has changed", MB_YESNO) == IDYES)
 	{
@@ -189,6 +198,7 @@ Retry:
 			goto Retry;
 		}
 	}
+#endif
 
 	if (GS && GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
@@ -237,7 +247,9 @@ PGENTYPE GenData::LoadArchetype (const C8 *name)
 				fclose(trace);
 			}
 
+#ifdef _WIN32
 			CURSOR->SetBusy(1);
+#endif
 			
 			while (node)
 			{
@@ -265,7 +277,9 @@ PGENTYPE GenData::LoadArchetype (const C8 *name)
 				CQERROR1("No provider found for '%s'", dataType->name);
 			}
 
+#ifdef _WIN32
 			CURSOR->SetBusy(0);
+#endif
 		}
 		else
 		{
@@ -474,6 +488,12 @@ static void get_total_bytes (IFileSystem * file, U32 & dataSize, U32 & numFiles)
 				}
 				else 
 				{	
+				#ifndef _WIN32
+					if (dataSize > 64U * 1024U * 1024U ||
+						data.nFileSizeLow > 64U * 1024U * 1024U - dataSize)
+						dataSize = ~U32(0);
+					else
+				#endif
 				 	dataSize += data.nFileSizeLow;
 					numFiles++;
 				}
@@ -549,8 +569,94 @@ static void load_bytes (IFileSystem * file, ARCHDATA * archData, U32 & checkSum)
 }
 //--------------------------------------------------------------------------//
 //
-BOOL32 GenData::loadTypesData (void)
+#ifndef _WIN32
+// Validate the production archive traversal before exposing its archetypes.
+static bool load_bytes_native (IFileSystem * file, ARCHDATA * archData,
+	U32 maxFiles, U32 maxBytes, U32 & bytesUsed, U32 & checkSum)
 {
+	WIN32_FIND_DATA data;
+	HANDLE search = file->FindFirstFile("*.*", &data);
+	if (search == INVALID_HANDLE_VALUE)
+		return file->GetLastError() == ERROR_FILE_NOT_FOUND;
+	bool valid = true;
+	do
+	{
+		if (data.cFileName[0] == '.' && strchr(data.cFileName, '\\') == 0)
+			continue;
+		if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			if (strcmp(data.cFileName, "Parsed Files") == 0)
+				continue;
+			valid = file->SetCurrentDirectory(data.cFileName) &&
+				load_bytes_native(file, archData, maxFiles, maxBytes, bytesUsed, checkSum);
+			valid = file->SetCurrentDirectory("..") && valid;
+			continue;
+		}
+		if (archData->numArchetypes >= maxFiles || bytesUsed > maxBytes ||
+			data.nFileSizeLow > maxBytes - bytesUsed)
+		{
+			valid = false;
+			break;
+		}
+		DAFILEDESC descriptor = data.cFileName;
+		HANDLE child = file->OpenChild(&descriptor);
+		if (child == INVALID_HANDLE_VALUE)
+		{
+			valid = false;
+			break;
+		}
+		const U32 size = file->GetFileSize(child);
+		U32 read = 0;
+		U8 * target = (U8 *)archData->type[0].objData + bytesUsed;
+		valid = size == data.nFileSizeLow &&
+			file->ReadFile(child, target, size, &read, 0) && read == size;
+		valid = file->CloseHandle(child) && valid;
+		if (!valid) break;
+		ARCHDATATYPE & entry = archData->type[archData->numArchetypes++];
+		strncpy(entry.name, data.cFileName, sizeof(entry.name)-1);
+		entry.objData = (GENBASE_DATA *)target;
+		entry.dataSize = size;
+		bytesUsed += size;
+		checkSum = calcCheckSum(target, size, checkSum);
+	} while (valid && file->FindNextFile(search, &data));
+	valid = valid && file->GetLastError() == ERROR_NO_MORE_FILES;
+	return file->FindClose(search) && valid;
+}
+#endif
+BOOL32 GenData::loadTypesData (IFileSystem * nativeSource)
+{
+#ifndef _WIN32
+	if (!nativeSource || !nativeSource->SetCurrentDirectory("\\"))
+		return 0;
+	U32 dataSize = 0, numFiles = 0;
+	get_total_bytes(nativeSource, dataSize, numFiles);
+	if (numFiles == 0 || numFiles > 16384 || dataSize == 0 ||
+		dataSize > 64U * 1024U * 1024U)
+		return 0;
+	const size_t allocationSize = sizeof(ARCHDATA) +
+		size_t(sizeof(ARCHDATATYPE)) * numFiles + dataSize;
+	archData = (ARCHDATA *) calloc(allocationSize, 1);
+	if (!archData) return 0;
+	archData->type[0].objData = (GENBASE_DATA *)
+		(((U8 *)archData) + sizeof(ARCHDATA) + sizeof(ARCHDATATYPE) * numFiles);
+	U32 checkSum = 0;
+	U32 bytesUsed = 0;
+	const bool loaded = load_bytes_native(nativeSource, archData,
+		numFiles, dataSize, bytesUsed, checkSum);
+	U32 globalSize = 0;
+	const bool complete = loaded && bytesUsed == dataSize &&
+		archData->numArchetypes == numFiles &&
+		GetArchetypeData("GlobalValues", globalSize) != 0 &&
+		globalSize == sizeof(GT_GLOBAL_VALUES);
+	if (!complete)
+	{
+		free(archData);
+		archData = 0;
+		return 0;
+	}
+	return 1;
+#else
+	(void)nativeSource;
 	DAFILEDESC fdesc = "GenData.db";
 	U32 dataSize=0, numFiles=0, checkSum=0;
 	BOOL32 result = 0;
@@ -625,7 +731,9 @@ BOOL32 GenData::loadTypesData (void)
 
 	archData->type[0].objData = (GENBASE_DATA *) (((U8 *)archData) + sizeof(ARCHDATA)+(sizeof(ARCHDATATYPE)*numFiles)); // mark beginning of data
 	load_bytes(pMemFile, archData, checkSum);
+#ifdef _WIN32
 	SendMessage(hMainWindow, CQE_DATA_CHECKSUM, 1, checkSum);
+#endif
 
 	pMemFile.free();
 	file->UnmapViewOfFile(pImage);
@@ -634,6 +742,7 @@ BOOL32 GenData::loadTypesData (void)
 	result = 1;
 Done:
 	return result;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -659,6 +768,10 @@ ARCHDATATYPE * GenData::getArchDataType (const C8 * name)
 //
 GENRESULT GenData::copyOpenFile (IFileSystem *file)
 {
+#ifndef _WIN32
+	(void)file;
+	return GR_GENERIC;
+#else
 	GENRESULT result;
 	COMPTR<IFileSystem> outFile, temp;
 	DAFILEDESC fdesc = "GenData.db";
@@ -702,11 +815,49 @@ GENRESULT GenData::copyOpenFile (IFileSystem *file)
 	free(buffer);
 
 	return result;
+#endif
 }
+
+#ifndef _WIN32
+namespace FrontierX
+{
+bool CreateNativeGeneralData(IFileSystem * source, IGeneralData ** output,
+                             unsigned int * globalValueBytes)
+{
+	if (!output || !globalValueBytes) return false;
+	*output = 0;
+	*globalValueBytes = 0;
+	if (!source) return false;
+	GenData * data = new DAComponent<GenData>;
+	if (!data) return false;
+	if (!data->loadTypesData(source))
+	{
+		data->getBase()->Release();
+		return false;
+	}
+	U32 bytes = 0;
+	if (!data->GetArchetypeData("GlobalValues", bytes) ||
+		bytes != sizeof(GT_GLOBAL_VALUES))
+	{
+		data->getBase()->Release();
+		return false;
+	}
+	*output = static_cast<IGeneralData *>(data->getBase());
+	*globalValueBytes = bytes;
+	return true;
+}
+
+void ReleaseNativeGeneralData(IGeneralData * data) noexcept
+{
+	if (data) static_cast<IDAComponent *>(data)->Release();
+}
+}
+#endif
 //-------------------------------------------------------------------
 //-------------------------------------------------------------------
 //-------------------------------------------------------------------
 //
+#ifdef _WIN32
 struct _genlist : GlobalComponent
 {
 	GenData * list;
@@ -730,6 +881,7 @@ struct _genlist : GlobalComponent
 };
 
 static _genlist genlist;
+#endif
 
 //-------------------------------------------------------------------
 //-------------------------END GenData.cpp---------------------------

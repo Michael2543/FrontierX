@@ -27,20 +27,35 @@
 // 4786: truncating function name (255 chars) in browser info
 #pragma warning (disable : 4514 4201 4100 4512 4245 4127 4355 4244 4710 4702 4786)
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #pragma warning (disable : 4355 4201)
 
 #include "ViewCnst.h"
-#include "SymTable.h"
+#include "Symtable.h"
+#include "ViewSymbolOperations.h"
+#ifdef _WIN32
 #include "DataView.h"
 #include "Document.h"
-#include "TComponent.h"
 #include "IConnection.h"
 #include "TSmartPointer.h"
+#else
+struct VIEWDESC;
+#endif
+#include "TComponent.h"
 #include "HeapObj.h"
 #include "DataParser.h"
+#ifndef _WIN32
+#include "Ferror.h"
+#endif
 
+#include <algorithm>
+#include <cstring>
+
+#ifdef _WIN32
 extern HINSTANCE hInstance;
+#endif
 extern ICOManager * DACOM;
 
 static char interface_name[] = "IViewConstructor";
@@ -48,13 +63,17 @@ static char interface_name[] = "IViewConstructor";
 extern SymbolManager SymbolTable;
 
 static BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData);
-void __stdcall CreateDataParser (SYMBOL symbol, IDataParser ** pParser);
+void COMAPI CreateDataParser (SYMBOL symbol, IDataParser ** pParser);
+#ifndef _WIN32
+BOOL32 CopyViewSymbolValue (SYMBOL source, U32 sourceModifiers, const char * sourceData,
+	SYMBOL destination, U32 destinationModifiers, char * destinationData);
+#endif
 
 //--------------------------------------------------------------------------
 //  
 struct ViewConstructor : public IViewConstructor, IViewConstructor2, IAggregateComponent
 {
-	DWORD dwRefs;
+	U32 dwRefs;
 	SYMBOL table;
 	IDAComponent * outer;
 
@@ -75,6 +94,12 @@ struct ViewConstructor : public IViewConstructor, IViewConstructor2, IAggregateC
 	{
 		return HEAP->ClearAllocateMemory(size, "ViewConstructor");
 	}
+#ifndef _WIN32
+	void operator delete (void * memory) noexcept
+	{
+		if (memory) HEAP->FreeMemory(memory);
+	}
+#endif
 
 	/* IDAComponent members */
 
@@ -280,7 +305,18 @@ GENRESULT ViewConstructor::ParseFile (const C8 *value)
 //
 GENRESULT ViewConstructor::ParseMemory (const C8 *memory)
 {
+#ifndef _WIN32
+	num_errors = 0;
+#endif
 	SYMBOL sym = parse_memory(memory), tmp;
+
+#ifndef _WIN32
+	if (num_errors || !sym)
+	{
+		if (sym) DestroySymbols(sym);
+		return GR_GENERIC;
+	}
+#endif
 
 	if (sym)
 	{
@@ -358,6 +394,9 @@ HANDLE ViewConstructor::ParseNewMemory (const C8 *memory)
 	if ((table = SymbolTable.set_reserved()) != 0)
 		table->AddRef();
 	
+#ifndef _WIN32
+	num_errors = 0;
+#endif
 	SYMBOL sym = parse_memory(memory), tmp;
 
 	if (sym)
@@ -376,6 +415,14 @@ HANDLE ViewConstructor::ParseNewMemory (const C8 *memory)
 	tmp = table;
 	table = oldTable;	// restore old state
 	SymbolTable.free();
+
+#ifndef _WIN32
+	if (num_errors || !sym)
+	{
+		if (tmp) DestroySymbols(tmp);
+		return 0;
+	}
+#endif
 
 	return tmp;			// return new parsed list
 }
@@ -416,7 +463,7 @@ GENRESULT ViewConstructor::DestroySymbols (HANDLE hSymbolList)
 //
 void ViewConstructor::CorrelateSymbol (SYMBOL oldSymbol, void *pOldData, SYMBOL newSymbol, void *pNewData)
 {
-	memset(pNewData, 0, DataViewer::GetType(newSymbol)->size);		// initialize output to 0
+	memset(pNewData, 0, ResolveViewSymbolType(newSymbol)->size);		// initialize output to 0
 
 	::CorrelateSymbol(oldSymbol, (char *)pOldData, newSymbol, (char *)pNewData);
 }
@@ -424,16 +471,17 @@ void ViewConstructor::CorrelateSymbol (SYMBOL oldSymbol, void *pOldData, SYMBOL 
 //
 BOOL32 ViewConstructor::IsEqual (SYMBOL oldSymbol, SYMBOL newSymbol)
 {
-	return DataViewer::IsEqual(oldSymbol, newSymbol);
+	return EqualViewSymbols(oldSymbol, newSymbol);
 }
 //--------------------------------------------------------------------------//
 //
 BOOL32 ViewConstructor::HasVariableSize (SYMBOL symbol)
 {
-	return DataViewer::HasVariableSize(symbol);
+	return HasVariableViewSymbolSize(symbol);
 }
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 GENRESULT ViewConstructor::CreateViewer (VIEWDESC *lpDesc, void **instance)
 {
 	GENRESULT result = GR_GENERIC;
@@ -528,6 +576,13 @@ Done:
 	*instance = pNewInstance;
 	return result;
 }
+#else
+GENRESULT ViewConstructor::CreateViewer (VIEWDESC *, void **instance)
+{
+	*instance = 0;
+	return GR_INTERFACE_UNSUPPORTED;
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 static SYMBOL GetTypeByName (SYMBOL list, SYMBOL match)
@@ -537,14 +592,14 @@ static SYMBOL GetTypeByName (SYMBOL list, SYMBOL match)
 
 	if ((matchName = match->name) == 0)
 	{
-		if ((matchName = DataViewer::GetType(match)->name) == 0)		// ambiguous case
+		if ((matchName = ResolveViewSymbolType(match)->name) == 0)		// ambiguous case
 			return 0;
 	}
 
 	while (list)
 	{
 		if ((oldName = list->name) == 0)
-			oldName = DataViewer::GetType(list)->name;
+			oldName = ResolveViewSymbolType(list)->name;
 		
 		//if (oldName && strcmp(oldName, matchName) == 0)
 		if (oldName == matchName)	// all names come from the same table
@@ -559,21 +614,25 @@ static SYMBOL GetTypeByName (SYMBOL list, SYMBOL match)
 //
 BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData)
 {
-	SYMBOL type = DataViewer::GetType(pNewSymbol);
+	SYMBOL type = ResolveViewSymbolType(pNewSymbol);
 	BOOL32 result = 1;
 
 	switch (type->kind)
 	{
 	case BASICTYPE:
 	case ENUMSYM:
+#ifdef _WIN32
 		result &= DataViewer::CopySymValue(pOldSymbol, 0, (const char *) pOldData, pNewSymbol, 0, (char *)pNewData);
+#else
+		result &= CopyViewSymbolValue(pOldSymbol, 0, (const char *) pOldData, pNewSymbol, 0, (char *)pNewData);
+#endif
 		break;
 
 	case RECORDSYM:
 	{
 		SYMBOL pOldSubType;
 
-		pOldSymbol = DataViewer::GetType(pOldSymbol);
+		pOldSymbol = ResolveViewSymbolType(pOldSymbol);
 		pOldSubType = pOldSymbol->datatype;	// this should be a VARSYM, can be NULL if empty struct!
 		
 		//
@@ -581,7 +640,7 @@ BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, ch
 		//
 		if (pOldSubType==0 || (pOldSubType->link && pOldSubType->link->offset == 0 && pOldSubType->bit_count==0))	// union if next var is also at offset 0
 		{	
-			memcpy(pNewData, pOldData, __min(pOldSymbol->size, type->size));
+			memcpy(pNewData, pOldData, std::min(pOldSymbol->size, type->size));
 		}
 		else	// we are a struct
 		{
@@ -605,10 +664,10 @@ BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, ch
 	{
 		int i = type->arrayval;		// i = num entries in the array
 
-		pOldSymbol = DataViewer::GetType(pOldSymbol);
+		pOldSymbol = ResolveViewSymbolType(pOldSymbol);
 		if (i != pOldSymbol->arrayval)
 			result = 0;
-		i = __min(i, pOldSymbol->arrayval);	// i min of old and new
+		i = std::min(i, pOldSymbol->arrayval);	// i min of old and new
 
 		pOldSymbol = pOldSymbol->datatype;		// this should be some kind of type
 		type = type->datatype;					// this should be some kind of type

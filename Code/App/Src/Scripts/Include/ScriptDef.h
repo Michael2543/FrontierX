@@ -14,6 +14,7 @@
 */
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 // 4514: unused inline function
 // 4201: nonstandard no-name structure use
@@ -30,16 +31,25 @@
 #pragma warning (disable : 4514 4201 4100 4512 4245 4127 4355 4244 4710 4702 4786)
 #include <windows.h>
 #pragma warning (disable : 4355 4201)
+#else
+#include <FrontierX/LegacyFileTypes.h>
+#include <cstdint>
+#endif
 
-#include <CQTRACE.h>
-#include <heapobj.h>
-#include <mscript.h>
+#include <CQTrace.h>
+#include <HeapObj.h>
+#include <MScript.h>
 #include <MovieCameraFlags.h>
 #include <TriggerFlags.h>
 #include <DMBaseData.h>
 #include <MGroupRef.h>
 
+#if defined(_WIN32)
 #define scriptoffsetofclass(base, derived) ((U32)(static_cast<base*>((derived*)8))-8)
+#else
+// Script entries carry an in-process base offset, never a serialized pointer.
+#define scriptoffsetofclass(base, derived) (reinterpret_cast<std::uintptr_t>(static_cast<base*>(reinterpret_cast<derived*>(8))) - 8)
+#endif
 
 extern CQSCRIPTDATADESC g_CQScriptDataDesc;
 

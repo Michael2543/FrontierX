@@ -47,7 +47,7 @@
 #define HP_PATH 64
 #endif
 
-#include "..\Src\Resource.h"
+#include "../Src/resource.h"
 
 #ifndef DOBJNAMES_H
 #include "DObjNames.h"
@@ -130,12 +130,25 @@ struct ARMOR_DATA
 {
 	ARMOR_TYPE myArmor;
 
+#if !defined(_WIN32) && !defined(_ADB)
+	struct ARMOR_DAMAGE
+	{
+		SINGLE noArmor;
+		SINGLE lightArmor;
+		SINGLE mediumArmor;
+		SINGLE heavyArmor;
+	};
+#endif
+
 #ifdef _ADB
 	union FIELDS			// transmorgrify function doesn't like nameless unions
 #else
 	union 
 #endif
 	{
+#if !defined(_WIN32) && !defined(_ADB)
+		ARMOR_DAMAGE damageTable;
+#else
 		struct ARMOR_DAMAGE
 		{
 			SINGLE noArmor;
@@ -143,6 +156,7 @@ struct ARMOR_DATA
 			SINGLE mediumArmor;
 			SINGLE heavyArmor;
 		} damageTable;
+#endif
 
 		SINGLE _damageTable[4];
 #ifdef _ADB
@@ -152,6 +166,13 @@ struct ARMOR_DATA
 	};
 #endif
 };
+
+#if !defined(_WIN32) && !defined(_ADB)
+static_assert(sizeof(ARMOR_DATA) == 20, "ARMOR_DATA runtime size must be 20 bytes");
+static_assert(offsetof(ARMOR_DATA, damageTable) == 4, "ARMOR_DATA damage offset must be 4");
+static_assert(offsetof(ARMOR_DATA, _damageTable) + sizeof(ARMOR_DATA::_damageTable) == 20,
+	"ARMOR_DATA final field must end at byte 20");
+#endif
 
 struct DamageSave
 {

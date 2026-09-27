@@ -12,14 +12,16 @@
 //--------------------------------------------------------------------------//
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
-#include "FileSys.h"
+#endif
+#include "Filesys.h"
 
-#include "tokendef.h"
-#include "prttoken.h"
-#include "lxtables.h"
-#include "filestrm.h"
-#include "ferror.h"
+#include "Tokendef.h"
+#include "Prttoken.h"
+#include "Lxtables.h"
+#include "Filestrm.h"
+#include "Ferror.h"
 
 extern FileStream stream;
 #define MAX_POWER 38

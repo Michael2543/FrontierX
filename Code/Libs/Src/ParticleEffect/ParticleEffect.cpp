@@ -1,12 +1,18 @@
 // ParticleEffect.cpp : Defines the entry point for the dll application.
 //
 
+#if defined(_WIN32)
 #include "stdafx.h"
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/NativeParticleManager.h"
+#include <cstring>
+#endif
 #include <stdlib.h>
 #include <IParticleManager.h>
 #include "ParticleSystem.h"
 #include "ParticleParamFunctions.h"
-#include <tcomponent.h>
+#include <TComponent.h>
 #include <da_heap_utility.h>
 
 #define CLSID_ParticleManager "IParticleManager"
@@ -462,8 +468,8 @@ ParticleManager::ParticleManager()
 	GMCAMERA = NULL;
 	POSCALLBACK = NULL;
 
-	realTimeMS = NULL;
-	lastUpdateTimeMS = NULL;
+	realTimeMS = 0;
+	lastUpdateTimeMS = 0;
 
 	freeParticleList = NULL;
 }
@@ -537,6 +543,7 @@ void ParticleManager::CleanUpParticles()
 }
 
 
+#if defined(_WIN32)
 BOOL APIENTRY DllMain( HINSTANCE hModule, 
                        DWORD  ul_reason_for_call, 
                        LPVOID lpReserved
@@ -572,3 +579,20 @@ BOOL APIENTRY DllMain( HINSTANCE hModule,
 	return TRUE;
 }
 
+
+#endif
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool RegisterNativeParticleManager(ICOManager * manager)
+{
+	if (!manager) return false;
+	IComponentFactory * factory =
+		new DAComponentFactory2<DAComponentAggregate<ParticleManager>, AGGDESC>(CLSID_ParticleManager);
+	const GENRESULT result = manager->RegisterComponent(factory, CLSID_ParticleManager);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

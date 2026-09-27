@@ -10,10 +10,10 @@
 //
 
 #include "ParticleSystemParameters.h"
-#include "FDUMP.h"
+#include "FDump.h"
 
 #include "IParticleSystem.h"
-#include "Filesys_Utility.h"
+#include "FileSys_Utility.h"
 #include "rendpipeline.h"
 #include "ITextureLibrary.h"
 

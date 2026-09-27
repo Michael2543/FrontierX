@@ -177,7 +177,7 @@
 //
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 typedef S32 INSTANCE_INDEX;     // defined by Engine.h

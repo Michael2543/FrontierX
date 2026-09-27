@@ -14,12 +14,25 @@
 //--------------------------------------------------------------------------//
 
 #include <ScriptDef.h>
+#if !defined(_WIN32)
+#include "resource.h"
+#include "NativeSolTrainSchema.h"
+#include "NativeSolTrainStrings.h"
+#include "NativeSolTrainModule.h"
+#include <cstdint>
+#include <cstdlib>
+#include <cstdio>
+#endif
 #include <DLLScriptMain.h>
 #include "DataDef.h"
 #include "Local.h"
 #include "stdlib.h"
 
+#if defined(_WIN32)
 #include "..\helper\helper.h"
+#else
+#include "../Helper/helper.h"
+#endif
 
 //--------------------------------------------------------------------------//
 //  Solarian Training #define's																	//
@@ -42,6 +55,23 @@ static void AddAndDisplayObjective
 );
 //---------------------------------------------------------------------------//
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+extern "C" void FrontierXInitializeSolTrainScript(void)
+{
+	if (!HEAP) HEAP = HEAP_Acquire();
+	std::size_t schemaSize = 0;
+	const void *schema = FrontierX::GetNativeSolTrainSchema(schemaSize);
+	if (!HEAP || !schema || !schemaSize || schemaSize > UINT32_MAX)
+	{
+		std::fputs("Native Sol_T module resources are incomplete\n", stderr);
+		std::abort();
+	}
+	g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+	g_CQScriptDataDesc.preprocessSize = static_cast<U32>(schemaSize);
+	g_CQScriptDataDesc.hLocal = FrontierX::GetNativeSolTrainResourceHandle();
+	MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 //--------------------------------------------------------------------------//
 // Mission functions: Solarian Training Campaign 
 //--------------------------------------------------------------------------//
@@ -2040,4 +2070,3 @@ bool TM1_DisplayObjectiveHandler::Update
 
 //--------------------------------------------------------------------------//
 //--End ScriptTest.cpp-------------------------------------------------------//
-

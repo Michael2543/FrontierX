@@ -20,7 +20,11 @@
 
 #include "MyVertex.h"
 
-#include <LightMan.h>
+#if !defined(_WIN32)
+#include <renderer.h>
+#endif
+
+#include <lightman.h>
 
 #include <DBaseData.h>
 

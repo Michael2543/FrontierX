@@ -1,5 +1,17 @@
 # FrontierX
 
+Native audio status (2026-09-27): the existing window-manager check now also
+executes `IStreamer` PCM playback and notifications. Retail training speech
+executes with the optional external shared-LGPL FFmpeg IAC decoder; see [the audio contract](docs/NATIVE_AUDIO_STREAMER.md).
+This is not mission execution. For IAC, configure either Linux preset with
+`-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON -DCMAKE_PREFIX_PATH=/external/lgpl-prefix`
+after building the reviewed dependency as documented there. The default stays
+SDL-only and rejects IAC; GPL-enabled FFmpeg libraries are rejected at configure.
+Existing build/test commands are unchanged.
+The explicit `--skip-movies` option excludes full-screen cinematics for the
+training checkpoint through the existing App flag; it preserves audio and
+animation requirements. Startup then stops at `IParticleManager`.
+
 FrontierX is a non-commercial effort to port *Conquest: Frontier Wars* to native 64-bit Linux
 while preserving retail gameplay, data compatibility, and deterministic simulation behavior. It
 starts from Revan67's Windows 11 retail-restoration work rather than from the uncorrected 2013
@@ -110,7 +122,7 @@ development source disagrees with shipped data.
 ## Requirements
 
 The Linux targets require Linux x86_64, CMake 3.25 or newer, Ninja, and either GCC or Clang. The
-checked-in presets also require `pkg-config`, SDL3 3.4.16 or a compatible SDL3 package, and `glslc`
+checked-in presets also require Python 3, `llvm-rc`, `pkg-config`, SDL3 3.4.16 or a compatible SDL3 package, and `glslc`
 because they enable the SDL3 platform and isolated GPU probe. A core/headless configure can leave
 both SDL3 options off; a window-only build can leave `FRONTIERX_BUILD_SDL3_GPU=OFF`. None of these
 targets requires retail media or builds/runs the game.
@@ -675,13 +687,29 @@ resource selection, an SDL joystick source and native Windows parity remain open
 
 `frontierx_native_shell` is the first executable to compose shared native configuration/data-root
 selection, the native component
-manager, production event-system owner, SDL window/text input, platform timing and complete event
+manager, production App system container loading EventSystem and SDL WindowManager
+from synthetic `[System]` entries by default or a bounded external
+`--system-profile FILE`, and, in the GPU build, the production
+`GameSystem::startup` caller with an empty synthetic `[Engine]` section,
+window/text input, platform timing and complete event
 pump in one lifecycle. Its normal mode opens a visible window until close/quit; bounded
 `--smoke-ms ... --hidden` mode supports deterministic process tests. When the GPU option is built,
 explicit `--render-smoke VERTEX_SPV FRAGMENT_SPV` owns the tested Vulkan lifecycle and renders the
-shared fixture. It still does not construct the game renderer, and empty synthetic directories are
-not retail compatibility evidence. See
+shared fixture. An explicit `--game-scene MATERIAL_UTF MESH_UTF VERTEX_SPV FRAGMENT_SPV
+EXTENDED_SPV GAME_SPV` keeps a visible production GameSystem-owned Engine/RenderMgr/PolyMesh scene alive from supplied
+UTF files until close; `--smoke-ms` bounds a repeated-frame run. The CQ2 branch also calls the App
+`MeshRender::Render` path with the supported `VertexColor.fx` material. This scene does not start gameplay.
+The production App system container now owns the scene's `ITManager`,
+`IMaterialManager` and `TextureLibrary`. A supplied profile can create its
+`IRenderPrimitive` aggregate, which binds to the GPU after startup and
+unbinds after scene teardown. A supplied profile can also create the `IRenderPipeline` aggregate, which
+binds after GPU startup. The checked-in `Conquest.ini` next stops at its
+`IViewConstructor` entry. Empty synthetic
+directories are not retail compatibility evidence. See
 [the native startup-shell contract](docs/NATIVE_SHELL.md).
+The container and GameSystem startup boundaries are documented in
+[the App system-container record](docs/APP_SYSTEM_CONTAINER.md) and
+[the GameSystem startup record](docs/GAME_SYSTEM_STARTUP.md).
 
 ### Portable scalar math core
 

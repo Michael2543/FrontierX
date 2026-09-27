@@ -22,10 +22,12 @@ must not be misrepresented as being the original software.
 distribution.
 */
 
-// FrontierX modification: removed the unused Windows header dependency.
+// FrontierX modification: removed the unused Windows header dependency and
+// preserved UTF-16 code units in wide string attributes across wchar_t widths.
 
 #include <ctype.h>
 #include "tinyxml.h"
+#include <vector>
 
 void uword_to_hexstring (unsigned int input, char *str, unsigned int numdigits);
 unsigned int hexstring_to_uword (char *str);
@@ -577,32 +579,69 @@ TIXML_QRESULT TiXmlElement::QueryUnsignedIntValue( const char* name, unsigned lo
 
 TIXML_QRESULT TiXmlElement::QueryUnicodeValue( const char* name, wchar_t** stringVal ) const
 {
+	if ( !stringVal )
+		return TIXML_WRONG_TYPE;
+	*stringVal = 0;
 	TiXmlAttribute* node = attributeSet.Find( name );
 	if ( !node )
 		return TIXML_NO_ATTRIBUTE;
 
 	const char* value = node->Value();
-	int valueLen = (int)strlen(value);
-	char hexString[5] = {0,0,0,0,0};
-	int count = 0;
+	const size_t valueLen = strlen(value);
+	if ( valueLen % 4 != 0 )
+		return TIXML_WRONG_TYPE;
 
-	static wchar_t* static_ReturnValue = NULL;
-	if( static_ReturnValue != NULL )
+	static std::vector<wchar_t> decoded;
+	decoded.clear();
+	for ( size_t offset = 0; offset < valueLen; offset += 4 )
 	{
-		delete [] static_ReturnValue;
+		unsigned int unit = 0;
+		for ( unsigned int digit = 0; digit < 4; ++digit )
+		{
+			const unsigned char character = static_cast<unsigned char>(value[offset + digit]);
+			if ( !isxdigit(character) )
+				return TIXML_WRONG_TYPE;
+			unit = unit * 16 + (character <= '9' ? character - '0' :
+				(character | 0x20) - 'a' + 10);
+		}
+		if ( unit == 0 )
+		{
+			if ( offset + 4 != valueLen )
+				return TIXML_WRONG_TYPE;
+			break;
+		}
+		if ( sizeof(wchar_t) == 2 )
+		{
+			decoded.push_back(static_cast<wchar_t>(unit));
+		}
+		else if ( unit >= 0xd800 && unit <= 0xdbff )
+		{
+			if ( offset + 8 > valueLen )
+				return TIXML_WRONG_TYPE;
+			unsigned int low = 0;
+			for ( unsigned int digit = 0; digit < 4; ++digit )
+			{
+				const unsigned char character = static_cast<unsigned char>(value[offset + 4 + digit]);
+				if ( !isxdigit(character) )
+					return TIXML_WRONG_TYPE;
+				low = low * 16 + (character <= '9' ? character - '0' :
+					(character | 0x20) - 'a' + 10);
+			}
+			if ( low < 0xdc00 || low > 0xdfff )
+				return TIXML_WRONG_TYPE;
+			decoded.push_back(static_cast<wchar_t>(0x10000 +
+				((unit - 0xd800) << 10) + (low - 0xdc00)));
+			offset += 4;
+		}
+		else
+		{
+			if ( unit >= 0xdc00 && unit <= 0xdfff )
+				return TIXML_WRONG_TYPE;
+			decoded.push_back(static_cast<wchar_t>(unit));
+		}
 	}
-	static_ReturnValue = new wchar_t[ (valueLen / 4) + 1];
-
-	while( (count*4) < valueLen )
-	{
-		memcpy( hexString, value, 4 );
-		static_ReturnValue[count] = hexstring_to_uword( hexString );
-		count++;
-		value += 4;
-	}
-	static_ReturnValue[count] = 0;
-
-	*stringVal = static_ReturnValue;
+	decoded.push_back(0);
+	*stringVal = decoded.data();
 	return TIXML_SUCCESS;
 }
 
@@ -650,23 +689,35 @@ void TiXmlElement::SetAttribute( const char * name, const char * _value )
 
 void TiXmlElement::SetAttribute( const char * name, const wchar_t* value )
 {
-//void uword_to_hexstring (unsigned int input, char *str, char numdigits);
-//unsigned int hexstring_to_uword (char *str);
-
-	char* longBuffer = new char[1024*16]; // 16KB long unicode string
-	char* pBuffer = longBuffer;
-
-	const wchar_t* walker = value;
-	while( walker && *walker )
+	static const char hex[] = "0123456789abcdef";
+	TIXML_STRING encoded;
+	if ( value )
 	{
-		sprintf(pBuffer,"%04x", *walker );
-		walker++;
-		pBuffer += 4;
+		for ( const wchar_t* walker = value; *walker; ++walker )
+		{
+			unsigned int scalar = static_cast<unsigned int>(*walker);
+			if ( sizeof(wchar_t) != 2 &&
+				(scalar > 0x10ffff || (scalar >= 0xd800 && scalar <= 0xdfff)) )
+				scalar = 0xfffd;
+			unsigned int units[2] = { scalar, 0 };
+			unsigned int count = 1;
+			if ( sizeof(wchar_t) != 2 && scalar > 0xffff )
+			{
+				scalar -= 0x10000;
+				units[0] = 0xd800 + (scalar >> 10);
+				units[1] = 0xdc00 + (scalar & 0x3ff);
+				count = 2;
+			}
+			for ( unsigned int index = 0; index < count; ++index )
+				for ( unsigned int shift = 12; ; shift -= 4 )
+				{
+					encoded += hex[(units[index] >> shift) & 0xf];
+					if ( shift == 0 ) break;
+				}
+		}
 	}
-	sprintf(pBuffer,"0000");
-
-	SetAttribute( name, longBuffer );
-	delete [] longBuffer;
+	encoded += "0000";
+	SetAttribute( name, encoded.c_str() );
 }
 
 void TiXmlElement::Print( FILE* cfile, int depth ) const
@@ -1436,5 +1487,4 @@ unsigned int hexstring_to_uword (char *str)
   }
   return(j);
 }
-
 

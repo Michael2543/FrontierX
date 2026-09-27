@@ -3,6 +3,9 @@
 
 //
 #include <float.h>
+#if !defined(_WIN32)
+#include <cmath>
+#endif
 
 #include "EngineArchetype.h"
 #include "EngineInstanceJoint.h"
@@ -407,8 +410,13 @@ bool EngineInstance::get_bounding_sphere( bool recursive, float *out_radius, Vec
 	*out_radius = bounding_sphere_radius = compound_radius;
 	*out_center = bounding_sphere_center = compound_center;
 	
+#if defined(_WIN32)
 	ASSERT( !_isnan( compound_radius ) );
 	ASSERT( _finite( compound_radius ) );
+#else
+	ASSERT( !std::isnan( compound_radius ) );
+	ASSERT( std::isfinite( compound_radius ) );
+#endif
 	ASSERT( compound_radius >= 0.0f );
 
 	return true;

@@ -655,6 +655,9 @@
     <ClCompile Include="System.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="GlobalStartup.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="TabButton.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

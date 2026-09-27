@@ -87,9 +87,18 @@ struct _NO_VTABLE ObjectRender : public Base
 	MeshChain mc;
 	IMeshRender **mr;//[MAX_CHILDS];
 
+#if defined(_WIN32)
 	typename typedef Base::INITINFO RENDERINITINFO;
+#else
+	typedef typename Base::INITINFO RENDERINITINFO;
+#endif
+#if defined(_WIN32)
 	struct InitNode			initNode;
 	struct PostRenderNode	postRenderNode;
+#else
+	typename Base::InitNode initNode;
+	typename Base::PostRenderNode postRenderNode;
+#endif
 
 	//child blasts
 	IBaseObject *childBlastList;
@@ -139,9 +148,9 @@ template <class Base>
 void ObjectRender< Base >::initRender (const RENDERINITINFO & data)
 {
 
-	HARCH archIndex = instanceIndex;
+	HARCH archIndex = this->instanceIndex;
 
-	mesh_info = CreateMeshInfoTree(instanceIndex);
+	mesh_info = CreateMeshInfoTree(this->instanceIndex);
 	mc.numChildren = mesh_info->ListChildren(mc.mi);
 	mr = data.mr;
 

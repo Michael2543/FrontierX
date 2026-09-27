@@ -10,17 +10,42 @@
 */
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include <DACOM.H>
+extern ICOManager * DACOM;
+#endif
 
-#include <system.h>
+#include <SYSTEM.H>
 #include <TComponent.h>
 #include <TSmartPointer.h>
 #include <da_heap_utility.h>
 #include <IProfileParser.h>
 #include <IConnection.h>
 #include <FDump.h>
-#include <Tempstr.h>
+#include <TempStr.h>
+#if !defined(_WIN32)
+#include "FrontierX/NativeSystemContainer.h"
+#include "Include/NativeAppGlobals.h"
+
+// Profiles can contain external paths. Report interface identifiers, not paths.
+static const char * nativeComponentDiagnosticName(const char * name)
+{
+	if (!name || !*name)
+		return "<invalid identifier>";
+	for (unsigned i = 0; name[i]; ++i)
+	{
+		const char c = name[i];
+		if (i >= 96 || !((c >= 'A' && c <= 'Z') ||
+			(c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_'))
+			return "<invalid identifier>";
+	}
+	return name;
+}
+#endif
 
 struct SystemContainer;
 
@@ -48,11 +73,16 @@ struct SystemContainer : public ISystemContainer, IDAConnectionPointContainer
 		COMPTR<IDAComponent>  pInner;
 		ISystemComponent    * pSysComp;
 		IAggregateComponent * pAggComp;
+#if !defined(_WIN32)
+		BOOL32 bDynamic;
+#endif
 
 		ELEMENT (void)
-		{
-			pNext = 0;
-		}
+			: pNext(0), pSysComp(0), pAggComp(0)
+#if !defined(_WIN32)
+			, bDynamic(0)
+#endif
+			{}
 	};
 	
 	
@@ -73,9 +103,9 @@ struct SystemContainer : public ISystemContainer, IDAConnectionPointContainer
 	// methods
 	// 
 
-	SystemContainer( void ) : innerComponent( this )
+	SystemContainer( void ) : pList(0), pLast(0), innerComponent( this ),
+		outerComponent(&innerComponent), bAggMember(0), bLoaded(0)
 	{ 
-		outerComponent = &innerComponent;
 	};
 
 	~SystemContainer (void);
@@ -108,6 +138,12 @@ struct SystemContainer : public ISystemContainer, IDAConnectionPointContainer
 	DEFMETHOD(Shutdown) (void);
 	
 	DEFMETHOD(AddComponent) (const AGGDESC * descriptor);
+
+#if !defined(_WIN32)
+	GENRESULT RemoveDynamicComponent(IDAComponent * component);
+	GENRESULT AddDynamicComponent(const AGGDESC * descriptor,
+		IDAComponent ** component);
+#endif
 
 	/* IAggregateComponent methods */
 
@@ -218,6 +254,7 @@ GENRESULT SystemContainer::Shutdown (void)
 //
 GENRESULT SystemContainer::LoadSystemComponents (void)
 {
+	GENRESULT result = GR_OK;
 	if (bLoaded == 0)
 	{
 		COMPTR<IProfileParser> parser;
@@ -226,14 +263,24 @@ GENRESULT SystemContainer::LoadSystemComponents (void)
 		int line=0;
 
 		if (DACOM->QueryInterface("IProfileParser", parser) != GR_OK)
+		{
+#if !defined(_WIN32)
+			result = GR_DATA_NOT_FOUND;
+#endif
 			goto Done;
+		}
 
 		if ((hSection = parser->CreateSection("System")) == 0)
+		{
+#if !defined(_WIN32)
+			result = GR_DATA_NOT_FOUND;
+#endif
 			goto Done;
+		}
 
 		while (parser->ReadProfileLine(hSection, line++, buffer, sizeof(buffer)) != 0)
 		{
-			char * ptr, * ptr2;
+			char * ptr, * ptr2 = 0;
 			AGGDESC info;
 
 			ptr = buffer;
@@ -261,13 +308,27 @@ GENRESULT SystemContainer::LoadSystemComponents (void)
 			if ((ptr = const_cast<char*>(strchr(info.interface_name, '\t'))) != 0)
 				*ptr = 0;
 
-			char *response = "";
+#if !defined(_WIN32)
+			// MovieScreen uses this same App flag before touching VIDEOSYS.
+			// Keep every other profile requirement, including IStreamer, intact.
+			if (CQFLAGS.bSkipMovies && strcmp(info.interface_name, "IVideoSystem") == 0)
+			{
+				delete element;
+				GENERAL_NOTICE("SystemContainer: IVideoSystem [DISABLED by --skip-movies]\n");
+				continue;
+			}
+#endif
+
+			const char *response = "";
 
 			IDAComponent * pOuter;
 			if (DACOM->CreateInstance(&info, (void **) &pOuter) != GR_OK)
 			{
 				response = "[FAILED]";
 				delete element;
+#if !defined(_WIN32)
+				result = GR_GENERIC;
+#endif
 			}
 			else
 			{
@@ -291,15 +352,26 @@ GENRESULT SystemContainer::LoadSystemComponents (void)
 				}
 			}
 
+#if defined(_WIN32)
 			GENERAL_NOTICE( TEMPSTR( "SystemContainer: LoadSystemComponents: Loading '%s' [%s] returned %s\n",
 									  info.interface_name, 
 									  info.description ? info.description : "",
 									  response ) );
+#else
+			char diagnosticFormat[] = "SystemContainer: LoadSystemComponents: %s returned %s\n";
+			GENERAL_NOTICE( TEMPSTR( diagnosticFormat,
+									  nativeComponentDiagnosticName(info.interface_name), response ) );
+#endif
+#if !defined(_WIN32)
+			if (result != GR_OK)
+				goto Done;
+#endif
 		}
 
 		//
 		// add conquest pipe wrapper
 		//
+#if defined(_WIN32)
 		{
 			ELEMENT *element = new ELEMENT;
 
@@ -310,50 +382,53 @@ GENRESULT SystemContainer::LoadSystemComponents (void)
 			element->pNext = pList;		// add to the beginning of the list
 			pList = element;
 		}
+#endif
 		
 		if (bAggMember == 0)	// else wait for container to do it
+		{
+#if defined(_WIN32)
 			Initialize();
+#else
+			result = Initialize();
+			if (result != GR_OK)
+				goto Done;
+#endif
+		}
 		bLoaded = 1;
 	}
 
 Done:
-	return GR_OK;
+	return result;
 }
 //--------------------------------------------------------------------------//
 //
 GENRESULT SystemContainer::AddComponent (const AGGDESC * descriptor)
 {
 	ELEMENT *element = 0;
-	AGGDESC * info = (AGGDESC *) descriptor;
 	GENRESULT result = GR_OK;
-	IDAComponent *  outer;
-	IDAComponent ** inner;
 
 	if (descriptor == 0)
-	{
-		result = GR_INVALID_PARMS;
-		goto Done;
-	}
+		return GR_INVALID_PARMS;
 
-	outer = info->outer;		// save these values
-	inner = info->inner;		
-
+	AGGDESC info = *descriptor;
 	if ((element = new ELEMENT) == 0)
 	{
 		result = GR_OUT_OF_MEMORY;
 		goto Done;
 	}
 
-	info->outer = getBase();
-	info->inner = element->pInner;
+	info.outer = getBase();
+	info.inner = element->pInner;
 
 	IDAComponent * pOuter;
-	if ((result = DACOM->CreateInstance(info, (void **) &pOuter)) != GR_OK)
+	if ((result = DACOM->CreateInstance(&info, (void **) &pOuter)) != GR_OK)
 	{
-		info->outer = outer;		// restore these values
-		info->inner = inner;		
 		goto Done;
 	}
+
+#if !defined(_WIN32)
+	element->bDynamic = 1;
+#endif
 
 	//
 	// hook it into the list
@@ -376,14 +451,75 @@ GENRESULT SystemContainer::AddComponent (const AGGDESC * descriptor)
 		element->pAggComp->Release();		// get rid of extra reference
 	}
 
-	info->outer = outer;		// restore these values
-	info->inner = inner;		
-
 Done:
 	if (result != GR_OK)
 		delete element;
 	return result;
 }
+//--------------------------------------------------------------------------//
+//
+#if !defined(_WIN32)
+GENRESULT SystemContainer::AddDynamicComponent(const AGGDESC * descriptor,
+		IDAComponent ** component)
+{
+	if (!component)
+		return GR_INVALID_PARMS;
+	*component = 0;
+	GENRESULT result = AddComponent(descriptor);
+	if (result == GR_OK)
+	{
+		*component = pLast->pInner;
+		(*component)->AddRef();
+	}
+	return result;
+}
+
+GENRESULT SystemContainer::RemoveDynamicComponent(IDAComponent * component)
+{
+	if (!component)
+		return GR_INVALID_PARMS;
+
+	ELEMENT *previous = 0;
+	ELEMENT *element = pList;
+	while (element && element->pInner.ptr != component)
+	{
+		previous = element;
+		element = element->pNext;
+	}
+	if (!element || !element->bDynamic)
+		return GR_INVALID_PARMS;
+
+	if (previous)
+		previous->pNext = element->pNext;
+	else
+		pList = element->pNext;
+	if (pLast == element)
+		pLast = previous;
+	if (element->pSysComp)
+		element->pSysComp->ShutdownAggregate();
+	delete element;
+	return GR_OK;
+}
+
+GENRESULT AddNativeSystemComponent(ISystemContainer * container,
+		const AGGDESC * descriptor, IDAComponent ** inner)
+{
+	SystemContainer * owner = dynamic_cast<SystemContainer *>(container);
+	if (!owner)
+	{
+		if (inner) *inner = 0;
+		return GR_INVALID_PARMS;
+	}
+	return owner->AddDynamicComponent(descriptor, inner);
+}
+
+GENRESULT RemoveNativeSystemComponent(ISystemContainer * container,
+		IDAComponent * inner)
+{
+	SystemContainer * owner = dynamic_cast<SystemContainer *>(container);
+	return owner ? owner->RemoveDynamicComponent(inner) : GR_INVALID_PARMS;
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 void SystemContainer::Update (void)
@@ -414,6 +550,8 @@ GENRESULT SystemContainer::Initialize (void)
 				back->pNext = tmp->pNext;
 			else
 				pList = tmp->pNext;
+			if (pLast == tmp)
+				pLast = back;
 			
 			delete tmp;
 			

@@ -3,7 +3,11 @@
 
 //
 
+#if !defined(_WIN32)
+#include "DACOM.H"
+#else
 #include "dacom.h"
+#endif
 #include "extent.h"
 
 //

@@ -1,5 +1,6 @@
 #ifndef DATAPARSER_H
 #define DATAPARSER_H
+#include <cstring>
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                              DataParser.h                                //
@@ -65,7 +66,7 @@ struct DACOM_NO_VTABLE IParserCallback
 	// else it will be NULL for basic types.
 	// Use the "newParser" if you want to parse the internals of the variable.
 	// The callback should return TRUE to continue the enumeration, or false to stop now.
-	virtual BOOL32 __stdcall VarInstance (IDataParser *newParser, const VARIABLEDESC & varDesc) = 0;
+	virtual BOOL32 COMAPI VarInstance (IDataParser *newParser, const VARIABLEDESC & varDesc) = 0;
 };
 //--------------------------------------------------------------------------//
 //
@@ -75,7 +76,7 @@ struct DACOM_NO_VTABLE IParserCallback
 struct DACOM_NO_VTABLE IDataParser : public IDAComponent
 {
 	// returns TRUE if the enumeration completed, FALSE if the user defined callback returned FALSE to stop early.
-	virtual BOOL32 __stdcall Enumerate (IParserCallback * callback) = 0;
+	virtual BOOL32 COMAPI Enumerate (IParserCallback * callback) = 0;
 };
 
 //--------------------------------------------------------------------------//

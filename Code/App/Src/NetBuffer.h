@@ -140,10 +140,15 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
-typedef DWORD DPID, FAR *LPDPID;
+typedef DWORD DPID;
+typedef DPID *LPDPID;
+#if !defined(_WIN32)
+struct GUID;
+struct DPMSG_GENERIC;
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//

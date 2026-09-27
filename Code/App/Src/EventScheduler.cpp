@@ -7,14 +7,25 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "MGlobals.h"
+#include "MyVertex.h"
+#include <TComponent.h>
+#endif
 
 #include "EventScheduler.h"
 #include "IWeapon.h"
 #include "Objwatch.h"
 #include "Startup.h"
+#if defined(_WIN32)
 #include "Objlist.h"
+#else
+#include "ObjList.h"
+#endif
 #include "ILauncher.h"
 
 struct DamageInfo
@@ -115,7 +126,12 @@ void EventScheduler::QueueDamageEvent(SINGLE timeTillEvent,U32 _ownerID, U32 tar
 	node->info.damageInfo.targetID = targetID;
 	node->info.damageInfo.amount = _amount;
 
+#if defined(_WIN32)
 	node->updateTime = MGlobals::GetUpdateCount() + __max(timeTillEvent/(ELAPSED_TIME/8),1);
+#else
+	const SINGLE ticks = timeTillEvent/(ELAPSED_TIME/8);
+	node->updateTime = MGlobals::GetUpdateCount() + ((ticks > 1.0f) ? ticks : 1.0f);
+#endif
 
 	EventNode * search = eventList;
 	EventNode * prev = NULL;

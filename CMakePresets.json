@@ -48,6 +48,7 @@
       "targets": [
         "frontierx_layout_probe",
         "frontierx_tinyxml_probe",
+        "frontierx_string_table_file_text_probe",
         "frontierx_platform_time_probe",
         "frontierx_data_root_probe",
         "frontierx_event_queue_probe",
@@ -57,6 +58,7 @@
         "frontierx_profile_parser_probe",
         "frontierx_native_dacom_bootstrap_probe",
         "frontierx_native_heap_probe",
+        "frontierx_view_parser_probe",
         "frontierx_preference_store_probe",
         "frontierx_native_user_settings_probe",
         "frontierx_native_user_defaults_probe",
@@ -70,6 +72,13 @@
         "frontierx_render_submission_probe",
         "frontierx_render_pipeline_probe",
         "frontierx_render_batcher_header_probe",
+        "frontierx_vertex_buffer_manager_probe",
+        "frontierx_texture_library_owner",
+        "frontierx_game_material_manager_probe",
+        "frontierx_state_material_probe",
+        "frontierx_math_accessor_probe",
+        "frontierx_render_batcher_runtime_probe",
+        "frontierx_bmpooljr_probe",
         "frontierx_profile_buffer_probe",
         "frontierx_profile_document_probe",
         "frontierx_headless",
@@ -78,6 +87,7 @@
         "frontierx_sdl3_gpu_probe",
         "frontierx_legacy_input_probe",
         "frontierx_native_window_manager_probe",
+        "frontierx_app_mglobals_owner",
         "frontierx_native_shell"
       ]
     },
@@ -87,6 +97,7 @@
       "targets": [
         "frontierx_layout_probe",
         "frontierx_tinyxml_probe",
+        "frontierx_string_table_file_text_probe",
         "frontierx_platform_time_probe",
         "frontierx_data_root_probe",
         "frontierx_event_queue_probe",
@@ -96,6 +107,7 @@
         "frontierx_profile_parser_probe",
         "frontierx_native_dacom_bootstrap_probe",
         "frontierx_native_heap_probe",
+        "frontierx_view_parser_probe",
         "frontierx_preference_store_probe",
         "frontierx_native_user_settings_probe",
         "frontierx_native_user_defaults_probe",
@@ -109,6 +121,13 @@
         "frontierx_render_submission_probe",
         "frontierx_render_pipeline_probe",
         "frontierx_render_batcher_header_probe",
+        "frontierx_vertex_buffer_manager_probe",
+        "frontierx_texture_library_owner",
+        "frontierx_game_material_manager_probe",
+        "frontierx_state_material_probe",
+        "frontierx_math_accessor_probe",
+        "frontierx_render_batcher_runtime_probe",
+        "frontierx_bmpooljr_probe",
         "frontierx_profile_buffer_probe",
         "frontierx_profile_document_probe",
         "frontierx_headless",
@@ -117,6 +136,7 @@
         "frontierx_sdl3_gpu_probe",
         "frontierx_legacy_input_probe",
         "frontierx_native_window_manager_probe",
+        "frontierx_app_mglobals_owner",
         "frontierx_native_shell"
       ]
     }

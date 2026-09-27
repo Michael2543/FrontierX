@@ -5,7 +5,7 @@
 #ifndef CHULL_H
 #define CHULL_H
 
-#include "view2d.h"
+#include "View2d.h"
 
 //
 // Returns number of points on convex hull. Can be zero of dst_len isn't long enough to

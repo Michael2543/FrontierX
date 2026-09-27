@@ -133,7 +133,12 @@
 //--------------------------------------------------------------------------//
 //
 #ifndef DACOM_H
-#include <DACOM.h>
+#include "DACOM.H"
+#endif
+#if !defined(_WIN32)
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/LegacyWindowTypes.h"
+#include <cstring>
 #endif
 //--------------------------------------------------------------------------//
 //

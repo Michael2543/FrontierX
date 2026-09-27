@@ -15,6 +15,7 @@
 */
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "Resource.h"
 
 IHeap * HEAP;
@@ -130,6 +131,10 @@ BOOL WINAPI DllMain (HINSTANCE hInstance, DWORD fdwReason, LPVOID lpvReserved)
 
 	return 1;
 }
+#else
+// Statically linked native scripts use the host heap and generated schema.
+extern IHeap * HEAP;
+#endif
 
 //--------------------------------------------------------------------------//
 //------------------------------End DLLScriptMain.h-------------------------//

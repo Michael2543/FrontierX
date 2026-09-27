@@ -1,6 +1,10 @@
 #include "FrontierX/LegacyRenderSubmission.h"
+#include "FrontierX/LegacyFileTypes.h"
 #include "FrontierX/NativeRenderPipeline.h"
+#include "FrontierX/NativeBatchStateIds.h"
+#include "FrontierX/NativeGameIndexBuffer.h"
 #include "FrontierX/RenderSmokeScene.h"
+#include "IMaterialManager.h"
 #include "rendpipeline.h"
 
 #include <array>
@@ -122,7 +126,8 @@ public:
         const std::size_t stride =
             vertexFormat == FrontierX::LegacyD3d9::kRpVertexFvf
                 ? sizeof(FrontierX::RenderVertexP3DiffuseT2)
-                : sizeof(FrontierX::RenderVertexP3DiffuseT4);
+                : vertexFormat == FrontierX::LegacyD3d9::kGameStandardFvf
+                    ? sizeof(StandardVertex) : sizeof(FrontierX::RenderVertexP3DiffuseT4);
         sourceBytes.resize(static_cast<std::size_t>(vertexCount) * stride);
         std::memcpy(sourceBytes.data(), vertices, sourceBytes.size());
         return result;
@@ -228,6 +233,7 @@ bool CheckInterfaceRegressions()
     IDAComponent * component = nullptr;
     void * unsupported = reinterpret_cast<void *>(1U);
     U32 ability = 99U;
+    U32 textureState = 99U;
     if (!Expect(pipeline.QueryInterface(IID_IRenderPipeline,
                                         reinterpret_cast<void **>(&interface)) == GR_OK &&
                     interface == static_cast<IRenderPipeline *>(&pipeline),
@@ -247,6 +253,27 @@ bool CheckInterfaceRegressions()
         !Expect(pipeline.query_device_ability(RP_A_DEVICE_MEMORY, &ability) ==
                     GR_NOT_IMPLEMENTED && ability == 0U,
                 "unknown native ability rejected deterministically") ||
+        !Expect(interface->get_pipeline_state(RP_TEXTURE, &textureState) == GR_OK &&
+                    textureState == 1U,
+                "game texture state defaults to enabled") ||
+        !Expect(interface->set_pipeline_state(RP_TEXTURE, 0U) == GR_OK &&
+                    interface->get_pipeline_state(RP_TEXTURE, &textureState) == GR_OK &&
+                    textureState == 0U,
+                "game texture state can be disabled") ||
+        !Expect(interface->set_pipeline_state(RP_TEXTURE, 2U) == GR_INVALID_PARMS &&
+                    interface->get_pipeline_state(RP_TEXTURE, &textureState) == GR_OK &&
+                    textureState == 0U,
+                "invalid game texture state preserves prior value") ||
+        !Expect(interface->set_pipeline_state(RP_TEXTURE, 1U) == GR_OK &&
+                    interface->get_pipeline_state(RP_TEXTURE, &textureState) == GR_OK &&
+                    textureState == 1U,
+                "game texture state can be reenabled") ||
+        !Expect(interface->set_pipeline_state(RP_TEXTURE_LOD, 1U) == GR_NOT_IMPLEMENTED &&
+                    interface->get_pipeline_state(RP_TEXTURE_LOD, &textureState) ==
+                        GR_NOT_IMPLEMENTED && textureState == 1U,
+                "unsupported pipeline state leaves texture state intact") ||
+        !Expect(interface->get_pipeline_state(RP_TEXTURE, nullptr) == GR_INVALID_PARMS,
+                "null game texture state output rejected") ||
         !Expect(interface->startup() == GR_NOT_IMPLEMENTED,
                 "unimplemented pipeline lifecycle fails explicitly") ||
         !Expect(interface->draw_primitive(
@@ -286,7 +313,8 @@ bool CheckPipelineRegressions()
         const auto truncatedHandle = static_cast<std::uint32_t>(4U + format);
         capture.drawCount = 0;
         if (!Expect(pipeline.draw_indexed_primitive_vb(D3DPT_TRIANGLELIST, handle, 0, 3,
-                                                       nullptr, 3, 0U) == GR_INVALID_PARMS,
+                                                       static_cast<const U16 *>(nullptr),
+                                                       3, 0U) == GR_INVALID_PARMS,
                     "null indices rejected") ||
             !Expect(pipeline.draw_indexed_primitive_vb(D3DPT_TRIANGLELIST, handle, 0, 3,
                                                        valid, 0, 0U) == GR_INVALID_PARMS,
@@ -478,6 +506,92 @@ bool CheckOwnedVertexBufferRegressions()
         return false;
     }
 
+    IRP_VERTEXBUFFERHANDLE gameHandle = 0U;
+    std::array<unsigned char, 4U * sizeof(StandardVertex)> gameBytes{};
+    for (std::size_t index = 0U; index < gameBytes.size(); ++index)
+        gameBytes[index] = static_cast<unsigned char>(index);
+    if (!Expect(pipeline.create_vertex_buffer(
+                    LegacyD3d9::kGameStandardFvf, 4, 0U, &gameHandle) == GR_OK &&
+                    gameHandle > extendedHandle,
+                "owned game StandardVertex buffer created") ||
+        !Expect(pipeline.lock_vertex_buffer(gameHandle, 0U, &vertices, &vertexCount) == GR_OK &&
+                    vertexCount == 4U,
+                "owned game StandardVertex buffer locked") ||
+        !Expect(pipeline.draw_indexed_primitive_vb(
+                    D3DPT_TRIANGLELIST, gameHandle, 1, 3, indices, 3, 0U) == GR_GENERIC,
+                "locked game buffer cannot draw"))
+    {
+        return false;
+    }
+    std::memcpy(vertices, gameBytes.data(), gameBytes.size());
+    const U16 badGameIndices[] = {0U, 1U, 3U};
+    if (!Expect(pipeline.unlock_vertex_buffer(gameHandle) == GR_OK,
+                "owned game StandardVertex buffer unlocked") ||
+        !Expect(pipeline.draw_indexed_primitive_vb(
+                    D3DPT_TRIANGLELIST, gameHandle, 1, 3, badGameIndices, 3, 0U) ==
+                    GR_INVALID_PARMS,
+                "game StandardVertex slice rejects out-of-range index") ||
+        !Expect(pipeline.draw_indexed_primitive_vb(
+                    D3DPT_TRIANGLESTRIP, gameHandle, 1, 3, indices, 3, 0U) ==
+                    GR_NOT_IMPLEMENTED,
+                "game StandardVertex unsupported topology rejected") ||
+        !Expect(pipeline.draw_indexed_primitive_vb(
+                    D3DPT_TRIANGLELIST, gameHandle, 1, 3, indices, 3, 0U) == GR_OK,
+                "game StandardVertex slice reaches primitive owner") ||
+        !Expect(capture.format == LegacyD3d9::kGameStandardFvf &&
+                    capture.sourceCount == 3 &&
+                    capture.indices == std::vector<U16>({0U, 1U, 2U}) &&
+                    std::memcmp(capture.sourceBytes.data(),
+                                gameBytes.data() + sizeof(StandardVertex),
+                                3U * sizeof(StandardVertex)) == 0,
+                "game StandardVertex keeps all normal, color and UV bytes"))
+    {
+        return false;
+    }
+
+    IDirect3DIndexBuffer9 * gameIndex = nullptr;
+    if (!Expect(pipeline.create_index_buffer(3U, &gameIndex) == GR_INVALID_PARMS &&
+                    !gameIndex,
+                "native game index buffer rejects odd byte count") ||
+        !Expect(pipeline.create_index_buffer(sizeof(indices), &gameIndex) == GR_OK &&
+                    gameIndex && gameIndex->Count() == 3U,
+                "native game index buffer created")) return false;
+    void * lockedIndices = nullptr;
+    void * repeatedLock = reinterpret_cast<void *>(1U);
+    if (!Expect(gameIndex->Lock(1U, 2U, &lockedIndices, 0U) == GR_INVALID_PARMS &&
+                    !lockedIndices,
+                "native game index buffer rejects unaligned lock") ||
+        !Expect(gameIndex->Lock(0U, 0U, &lockedIndices, 0U) == GR_OK && lockedIndices,
+                "native game index buffer locked") ||
+        !Expect(gameIndex->Lock(0U, 0U, &repeatedLock, 0U) == GR_INVALID_PARMS &&
+                    !repeatedLock,
+                "native game index buffer rejects double lock") ||
+        !Expect(pipeline.draw_indexed_primitive_vb(
+                    D3DPT_TRIANGLELIST, gameHandle, 1, 3, gameIndex, 3, 0U) == GR_GENERIC,
+                "locked game index buffer cannot draw"))
+    {
+        gameIndex->Release();
+        return false;
+    }
+    std::memcpy(lockedIndices, indices, sizeof(indices));
+    if (!Expect(gameIndex->Unlock() == GR_OK,
+                "native game index buffer unlocked") ||
+        !Expect(pipeline.draw_indexed_primitive_vb(
+                    D3DPT_TRIANGLELIST, gameHandle, 1, 3, gameIndex, 4, 0U) ==
+                    GR_INVALID_PARMS,
+                "native game index buffer rejects oversized draw") ||
+        !Expect(pipeline.draw_indexed_primitive_vb(
+                    D3DPT_TRIANGLELIST, gameHandle, 1, 3, gameIndex, 3, 0U) == GR_OK &&
+                    capture.indices == std::vector<U16>({0U, 1U, 2U}),
+                "native game index buffer reaches the checked slice") ||
+        !Expect(gameIndex->Release() == 0U,
+                "native game index buffer released") ||
+        !Expect(pipeline.destroy_vertex_buffer(gameHandle) == GR_OK,
+                "owned game StandardVertex buffer destroyed"))
+    {
+        return false;
+    }
+
     NativeRenderPipeline external{LookupVertexBuffer, &vertexBufferOwner, &capture};
     return Expect(external.create_vertex_buffer(
                       LegacyD3d9::kRpVertexFvf, 3, 0U, &handle) == GR_NOT_IMPLEMENTED,
@@ -551,19 +665,22 @@ struct ReusedTextureHandle
 {
     unsigned creates = 0U;
     unsigned destroys = 0U;
+    U32 value = 41U;
 };
 
 GENRESULT CreateReusedTexture(void * context, U32, U32, U32 & handle)
 {
-    ++static_cast<ReusedTextureHandle *>(context)->creates;
-    handle = 41U;
+    auto * owner = static_cast<ReusedTextureHandle *>(context);
+    ++owner->creates;
+    handle = owner->value;
     return GR_OK;
 }
 
 GENRESULT DestroyReusedTexture(void * context, U32 handle)
 {
-    if (handle != 41U) return GR_INVALID_PARMS;
-    ++static_cast<ReusedTextureHandle *>(context)->destroys;
+    auto * owner = static_cast<ReusedTextureHandle *>(context);
+    if (handle != owner->value) return GR_INVALID_PARMS;
+    ++owner->destroys;
     return GR_OK;
 }
 
@@ -590,6 +707,31 @@ bool CheckTextureHandleCollision()
                "collision preserves original texture metadata") &&
         Expect(pipeline.destroy_texture(first) == GR_OK && owner.creates == 2U &&
                    owner.destroys == 1U, "original texture remains destroyable");
+}
+
+bool CheckTextureStateIdBoundary()
+{
+    ReusedTextureHandle owner;
+    owner.value = FrontierX::kFirstMeshMaterialStateId;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &owner;
+    operations.create = CreateReusedTexture;
+    operations.destroy = DestroyReusedTexture;
+    FrontierX::NativeRenderPipeline pipeline{nullptr, operations};
+    U32 handle = 99U;
+    if (!Expect(pipeline.create_texture(2, 2, PixelFormat(PF_RGBA8), 0, 0U,
+                                        handle) == GR_INVALID_PARMS &&
+                    handle == 0U && owner.creates == 1U && owner.destroys == 1U,
+                "mesh material state range rejects and destroys texture handle"))
+    {
+        return false;
+    }
+    owner.value = FrontierX::kMaxTextureStateId;
+    return Expect(pipeline.create_texture(2, 2, PixelFormat(PF_RGBA8), 0, 0U,
+                                          handle) == GR_OK && handle == owner.value &&
+                      pipeline.destroy_texture(handle) == GR_OK &&
+                      owner.creates == 2U && owner.destroys == 2U,
+                  "last texture state handle remains usable");
 }
 
 struct LockTextureBackend
@@ -775,9 +917,38 @@ bool CheckTextureBlit()
 
 int main()
 {
+    // The profile aggregate uses this same owner before and after scene binding.
+    CapturingRenderPrimitive deferredCapture;
+    FrontierX::NativeRenderPipeline deferred;
+    if (!Expect(deferred.draw_primitive(D3DPT_TRIANGLELIST,
+                    FrontierX::LegacyD3d9::kRpVertexFvf,
+                    vertexBufferA.data(), 3, 0U) == GR_GENERIC,
+                "unbound profile pipeline rejected draw") ||
+        !Expect(deferred.BindScene(&deferredCapture, {}, nullptr, nullptr) == GR_OK,
+                "profile pipeline bound scene") ||
+        !Expect(deferred.BindScene(&deferredCapture, {}, nullptr, nullptr) ==
+                    GR_INVALID_PARMS,
+                "profile pipeline rejected duplicate bind") ||
+        !Expect(deferred.draw_primitive(D3DPT_TRIANGLELIST,
+                    FrontierX::LegacyD3d9::kRpVertexFvf,
+                    vertexBufferA.data(), 3, 0U) == GR_OK &&
+                    deferredCapture.drawCount == 1,
+                "profile pipeline forwarded bound draw") ||
+        !Expect(deferred.UnbindScene() == GR_OK,
+                "profile pipeline unbound scene") ||
+        !Expect(deferred.draw_primitive(D3DPT_TRIANGLELIST,
+                    FrontierX::LegacyD3d9::kRpVertexFvf,
+                    vertexBufferA.data(), 3, 0U) == GR_GENERIC,
+                "profile pipeline rejected draw after unbind") ||
+        !Expect(deferred.BindScene(&deferredCapture, {}, nullptr, nullptr) == GR_OK &&
+                    deferred.UnbindScene() == GR_OK,
+                "profile pipeline repeated bind lifecycle"))
+        return 1;
+
     if (!CheckInterfaceRegressions() || !CheckPipelineRegressions() ||
         !CheckOwnedVertexBufferRegressions() ||
         !CheckExtendedSubmissionRegressions() || !CheckTextureHandleCollision() ||
+        !CheckTextureStateIdBoundary() ||
         !CheckTextureLockLifecycle() || !CheckTextureBlit())
     {
         return 1;

@@ -17,7 +17,14 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
+#if defined(_WIN32)
 #include <DACOM.h>
+#else
+#include <DACOM.H>
+#endif
+#endif
+#if !defined(_WIN32)
+#include <DMissionEnum.h>
 #endif
 
 struct IMusicManager : IDAComponent

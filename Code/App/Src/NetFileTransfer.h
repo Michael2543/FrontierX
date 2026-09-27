@@ -23,10 +23,10 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
-typedef DWORD DPID, FAR *LPDPID;
+typedef DWORD DPID, *LPDPID;
 struct FTCHANNEL;
 typedef FTCHANNEL * FTPCHANNEL;
 struct IFileSystem;

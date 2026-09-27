@@ -11,13 +11,31 @@
 */
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "FrontierX/PlatformTime.h"
+#include "FrontierX/LegacyInput.h"
+#include "UserDefaults.h"
+#include <cstring>
+#include <3dmath.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <new>
+static U32 GetTickCount()
+{
+	return FrontierX::Platform::MonotonicMilliseconds();
+}
+#endif
 
 #include <MGlobals.h>
 #include "Startup.h"
 #include "CQTrace.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "ObjSet.h"
 #include "ObjList.h"
 #include "CommPacket.h"
@@ -31,13 +49,13 @@
 #include <DMBaseData.h>
 #include "MPart.h"
 #include "DBHotkeys.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IHarvest.h"
 #include "IAdmiral.h"
 #include "ISupplier.h"
 #include "ITroopship.h"
 #include "IRecoverShip.h"
-#include "MScript.h"
+#include <MScript.h>
 #include "GridVector.h"
 #include "IJumpGate.h"
 #include "INugget.h"
@@ -49,15 +67,17 @@
 #include "IArtifact.h"
 #include <DCQGame.h>
 
+#if defined(_WIN32)
 #include <dplay.h>
 #include <dplobby.h>
 #include "ZoneLobby.h"
+#endif
 #include <TSmartPointer.h>
 #include <EventSys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <HeapObj.h>
-#include <FileSys.h>
+#include <Filesys.h>
 
 #define NUM_BINS			  16
 #define SYNC_PERIOD	  (1000	/ NUM_BINS)	// time between throughput measurements
@@ -152,7 +172,11 @@ static LovelyFormation formation = {
 
 
 
+#if defined(_WIN32)
 enum HOSTCMD
+#else
+enum HOSTCMD : int
+#endif
 {
 	NOTHING = 0,
 	NEWGROUP,
@@ -445,6 +469,12 @@ struct SUBPACKET_HEADER		// used on client side (must be converted from HOST_SUB
 	U32			opID;	
 	U32			groupID;
 };
+#if !defined(_WIN32)
+static_assert(sizeof(HOSTCMD) == sizeof(U32));
+static_assert(sizeof(HOST_SUBPACKET_HEADER) == 6);
+static_assert(offsetof(HOST_SUBPACKET_HEADER, groupID) == 2);
+static_assert(sizeof(SUBPACKET_HEADER) == 16);
+#endif
 //--------------------------------------------------------------------------//
 //
 struct SUPERBASE_PACKET
@@ -1521,8 +1551,13 @@ OpAgent::~OpAgent (void)
 {
 	COMPTR<IDAConnectionPoint> connection;
 
+#if defined(_WIN32)
 	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
+#else
+	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+		connection->Unadvise(eventHandle);
+#endif
 
 	reset();
 }
@@ -1576,7 +1611,15 @@ void OpAgent::verifyDependencies (void) const
 //
 GENRESULT OpAgent::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+	const U32 param32 = U32(param);
+#else
+	const std::uintptr_t encoded = reinterpret_cast<std::uintptr_t>(param);
+	if (message == CQE_DEBUG_HOTKEY && encoded > UINT32_MAX)
+		return GR_INVALID_PARMS;
+	const U32 param32 = static_cast<U32>(encoded);
+#endif
 
 	switch (message)
 	{
@@ -1589,14 +1632,15 @@ GENRESULT OpAgent::Notify (U32 message, void *param)
 		bRealMigration = true;
 		break;
 	case CQE_DEBUG_HOTKEY:
-		if (U32(param) == IDH_PRINT_OPLIST)
+		if (param32 == IDH_PRINT_OPLIST)
 		{
 			if (CQFLAGS.bGameActive)
 				printOplist();
 		}
 		else
-		if (U32(param) == IDH_FORCE_MIGRATION)
+		if (param32 == IDH_FORCE_MIGRATION)
 		{
+#if defined(_WIN32)
 			if (clientPlaybackBuffer)
 			{
 				VirtualFree(clientPlaybackBuffer, 0, MEM_RELEASE);
@@ -1604,9 +1648,13 @@ GENRESULT OpAgent::Notify (U32 message, void *param)
 				clientPlaybackBufferOffset = 0;
 				onNewHost();
 			}
+#else
+			return GR_INTERFACE_UNSUPPORTED;
+#endif
 		}
 		break;
 
+#if defined(_WIN32)
 	case WM_COMMAND:
 		switch (LOWORD(msg->wParam))
 		{
@@ -1616,6 +1664,7 @@ GENRESULT OpAgent::Notify (U32 message, void *param)
 			break;
 		} // end switch (LOWORD(msg->wParam))
 		break;	// end case WM_COMMAND
+#endif
 
 	case CQE_NETPACKET:		// could receive packet before game is "active", must handle this case
 		if (clientPlaybackBuffer==0 && bMissionLoaded)
@@ -2329,6 +2378,9 @@ bool OpAgent::testMigrationState (void)
 //
 BOOL32 OpAgent::New (void)
 {
+#if !defined(_WIN32)
+	if (CQFLAGS.bClientPlayback) return 0;
+#endif
 	reset();
 	bMissionLoaded=true;
 	if (CQFLAGS.bClientPlayback && NETOUTPUT!=0)
@@ -2340,6 +2392,9 @@ BOOL32 OpAgent::New (void)
 //
 void OpAgent::startClientPlayback (void)
 {
+#if !defined(_WIN32)
+	CQBOMB0("Native client playback is unavailable.");
+#else
 	// remember: file contains some data at the beginning that is not ours
 	U32 fileSize = NETOUTPUT->GetFileSize() - NETOUTPUT->GetFilePosition();
 
@@ -2358,6 +2413,7 @@ void OpAgent::startClientPlayback (void)
 	}
 	else
 		CQERROR1("Failed to allocate %d bytes for clientPlaybackBuffer!", fileSize);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -2926,6 +2982,7 @@ void OpAgent::ResetSyncItems (void)
 	//
 	// update the zone
 	//
+#if defined(_WIN32)
 	if (ZONESCORE!=0)
 	{
 		int i;
@@ -2943,6 +3000,7 @@ void OpAgent::ResetSyncItems (void)
 			}
 		}
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -3103,7 +3161,13 @@ void OpAgent::reset (void)
 	bRealMigration = bHostMigration = false;
 
 	if (clientPlaybackBuffer)
+	{
+#if defined(_WIN32)
 		VirtualFree(clientPlaybackBuffer, 0, MEM_RELEASE);		// used for testing network code on client side
+#else
+		CQBOMB0("Unexpected native client playback buffer.");
+#endif
+	}
 	clientPlaybackBuffer = 0;
 	clientPlaybackBufferOffset = 0;
 
@@ -3538,6 +3602,7 @@ void OpAgent::sendSyncAlliance (void)
 			//
 			// update the zone
 			//
+#if defined(_WIN32)
 			if (ZONESCORE!=0)
 			{
 				int i;
@@ -3555,6 +3620,7 @@ void OpAgent::sendSyncAlliance (void)
 					}
 				}
 			}
+#endif
 		}
 	}
 }
@@ -3589,14 +3655,22 @@ void OpAgent::sendSyncScores (void)
 void OpAgent::sendSyncStats (void)
 {
 	U32 i;
+	#if defined(_WIN32)
 	U8 buffer[500];
+	#else
+	alignas(SYNCSTATS) U8 buffer[500];
+	#endif
 	SYNCSTATS * pPacket = (SYNCSTATS *) buffer;
 
 	for (i = 1; i <= MAX_PLAYERS; i++)
 	{
 		if (MGlobals::IsPlayerInGame(i))
 		{
+			#if defined(_WIN32)
 			pPacket->SYNCSTATS::SYNCSTATS();		// construct the packet
+			#else
+			new (pPacket) SYNCSTATS;
+			#endif
 			U32 statSize = MGlobals::GetGameStats(i, pPacket->stats);
 			pPacket->dwSize = sizeof(SYNCSTATS) + statSize;
 			CQASSERT(pPacket->dwSize <= 500);
@@ -3659,6 +3733,9 @@ void OpAgent::Update (void)
 //
 void OpAgent::updateClientPlayback (void)
 {
+#if !defined(_WIN32)
+	CQBOMB0("Native client playback is unavailable.");
+#else
 	// offset the time by 15 seconds +/-
 	U32 currentCount = (CQFLAGS.bForceEarlyDelivery) ? (30 * 15) : 0;
 	const U32 * pNewCount;
@@ -3700,6 +3777,7 @@ void OpAgent::updateClientPlayback (void)
 		clientPlaybackBufferOffset = 0;
 		onNewHost();
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -6374,6 +6452,7 @@ void OpAgent::clientSyncAlliance (SUBPACKET_HEADER *header)
 	//
 	// update the zone
 	//
+#if defined(_WIN32)
 	if (ZONESCORE!=0)
 	{
 		int i;
@@ -6391,6 +6470,7 @@ void OpAgent::clientSyncAlliance (SUBPACKET_HEADER *header)
 			}
 		}
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -8226,18 +8306,29 @@ struct _opagent : GlobalComponent
 	virtual void Startup (void)
 	{
 		THEMATRIX = agent = new DAComponent<OpAgent>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&THEMATRIX);
+		#else
+		AddToGlobalCleanupList((IDAComponent **)&THEMATRIX);
+		#endif
 	}
 
 	virtual void Initialize (void)
 	{
 		COMPTR<IDAConnectionPoint> connection;
 
+#if defined(_WIN32)
 		if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		{
 			connection->Advise(agent->getBase(), &agent->eventHandle);
 			FULLSCREEN->SetCallbackPriority(agent, EVENT_PRIORITY_MISSION);
 		}
+#else
+		if (!EVENTSYS ||
+			EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+			connection->Advise(agent->getBase(), &agent->eventHandle) != GR_OK)
+			CQBOMB0("OpAgent requires the native EventSystem callback point.");
+#endif
 	}
 };
 
@@ -8246,4 +8337,3 @@ static _opagent agent;
 //------------------------------------------------------------------------------------//
 //---------------------------------------End OpAgent.cpp------------------------------//
 //------------------------------------------------------------------------------------//
-

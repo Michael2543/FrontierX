@@ -18,9 +18,41 @@
 */
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "FrontierX/PlatformTime.h"
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+static U32 GetTickCount()
+{
+	return FrontierX::Platform::MonotonicMilliseconds();
+}
+static void unsupportedNativeNetwork(const char *operation)
+{
+	std::fprintf(stderr, "NetBuffer: unsupported native multiplayer operation: %s\n", operation);
+	std::abort();
+}
+static int nativePrefixCompare(const char *lhs, const char *rhs, size_t count)
+{
+	for (size_t index = 0; index < count; ++index)
+	{
+		const int left = std::tolower(static_cast<unsigned char>(lhs[index]));
+		const int right = std::tolower(static_cast<unsigned char>(rhs[index]));
+		if (left != right || left == 0)
+			return left - right;
+	}
+	return 0;
+}
+#define strnicmp nativePrefixCompare
+#define _localprintf(...) std::fprintf(stderr, __VA_ARGS__)
+#endif
 
+#include <algorithm>
 
 #include "NetBuffer.h"
 #include "NetPacket.h"
@@ -31,10 +63,12 @@
 #include <IProfileParser.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <EventSys.h>
 
+#if defined(_WIN32)
 #include <dplobby.h>
+#endif
 
 #ifdef FINAL_RELEASE
 #define SILENCE_TRACE
@@ -52,13 +86,13 @@
 
 #else	//  !FINAL_RELEASE
 
-#define NETPRINT0(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick())
-#define NETPRINT1(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1)
-#define NETPRINT2(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2)
-#define NETPRINT3(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3)
-#define NETPRINT4(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4)
-#define NETPRINT5(exp,p1,p2,p3,p4,p5) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5)
-#define NETPRINT6(exp,p1,p2,p3,p4,p5,p6) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] "##exp"\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5, p6)
+#define NETPRINT0(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick())
+#define NETPRINT1(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1)
+#define NETPRINT2(exp,p1,p2) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2)
+#define NETPRINT3(exp,p1,p2,p3) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3)
+#define NETPRINT4(exp,p1,p2,p3,p4) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4)
+#define NETPRINT5(exp,p1,p2,p3,p4,p5) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5)
+#define NETPRINT6(exp,p1,p2,p3,p4,p5,p6) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "[%5d] " exp "\r\n", NETBUFFER->GetHostTick(), p1, p2, p3, p4, p5, p6)
 
 #endif //  !FINAL_RELEASE
 
@@ -99,9 +133,9 @@ struct PLAYER_NODE
 	U32						maxThroughput;
 	U32						checkSum;
 
-	__int64					l64Accum;
-	long					lMinOffset;
-	long					lMaxOffset;
+	S64						l64Accum;
+	S32						lMinOffset;
+	S32						lMaxOffset;
 
 	void * operator new (size_t size)
 	{
@@ -245,12 +279,22 @@ struct DACOM_NO_VTABLE NetBuffer : public INetBuffer
 
 	bool isSysMsg (BASE_PACKET * packet)
 	{
+#if defined(_WIN32)
 		return (PLAYERID != DPID_SYSMSG && packet->fromID == DPID_SYSMSG);
+#else
+		(void)packet;
+		return false;
+#endif
 	}
 
 	bool isSysMsg (SUPERBASE_PACKET * packet)
 	{
+#if defined(_WIN32)
 		return (PLAYERID != DPID_SYSMSG && packet->fromID == DPID_SYSMSG);
+#else
+		(void)packet;
+		return false;
+#endif
 	}
 
 	bool testSend (U32 packetSize)
@@ -329,6 +373,9 @@ void NetBuffer::Send (DPID idTo, DWORD dwFlags, const BASE_PACKET * _packet)
 		goto Done;
 	}
 
+#if !defined(_WIN32)
+	unsupportedNativeNetwork("Send to remote player");
+#else
 	if (testSend(_packet->dwSize) == false)
 	{
 		if (CQFLAGS.bTraceNetwork)
@@ -353,6 +400,7 @@ void NetBuffer::Send (DPID idTo, DWORD dwFlags, const BASE_PACKET * _packet)
 		if (CQFLAGS.bTraceNetwork)
 			NETPRINT1("DPLAY::SendEx() returned error 0x%X", dpResult);
 	}
+#endif
 
 Done:
 	return;
@@ -361,6 +409,10 @@ Done:
 //
 BOOL32 NetBuffer::Receive (DPID idFrom, DWORD dwFlags,	BASE_PACKET ** packet)
 {
+#if !defined(_WIN32)
+	if (idFrom != 0 || dwFlags != 0)
+		unsupportedNativeNetwork("Receive with DirectPlay filters");
+#endif
 	BOOL32 result = 0, bWasEmpty;
 
 	setTick();
@@ -410,6 +462,11 @@ void NetBuffer::SetPacketLoss (U32 _percentLost)
 //
 void NetBuffer::SetMaxBandwidth (const GUID & guid, bool bLAN)
 {
+#if !defined(_WIN32)
+	(void)guid;
+	(void)bLAN;
+	unsupportedNativeNetwork("SetMaxBandwidth");
+#else
 	if (IsEqualGUID(guid, DPSPGUID_SERIAL) || IsEqualGUID(guid, DPSPGUID_MODEM) )
 		maxBandwidth = DEFAULT_BANDWIDTH;
 	else
@@ -417,6 +474,7 @@ void NetBuffer::SetMaxBandwidth (const GUID & guid, bool bLAN)
 		maxBandwidth = LANBandwidth;
 	else
 		maxBandwidth = TCPBandwidth;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -631,7 +689,7 @@ U32 NetBuffer::GetSessionThroughput (void)
 		}
 
 		result *= numPlayers;
-		result = __min(maxBandwidth, result);
+		result = std::min(maxBandwidth, result);
 	}
 	
 	return result;
@@ -679,8 +737,10 @@ void NetBuffer::reset (void)
 //
 void NetBuffer::update (void)
 {
+#if defined(_WIN32)
 	DPID idFrom, idTo;
 	DWORD dwDataSize = MAX_MESSAGE_SIZE;
+#endif
 
 	if (syncTick == 0 || currentTick - syncTick > SYNC_PERIOD)
 	{
@@ -708,6 +768,7 @@ void NetBuffer::update (void)
 	if (pHolding->dwSize && useHolding() == 0)	// have a leftover block, but no room at the inn
 		goto Done;
 	
+#if defined(_WIN32)
 	while (DPLAY && PLAYERID && DPLAY->Receive(&idFrom, &idTo, DPRECEIVE_ALL, (&pHolding->dwSize)+2, &dwDataSize) == DP_OK)
 	{
 		throughputBin[currentBin] += dwDataSize;
@@ -739,6 +800,7 @@ void NetBuffer::update (void)
 
 		dwDataSize = MAX_MESSAGE_SIZE;
 	}
+#endif
 
 Done:
 	updateTick = currentTick;		// remember the last time we were updated
@@ -836,7 +898,11 @@ BOOL32 NetBuffer::receive (DPID idFrom, DWORD dwFlags, BASE_PACKET ** packet)
 
 	while (pNode)
 	{
+#if defined(_WIN32)
 		if ((dwFlags & DPRECEIVE_FROMPLAYER)==0 || idFrom == pNode->fromID)
+#else
+		if (true)
+#endif
 		{
 			//
 			// check against minimum latency
@@ -845,7 +911,9 @@ BOOL32 NetBuffer::receive (DPID idFrom, DWORD dwFlags, BASE_PACKET ** packet)
 			{
 				*packet = (BASE_PACKET *) (((C8 *)pNode) + sizeof(SUPERBASE_PACKET *));
 
+#if defined(_WIN32)
 				if ((dwFlags & DPRECEIVE_PEEK)==0)	// remove packet from the list
+#endif
 				{
 					if (pPrev == 0)	// removed the first element
 					{
@@ -883,6 +951,11 @@ BOOL32 NetBuffer::receive (DPID idFrom, DWORD dwFlags, BASE_PACKET ** packet)
 //
 BOOL32 NetBuffer::syncPlayers (void)
 {
+#if !defined(_WIN32)
+	if (pPlayerList != nullptr || PLAYERID != 0)
+		unsupportedNativeNetwork("SyncPlayer");
+	return 0;
+#else
 	PLAYER_NODE *pNode;
 	BOOL32 result=0;
 	SYNC_PACKET packet;
@@ -918,11 +991,16 @@ BOOL32 NetBuffer::syncPlayers (void)
 
 Done:
 	return result;
+#endif
 }
 //--------------------------------------------------------------------------
 //
 void NetBuffer::handleSyncMsg (SYNC_PACKET * pPacket)
 {
+#if !defined(_WIN32)
+	(void)pPacket;
+	unsupportedNativeNetwork("handleSyncMsg");
+#else
 	if (PLAYERID == 0)
 		goto Done;	// can't do anything yet, don't have a player
 
@@ -1016,11 +1094,16 @@ void NetBuffer::handleSyncMsg (SYNC_PACKET * pPacket)
 	}
 Done:
 	return;
+#endif
 }
 //----------------------------------------------------------------------------//
 //
 void NetBuffer::handleSystemMessages (DPMSG_GENERIC * _pPacket)
 {
+#if !defined(_WIN32)
+	(void)_pPacket;
+	unsupportedNativeNetwork("handleSystemMessages");
+#else
 	switch (_pPacket->dwType)
 	{
 	case DPSYS_CREATEPLAYERORGROUP:
@@ -1103,11 +1186,16 @@ void NetBuffer::handleSystemMessages (DPMSG_GENERIC * _pPacket)
 		} // end case DPSYS_SESSIONLOST
 		break;
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void NetBuffer::DestroyPlayer (DPID playerID)
 {
+#if !defined(_WIN32)
+	(void)playerID;
+	unsupportedNativeNetwork("DestroyPlayer");
+#else
 	if (DPLAY)
 	{
 		HRESULT hresult = DPLAY->DestroyPlayer(playerID);
@@ -1176,6 +1264,7 @@ void NetBuffer::DestroyPlayer (DPID playerID)
 			pNode = pNode->pNext;
 		}
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //

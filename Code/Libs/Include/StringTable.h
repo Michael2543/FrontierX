@@ -5,7 +5,10 @@
 #ifndef STRING_TABLE_HEADER_H
 #define STRING_TABLE_HEADER_H
 
-#include "dacom.h"
+#include "DACOM.H"
+#if !defined(_WIN32)
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 
 struct IStringEnum
 {
@@ -13,7 +16,7 @@ struct IStringEnum
 	{
 		const wchar_t* wideString;
 		const char*    tagString;
-		unsigned long  idString;
+		U32            idString;
 	};
 
 	virtual void EnumStringInfo( IStringEnum::StringInfo& _stringInfo ) = 0;
@@ -45,4 +48,3 @@ struct DACOM_NO_VTABLE IStringTable : IDAComponent
 #define IID_IStringTable MAKE_IID("StringTable",1)
 
 #endif
-

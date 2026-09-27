@@ -1,7 +1,19 @@
 # Native math-backend readiness
 
-Evidence: source review plus isolated GCC/Clang compilation and synthetic tests, 2026-09-16.
-No Windows build, retail execution, or cross-build floating-point comparison was performed.
+Latest App grid-distance gate, 2026-09-27: the production
+`GridVector.cpp` table and subtraction operator executed in the
+existing `frontierx_math_core_probe` under GCC 16.2.1 and Clang
+22.1.8 on Linux x86_64. Both produced the same asserted
+4096-position fingerprint `10760374359831800577`; the 3-4 input
+returned the historical `1.25`. The owner remains outside the
+successful mission shell, and native Windows Debug/Final and numeric
+parity checks were not run. See
+[the focused mission record](NATIVE_SINGLEPLAYER_SLICE.md#production-grid-distance-owner-for-mission-objects-2026-09-27).
+
+
+Evidence: source review plus isolated GCC/Clang compilation and synthetic tests, updated
+2026-09-26 with a production-provider synthetic game-material closure. No Windows rebuild,
+retail execution, or cross-build floating-point comparison was performed for that closure.
 
 ## Why this boundary matters
 
@@ -62,9 +74,9 @@ preset matrices. These are synthetic numerical checks, not gameplay or determini
 
 ## Remaining integration gates
 
-1. Add a thin `I3DMathEngine` adapter only after native Windows ABI ownership and provider-loading
-   behavior are recorded. The adapter should translate existing engine values to this core without
-   changing public layouts.
+1. Measure native Windows ABI ownership and provider-loading behavior, then compare the now
+   linked scalar provider against the Windows reference. Its public interface and layouts remain
+   unchanged; the current Linux execution is synthetic and does not establish parity.
 2. Capture Windows reference outputs for normal, singular, nearly singular, quaternion edge and
    inverse-square-root cases. Compare exact bits where retail determinism requires them and bounded
    error only where the original contract permits it.
@@ -75,8 +87,8 @@ preset matrices. These are synthetic numerical checks, not gameplay or determini
 5. Repair the supported Windows build/deploy wrapper separately so it builds or explicitly verifies
    the selected math-provider DLL. That is a Win32 baseline issue and cannot be validated on Linux.
 
-Until those gates pass, the repository has a tested native math core, not a wired native game math
-provider and not a determinism-equivalent Linux game.
+Until those gates pass, the wired scalar provider is a synthetic Linux runtime result,
+not a determinism-equivalent Linux game.
 
 ## Production MathLib accessor closure (2026-09-23)
 
@@ -113,3 +125,54 @@ repository-owned native component bootstrap with no math provider; this is
 synthetic runtime evidence for the accessor's failure path. A provider-backed
 lookup, mathematical execution through `I3DMathEngine`, Windows Debug/Final
 rebuilds, cross-module ABI and numerical comparison with retail remain open.
+
+## Production scalar provider in the game-mesh closure (2026-09-26)
+
+The next `Engine → RenderMgr → PolyMesh::render_instance` call exposed a real
+blocker: `Transform::multiply` invokes `MATH_ENGINE()`, but the existing native
+global manager returned no `I3DMathEngine`. Clang UBSan stopped at the null
+interface call in `3dmath.h`. The production owner and real caller are the
+supported scalar `x86Math/x86math.cpp` provider and PolyMesh's world/view
+transform composition. The falsifiable behavior is that the registered
+provider composes two translated engine transforms and lets the production
+render call advance to its next unsupported renderer state. The existing
+`frontierx_math_core_probe` checks ABI-neutral values only, and the existing
+accessor probe intentionally checks absence in a separate executable; neither
+could cover this production provider lookup.
+
+`frontierx_x86_math_owner` now compiles the scalar production provider under
+GCC and Clang, with no 3DNow source. Native registration supplies its existing
+`I3DMathEngine` DACOM interface to the linked game-material executable; it
+is not registered by default in the native shell. The Windows DLL entry and
+provider implementation remain in the Windows branch. The native source uses
+the exact-case DACOM include, a bounded ASCII comparison for its `x86`
+implementation name and explicit quaternion scalar/vector fields because
+the native header excludes the MSVC anonymous union. The native inverse
+square root and square root methods call the already tested `MathCore`
+implementations, which use fixed-width float bits and retain the historical
+lookup table and two refinement steps. This avoids the production
+`inv_sqrt.h` assumption that `unsigned long` and float are both four bytes
+on LP64. The provider object has process lifetime so the native DACOM
+manager cannot retain a pointer to a destroyed static object during shutdown.
+The provider target compiles with FMA contraction disabled.
+
+The linked synthetic game-material check observes a non-null production
+`MATH_ENGINE()` and the exact expected translation `(5, 7, 9)` when composing
+two unit-rotation transforms translated by `(1, 2, 3)` and `(4, 5, 6)`.
+It then calls the production Engine/RenderMgr/PolyMesh instance render path
+with a minimal test camera and advances past the earlier null math call.
+The native pipeline now reports the cached `RP_TEXTURE` state, and the
+PolyMesh render owner forwards model/view and an indexed `MTVERTEX` draw to
+synthetic CPU receivers. The draw callback rejects GPU execution. The SDL
+GPU transform path compiles but its runtime
+check skipped in the command sandbox. The remaining game vertex-format and
+transform image gates are recorded in [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+
+GCC 16.2.1 and Clang 22.1.8 Linux debug full presets built and ran their
+CTest matrices after this change; the matrix result is in `BUILD_GRAPH.md`.
+The game-material check's three generated UTF inputs passed under focused
+Clang ASan/UBSan with LeakSanitizer disabled for this host's ptrace setup.
+These are synthetic CPU checks. Native Windows Debug/Final rebuilds, affected
+module ABI/layout checks, scalar/quaternion edge comparisons, floating-point
+environment comparisons, retail runtime, visible GPU output and a
+Windows/Linux same-input comparison remain unperformed.

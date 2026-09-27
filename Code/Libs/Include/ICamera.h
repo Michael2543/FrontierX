@@ -91,7 +91,7 @@
 */
 
 #ifndef DACOM_H
-#include "dacom.h"   
+#include "DACOM.H"
 #endif
 
 // Interface versioning macros

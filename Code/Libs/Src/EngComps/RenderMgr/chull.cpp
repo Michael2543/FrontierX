@@ -3,7 +3,9 @@
 //
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 #include <stdlib.h>
 #include <memory.h>
@@ -42,7 +44,7 @@ public:
 	int pop(void)
 	{
 		list[--top] = -1;
-		top = __max(top, 0);
+		top = top > 0 ? top : 0;
 		return top;
 	}
 };
@@ -88,7 +90,11 @@ int Left(const ViewPoint * p1, const ViewPoint * p2, const ViewPoint * p3)
 
 //
 
+#ifdef _WIN32
 int _cdecl Compare(const void * v1, const void * v2)
+#else
+int Compare(const void * v1, const void * v2)
+#endif
 {
 	const ViewPoint * p1 = (ViewPoint *) v1;
 	const ViewPoint * p2 = (ViewPoint *) v2;
@@ -156,7 +162,9 @@ int Graham(ViewPoint * hull, int n_hull, const ViewPoint * pts, int n)
 		counter++;
 		if (counter >= timeout)
 		{
+#ifdef _WIN32
 			OutputDebugString("Infinite loop in ComputeConvexHull().\n");
+#endif
 			return 0;
 		}
 	}

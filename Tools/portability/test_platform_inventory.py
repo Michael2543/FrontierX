@@ -416,8 +416,11 @@ class PlatformInventoryTests(unittest.TestCase):
         cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
 
         self.assertIn('class NativeUtfFileSystem final : public IFileSystem', adapter)
-        self.assertIn('ReadUtfEntry(path_, descriptor->lpFileName', adapter)
-        self.assertIn('TryDecodeOffsetHandleIndex(handle, FirstChildHandle', adapter)
+        self.assertIn('ReadUtfEntry(path_, entry', adapter)
+        self.assertIn('DecodeEncodedHandle(handle)', adapter)
+        self.assertIn('ListDirectory(directory_, entries, error)', adapter)
+        self.assertIn('ListUtfDirectory(path_, directory, entries, error)', adapter)
+        self.assertIn('ListUtfDirectory(*archive_, directory, entries, error)', adapter)
         self.assertIn('descriptor->dwDesiredAccess != GENERIC_READ', adapter)
         self.assertIn('WriteFile(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED)', adapter)
         self.assertIn('ValidateRealArchive(manager, argv[1])', probe)
@@ -537,6 +540,9 @@ class PlatformInventoryTests(unittest.TestCase):
         startup = strip_comments(
             (root / 'Code/Libs/Src/Platform/StartupDataRoot.cpp').read_text(
                 encoding='utf-8', errors='replace'))
+        game_system = strip_comments(
+            (root / 'Code/Launcher/NativeGameSystem.cpp').read_text(
+                encoding='utf-8', errors='replace'))
         cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8', errors='replace')
 
         self.assertIn('ICOManager * manager = DACOM_Acquire()', shell)
@@ -551,7 +557,14 @@ class PlatformInventoryTests(unittest.TestCase):
         self.assertIn('RegisterNativeWindowManager(manager)', shell)
         self.assertLess(shell.index('RegisterNativeWindowManager(manager)'),
                         shell.index('manager->SetINIConfig(configName.c_str())'))
-        self.assertIn('AGGDESC windowDescriptor("IWindowManager", "WindowManager")', shell)
+        self.assertIn('"[System]', shell)
+        self.assertIn('IWindowManager = WindowManager', shell)
+        self.assertIn('nativeManager->SetProfileParser(profile.Get())', shell)
+        self.assertIn('StartNativeGameSystem(', shell)
+        self.assertIn('system->game.startup(', game_system)
+        self.assertIn('system->game.shut_down()', game_system)
+        self.assertLess(shell.index('nativeManager->SetProfileParser(profile.Get())'),
+                        shell.index('StartNativeGameSystem('))
         self.assertIn('windowManager.Get()->SetCallback(ShellWindowCallback)', shell)
         self.assertIn('windowManager.Get()->ServeMessageQueue(WMF_BACKGROUND)', shell)
         self.assertIn('eventSystemOwner.Get()->Update()', shell)

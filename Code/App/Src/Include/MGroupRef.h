@@ -19,7 +19,7 @@
 
 #include "FrontierX/StackAddress.h"
 
-#define MAX_SELECTED_UNITS 22		// also defined in globals.h
+#include "AppObjectContracts.h"
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//

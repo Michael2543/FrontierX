@@ -1,9 +1,13 @@
 #include "stdafx.h"
+#if defined(_WIN32)
 #include <windows.h>
-#include <FDUMP.h>
+#endif
+#include <FDump.h>
 
 #include "stdio.h"
+#if defined(_WIN32)
 #include "windows.h"
+#endif
 #include "ICamera.h"
 #include <IParticleManager.h>
 #include <stdlib.h>

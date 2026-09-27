@@ -16,8 +16,15 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <cmath>
+#include <cstring>
+#include "FrontierX/LegacyFileTypes.h"
+#include "Include/NativeAppGlobals.h"
+#endif
 
 #include "SuperTrans.h"
 

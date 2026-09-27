@@ -2,6 +2,14 @@
 #include "FrontierX/NativeComponentManager.h"
 #include "FrontierX/NativeRenderPrimitive.h"
 #include "RPUL/PrimitiveBuilder.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+#include "MyVertex.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #include <array>
 #include <cstddef>
@@ -19,8 +27,10 @@ using FrontierX::LegacySubmissionInput;
 using FrontierX::LegacySubmissionStatus;
 using FrontierX::RenderSubmissionView;
 using FrontierX::RenderSubmissionView2;
+using FrontierX::RenderSubmissionView3;
 using FrontierX::RenderVertexP3DiffuseT2;
 using FrontierX::RenderVertexP3DiffuseT4;
+using FrontierX::RenderVertexP3DiffuseSpecularT4;
 
 constexpr std::array<RenderVertexP3DiffuseT2, 4> kVertices = {{
     {-1.0F, -1.0F, 0.5F, FrontierX::PackDiffuseBgra(255U, 0U, 0U, 255U), 0.0F, 1.0F},
@@ -38,6 +48,15 @@ constexpr std::array<RenderVertexP3DiffuseT4, 4> kVertices2 = {{
      1.0F, 0.0F, 0.8F, 0.2F},
     {-0.9F, 0.8F, 0.4F, FrontierX::PackDiffuseBgra(131U, 141U, 151U, 161U),
      0.0F, 0.0F, 0.1F, 0.2F},
+}};
+
+constexpr std::array<RenderVertexP3DiffuseSpecularT4, 3> kMtVertices = {{
+    {-0.5F, -0.5F, 0.5F, 0xFF112233U, 0x00102030U,
+     0.0F, 0.0F, 0.2F, 0.3F},
+    {0.5F, -0.5F, 0.5F, 0xFF445566U, 0x00405060U,
+     1.0F, 0.0F, 0.8F, 0.3F},
+    {0.0F, 0.5F, 0.5F, 0xFF778899U, 0x00708090U,
+     0.5F, 1.0F, 0.5F, 0.9F},
 }};
 
 bool Expect(bool condition, const char *message)
@@ -227,13 +246,21 @@ struct NativeOwnerCapture
 {
     std::size_t calls = 0U;
     std::size_t calls2 = 0U;
+    std::size_t calls3 = 0U;
+    std::size_t calls4 = 0U;
     std::size_t lookupCalls = 0U;
     std::size_t stateCalls = 0U;
+    std::size_t textureStageCalls = 0U;
+    std::size_t samplerCalls = 0U;
     GENRESULT result = GR_OK;
     PrimitiveTopology topology = PrimitiveTopology::PointList;
     FrontierX::RenderStateSnapshot renderState{};
+    FrontierX::TextureStageSnapshot textureStage{};
+    FrontierX::SamplerStateSnapshot samplerState{};
     std::vector<RenderVertexP3DiffuseT2> vertices;
     std::vector<RenderVertexP3DiffuseT4> vertices2;
+    std::vector<RenderVertexP3DiffuseSpecularT4> vertices3;
+    std::vector<FrontierX::RenderVertexP3N3DiffuseT5> vertices4;
     std::vector<std::uint16_t> indices;
 };
 
@@ -285,6 +312,38 @@ GENRESULT DACOM_CDECL CaptureNativeSubmission2(
     return capture.result;
 }
 
+GENRESULT DACOM_CDECL CaptureNativeSubmission3(
+    void * context, const RenderSubmissionView3 & submission)
+{
+    if (!context || !submission.IsValid()) return GR_INVALID_PARMS;
+    auto & capture = *static_cast<NativeOwnerCapture *>(context);
+    ++capture.calls3;
+    capture.vertices3.assign(
+        submission.vertices, submission.vertices + submission.vertexCount);
+    if (submission.indices)
+        capture.indices.assign(submission.indices,
+                               submission.indices + submission.indexCount);
+    else
+        capture.indices.clear();
+    return capture.result;
+}
+
+GENRESULT DACOM_CDECL CaptureNativeSubmission4(
+    void * context, const FrontierX::RenderSubmissionView4 & submission)
+{
+    if (!context || !submission.IsValid()) return GR_INVALID_PARMS;
+    auto & capture = *static_cast<NativeOwnerCapture *>(context);
+    ++capture.calls4;
+    capture.vertices4.assign(submission.vertices,
+                             submission.vertices + submission.vertexCount);
+    if (submission.indices)
+        capture.indices.assign(submission.indices,
+                               submission.indices + submission.indexCount);
+    else
+        capture.indices.clear();
+    return capture.result;
+}
+
 GENRESULT DACOM_CDECL CaptureNativeRenderState(
     void * context, const FrontierX::RenderStateSnapshot & state)
 {
@@ -298,6 +357,26 @@ GENRESULT DACOM_CDECL CaptureNativeRenderState(
     {
         capture.renderState = state;
     }
+    return capture.result;
+}
+
+GENRESULT DACOM_CDECL CaptureNativeTextureStage(
+    void * context, const FrontierX::TextureStageSnapshot & state)
+{
+    if (!context) return GR_INVALID_PARMS;
+    auto & capture = *static_cast<NativeOwnerCapture *>(context);
+    ++capture.textureStageCalls;
+    if (capture.result == GR_OK) capture.textureStage = state;
+    return capture.result;
+}
+
+GENRESULT DACOM_CDECL CaptureNativeSamplerState(
+    void * context, const FrontierX::SamplerStateSnapshot & state)
+{
+    if (!context) return GR_INVALID_PARMS;
+    auto & capture = *static_cast<NativeOwnerCapture *>(context);
+    ++capture.samplerCalls;
+    if (capture.result == GR_OK) capture.samplerState = state;
     return capture.result;
 }
 
@@ -365,6 +444,35 @@ int main()
     }
 
     constexpr std::array<std::uint16_t, 3> kBadIndices = {{0U, 1U, 4U}};
+    std::array<RenderVertexP3DiffuseSpecularT4, 3> convertedMt{};
+    RenderSubmissionView3 mtSubmission{};
+    const LegacySubmissionInput mtInput{
+        FrontierX::LegacyD3d9::kTriangleList,
+        FrontierX::LegacyD3d9::kMtVertexFvf,
+        kMtVertices.data(), kMtVertices.size(), kIndices.data(), 3U};
+    if (!Expect(FrontierX::AdaptLegacyMtVertexSubmission(
+                    mtInput, convertedMt.data(), convertedMt.size(), mtSubmission) ==
+                    LegacySubmissionStatus::Ok && mtSubmission.IsValid(),
+                "PolyMesh indexed FVF adapts") ||
+        !Expect(std::memcmp(convertedMt.data(), kMtVertices.data(),
+                            sizeof(kMtVertices)) == 0 &&
+                    mtSubmission.vertices[0].specularBgra == 0x00102030U &&
+                    mtSubmission.vertices[2].u2 == 0.5F,
+                "PolyMesh diffuse, specular and second UV preserved"))
+        return 1;
+    LegacySubmissionInput invalidMt = mtInput;
+    invalidMt.indices = kBadIndices.data();
+    if (!Expect(FrontierX::AdaptLegacyMtVertexSubmission(
+                    invalidMt, convertedMt.data(), convertedMt.size(), mtSubmission) ==
+                    LegacySubmissionStatus::InvalidInput && !mtSubmission.IsValid(),
+                "PolyMesh out-of-range index rejected")) return 1;
+    invalidMt = mtInput;
+    invalidMt.vertexFormat = FrontierX::LegacyD3d9::kRpVertex2Fvf;
+    if (!Expect(FrontierX::AdaptLegacyMtVertexSubmission(
+                    invalidMt, convertedMt.data(), convertedMt.size(), mtSubmission) ==
+                    LegacySubmissionStatus::UnsupportedVertexFormat,
+                "PolyMesh FVF remains exact")) return 1;
+
     const std::array<RenderSubmissionView, 7> invalid = {{
         {PrimitiveTopology::TriangleList, nullptr, 3U, nullptr, 0U},
         {PrimitiveTopology::TriangleList, kVertices.data(), 0U, nullptr, 0U},
@@ -640,10 +748,39 @@ int main()
         return 1;
     }
 
+    capture.ResetCapture();
+    {
+        PrimitiveBuilder2 appBuilder(4U);
+        appBuilder.SetIRenderPrimitive(&capture);
+        appBuilder.Begin(PB_QUADS, 4U);
+        appBuilder.Color4ub(0x33U, 0x22U, 0x11U, 0x44U);
+        appBuilder.Vertex3f(-1.0F, -1.0F, 0.0F);
+        appBuilder.Vertex3f(1.0F, -1.0F, 0.0F);
+        appBuilder.Vertex3f(1.0F, 1.0F, 0.0F);
+        appBuilder.Vertex3f(-1.0F, 1.0F, 0.0F);
+        appBuilder.End();
+        if (!Expect(capture.referenceCount == 2U, "App builder receiver retention") ||
+            !Expect(reinterpret_cast<std::uintptr_t>(appBuilder.vertex_buffer) % 32U == 0U,
+                    "App builder native vertex alignment") ||
+            !Expect(capture.status == LegacySubmissionStatus::Ok,
+                    "App builder native draw adaptation") ||
+            !Expect(capture.submission.vertexCount == 6U,
+                    "App builder quad expansion") ||
+            !Expect(capture.converted[0].diffuseBgra == 0x44332211U,
+                    "App builder color packing"))
+        {
+            return 1;
+        }
+    }
+    if (!Expect(capture.referenceCount == 1U, "App builder receiver release"))
+    {
+        return 1;
+    }
+
     FrontierX::NativeComponentManager manager;
     FrontierX::RegisterNativeRenderPrimitive(&manager);
-    if (!Expect(manager.RegisteredCount() == 1U,
-                "native render-primitive factory registration"))
+    if (!Expect(manager.RegisteredCount() == 2U,
+                "native render-primitive direct and aggregate factory registration"))
     {
         return 1;
     }
@@ -673,7 +810,12 @@ int main()
                     D3DPT_TRIANGLELIST,
                     FrontierX::LegacyD3d9::kRpVertex2Fvf,
                     kVertices2.data(), 3, 0U) == GR_NOT_IMPLEMENTED,
-                "native owner without extended callback accepted RPVERTEX2"))
+                "native owner without extended callback accepted RPVERTEX2") ||
+        !Expect(basicOwner->draw_primitive(
+                    D3DPT_TRIANGLELIST,
+                    FrontierX::LegacyD3d9::kGameStandardFvf,
+                    kVertices2.data(), 3, 0U) == GR_NOT_IMPLEMENTED,
+                "native owner without game callback accepted StandardVertex"))
     {
         basicOwner->Release();
         return 1;
@@ -683,7 +825,9 @@ int main()
     FrontierX::NativeRenderPrimitiveDesc ownerDescriptor(
         CaptureNativeSubmission, &ownerCapture, CaptureNativeSubmission2,
         CaptureNativeRenderState,
-        LookupNativeVertexBuffer, &ownerCapture);
+        LookupNativeVertexBuffer, &ownerCapture, CaptureNativeTextureStage, nullptr,
+        nullptr, nullptr, CaptureNativeSubmission3, CaptureNativeSubmission4,
+        CaptureNativeSamplerState);
     void * rawOwner = nullptr;
     if (!Expect(manager.CreateInstance(&ownerDescriptor, &rawOwner) == GR_OK && rawOwner,
                 "native render-primitive creation"))
@@ -713,6 +857,81 @@ int main()
         !Expect(nativeOwner->set_render_state(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA) == GR_OK &&
                     ownerCapture.renderState.destinationBlend == D3DBLEND_INVSRCALPHA,
                 "native owner destination-blend update") ||
+        !Expect(nativeOwner->set_render_state(D3DRS_SPECULARENABLE, 1U) == GR_OK &&
+                    ownerCapture.renderState.specularEnabled == 1U &&
+                    nativeOwner->get_render_state(D3DRS_SPECULARENABLE, &stateValue) == GR_OK &&
+                    stateValue == 1U,
+                "native owner specular state") ||
+        !Expect(nativeOwner->set_render_state(D3DRS_SPECULARENABLE, 2U) == GR_INVALID_PARMS,
+                "native owner invalid specular Boolean") ||
+        !Expect(nativeOwner->set_render_state(D3DRS_COLORVERTEX, 1U) == GR_OK &&
+                    nativeOwner->get_render_state(D3DRS_COLORVERTEX, &stateValue) == GR_OK &&
+                    stateValue == 1U &&
+                    nativeOwner->set_render_state(D3DRS_DIFFUSEMATERIALSOURCE,
+                                                  D3DMCS_COLOR1) == GR_OK &&
+                    nativeOwner->get_render_state(D3DRS_DIFFUSEMATERIALSOURCE,
+                                                  &stateValue) == GR_OK &&
+                    stateValue == D3DMCS_COLOR1 &&
+                    nativeOwner->set_render_state(D3DRS_LIGHTING, 0U) == GR_OK &&
+                    nativeOwner->get_render_state(D3DRS_LIGHTING, &stateValue) == GR_OK &&
+                    stateValue == 0U,
+                "native fixed vertex-color and unlit shader state") ||
+        !Expect(nativeOwner->set_render_state(D3DRS_COLORVERTEX, 0U) == GR_NOT_IMPLEMENTED &&
+                    nativeOwner->set_render_state(D3DRS_LIGHTING, 1U) == GR_NOT_IMPLEMENTED &&
+                    nativeOwner->set_render_state(D3DRS_LIGHTING, 2U) == GR_INVALID_PARMS &&
+                    nativeOwner->set_render_state(D3DRS_DIFFUSEMATERIALSOURCE, 0U) ==
+                        GR_NOT_IMPLEMENTED,
+                "native fixed shader rejects incompatible material state") ||
+        !Expect(nativeOwner->set_texture_stage_state(2U, D3DTSS_COLOROP,
+                                                     D3DTOP_DISABLE) == GR_OK &&
+                    nativeOwner->set_texture_stage_state(3U, D3DTSS_ALPHAOP,
+                                                         D3DTOP_DISABLE) == GR_OK &&
+                    nativeOwner->set_texture_stage_texture(2U, 0U) == GR_OK &&
+                    nativeOwner->set_texture_stage_texture(3U, 0U) == GR_OK &&
+                    nativeOwner->get_texture_stage_texture(3U, &stateValue) == GR_OK &&
+                    stateValue == 0U,
+                "native unused texture stages remain disabled") ||
+        !Expect(nativeOwner->set_texture_stage_state(2U, D3DTSS_COLOROP,
+                                                     D3DTOP_MODULATE) == GR_NOT_IMPLEMENTED &&
+                    nativeOwner->set_texture_stage_texture(2U, 1U) == GR_NOT_IMPLEMENTED &&
+                    nativeOwner->set_texture_stage_state(4U, D3DTSS_COLOROP,
+                                                         D3DTOP_DISABLE) == GR_NOT_IMPLEMENTED,
+                "native unused texture stages reject active values") ||
+        !Expect(nativeOwner->get_sampler_state(0U, D3DSAMP_MINFILTER,
+                                               &stateValue) == GR_OK &&
+                    stateValue == D3DTEXF_POINT &&
+                    nativeOwner->set_sampler_state(0U, D3DSAMP_MINFILTER,
+                                                   D3DTEXF_LINEAR) == GR_OK &&
+                    nativeOwner->set_sampler_state(0U, D3DSAMP_MAGFILTER,
+                                                   D3DTEXF_LINEAR) == GR_OK &&
+                    nativeOwner->set_sampler_state(0U, D3DSAMP_MIPFILTER,
+                                                   D3DTEXF_LINEAR) == GR_OK &&
+                    nativeOwner->set_sampler_state(0U, D3DSAMP_ADDRESSU,
+                                                   D3DTADDRESS_WRAP) == GR_OK &&
+                    nativeOwner->set_sampler_state(0U, D3DSAMP_ADDRESSV,
+                                                   D3DTADDRESS_WRAP) == GR_OK &&
+                    ownerCapture.samplerState.minFilter == D3DTEXF_LINEAR &&
+                    ownerCapture.samplerState.magFilter == D3DTEXF_LINEAR &&
+                    ownerCapture.samplerState.mipFilter == D3DTEXF_LINEAR &&
+                    ownerCapture.samplerState.addressU == D3DTADDRESS_WRAP &&
+                    ownerCapture.samplerState.addressV == D3DTADDRESS_WRAP,
+                "native sampler maps linear filtering and wrapping") ||
+        !Expect(nativeOwner->set_sampler_state(1U, D3DSAMP_MINFILTER,
+                                               D3DTEXF_LINEAR) == GR_NOT_IMPLEMENTED &&
+                    nativeOwner->set_sampler_state(0U, D3DSAMP_MINFILTER,
+                                                   999U) == GR_NOT_IMPLEMENTED &&
+                    nativeOwner->set_sampler_state(0U, D3DSAMP_ADDRESSU,
+                                                   999U) == GR_NOT_IMPLEMENTED,
+                "native sampler rejects unsupported stage and values") ||
+        !Expect(nativeOwner->set_texture_stage_state(0U, D3DTSS_TEXCOORDINDEX, 1U) == GR_OK &&
+                    ownerCapture.textureStage.textureCoordinateIndex == 1U &&
+                    nativeOwner->get_texture_stage_state(0U, D3DTSS_TEXCOORDINDEX,
+                                                          &stateValue) == GR_OK &&
+                    stateValue == 1U,
+                "native owner texture coordinate selection") ||
+        !Expect(nativeOwner->set_texture_stage_state(0U, D3DTSS_TEXCOORDINDEX, 2U) ==
+                    GR_NOT_IMPLEMENTED,
+                "native owner unsupported texture coordinate index") ||
         !Expect(nativeOwner->set_render_state(D3DRS_ZENABLE, 2U) == GR_INVALID_PARMS,
                 "native owner invalid Boolean state") ||
         !Expect(nativeOwner->set_render_state(
@@ -734,6 +953,36 @@ int main()
                 "native owner failed state update rollback") ||
         !Expect(ownerCapture.stateCalls == committedStateCalls + 1U,
                 "native owner state callback count"))
+    {
+        nativeOwner->Release();
+        return 1;
+    }
+    ownerCapture.result = GR_OK;
+    const std::size_t committedSamplerCalls = ownerCapture.samplerCalls;
+    ownerCapture.result = GR_GENERIC;
+    if (!Expect(nativeOwner->set_sampler_state(0U, D3DSAMP_ADDRESSU,
+                                               D3DTADDRESS_CLAMP) == GR_GENERIC &&
+                    nativeOwner->get_sampler_state(0U, D3DSAMP_ADDRESSU,
+                                                   &stateValue) == GR_OK &&
+                    stateValue == D3DTADDRESS_WRAP &&
+                    ownerCapture.samplerCalls == committedSamplerCalls + 1U,
+                "native sampler callback failure preserves prior state"))
+    {
+        nativeOwner->Release();
+        return 1;
+    }
+    ownerCapture.result = GR_OK;
+    const std::size_t committedTextureStageCalls = ownerCapture.textureStageCalls;
+    ownerCapture.result = GR_GENERIC;
+    if (!Expect(nativeOwner->set_texture_stage_state(0U, D3DTSS_TEXCOORDINDEX, 0U) ==
+                    GR_GENERIC,
+                "native owner texture-stage callback failure propagation") ||
+        !Expect(nativeOwner->get_texture_stage_state(0U, D3DTSS_TEXCOORDINDEX,
+                                                      &stateValue) == GR_OK &&
+                    stateValue == 1U,
+                "native owner failed texture-stage update rollback") ||
+        !Expect(ownerCapture.textureStageCalls == committedTextureStageCalls + 1U,
+                "native owner texture-stage callback count"))
     {
         nativeOwner->Release();
         return 1;
@@ -781,6 +1030,72 @@ int main()
         nativeOwner->Release();
         return 1;
     }
+
+    if (!Expect(nativeOwner->draw_indexed_primitive(
+                    D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kMtVertexFvf,
+                    kMtVertices.data(), static_cast<int>(kMtVertices.size()),
+                    kIndices.data(), 3, 0U) == GR_OK &&
+                    ownerCapture.calls3 == 1U &&
+                    ownerCapture.vertices3.size() == 3U &&
+                    ownerCapture.vertices3[0].specularBgra == 0x00102030U &&
+                    ownerCapture.vertices3[2].u2 == 0.5F &&
+                    ownerCapture.indices.size() == 3U,
+                "native primitive indexed PolyMesh callback"))
+    {
+        nativeOwner->Release();
+        return 1;
+    }
+    ownerCapture.result = GR_GENERIC;
+    if (!Expect(nativeOwner->draw_indexed_primitive(
+                    D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kMtVertexFvf,
+                    kMtVertices.data(), static_cast<int>(kMtVertices.size()),
+                    kIndices.data(), 3, 0U) == GR_GENERIC,
+                "native primitive propagates PolyMesh callback failure"))
+    {
+        nativeOwner->Release();
+        return 1;
+    }
+    ownerCapture.result = GR_OK;
+
+    std::array<FrontierX::RenderVertexP3N3DiffuseT5, 3U> gameVertices{};
+    gameVertices[0].nx = 1.0F;
+    gameVertices[0].diffuseBgra = 0x12345678U;
+    gameVertices[1].u2 = 0.5F;
+    gameVertices[2].binZ = 0.75F;
+    if (!Expect(nativeOwner->draw_indexed_primitive(
+                    D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kGameStandardFvf,
+                    gameVertices.data(), static_cast<int>(gameVertices.size()),
+                    kIndices.data(), 3, 0U) == GR_OK &&
+                    ownerCapture.calls4 == 1U &&
+                    ownerCapture.vertices4.size() == gameVertices.size() &&
+                    std::memcmp(ownerCapture.vertices4.data(), gameVertices.data(),
+                                sizeof(gameVertices)) == 0,
+                "native primitive preserves complete App StandardVertex bytes") ||
+        !Expect(nativeOwner->draw_indexed_primitive(
+                    D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kGameStandardFvf,
+                    gameVertices.data(), static_cast<int>(gameVertices.size()),
+                    kBadIndices.data(), 3, 0U) == GR_INVALID_PARMS,
+                "native primitive rejects out-of-range App index") ||
+        !Expect(nativeOwner->draw_indexed_primitive(
+                    D3DPT_TRIANGLESTRIP, FrontierX::LegacyD3d9::kGameStandardFvf,
+                    gameVertices.data(), static_cast<int>(gameVertices.size()),
+                    kIndices.data(), 3, 0U) == GR_NOT_IMPLEMENTED,
+                "native primitive rejects unsupported App topology"))
+    {
+        nativeOwner->Release();
+        return 1;
+    }
+    ownerCapture.result = GR_GENERIC;
+    if (!Expect(nativeOwner->draw_indexed_primitive(
+                    D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kGameStandardFvf,
+                    gameVertices.data(), static_cast<int>(gameVertices.size()),
+                    kIndices.data(), 3, 0U) == GR_GENERIC,
+                "native primitive propagates App callback failure"))
+    {
+        nativeOwner->Release();
+        return 1;
+    }
+    ownerCapture.result = GR_OK;
 
     ownerCapture.calls = 0U;
     ownerCapture.calls2 = 0U;

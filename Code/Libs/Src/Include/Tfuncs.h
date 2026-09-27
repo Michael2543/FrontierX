@@ -115,9 +115,9 @@ template<typename T>
 inline T Tgain( const T & b, const T & x )
 {
 	if( x < 0.5 ) {
-		return Tbias( 1-g, 2*x ) / 2;
+		return Tbias( 1-b, 2*x ) / 2;
 	}
-	return 1 - Tbias( 1-g, 2 - 2*x ) / 2;
+	return 1 - Tbias( 1-b, 2 - 2*x ) / 2;
 }
 
 template<typename T>

@@ -4,8 +4,8 @@
 #ifndef PERSISTCOMPOUND_H__
 #define PERSISTCOMPOUND_H__
 
-#include "persistmath.h"
-#include "typedefs.h"
+#include "PersistMath.h"
+#include "TYPEDEFS.H"
 
 
 const int PARTNAME_MAX = 64;

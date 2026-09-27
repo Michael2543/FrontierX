@@ -10,13 +10,29 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
-#include <stdio.h>
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "FrontierX/LegacyInput.h"
+#include "FrontierX/PlatformTime.h"
+#include "Scripts/Sol_T/NativeSolTrainStrings.h"
+#include "Scripts/Sol_T/NativeSolTrainModule.h"
+#include "MyVertex.h"
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <EventSys.h>
+#include <cstdint>
+#include <cstdlib>
+#endif
+#include <stdio.h>
 #include <MGlobals.h>
 #include <MScript.h>
 #include <CQTrace.h>
+#if defined(_WIN32)
 #include "Menu.h"
+#endif
 #include "UserDefaults.h"
 #include <MPartRef.h>
 #include <MGroupRef.h>
@@ -31,13 +47,19 @@
 #include "CommPacket.h"
 #include "FogOfWar.h"
 #include "MScroll.h"
+#if !defined(_WIN32)
+#include "Cursor.h"
+#endif
 #include "ILineManager.h"
+struct IMeshArchetype;
 #include <DSpaceship.h>
 #include "Mission.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
-#include "Ijumpgate.h"
-#include "Ijumpplat.h"
-#include "sysmap.h"
+#endif
+#include "IJumpGate.h"
+#include "IJumpPlat.h"
+#include "SysMap.h"
 #include "common.h"
 #include "OpAgent.h"
 #include "IWeapon.h"
@@ -49,17 +71,19 @@
 #include "IUnbornMeshList.h"
 #include "IMissionActor.h"
 #include "ObjMap.h"
-#include "Ifabricator.h"
+#include "ifabricator.h"
 #include "ObjMapIterator.h"
 #include "INugget.h"
-#include "terrainmap.h"
+#include "TerrainMap.h"
 #include "IGameProgress.h"
 #include "IBriefing.h"
 #include "Hotkeys.h"
 #include "DResearch.h"
 #include "UnitComm.h"
 #include "MusicManager.h"
+#if defined(_WIN32)
 #include "Frame.h"
+#endif
 #include "IScriptObject.h"
 #include <DCQGame.h>
 #include "IWormholeBlast.h"
@@ -71,12 +95,13 @@
 #include "IShapeLoader.h"
 #include "DrawAgent.h"
 
-#include "Resource.h"
-#include <FileSys.h>
+#include "resource.h"
+#include <Filesys.h>
 #include <ViewCnst.h>
-#include <TSmartpointer.h>
+#include <TSmartPointer.h>
 #include <StringTable.h>
 #include <SaveLoad.h>
+#include "Include/AppStringTableLoad.h"
 
 #include <malloc.h>
 
@@ -138,6 +163,7 @@ struct MCachedPart
 		dwMissionID = other.dwMissionID;
 		memcpy(&mdata,&(other.mdata),sizeof(IBaseObject::MDATA));
 		obj = other.obj;
+		return *this;
 	}
 
 	MCachedPart & operator = (U32 _dwMissionID)
@@ -262,6 +288,7 @@ static FILE * g_scriptDiag;
 //
 static void enableMenuItems (bool bEnable)
 {
+#if defined(_WIN32)
 	if (bEnable)
 	{
 		MENU->EnableMenuItem(IDM_START_PROGRAM, MF_BYCOMMAND|MF_ENABLED);
@@ -293,6 +320,9 @@ static void enableMenuItems (bool bEnable)
 		RemoveMenu(hMenu, IDS_VIEWMISSIONDATA, MF_BYCOMMAND);
 		RemoveMenu(hMenu, IDS_VIEWPROGRAMDATA, MF_BYCOMMAND);
 	}
+#else
+	(void)bEnable; // The Win32 script-debug menu is not part of gameplay.
+#endif
 }
 
 //--------------------------------------------------------------------------//
@@ -312,6 +342,14 @@ void MScript::SetScriptData (const CQSCRIPTDATADESC & desc)
 	COMPTR<IViewConstructor2> parser;
 
 	CQASSERT(g_hNewSymbols == 0);
+#if !defined(_WIN32)
+	if (!PARSER || !desc.preprocessData || !desc.preprocessSize ||
+		!desc.typeName || !desc.data || !desc.typeSize || !desc.hLocal)
+	{
+		std::fputs("Native script schema or parser is missing\n", stderr);
+		std::abort();
+	}
+#endif
 		
 	g_preprocessData = desc.preprocessData;
 	g_preprocessSize = desc.preprocessSize;
@@ -323,12 +361,26 @@ void MScript::SetScriptData (const CQSCRIPTDATADESC & desc)
 	if (PARSER->QueryInterface("IViewConstructor2", parser) == GR_OK)
 	{
 		char * ptr2 = (char *) malloc(desc.preprocessSize + 1);
+#if !defined(_WIN32)
+		if (!ptr2)
+		{
+			std::fputs("Native script schema allocation failed\n", stderr);
+			std::abort();
+		}
+#endif
 		memcpy(ptr2, desc.preprocessData, desc.preprocessSize);
 		ptr2[desc.preprocessSize] = 0;		// null terminated string
 
 		g_hNewSymbols = parser->ParseNewMemory(ptr2);
 		::free(ptr2);
 	}
+#if !defined(_WIN32)
+	if (!g_hNewSymbols || !parser->GetSymbol(g_hNewSymbols, desc.typeName))
+	{
+		std::fputs("Native script schema did not define its data type\n", stderr);
+		std::abort();
+	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -382,7 +434,14 @@ static void saveProgramData (IFileSystem * outFile)
 			fdesc.dwDesiredAccess = GENERIC_READ|GENERIC_WRITE;
 			fdesc.dwShareMode = 0;  // no sharing
 			fdesc.dwCreationDistribution = CREATE_ALWAYS;
+#if defined(_WIN32)
 			wsprintf(buffer, "%d-%s", i++, node->pScript->progName);
+#else
+			const int count = snprintf(buffer, sizeof(buffer), "%d-%s", i++,
+				node->pScript->progName);
+			if (count < 0 || static_cast<size_t>(count) >= sizeof(buffer))
+				std::abort();
+#endif
 			if (outFile->CreateInstance(&fdesc, file) == GR_OK)
 				file->WriteFile(0, ((char *)node->pProgram) + node->pScript->saveOffset, node->pScript->saveSize, &dwWritten, 0);
 
@@ -606,23 +665,7 @@ Done:
 //
 static void loadStringTable( IFileSystem & inFile )
 {
-	COMPTR<IFileSystem> file;
-	DAFILEDESC fdesc = "\\";
-
-	fdesc.lpImplementation = "DOS";
-	fdesc.dwDesiredAccess = GENERIC_READ;
-	fdesc.dwShareMode = 0;  // no sharing
-	fdesc.dwCreationDistribution = OPEN_EXISTING;
-
-	if( inFile.CreateInstance(&fdesc,file) == GR_OK )
-	{
-		COMPTR<ISaverLoader> stringTableLoader;
-		if( STRINGTABLE->QueryInterface("ISaverLoader",stringTableLoader) == GR_OK )
-		{		
-			file->SetCurrentDirectory("\\");
-			stringTableLoader->Load( *file.ptr );
-		}
-	}
+	FrontierX::LoadScriptStringTable(inFile, *STRINGTABLE);
 }
 //--------------------------------------------------------------------------//
 //
@@ -650,6 +693,38 @@ static void loadScripts( IFileSystem & inFile )
 //
 void MScript::Load (IFileSystem * inFile)
 {
+#if !defined(_WIN32)
+	char scriptName[MAX_PATH] = {};
+	if (!MGlobals::GetScriptName(scriptName, sizeof(scriptName)) ||
+		strcmp(scriptName, "Sol_T.dll") != 0 || !g_pScripts ||
+		!findScript("SolTrain_Start") || !PARSER || !SOUNDMANAGER ||
+		!TELETYPE || (inFile && (!STRINGTABLE || !SCRIPTING)))
+	{
+		std::fprintf(stderr, "Native training script prerequisites missing: %s\n",
+			scriptName);
+		std::abort();
+	}
+	if (MGlobals::GetUpdateCount() != 0)
+	{
+		std::fputs("Native saved script reload is not implemented\n", stderr);
+		std::abort();
+	}
+	FrontierXInitializeSolTrainScript();
+	SOUNDMANAGER->SetLastStreamID(MGlobals::GetLastStreamID());
+	TELETYPE->SetLastTeletypeID(MGlobals::GetLastTeletypeID());
+	if (inFile)
+	{
+		COMPTR<IViewConstructor2> parser;
+		if (PARSER->QueryInterface("IViewConstructor2", parser) != GR_OK || !parser)
+		{
+			std::fputs("Native script parser interface is missing\n", stderr);
+			std::abort();
+		}
+		loadParseData(inFile, parser);
+		loadStringTable(*inFile);
+		loadScripts(*inFile);
+	}
+#else
 	char abuffer[MAX_PATH];
 	int len;
 	const U32 updateCount = MGlobals::GetUpdateCount();
@@ -729,11 +804,16 @@ void MScript::Load (IFileSystem * inFile)
 		SCRIPT_LOGF("LoadScript: after loadScripts\n");
 	}
 	SCRIPT_LOGF("LoadScript: complete\n");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MScript::LoadScript (void)
 {
+#if !defined(_WIN32)
+	std::fputs("Native MScript briefing module loading is not implemented\n", stderr);
+	std::abort();
+#else
 	char abuffer[MAX_PATH];
 	int len;
 
@@ -770,6 +850,7 @@ void MScript::LoadScript (void)
 		runStartProgram(true);
 		SCRIPT_LOGF("LoadScript: after start program head=%p\n", g_pPrograms);
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -808,13 +889,17 @@ void MScript::Close  (void)
 		g_scriptDataType = 0;
 		g_pScriptData    = 0;
 		g_scriptDataSize = 0;
+#if defined(_WIN32)
 		g_pScripts		 = 0;
+#endif
 		g_hLocalDLL		 = 0;
 
 		if (g_hScriptDLL)
 		{
+#if defined(_WIN32)
 			CQIMAGE->UnloadSymTable(g_hScriptDLL);
 			FreeLibrary(g_hScriptDLL);
+#endif
 			g_hScriptDLL = 0;
 		}
 	}
@@ -868,6 +953,7 @@ void MScript::Update (void)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 static void initializeScriptListWnd (HWND hListbox)
 {
 	const CQSCRIPTENTRY * node = g_pScripts;
@@ -1115,17 +1201,33 @@ static BOOL killProgDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 
 	return result;
 }
+#endif
 //--------------------------------------------------------------------------//
 //
 void MScript::Notify (U32 message, void * param)
 {
+#if defined(_WIN32)
 	MSG * msg = (MSG *) param;
+#endif
 
 	switch (message)
 	{
 	case CQE_HOTKEY:
 		{
-			switch ((U32)param)
+#if !defined(_WIN32)
+			if (reinterpret_cast<std::uintptr_t>(param) > UINT32_MAX)
+			{
+				std::fputs("Native script hotkey token exceeds U32\n", stderr);
+				std::abort();
+			}
+#endif
+			switch (
+#if defined(_WIN32)
+				(U32)param
+#else
+				static_cast<U32>(reinterpret_cast<std::uintptr_t>(param))
+#endif
+			)
 			{
 			case IDH_SCRIPT_KEY_1:
 				{
@@ -1160,6 +1262,7 @@ void MScript::Notify (U32 message, void * param)
 		}
 		break;
 	
+#if defined(_WIN32)
 	case WM_COMMAND:
 		{
 			switch (LOWORD(msg->wParam))
@@ -1190,6 +1293,7 @@ void MScript::Notify (U32 message, void * param)
 			}
 		}
 		break; // end case WM_COMMAND
+#endif
 	} // end switch message
 }
 //-------------------------------------------------------------------
@@ -1906,6 +2010,9 @@ struct ResourceCost MScript::GetResourceCost(const char * name)
 //
 void MScript::EnableMouse (bool bEnable)
 {
+#if !defined(_WIN32)
+	EVENTSYS->Send(bEnable ? CQE_SET_FOCUS : CQE_KILL_FOCUS, nullptr);
+#else
 	if (!bEnable)
 	{
 		if (Frame::g_pFocusFrame == NULL)
@@ -1929,6 +2036,7 @@ void MScript::EnableMouse (bool bEnable)
 		}
 		
 	}
+#endif
 
 	MSCROLL->SetActive(bEnable);
 
@@ -1989,6 +2097,20 @@ void MScript::SetPlayerTech (U32 playerID, TECHNODE node)
 	 */
 wchar_t * MScript::GetCountedString (U32 stringID)
 {
+#if !defined(_WIN32)
+	if (g_hLocalDLL != FrontierX::GetNativeSolTrainResourceHandle())
+	{
+		std::fputs("Native script localization resource is not bound\n", stderr);
+		std::abort();
+	}
+	const wchar_t *counted = FrontierX::GetNativeSolTrainCountedString(stringID);
+	if (!counted)
+	{
+		std::fprintf(stderr, "Native Sol_T string ID %u is missing\n", stringID);
+		std::abort();
+	}
+	return const_cast<wchar_t *>(counted);
+#else
 	U16 *pData = NULL;
 	HRSRC hRes;
 
@@ -2024,6 +2146,7 @@ wchar_t * MScript::GetCountedString (U32 stringID)
 	}
 
 	return (wchar_t*)pData;
+#endif
 }
 
 //--------------------------------------------------------------------------//
@@ -2108,12 +2231,24 @@ void MScript::EnableMovieMode (bool bEnable)
 	if(bEnable)
 	{
 		CQFLAGS.bMovieMode = true;
-		EVENTSYS->Send(CQE_MOVIE_MODE,(void *)true);
+		EVENTSYS->Send(CQE_MOVIE_MODE,
+#if defined(_WIN32)
+			(void *)true
+#else
+			reinterpret_cast<void *>(std::uintptr_t{1})
+#endif
+		);
 	}
 	else
 	{
 		CQFLAGS.bMovieMode = false;
-		EVENTSYS->Send(CQE_MOVIE_MODE,false);
+		EVENTSYS->Send(CQE_MOVIE_MODE,
+#if defined(_WIN32)
+			false
+#else
+			nullptr
+#endif
+		);
 	}
 }
 //--------------------------------------------------------------------------//
@@ -2618,7 +2753,7 @@ void MScript::MakeInvincible (MPartRef & part,bool value)
 	{
 		MCachedPart & object = part.getPartFromCache();
 
-		MPartNC part = object.obj;
+		MPartNC part(object.obj);
 		part->bInvincible = value;
 	}
 }
@@ -2630,7 +2765,7 @@ void MScript::MakeNonAutoTarget (MPartRef & part,bool value)
 	{
 		MCachedPart & object = part.getPartFromCache();
 
-		MPartNC part = object.obj;
+		MPartNC part(object.obj);
 		part->bNoAutoTarget = value;
 	}
 }
@@ -2652,7 +2787,7 @@ void MScript::MakeJumpgateInvisible (const MPartRef & part, bool value)
 	if (part.isValid())
 	{
 		MCachedPart & object = part.getPartFromCache();
-		VOLPTR(IJumpGate) gate = object.obj;
+		VOLPTR(IJumpGate) gate(object.obj);
 		if(gate)
 		{
 			gate->SetJumpgateInvisible(value);
@@ -3698,7 +3833,7 @@ void MScript::SetRallyPoint (const MPartRef & platform, const MPartRef & point)
 			NETGRIDVECTOR gridVectorPoint;
 			gridVectorPoint.init( objPoint.obj->GetGridPosition(), objPoint.obj->GetSystemID() );
 			
-			VOLPTR(IPlatform) platform = objPlatform.obj;
+			VOLPTR(IPlatform) platform(objPlatform.obj);
 			if( platform )
 				platform->SetRallyPoint(gridVectorPoint);
 		}
@@ -3713,7 +3848,7 @@ void MScript::GiveCommandKit (const MPartRef & admiral, char * kitName)
 		MCachedPart & admiralObj = admiral.getPartFromCache();
 		if(MGlobals::IsFlagship((M_OBJCLASS)admiralObj.mdata.pInitData->mObjClass))
 		{
-			VOLPTR(IAdmiral) ad = admiralObj.obj;
+			VOLPTR(IAdmiral) ad(admiralObj.obj);
 			ad->LearnCommandKit(kitName);
 		}
 	}
@@ -3727,7 +3862,7 @@ const char * MScript::GetFormationName(const MPartRef & admiral)
 		MCachedPart & admiralObj = admiral.getPartFromCache();
 		if(MGlobals::IsFlagship((M_OBJCLASS)admiralObj.mdata.pInitData->mObjClass))
 		{
-			VOLPTR(IAdmiral) ad = admiralObj.obj;
+			VOLPTR(IAdmiral) ad(admiralObj.obj);
 			return ARCHLIST->GetArchName(ad->GetFormation());
 		}
 	}
@@ -3876,11 +4011,17 @@ U32 MScript::PlayAnimatedMessage (const char * filename, const char * animType, 
 //
 void MScript::PlayFullScreenVideo (const char * filename)
 {
+#if !defined(_WIN32)
+	(void)filename;
+	std::fputs("Native script full-screen video is not implemented\n", stderr);
+	std::abort();
+#else
 	EnableMovieMode(true);
 	CQFLAGS.bGameActive = false;
 	MovieScreen(NULL,filename);
 	CQFLAGS.bGameActive = true;
 	EnableMovieMode(false);
+#endif
 }
 
 //--------------------------------------------------------------------------//
@@ -3923,7 +4064,12 @@ U32 MScript::PlayTeletype (U32 stringID, U32 left, U32 top, U32 right, U32 botto
 						   bool bMuted, bool bCentered)
 {
 	RECT rc;
+#if defined(_WIN32)
 	SetRect(&rc, left, top, right, bottom);
+#else
+	rc = {static_cast<LONG>(left), static_cast<LONG>(top),
+		static_cast<LONG>(right), static_cast<LONG>(bottom)};
+#endif
 
 	return TELETYPE->CreateTeletypeDisplay(GetCountedString(stringID), rc, IDS_TELETYPE_FONT, color, lifetime, textTime, bMuted, bCentered);
 }

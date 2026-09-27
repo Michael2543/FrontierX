@@ -18,11 +18,11 @@
 #define RENDERER_H
 
 #ifndef US_TYPEDEFS
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 #endif
 
 #ifndef DACOM_H
-#include "Dacom.h"      
+#include "DACOM.H"
 #endif
 
 #include "RenderProp.h"
@@ -31,6 +31,9 @@
 
 typedef S32 ARCHETYPE_INDEX;
 typedef S32 INSTANCE_INDEX;	// defined by Engine.h
+#ifndef INVALID_INSTANCE_INDEX
+#define INVALID_INSTANCE_INDEX ((INSTANCE_INDEX)-1)
+#endif
 
 //
 

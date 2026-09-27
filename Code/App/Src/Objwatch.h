@@ -43,7 +43,9 @@ struct IObject;
 struct IBaseObject;
 
 #undef CQEXTERN
-#ifdef BUILD_TRIM
+#if !defined(_WIN32)
+#define CQEXTERN
+#elif defined(BUILD_TRIM)
 #define CQEXTERN __declspec(dllexport)
 #else
 #define CQEXTERN __declspec(dllimport)

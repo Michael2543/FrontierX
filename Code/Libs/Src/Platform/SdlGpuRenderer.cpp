@@ -1,12 +1,24 @@
 #include "FrontierX/SdlGpuRenderer.h"
+#include "FrontierX/NativeBatchStateIds.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_gpu.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wextra"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#endif
+#include "matrix4.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include <fstream>
 #include <limits>
 #include <map>
@@ -28,9 +40,12 @@ struct SdlGpuRenderer::Impl
     SDL_GPUDevice * device = nullptr;
     SDL_GPUShader * vertexShader = nullptr;
     SDL_GPUShader * extendedVertexShader = nullptr;
+    SDL_GPUShader * gameVertexShader = nullptr;
     SDL_GPUShader * fragmentShader = nullptr;
     SDL_GPUGraphicsPipeline * pipeline = nullptr;
     SDL_GPUGraphicsPipeline * extendedPipeline = nullptr;
+    SDL_GPUGraphicsPipeline * gamePipeline = nullptr;
+    SDL_GPUGraphicsPipeline * appPipeline = nullptr;
     SDL_GPUBuffer * vertexBuffer = nullptr;
     SDL_GPUBuffer * indexBuffer = nullptr;
     SDL_GPUTransferBuffer * transferBuffer = nullptr;
@@ -46,13 +61,26 @@ struct SdlGpuRenderer::Impl
     Uint32 depthWidth = 0U;
     Uint32 depthHeight = 0U;
     Uint32 depthRecreations = 0U;
+    Uint32 pipelineRebuilds = 0U;
     Uint32 vertexCount = 0U;
     Uint32 indexCount = 0U;
     RenderStateSnapshot renderState{};
+    std::array<float, 16> modelview{{1.0F, 0.0F, 0.0F, 0.0F,
+                                     0.0F, 1.0F, 0.0F, 0.0F,
+                                     0.0F, 0.0F, 1.0F, 0.0F,
+                                     0.0F, 0.0F, 0.0F, 1.0F}};
+    std::array<float, 16> projection{{1.0F, 0.0F, 0.0F, 0.0F,
+                                      0.0F, 1.0F, 0.0F, 0.0F,
+                                      0.0F, 0.0F, 1.0F, 0.0F,
+                                      0.0F, 0.0F, 0.0F, 1.0F}};
+    std::array<float, 4> vertexUv{{0.0F, 0.0F, 1.0F, 1.0F}};
+    std::array<float, 4> vertexColor{{1.0F, 1.0F, 1.0F, 1.0F}};
     TextureStageSnapshot textureStage{};
+    SamplerStateSnapshot samplerState{};
     Uint32 currentTextureHandle = 1U;
+    Uint32 nullTextureHandle = 0U;
     Uint32 nextTextureHandle = 2U;
-    bool extendedActive = false;
+    unsigned activeVertexFormat = 0U;
     bool windowClaimed = false;
 };
 
@@ -158,13 +186,41 @@ struct alignas(16) TextureStageUniform
 {
     Uint32 operations[4];
     Uint32 arguments[4];
+    float factor[4];
 };
 
-TextureStageUniform MakeTextureStageUniform(const TextureStageSnapshot & state)
+struct alignas(16) VertexTransformUniform
 {
-    return {{state.colorOperation, state.alphaOperation, 0U, 0U},
+    std::array<float, 16> clip;
+    std::array<float, 4> uv;
+    std::array<float, 4> color;
+};
+
+TextureStageUniform MakeTextureStageUniform(const TextureStageSnapshot & state,
+                                           const RenderStateSnapshot & renderState)
+{
+    const U32 color = renderState.textureFactor;
+    constexpr float scale = 1.0F / 255.0F;
+    return {{state.colorOperation, state.alphaOperation, renderState.specularEnabled,
+             state.textureCoordinateIndex},
             {state.colorArgument1, state.colorArgument2,
-             state.alphaArgument1, state.alphaArgument2}};
+             state.alphaArgument1, state.alphaArgument2},
+            {static_cast<float>((color >> 16U) & 0xFFU) * scale,
+             static_cast<float>((color >> 8U) & 0xFFU) * scale,
+             static_cast<float>(color & 0xFFU) * scale,
+             static_cast<float>((color >> 24U) & 0xFFU) * scale}};
+}
+
+std::array<float, 16> MakeClipMatrix(const std::array<float, 16> & projection,
+                                     const std::array<float, 16> & modelview)
+{
+    std::array<float, 16> columnMajor{};
+    for (std::size_t row = 0U; row < 4U; ++row)
+        for (std::size_t column = 0U; column < 4U; ++column)
+            for (std::size_t inner = 0U; inner < 4U; ++inner)
+                columnMajor[column * 4U + row] +=
+                    projection[row * 4U + inner] * modelview[inner * 4U + column];
+    return columnMajor;
 }
 
 bool MapDepthFunction(U32 value, SDL_GPUCompareOp & result)
@@ -216,7 +272,7 @@ SDL_GPUGraphicsPipeline * CreateGraphicsPipeline(
     SDL_GPUShader * fragmentShader,
     SDL_GPUTextureFormat colorTargetFormat,
     const RenderStateSnapshot & state,
-    bool extended)
+    unsigned vertexFormat)
 {
     SDL_GPUCompareOp compare = SDL_GPU_COMPAREOP_INVALID;
     SDL_GPUBlendFactor source = SDL_GPU_BLENDFACTOR_INVALID;
@@ -228,17 +284,32 @@ SDL_GPUGraphicsPipeline * CreateGraphicsPipeline(
         return nullptr;
     }
     const SDL_GPUVertexBufferDescription bufferDescription{
-        0U, static_cast<Uint32>(extended ? sizeof(RenderVertexP3DiffuseT4) :
+        0U, static_cast<Uint32>(vertexFormat == 3U ?
+                                  sizeof(RenderVertexP3N3DiffuseT5) :
+                                  vertexFormat == 2U ?
+                                  sizeof(RenderVertexP3DiffuseSpecularT4) :
+                                  vertexFormat == 1U ? sizeof(RenderVertexP3DiffuseT4) :
                                   sizeof(RenderVertexP3DiffuseT2)),
         SDL_GPU_VERTEXINPUTRATE_VERTEX, 0U};
-    const std::array<SDL_GPUVertexAttribute, 4> attributes = {{
+    const std::array<SDL_GPUVertexAttribute, 5> attributes = {{
         {0U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, 0U},
         {1U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM,
-         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseT2, diffuseBgra))},
-        {2U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseT2, u))},
+         static_cast<Uint32>(vertexFormat == 3U ?
+             offsetof(RenderVertexP3N3DiffuseT5, diffuseBgra) :
+             offsetof(RenderVertexP3DiffuseT2, diffuseBgra))},
+        {2U, 0U, vertexFormat == 2U ? SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM :
+                                  SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+         static_cast<Uint32>(vertexFormat == 2U ?
+             offsetof(RenderVertexP3DiffuseSpecularT4, specularBgra) :
+             vertexFormat == 3U ? offsetof(RenderVertexP3N3DiffuseT5, u) :
+             offsetof(RenderVertexP3DiffuseT2, u))},
         {3U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseT4, u2))},
+         static_cast<Uint32>(vertexFormat == 2U ?
+             offsetof(RenderVertexP3DiffuseSpecularT4, u) :
+             vertexFormat == 3U ? offsetof(RenderVertexP3N3DiffuseT5, u2) :
+             offsetof(RenderVertexP3DiffuseT4, u2))},
+        {4U, 0U, SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+         static_cast<Uint32>(offsetof(RenderVertexP3DiffuseSpecularT4, u2))},
     }};
     SDL_GPUColorTargetDescription colorTarget{};
     colorTarget.format = colorTargetFormat;
@@ -255,10 +326,13 @@ SDL_GPUGraphicsPipeline * CreateGraphicsPipeline(
     pipelineInfo.vertex_input_state.vertex_buffer_descriptions = &bufferDescription;
     pipelineInfo.vertex_input_state.num_vertex_buffers = 1U;
     pipelineInfo.vertex_input_state.vertex_attributes = attributes.data();
-    pipelineInfo.vertex_input_state.num_vertex_attributes = extended ? 4U : 3U;
+    pipelineInfo.vertex_input_state.num_vertex_attributes = vertexFormat == 2U ? 5U :
+                                                             vertexFormat == 1U || vertexFormat == 3U ? 4U : 3U;
     pipelineInfo.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
     pipelineInfo.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
-    pipelineInfo.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+    pipelineInfo.rasterizer_state.cull_mode = state.cullMode == D3DCULL_CW ?
+        SDL_GPU_CULLMODE_BACK : state.cullMode == D3DCULL_CCW ?
+        SDL_GPU_CULLMODE_FRONT : SDL_GPU_CULLMODE_NONE;
     pipelineInfo.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
     pipelineInfo.rasterizer_state.enable_depth_clip = true;
     pipelineInfo.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
@@ -286,6 +360,24 @@ bool PixelsDiffer(const std::uint8_t * left,
     }
     return false;
 }
+
+SDL_GPUSampler * CreateSampler(SDL_GPUDevice * device,
+                               const SamplerStateSnapshot & state)
+{
+    SDL_GPUSamplerCreateInfo info{};
+    info.min_filter = state.minFilter == D3DTEXF_LINEAR ?
+        SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+    info.mag_filter = state.magFilter == D3DTEXF_LINEAR ?
+        SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+    info.mipmap_mode = state.mipFilter == D3DTEXF_LINEAR ?
+        SDL_GPU_SAMPLERMIPMAPMODE_LINEAR : SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    info.address_mode_u = state.addressU == D3DTADDRESS_WRAP ?
+        SDL_GPU_SAMPLERADDRESSMODE_REPEAT : SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    info.address_mode_v = state.addressV == D3DTADDRESS_WRAP ?
+        SDL_GPU_SAMPLERADDRESSMODE_REPEAT : SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    return SDL_CreateGPUSampler(device, &info);
+}
 }
 
 SdlGpuRenderer::SdlGpuRenderer() : impl_(std::make_unique<Impl>()) {}
@@ -300,7 +392,8 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
                                 const char * fragmentShaderPath,
                                 SdlGpuTextureView texture,
                                 std::string & error,
-                                const char * extendedVertexShaderPath)
+                                const char * extendedVertexShaderPath,
+                                const char * gameVertexShaderPath)
 {
     Shutdown();
     impl_ = std::make_unique<Impl>();
@@ -316,11 +409,14 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
     }
     std::vector<std::uint8_t> vertexCode;
     std::vector<std::uint8_t> extendedVertexCode;
+    std::vector<std::uint8_t> gameVertexCode;
     std::vector<std::uint8_t> fragmentCode;
     if (!ReadShader(vertexShaderPath, vertexCode, error) ||
         !ReadShader(fragmentShaderPath, fragmentCode, error) ||
         (extendedVertexShaderPath &&
-         !ReadShader(extendedVertexShaderPath, extendedVertexCode, error)))
+         !ReadShader(extendedVertexShaderPath, extendedVertexCode, error)) ||
+        (gameVertexShaderPath &&
+         !ReadShader(gameVertexShaderPath, gameVertexCode, error)))
     {
         impl_->error = error;
         return false;
@@ -350,14 +446,18 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
         return false;
     }
     impl_->vertexShader = CreateShader(
-        impl_->device, vertexCode, SDL_GPU_SHADERSTAGE_VERTEX, 0U);
+        impl_->device, vertexCode, SDL_GPU_SHADERSTAGE_VERTEX, 0U, 1U);
     if (extendedVertexShaderPath)
         impl_->extendedVertexShader = CreateShader(
-            impl_->device, extendedVertexCode, SDL_GPU_SHADERSTAGE_VERTEX, 0U);
+            impl_->device, extendedVertexCode, SDL_GPU_SHADERSTAGE_VERTEX, 0U, 1U);
+    if (gameVertexShaderPath)
+        impl_->gameVertexShader = CreateShader(
+            impl_->device, gameVertexCode, SDL_GPU_SHADERSTAGE_VERTEX, 0U, 1U);
     impl_->fragmentShader = CreateShader(
         impl_->device, fragmentCode, SDL_GPU_SHADERSTAGE_FRAGMENT, 1U, 1U);
     if (!impl_->vertexShader || !impl_->fragmentShader ||
-        (extendedVertexShaderPath && !impl_->extendedVertexShader))
+        (extendedVertexShaderPath && !impl_->extendedVertexShader) ||
+        (gameVertexShaderPath && !impl_->gameVertexShader))
     {
         error = SDL_GetError();
         impl_->error = error;
@@ -367,21 +467,24 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
 
     impl_->pipeline = CreateGraphicsPipeline(
         impl_->device, impl_->vertexShader, impl_->fragmentShader,
-        impl_->colorTargetFormat, impl_->renderState, false);
+        impl_->colorTargetFormat, impl_->renderState, 0U);
     if (impl_->extendedVertexShader)
         impl_->extendedPipeline = CreateGraphicsPipeline(
             impl_->device, impl_->extendedVertexShader, impl_->fragmentShader,
-            impl_->colorTargetFormat, impl_->renderState, true);
-    SDL_GPUSamplerCreateInfo samplerInfo{};
-    samplerInfo.min_filter = SDL_GPU_FILTER_NEAREST;
-    samplerInfo.mag_filter = SDL_GPU_FILTER_NEAREST;
-    samplerInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-    samplerInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    samplerInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    samplerInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    impl_->sampler = SDL_CreateGPUSampler(impl_->device, &samplerInfo);
+            impl_->colorTargetFormat, impl_->renderState, 1U);
+    if (impl_->gameVertexShader)
+        impl_->gamePipeline = CreateGraphicsPipeline(
+            impl_->device, impl_->gameVertexShader, impl_->fragmentShader,
+            impl_->colorTargetFormat, impl_->renderState, 2U);
+    if (impl_->extendedVertexShader)
+        impl_->appPipeline = CreateGraphicsPipeline(
+            impl_->device, impl_->extendedVertexShader, impl_->fragmentShader,
+            impl_->colorTargetFormat, impl_->renderState, 3U);
+    impl_->sampler = CreateSampler(impl_->device, impl_->samplerState);
     if (!impl_->pipeline || !impl_->sampler ||
-        (impl_->extendedVertexShader && !impl_->extendedPipeline))
+        (impl_->extendedVertexShader && !impl_->extendedPipeline) ||
+        (impl_->gameVertexShader && !impl_->gamePipeline) ||
+        (impl_->extendedVertexShader && !impl_->appPipeline))
     {
         error = SDL_GetError();
         impl_->error = error;
@@ -391,6 +494,15 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
     impl_->texturePixels.assign(texture.rgba8, texture.rgba8 + texture.byteCount);
     impl_->textureWidth = texture.width;
     impl_->textureHeight = texture.height;
+    const std::array<std::uint8_t, 4> white{{255U, 255U, 255U, 255U}};
+    if (RegisterTexture({white.data(), 1U, 1U, white.size()},
+                        impl_->nullTextureHandle) != GR_OK)
+    {
+        error = impl_->error.empty() ? "SDL GPU null texture upload failed" : impl_->error;
+        Shutdown();
+        return false;
+    }
+    ++impl_->pipelineRebuilds;
     return true;
 }
 
@@ -401,7 +513,7 @@ GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView & submission)
     if (!submission.IsValid()) return GR_INVALID_PARMS;
     return SubmitBytes(submission.vertices, submission.vertexCount,
                        sizeof(RenderVertexP3DiffuseT2), submission.indices,
-                       submission.indexCount, false);
+                       submission.indexCount, 0U);
 }
 
 GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView2 & submission)
@@ -411,15 +523,37 @@ GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView2 & submission)
     if (!submission.IsValid()) return GR_INVALID_PARMS;
     return SubmitBytes(submission.vertices, submission.vertexCount,
                        sizeof(RenderVertexP3DiffuseT4), submission.indices,
-                       submission.indexCount, true);
+                       submission.indexCount, 1U);
+}
+
+GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView3 & submission)
+{
+    if (submission.topology != PrimitiveTopology::TriangleList)
+        return GR_NOT_IMPLEMENTED;
+    if (!submission.IsValid()) return GR_INVALID_PARMS;
+    return SubmitBytes(submission.vertices, submission.vertexCount,
+                       sizeof(RenderVertexP3DiffuseSpecularT4), submission.indices,
+                       submission.indexCount, 2U);
+}
+
+GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView4 & submission)
+{
+    if (submission.topology != PrimitiveTopology::TriangleList)
+        return GR_NOT_IMPLEMENTED;
+    if (!submission.IsValid()) return GR_INVALID_PARMS;
+    return SubmitBytes(submission.vertices, submission.vertexCount,
+                       sizeof(RenderVertexP3N3DiffuseT5), submission.indices,
+                       submission.indexCount, 3U);
 }
 
 GENRESULT SdlGpuRenderer::SubmitBytes(const void * vertices, std::size_t vertexCount,
                                      std::size_t vertexStride,
                                      const std::uint16_t * indices,
-                                     std::size_t indexCount, bool extended)
+                                     std::size_t indexCount, unsigned vertexFormat)
 {
-    if (!impl_->device || (extended && !impl_->extendedPipeline))
+    if (!impl_->device || (vertexFormat == 1U && !impl_->extendedPipeline) ||
+        (vertexFormat == 2U && !impl_->gamePipeline) ||
+        (vertexFormat == 3U && !impl_->appPipeline))
         return GR_NOT_IMPLEMENTED;
     if (vertexCount > std::numeric_limits<Uint32>::max() / vertexStride ||
         indexCount >
@@ -529,7 +663,54 @@ GENRESULT SdlGpuRenderer::SubmitBytes(const void * vertices, std::size_t vertexC
     candidate.color = nullptr;
     impl_->vertexCount = static_cast<Uint32>(vertexCount);
     impl_->indexCount = static_cast<Uint32>(indexCount);
-    impl_->extendedActive = extended;
+    impl_->activeVertexFormat = vertexFormat;
+    return GR_OK;
+}
+
+GENRESULT SdlGpuRenderer::SetModelview(const Transform & modelview)
+{
+    if (!impl_->device) return GR_NOT_IMPLEMENTED;
+    std::array<float, 16> candidate{{
+        modelview.d[0][0], modelview.d[0][1], modelview.d[0][2], modelview.translation.x,
+        modelview.d[1][0], modelview.d[1][1], modelview.d[1][2], modelview.translation.y,
+        modelview.d[2][0], modelview.d[2][1], modelview.d[2][2], modelview.translation.z,
+        0.0F, 0.0F, 0.0F, 1.0F}};
+    for (float value : candidate)
+        if (!std::isfinite(value)) return GR_INVALID_PARMS;
+    impl_->modelview = candidate;
+    return GR_OK;
+}
+
+GENRESULT SdlGpuRenderer::SetProjection(const Matrix4 & projection)
+{
+    if (!impl_->device) return GR_NOT_IMPLEMENTED;
+    std::array<float, 16> candidate{};
+    for (std::size_t row = 0U; row < 4U; ++row)
+        for (std::size_t column = 0U; column < 4U; ++column)
+        {
+            const float value = projection.d[row][column];
+            if (!std::isfinite(value)) return GR_INVALID_PARMS;
+            candidate[row * 4U + column] = value;
+        }
+    impl_->projection = candidate;
+    return GR_OK;
+}
+
+GENRESULT SdlGpuRenderer::SetVertexConstants(std::uint32_t firstRegister,
+                                             const float * values,
+                                             std::uint32_t registerCount)
+{
+    if (!impl_->device) return GR_NOT_IMPLEMENTED;
+    if (!values || !registerCount || firstRegister < 30U ||
+        firstRegister > 31U || registerCount > 32U - firstRegister)
+        return GR_INVALID_PARMS;
+    for (std::uint32_t index = 0U; index < registerCount * 4U; ++index)
+        if (!std::isfinite(values[index])) return GR_INVALID_PARMS;
+    if (firstRegister == 30U)
+        std::copy_n(values, 4U, impl_->vertexUv.begin());
+    if (firstRegister + registerCount == 32U)
+        std::copy_n(values + (31U - firstRegister) * 4U, 4U,
+                    impl_->vertexColor.begin());
     return GR_OK;
 }
 
@@ -538,15 +719,30 @@ GENRESULT SdlGpuRenderer::SetRenderState(const RenderStateSnapshot & state)
     if (!impl_->device || !IsRenderBoolean(state.depthEnabled) ||
         !IsRenderBoolean(state.depthWriteEnabled) ||
         !IsRenderBoolean(state.alphaBlendEnabled) ||
+        !IsRenderBoolean(state.specularEnabled) ||
         !IsRenderDepthFunction(state.depthFunction) ||
         !IsRenderBlendFactor(state.sourceBlend) ||
-        !IsRenderBlendFactor(state.destinationBlend))
+        !IsRenderBlendFactor(state.destinationBlend) ||
+        state.cullMode < D3DCULL_NONE || state.cullMode > D3DCULL_CCW)
     {
         return GR_INVALID_PARMS;
     }
+    const RenderStateSnapshot & current = impl_->renderState;
+    if (state.depthEnabled == current.depthEnabled &&
+        state.depthWriteEnabled == current.depthWriteEnabled &&
+        state.depthFunction == current.depthFunction &&
+        state.alphaBlendEnabled == current.alphaBlendEnabled &&
+        state.sourceBlend == current.sourceBlend &&
+        state.destinationBlend == current.destinationBlend &&
+        state.cullMode == current.cullMode)
+    {
+        // Specular enable and texture factor are fragment uniforms only.
+        impl_->renderState = state;
+        return GR_OK;
+    }
     SDL_GPUGraphicsPipeline * pipeline = CreateGraphicsPipeline(
         impl_->device, impl_->vertexShader, impl_->fragmentShader,
-        impl_->colorTargetFormat, state, false);
+        impl_->colorTargetFormat, state, 0U);
     if (!pipeline)
     {
         impl_->error = SDL_GetError();
@@ -557,11 +753,43 @@ GENRESULT SdlGpuRenderer::SetRenderState(const RenderStateSnapshot & state)
     {
         extendedPipeline = CreateGraphicsPipeline(
             impl_->device, impl_->extendedVertexShader, impl_->fragmentShader,
-            impl_->colorTargetFormat, state, true);
+            impl_->colorTargetFormat, state, 1U);
         if (!extendedPipeline)
         {
             impl_->error = SDL_GetError();
             SDL_ReleaseGPUGraphicsPipeline(impl_->device, pipeline);
+            return GR_GENERIC;
+        }
+    }
+    SDL_GPUGraphicsPipeline * gamePipeline = nullptr;
+    if (impl_->gameVertexShader)
+    {
+        gamePipeline = CreateGraphicsPipeline(
+            impl_->device, impl_->gameVertexShader, impl_->fragmentShader,
+            impl_->colorTargetFormat, state, 2U);
+        if (!gamePipeline)
+        {
+            impl_->error = SDL_GetError();
+            SDL_ReleaseGPUGraphicsPipeline(impl_->device, pipeline);
+            if (extendedPipeline)
+                SDL_ReleaseGPUGraphicsPipeline(impl_->device, extendedPipeline);
+            return GR_GENERIC;
+        }
+    }
+    SDL_GPUGraphicsPipeline * appPipeline = nullptr;
+    if (impl_->extendedVertexShader)
+    {
+        appPipeline = CreateGraphicsPipeline(
+            impl_->device, impl_->extendedVertexShader, impl_->fragmentShader,
+            impl_->colorTargetFormat, state, 3U);
+        if (!appPipeline)
+        {
+            impl_->error = SDL_GetError();
+            SDL_ReleaseGPUGraphicsPipeline(impl_->device, pipeline);
+            if (extendedPipeline)
+                SDL_ReleaseGPUGraphicsPipeline(impl_->device, extendedPipeline);
+            if (gamePipeline)
+                SDL_ReleaseGPUGraphicsPipeline(impl_->device, gamePipeline);
             return GR_GENERIC;
         }
     }
@@ -571,15 +799,26 @@ GENRESULT SdlGpuRenderer::SetRenderState(const RenderStateSnapshot & state)
         SDL_ReleaseGPUGraphicsPipeline(impl_->device, pipeline);
         if (extendedPipeline)
             SDL_ReleaseGPUGraphicsPipeline(impl_->device, extendedPipeline);
+        if (gamePipeline)
+            SDL_ReleaseGPUGraphicsPipeline(impl_->device, gamePipeline);
+        if (appPipeline)
+            SDL_ReleaseGPUGraphicsPipeline(impl_->device, appPipeline);
         return GR_GENERIC;
     }
     if (impl_->pipeline)
         SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->pipeline);
     if (impl_->extendedPipeline)
         SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->extendedPipeline);
+    if (impl_->gamePipeline)
+        SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->gamePipeline);
+    if (impl_->appPipeline)
+        SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->appPipeline);
     impl_->pipeline = pipeline;
     impl_->extendedPipeline = extendedPipeline;
+    impl_->gamePipeline = gamePipeline;
+    impl_->appPipeline = appPipeline;
     impl_->renderState = state;
+    ++impl_->pipelineRebuilds;
     return GR_OK;
 }
 
@@ -591,11 +830,39 @@ GENRESULT SdlGpuRenderer::SetTextureStageState(const TextureStageSnapshot & stat
         !IsTextureStageArgument(state.colorArgument1) ||
         !IsTextureStageArgument(state.colorArgument2) ||
         !IsTextureStageArgument(state.alphaArgument1) ||
-        !IsTextureStageArgument(state.alphaArgument2))
+        !IsTextureStageArgument(state.alphaArgument2) ||
+        state.textureCoordinateIndex > 1U)
     {
         return GR_NOT_IMPLEMENTED;
     }
     impl_->textureStage = state;
+    return GR_OK;
+}
+
+GENRESULT SdlGpuRenderer::SetSamplerState(const SamplerStateSnapshot & state)
+{
+    if (!impl_->device) return GR_NOT_IMPLEMENTED;
+    if ((state.addressU != D3DTADDRESS_WRAP && state.addressU != D3DTADDRESS_CLAMP) ||
+        (state.addressV != D3DTADDRESS_WRAP && state.addressV != D3DTADDRESS_CLAMP) ||
+        (state.minFilter != D3DTEXF_POINT && state.minFilter != D3DTEXF_LINEAR) ||
+        (state.magFilter != D3DTEXF_POINT && state.magFilter != D3DTEXF_LINEAR) ||
+        (state.mipFilter != D3DTEXF_POINT && state.mipFilter != D3DTEXF_LINEAR))
+        return GR_NOT_IMPLEMENTED;
+    SDL_GPUSampler * candidate = CreateSampler(impl_->device, state);
+    if (!candidate)
+    {
+        impl_->error = SDL_GetError();
+        return GR_GENERIC;
+    }
+    if (!SDL_WaitForGPUIdle(impl_->device))
+    {
+        impl_->error = SDL_GetError();
+        SDL_ReleaseGPUSampler(impl_->device, candidate);
+        return GR_GENERIC;
+    }
+    SDL_ReleaseGPUSampler(impl_->device, impl_->sampler);
+    impl_->sampler = candidate;
+    impl_->samplerState = state;
     return GR_OK;
 }
 
@@ -606,7 +873,7 @@ GENRESULT SdlGpuRenderer::RegisterTexture(SdlGpuTextureView texture, std::uint32
         texture.width > std::numeric_limits<Uint32>::max() / 4U ||
         texture.height > std::numeric_limits<Uint32>::max() / (texture.width * 4U) ||
         texture.byteCount != static_cast<std::size_t>(texture.width) * texture.height * 4U ||
-        impl_->nextTextureHandle == std::numeric_limits<Uint32>::max())
+        impl_->nextTextureHandle > kMaxTextureStateId)
     {
         return GR_INVALID_PARMS;
     }
@@ -693,6 +960,7 @@ GENRESULT SdlGpuRenderer::CreateTexture(std::uint32_t width, std::uint32_t heigh
 GENRESULT SdlGpuRenderer::ReplaceTexture(std::uint32_t handle,
                                           SdlGpuTextureView texture)
 {
+    if (handle == impl_->nullTextureHandle) return GR_INVALID_PARMS;
     const auto found = impl_->registeredTextures.find(handle);
     if (found == impl_->registeredTextures.end() ||
         found->second.width != texture.width ||
@@ -711,7 +979,8 @@ GENRESULT SdlGpuRenderer::ReplaceTexture(std::uint32_t handle,
 
 GENRESULT SdlGpuRenderer::DestroyTexture(std::uint32_t handle)
 {
-    if (!impl_->device || handle == impl_->currentTextureHandle)
+    if (!impl_->device || handle == impl_->currentTextureHandle ||
+        handle == impl_->nullTextureHandle)
         return GR_INVALID_PARMS;
     const auto found = impl_->registeredTextures.find(handle);
     if (found == impl_->registeredTextures.end()) return GR_INVALID_PARMS;
@@ -728,7 +997,7 @@ GENRESULT SdlGpuRenderer::DestroyTexture(std::uint32_t handle)
 GENRESULT SdlGpuRenderer::BindTexture(std::uint32_t stage, std::uint32_t handle)
 {
     if (stage == 1U && handle == 0U) return GR_OK;
-    if (stage != 0U || !IsTexture(handle)) return GR_NOT_IMPLEMENTED;
+    if (stage != 0U || (handle != 0U && !IsTexture(handle))) return GR_NOT_IMPLEMENTED;
     impl_->currentTextureHandle = handle;
     return GR_OK;
 }
@@ -736,8 +1005,9 @@ GENRESULT SdlGpuRenderer::BindTexture(std::uint32_t stage, std::uint32_t handle)
 bool SdlGpuRenderer::IsTexture(std::uint32_t handle) const
 {
     return impl_->device &&
-        (handle == 1U || impl_->registeredTextures.find(handle) !=
-                             impl_->registeredTextures.end());
+        (handle == 1U || (handle != impl_->nullTextureHandle &&
+                          impl_->registeredTextures.find(handle) !=
+                             impl_->registeredTextures.end()));
 }
 
 GENRESULT DACOM_CDECL SdlGpuRenderer::SubmissionCallback(
@@ -752,6 +1022,18 @@ GENRESULT DACOM_CDECL SdlGpuRenderer::Submission2Callback(
     return context ? static_cast<SdlGpuRenderer *>(context)->Submit(submission) : GR_INVALID_PARMS;
 }
 
+GENRESULT DACOM_CDECL SdlGpuRenderer::Submission3Callback(
+    void * context, const RenderSubmissionView3 & submission)
+{
+    return context ? static_cast<SdlGpuRenderer *>(context)->Submit(submission) : GR_INVALID_PARMS;
+}
+
+GENRESULT DACOM_CDECL SdlGpuRenderer::Submission4Callback(
+    void * context, const RenderSubmissionView4 & submission)
+{
+    return context ? static_cast<SdlGpuRenderer *>(context)->Submit(submission) : GR_INVALID_PARMS;
+}
+
 GENRESULT DACOM_CDECL SdlGpuRenderer::RenderStateCallback(
     void * context, const RenderStateSnapshot & state)
 {
@@ -759,10 +1041,40 @@ GENRESULT DACOM_CDECL SdlGpuRenderer::RenderStateCallback(
                    : GR_INVALID_PARMS;
 }
 
+GENRESULT DACOM_CDECL SdlGpuRenderer::ModelviewCallback(
+    void * context, const Transform & modelview)
+{
+    return context ? static_cast<SdlGpuRenderer *>(context)->SetModelview(modelview)
+                   : GR_INVALID_PARMS;
+}
+
+GENRESULT DACOM_CDECL SdlGpuRenderer::ProjectionCallback(
+    void * context, const Matrix4 & projection)
+{
+    return context ? static_cast<SdlGpuRenderer *>(context)->SetProjection(projection)
+                   : GR_INVALID_PARMS;
+}
+
+GENRESULT DACOM_CDECL SdlGpuRenderer::VertexConstantsCallback(
+    void * context, UINT firstRegister, const FLOAT * values,
+    UINT registerCount)
+{
+    return context ? static_cast<SdlGpuRenderer *>(context)->SetVertexConstants(
+                         firstRegister, values, registerCount)
+                   : GR_INVALID_PARMS;
+}
+
 GENRESULT DACOM_CDECL SdlGpuRenderer::TextureStageCallback(
     void * context, const TextureStageSnapshot & state)
 {
     return context ? static_cast<SdlGpuRenderer *>(context)->SetTextureStageState(state)
+                   : GR_INVALID_PARMS;
+}
+
+GENRESULT DACOM_CDECL SdlGpuRenderer::SamplerStateCallback(
+    void * context, const SamplerStateSnapshot & state)
+{
+    return context ? static_cast<SdlGpuRenderer *>(context)->SetSamplerState(state)
                    : GR_INVALID_PARMS;
 }
 
@@ -807,7 +1119,9 @@ bool SdlGpuRenderer::Present(bool & presented, std::string & error)
     SDL_GPUTexture * boundTexture = impl_->colorTexture;
     if (impl_->currentTextureHandle != 1U)
     {
-        const auto found = impl_->registeredTextures.find(impl_->currentTextureHandle);
+        const auto found = impl_->registeredTextures.find(
+            impl_->currentTextureHandle == 0U ? impl_->nullTextureHandle :
+                                                impl_->currentTextureHandle);
         boundTexture = found == impl_->registeredTextures.end() ? nullptr : found->second.texture;
     }
     if (!impl_->device || !impl_->pipeline || !impl_->vertexBuffer || !boundTexture)
@@ -870,9 +1184,14 @@ bool SdlGpuRenderer::Present(bool & presented, std::string & error)
     depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
     depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
     const TextureStageUniform textureStageUniform =
-        MakeTextureStageUniform(impl_->textureStage);
+        MakeTextureStageUniform(impl_->textureStage, impl_->renderState);
     SDL_PushGPUFragmentUniformData(commandBuffer, 0U, &textureStageUniform,
                                    sizeof(textureStageUniform));
+    const VertexTransformUniform vertexUniform{
+        MakeClipMatrix(impl_->projection, impl_->modelview),
+        impl_->vertexUv, impl_->vertexColor};
+    SDL_PushGPUVertexUniformData(commandBuffer, 0U, &vertexUniform,
+                                 sizeof(vertexUniform));
     SDL_GPURenderPass * renderPass =
         SDL_BeginGPURenderPass(commandBuffer, &colorTarget, 1U, &depthTarget);
     if (!renderPass)
@@ -881,7 +1200,9 @@ bool SdlGpuRenderer::Present(bool & presented, std::string & error)
         return false;
     }
     SDL_BindGPUGraphicsPipeline(renderPass,
-        impl_->extendedActive ? impl_->extendedPipeline : impl_->pipeline);
+        impl_->activeVertexFormat == 3U ? impl_->appPipeline :
+        impl_->activeVertexFormat == 2U ? impl_->gamePipeline :
+        impl_->activeVertexFormat == 1U ? impl_->extendedPipeline : impl_->pipeline);
     const SDL_GPUBufferBinding vertexBinding{impl_->vertexBuffer, 0U};
     SDL_BindGPUVertexBuffers(renderPass, 0U, &vertexBinding, 1U);
     const SDL_GPUTextureSamplerBinding textureBinding{boundTexture, impl_->sampler};
@@ -916,7 +1237,9 @@ bool SdlGpuRenderer::Readback64(SdlGpuReadback & result, std::string & error)
     SDL_GPUTexture * boundTexture = impl_->colorTexture;
     if (impl_->currentTextureHandle != 1U)
     {
-        const auto found = impl_->registeredTextures.find(impl_->currentTextureHandle);
+        const auto found = impl_->registeredTextures.find(
+            impl_->currentTextureHandle == 0U ? impl_->nullTextureHandle :
+                                                impl_->currentTextureHandle);
         boundTexture = found == impl_->registeredTextures.end() ? nullptr : found->second.texture;
     }
     if (!impl_->device || !impl_->vertexBuffer || !boundTexture) return false;
@@ -950,9 +1273,14 @@ bool SdlGpuRenderer::Readback64(SdlGpuReadback & result, std::string & error)
     depthTarget.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
     depthTarget.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
     const TextureStageUniform textureStageUniform =
-        MakeTextureStageUniform(impl_->textureStage);
+        MakeTextureStageUniform(impl_->textureStage, impl_->renderState);
     SDL_PushGPUFragmentUniformData(commandBuffer, 0U, &textureStageUniform,
                                    sizeof(textureStageUniform));
+    const VertexTransformUniform vertexUniform{
+        MakeClipMatrix(impl_->projection, impl_->modelview),
+        impl_->vertexUv, impl_->vertexColor};
+    SDL_PushGPUVertexUniformData(commandBuffer, 0U, &vertexUniform,
+                                 sizeof(vertexUniform));
     SDL_GPURenderPass * renderPass =
         SDL_BeginGPURenderPass(commandBuffer, &colorTarget, 1U, &depthTarget);
     if (!renderPass)
@@ -961,7 +1289,9 @@ bool SdlGpuRenderer::Readback64(SdlGpuReadback & result, std::string & error)
         return false;
     }
     SDL_BindGPUGraphicsPipeline(renderPass,
-        impl_->extendedActive ? impl_->extendedPipeline : impl_->pipeline);
+        impl_->activeVertexFormat == 3U ? impl_->appPipeline :
+        impl_->activeVertexFormat == 2U ? impl_->gamePipeline :
+        impl_->activeVertexFormat == 1U ? impl_->extendedPipeline : impl_->pipeline);
     const SDL_GPUBufferBinding vertexBinding{impl_->vertexBuffer, 0U};
     SDL_BindGPUVertexBuffers(renderPass, 0U, &vertexBinding, 1U);
     const SDL_GPUTextureSamplerBinding textureBinding{boundTexture, impl_->sampler};
@@ -1051,9 +1381,15 @@ void SdlGpuRenderer::Shutdown()
         if (impl_->pipeline) SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->pipeline);
         if (impl_->extendedPipeline)
             SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->extendedPipeline);
+        if (impl_->gamePipeline)
+            SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->gamePipeline);
+        if (impl_->appPipeline)
+            SDL_ReleaseGPUGraphicsPipeline(impl_->device, impl_->appPipeline);
         if (impl_->vertexShader) SDL_ReleaseGPUShader(impl_->device, impl_->vertexShader);
         if (impl_->extendedVertexShader)
             SDL_ReleaseGPUShader(impl_->device, impl_->extendedVertexShader);
+        if (impl_->gameVertexShader)
+            SDL_ReleaseGPUShader(impl_->device, impl_->gameVertexShader);
         if (impl_->fragmentShader) SDL_ReleaseGPUShader(impl_->device, impl_->fragmentShader);
         if (impl_->windowClaimed && impl_->window)
             SDL_ReleaseWindowFromGPUDevice(impl_->device, impl_->window);
@@ -1070,6 +1406,7 @@ const char * SdlGpuRenderer::DriverName() const
 std::uint32_t SdlGpuRenderer::DepthWidth() const { return impl_->depthWidth; }
 std::uint32_t SdlGpuRenderer::DepthHeight() const { return impl_->depthHeight; }
 std::uint32_t SdlGpuRenderer::DepthRecreations() const { return impl_->depthRecreations; }
+std::uint32_t SdlGpuRenderer::PipelineRebuilds() const { return impl_->pipelineRebuilds; }
 std::uint32_t SdlGpuRenderer::VertexCount() const { return impl_->vertexCount; }
 std::uint32_t SdlGpuRenderer::IndexCount() const { return impl_->indexCount; }
 RenderStateSnapshot SdlGpuRenderer::CurrentRenderState() const
@@ -1079,6 +1416,11 @@ RenderStateSnapshot SdlGpuRenderer::CurrentRenderState() const
 TextureStageSnapshot SdlGpuRenderer::CurrentTextureStageState() const
 {
     return impl_->textureStage;
+}
+
+SamplerStateSnapshot SdlGpuRenderer::CurrentSamplerState() const
+{
+    return impl_->samplerState;
 }
 std::uint32_t SdlGpuRenderer::CurrentTextureHandle() const
 {

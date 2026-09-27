@@ -11,29 +11,83 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "CQTrace.h"
+#include "Include/NativeAppGlobals.h"
+#include "FrontierX/NativeD3dxMath.h"
+#include "FrontierX/NativeBatchStateIds.h"
+#endif
 
 #include <stdio.h>
+#include <algorithm>
+#include <cstdint>
+#if !defined(_WIN32)
+#include <limits>
+#include <map>
+#include <mutex>
+#include <stdexcept>
+#endif
  
 #include "MeshRender.h"
 #include "IExplosion.h"//MeshInfo.h?
 #include "Camera.h"
 #include "CQBatch.h"
-#include "Archholder.h"
+#include "ArchHolder.h"
 #include "GridVector.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include <DEffectOpts.h>
 #include "CQLight.h"
 #include "IVertexBuffer.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <ICamera.h>
-#include <LightMan.h>
+#include <lightman.h>
 
 #include "TManager.h"
 
-#include "iMaterialManager.h"
+#include "IMaterialManager.h"
+#if !defined(_WIN32)
+#include "FrontierX/NativeGameVertexBuffer.h"
+#include "FrontierX/NativeGameIndexBuffer.h"
+#endif
+
+static ArchetypeFaceInfo *AlignFaceStorage(U8 *storage)
+{
+	static_assert(alignof(ArchetypeFaceInfo) <= 32, "face storage requires at most 32-byte alignment");
+	const std::uintptr_t address = reinterpret_cast<std::uintptr_t>(storage);
+	return reinterpret_cast<ArchetypeFaceInfo *>((address + 31) & ~std::uintptr_t(31));
+}
+
+#if !defined(_WIN32)
+static U32 NativeMeshMaterialStateBase(const Material *material)
+{
+	static std::map<const Material *, U32> stateBases;
+	static std::uint64_t nextBase = FrontierX::kFirstMeshMaterialStateId;
+	static std::mutex stateMutex;
+	std::lock_guard<std::mutex> lock(stateMutex);
+	const auto existing = stateBases.find(material);
+	if (existing != stateBases.end())
+		return existing->second;
+	if (nextBase > static_cast<std::uint64_t>(std::numeric_limits<U32>::max()) -
+	                   FrontierX::kMeshMaterialStateStride + 1ULL)
+		throw std::overflow_error("native mesh material state IDs exhausted");
+	const U32 base = static_cast<U32>(nextBase);
+	stateBases.emplace(material, base);
+	nextBase += FrontierX::kMeshMaterialStateStride;
+	return base;
+}
+
+static char *strlwr(char *name)
+{
+	for (char *cursor = name; *cursor; ++cursor)
+		if (*cursor >= 'A' && *cursor <= 'Z')
+			*cursor = static_cast<char>(*cursor - 'A' + 'a');
+	return name;
+}
+#endif
 
 
 inline DWORD F2DW( FLOAT f ) { return *((DWORD*)&f); }
@@ -812,6 +866,7 @@ delete fg[i];
 	vb_mgr->Delete(this);
 }
 
+#if defined(_WIN32)
 BOOL MungeFPCW( WORD *pwOldCW )
 {
     BOOL ret = FALSE;
@@ -836,6 +891,7 @@ BOOL MungeFPCW( WORD *pwOldCW )
     *pwOldCW = wSave;
     return ret;
 }
+#endif
 
 
 void MeshRender::Render(MeshInfo *mc,const Transform &world_to_view)
@@ -907,13 +963,13 @@ void MeshRender::Render(MeshInfo *mc,const Transform &world_to_view)
 	
 	inv = world_adjust_tr.get_inverse();
 
-	//{
+	{
 		TRANSFORM mv = world_to_view*world_adjust_tr;
 		//.rotate_about_j(1);
 	//BATCH->set_modelview(mv);
 	PIPE->set_modelview(mv);
 		//PIPE->set_default_constants(mv, CAMERA->GetPosition());
-	//}
+	}
 //	S32 index_count;
 
 	cam_pos_in_object_space = inv.rotate_translate(cam_pos);
@@ -968,12 +1024,15 @@ Done:
 
 	BATCH->set_render_state(D3DRS_CLIPPING,TRUE);
 
-	SINGLE dt = OBJLIST->GetRealRenderTime();
 	IEffectChannel *ec = mc->ec_list;
-	while (ec)
+	if (ec)
 	{
-		ec->irc->Render(dt);
-		ec = ec->next;
+		SINGLE dt = OBJLIST->GetRealRenderTime();
+		while (ec)
+		{
+			ec->irc->Render(dt);
+			ec = ec->next;
+		}
 	}
 
 	return;
@@ -1467,7 +1526,12 @@ void MeshRender::BuildTangentSpace(VBVertex * pVertices, int c)
 			Vector vN(0,0,0);
 			for(int j=0; j < pos_cnt; j++ )
 			{
+#if defined(_WIN32)
 				FLOAT dist1 = D3DXVec3LengthSq( (D3DXVECTOR3*)&(pVertices[i].pos - pVertices[j].pos) );
+#else
+				const Vector delta = pVertices[i].pos - pVertices[j].pos;
+				FLOAT dist1 = delta.magnitude_squared();
+#endif
 				if( dist1 < 1.0e-8f)
 				{
 					vN += pVertices[j].norm;
@@ -1601,7 +1665,15 @@ void MeshRender::BuildTangentSpace(VBVertex * pVertices, int c)
     {    
         D3DXVec3Normalize( &scratchTangent[i], &scratchTangent[i] );
 		D3DXVec3Normalize( &scratchBinormal[i], &scratchBinormal[i] );
-        D3DXVec3Normalize( (D3DXVECTOR3*)&pVertices[i].norm, (D3DXVECTOR3*)&pVertices[i].norm);
+#if defined(_WIN32)
+		D3DXVec3Normalize( (D3DXVECTOR3*)&pVertices[i].norm, (D3DXVECTOR3*)&pVertices[i].norm);
+#else
+		D3DXVECTOR3 normal(pVertices[i].norm.x, pVertices[i].norm.y, pVertices[i].norm.z);
+		D3DXVec3Normalize(&normal, &normal);
+		pVertices[i].norm.x = normal.x;
+		pVertices[i].norm.y = normal.y;
+		pVertices[i].norm.z = normal.z;
+#endif
         //D3DXVec3Cross( &scratchBinormal[i], &scratchTangent[i], 
         //               (D3DXVECTOR3*)&pVertices[i].norm);
     }
@@ -1710,6 +1782,7 @@ void MeshRender::RestoreVertexBuffers()
 					{
 						PIPE->create_index_buffer(pos->new_face_cnt*3*sizeof(U16), &pos->IB4[c]);
 						pos->index_list4[c] = new U16[pos->new_face_cnt*3];
+						// D3D9 draw calls need the count, one more than this largest index.
 						pos->maxVert[c] = 0;
 						U16* lockedInds;
 						pos->IB4[c]->Lock(0,0,(void**)&lockedInds,0);
@@ -1799,7 +1872,11 @@ void MeshRender::SetupMeshInfo(MeshInfo *mc,bool bMakeBuffers, const char* mater
 			mc->fgi[pos->fg_idx].emissive.g = mat->emission.g;
 			mc->fgi[pos->fg_idx].emissive.b = mat->emission.b;
 			mc->fgi[pos->fg_idx].a = 255;
+#if defined(_WIN32)
 			mc->fgi[pos->fg_idx].unique_id = (U32)mat;
+#else
+			mc->fgi[pos->fg_idx].unique_id = NativeMeshMaterialStateBase(mat);
+#endif
 			
 			char texName[512];
 			sprintf(texName, "cq2\\");
@@ -1943,7 +2020,7 @@ FaceGroupRender::FaceGroupRender()
 FaceGroupRender::~FaceGroupRender()
 {
 //	delete [] pos_list;
-	delete [] src_verts_buffer;
+	delete [] static_cast<RPVertex *>(src_verts_buffer);
 	delete [] src_norms;
 	delete [] src_u2;
 	delete [] src_v2;
@@ -2224,7 +2301,7 @@ void FaceGroupRender::Init(Mesh *mesh,int _fg_idx,MeshRender *_mr)//MeshInfo *mc
 
 	//pad for cache read-ahead
 	faces_ptr = (U8 *)malloc(sizeof(ArchetypeFaceInfo)*(new_face_cnt+1)+31);
-	faces = (ArchetypeFaceInfo *)((U32(faces_ptr)+31) & ~31);
+	faces = AlignFaceStorage(faces_ptr);
 	memcpy(faces,afi,new_face_cnt*sizeof(ArchetypeFaceInfo));
 	//	result->sortVertsOnZ();
 	//CQASSERT(HEAP->EnumerateBlocks());
@@ -2267,7 +2344,7 @@ void FaceGroupRender::Clone(RenderMaterial **rm,bool bCopyBuffers)
 
 		//pad for cache read-ahead
 		fgr->faces_ptr = (U8 *)malloc(sizeof(ArchetypeFaceInfo)*(new_face_cnt+1)+31);
-		fgr->faces = (ArchetypeFaceInfo *)((U32(faces_ptr)+31) & ~31);
+		fgr->faces = AlignFaceStorage(fgr->faces_ptr);
 		memcpy(fgr->faces,faces,new_face_cnt*sizeof(ArchetypeFaceInfo));
 	}
 
@@ -2380,7 +2457,7 @@ FaceGroupRender2::FaceGroupRender2()
 FaceGroupRender2::~FaceGroupRender2()
 {
 //	delete [] pos_list;
-	delete [] src_verts_buffer;
+	delete [] static_cast<Vertex2 *>(src_verts_buffer);
 	delete [] src_norms;
 	delete [] index_list;
 //	delete [] nref_list;
@@ -2611,7 +2688,7 @@ void FaceGroupRender2::Init(Mesh *mesh,int _fg_idx,MeshRender *_mr)//MeshInfo *m
 //	faces = new ArchetypeFaceInfo[new_face_cnt];
 	//pad for cache read-ahead
 	faces_ptr = (U8 *)malloc(sizeof(ArchetypeFaceInfo)*(new_face_cnt+1)+31);
-	faces = (ArchetypeFaceInfo *)((U32(faces_ptr)+31) & ~31);
+	faces = AlignFaceStorage(faces_ptr);
 	memcpy(faces,afi,new_face_cnt*sizeof(ArchetypeFaceInfo));
 
 //	CQASSERT(HEAP->EnumerateBlocks());
@@ -2649,7 +2726,7 @@ void FaceGroupRender2::Clone(RenderMaterial **rm,bool bCopyBuffers)
 		
 		//pad for cache read-ahead
 		fgr->faces_ptr = (U8 *)malloc(sizeof(ArchetypeFaceInfo)*(new_face_cnt+1)+31);
-		fgr->faces = (ArchetypeFaceInfo *)((U32(faces_ptr)+31) & ~31);
+		fgr->faces = AlignFaceStorage(fgr->faces_ptr);
 		memcpy(fgr->faces,faces,new_face_cnt*sizeof(ArchetypeFaceInfo));
 	}
 
@@ -2830,9 +2907,9 @@ Loop:
 
 		if (r>255 || g>255 || b >255)
 		{
-			r = min(r,255);
-			g = min(g,255);
-			b = min(b,255);
+			r = (std::min)(r,U32(255));
+			g = (std::min)(g,U32(255));
+			b = (std::min)(b,U32(255));
 		}
 
 		vert.r = r;
@@ -2980,7 +3057,12 @@ void FaceGroupRender::Render(const Transform &inv)
 			//PIPE->set_render_state(D3DRS_ALPHAREF,0x0000000A);
 			//PIPE->set_render_state(D3DRS_CULLMODE,D3DCULL_CW);
 			
-			fgi[fg_idx].iMat->DrawVB((IDirect3DVertexBuffer9*)vb_handle, IB4[0], vb_offset, maxVert[0], 0, new_face_cnt*3, NULL);
+#if defined(_WIN32)
+			fgi[fg_idx].iMat->DrawVB((IDirect3DVertexBuffer9*)vb_handle, IB4[0], vb_offset, maxVert[0] + 1, 0, new_face_cnt*3, NULL);
+#else
+			IDirect3DVertexBuffer9 nativeVB{vb_handle};
+			fgi[fg_idx].iMat->DrawVB(&nativeVB, IB4[0], vb_offset, maxVert[0] + 1, 0, new_face_cnt*3, NULL);
+#endif
 			cleanupRenderStates();
 		}
 		else if (/*fgi[fg_idx].colorTex &&*/ !fgi[fg_idx].bCQ2Mat)
@@ -3007,7 +3089,7 @@ void FaceGroupRender::Render(const Transform &inv)
 			BATCH->set_texture_stage_state(0,D3DTSS_ALPHAARG1,D3DTA_TFACTOR);
 			BATCH->set_texture_stage_state(1,D3DTSS_COLOROP,D3DTOP_DISABLE);
 			// light renders here.  todo: fix it
-			GENRESULT result = PIPE->draw_indexed_primitive_vb( D3DPT_TRIANGLELIST, vb_handle, vb_offset, maxVert[0], IB4[0],new_face_cnt*3 , 0 );
+			GENRESULT result = PIPE->draw_indexed_primitive_vb( D3DPT_TRIANGLELIST, vb_handle, vb_offset, maxVert[0] + 1, IB4[0],new_face_cnt*3 , 0 );
 			CQASSERT(result == GR_OK);
 			cleanupRenderStates();
 
@@ -3015,6 +3097,11 @@ void FaceGroupRender::Render(const Transform &inv)
 		}
 		else if (fgi[fg_idx].colorTex)
 		{
+#if !defined(_WIN32)
+			// Do not draw this CQ2 path without its effect pass states.
+			cleanupRenderStates();
+			return;
+#else
 			for (int i = 0; i < 4; i++)
 			{
 				PIPE->set_sampler_state( i, D3DSAMP_ADDRESSU, MAT_GET_ADDR_MODE(fgi[fg_idx].texture_flags,0) );
@@ -3131,6 +3218,7 @@ void FaceGroupRender::Render(const Transform &inv)
 				CQASSERT(result == GR_OK);
 			}*/
 			chosenEffect->End();
+#endif
 
 			//return;
 			cleanupRenderStates();
@@ -3262,6 +3350,11 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortionZAlign(const Transform 
 
 	if (fgi[fg_idx].colorTex)
 		{
+#if !defined(_WIN32)
+			// Do not draw this CQ2 path without its effect pass states.
+			cleanupRenderStates();
+			return;
+#else
 			for (int i = 0; i < 4; i++)
 			{
 				PIPE->set_sampler_state( i, D3DSAMP_ADDRESSU, MAT_GET_ADDR_MODE(fgi[fg_idx].texture_flags,0) );
@@ -3285,9 +3378,9 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortionZAlign(const Transform 
 			PIPE->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
 			PIPE->set_render_state(D3DRS_ZFUNC,D3DCMP_LESSEQUAL);
 			
-			float emissiveColor [] = { fgi[fg_idx].emissive.r/255.0, 
-									   fgi[fg_idx].emissive.g/255.0, 
-									   fgi[fg_idx].emissive.b/255.0,
+			float emissiveColor [] = { static_cast<float>(fgi[fg_idx].emissive.r/255.0),
+									   static_cast<float>(fgi[fg_idx].emissive.g/255.0),
+									   static_cast<float>(fgi[fg_idx].emissive.b/255.0),
 									   0};
 			if ((emissiveColor[0] > .7 && emissiveColor[1] > .7 && emissiveColor[2] > .7)
 				|| (emissiveColor[0] <= .2 && emissiveColor[1]<= .2 && emissiveColor[2]<= .2))
@@ -3362,6 +3455,7 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortionZAlign(const Transform 
 				chosenEffect->EndPass();
 			}
 			chosenEffect->End();
+#endif
 			//return;
 			cleanupRenderStates();
 			return;
@@ -3492,6 +3586,11 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortion(const Transform &inv,c
 
 	if (fgi[fg_idx].colorTex)
 		{
+#if !defined(_WIN32)
+			// Do not draw this CQ2 path without its effect pass states.
+			cleanupRenderStates();
+			return;
+#else
 			for (int i = 0; i < 4; i++)
 			{
 				PIPE->set_sampler_state( i, D3DSAMP_ADDRESSU, MAT_GET_ADDR_MODE(fgi[fg_idx].texture_flags,0) );
@@ -3515,9 +3614,9 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortion(const Transform &inv,c
 			PIPE->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
 			PIPE->set_render_state(D3DRS_ZFUNC,D3DCMP_LESSEQUAL);
 			
-			float emissiveColor [] = { fgi[fg_idx].emissive.r/255.0, 
-									   fgi[fg_idx].emissive.g/255.0, 
-									   fgi[fg_idx].emissive.b/255.0,
+			float emissiveColor [] = { static_cast<float>(fgi[fg_idx].emissive.r/255.0),
+									   static_cast<float>(fgi[fg_idx].emissive.g/255.0),
+									   static_cast<float>(fgi[fg_idx].emissive.b/255.0),
 									   0};
 			if ((emissiveColor[0] > .7 && emissiveColor[1] > .7 && emissiveColor[2] > .7)
 				|| (emissiveColor[0] <= .2 && emissiveColor[1]<= .2 && emissiveColor[2]<= .2))
@@ -3592,6 +3691,7 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortion(const Transform &inv,c
 				chosenEffect->EndPass();
 			}
 			chosenEffect->End();
+#endif
 
 
 
@@ -3702,7 +3802,7 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPuffy(const Transform &inv,con
 					puff_norm.normalize();
 //					SINGLE dot = dot_product(puff_norm,fake_look);
 					puff_norm.normalize();
-					SINGLE s=max(0.0,min(1.0f,-2.0f+3.0f*dot_product(puff_norm,fake_look)));
+					SINGLE s=(std::max)(0.0f,(std::min)(1.0f,-2.0f+3.0f*dot_product(puff_norm,fake_look)));
 					alphas[v_dst] = F2LONG(255.0*s);
 					
 					//SINGLE d=fabs(fmod(dot,400));
@@ -3776,9 +3876,9 @@ Loop:
 
 		if (r>255 || g>255 || b >255)
 		{
-			r = min(r,255);
-			g = min(g,255);
-			b = min(b,255);
+			r = (std::min)(r,U32(255));
+			g = (std::min)(g,U32(255));
+			b = (std::min)(b,U32(255));
 		}
 
 		vert.r = r;
@@ -3911,9 +4011,9 @@ Loop:
 
 		if (r>255 || g>255 || b >255)
 		{
-			r = min(r,255);
-			g = min(g,255);
-			b = min(b,255);
+			r = (std::min)(r,U32(255));
+			g = (std::min)(g,U32(255));
+			b = (std::min)(b,U32(255));
 		}
 
 		vert.r = r;
@@ -4177,7 +4277,7 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 		
 		//pad for cache read-ahead
 		fg_out0->faces_ptr = (U8 *)malloc(sizeof(ArchetypeFaceInfo)*(fg_out0->new_face_cnt+1)+31);
-		fg_out0->faces = (ArchetypeFaceInfo *)((U32(fg_out0->faces_ptr)+31) & ~31);
+		fg_out0->faces = AlignFaceStorage(fg_out0->faces_ptr);
 		memcpy(fg_out0->faces,afi0,fg_out0->new_face_cnt*sizeof(ArchetypeFaceInfo));
 		fg_out0->face_offset = meshSplit.out_face_cnt0;
 		out0.mr->face_cnt += fg_out0->new_face_cnt;
@@ -4198,7 +4298,7 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 		
 		//pad for cache read-ahead
 		fg_out1->faces_ptr = (U8 *)malloc(sizeof(ArchetypeFaceInfo)*(fg_out1->new_face_cnt+1)+31);
-		fg_out1->faces = (ArchetypeFaceInfo *)((U32(fg_out1->faces_ptr)+31) & ~31);
+		fg_out1->faces = AlignFaceStorage(fg_out1->faces_ptr);
 		memcpy(fg_out1->faces,afi1,fg_out1->new_face_cnt*sizeof(ArchetypeFaceInfo));
 		fg_out1->face_offset = meshSplit.out_face_cnt1;
 		out1.mr->face_cnt += fg_out1->new_face_cnt;
@@ -4212,9 +4312,9 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 void PremultiplyTexture (U32 texID,S16 bias,SINGLE contrast)
 {
 	RPLOCKDATA data;
-	unsigned long level=0;
+	U32 level=0;
 
-	unsigned long width,height,num_levels;
+	U32 width,height,num_levels;
 	num_levels = 0;
 	PIPE->get_texture_dim(texID,&width,&height,&num_levels);
 	if(num_levels == 0)
@@ -4244,9 +4344,9 @@ void PremultiplyTexture (U32 texID,S16 bias,SINGLE contrast)
 					r = (*pixel >> data.pf.rl) << data.pf.rr;
 					g = (*pixel >> data.pf.gl) << data.pf.gr;
 					b = (*pixel >> data.pf.bl) << data.pf.br;
-					r = min(bias+r*contrast,255);
-					g = min(bias+g*contrast,255);
-					b = min(bias+b*contrast,255);
+					r = (std::min)(bias+r*contrast,255.0f);
+					g = (std::min)(bias+g*contrast,255.0f);
+					b = (std::min)(bias+b*contrast,255.0f);
 					*pixel = (r >> data.pf.rr) << data.pf.rl;
 					*pixel |= (g >> data.pf.gr) << data.pf.gl;
 					*pixel |= (b >> data.pf.br) << data.pf.bl;
@@ -4263,9 +4363,9 @@ void PremultiplyTexture (U32 texID,S16 bias,SINGLE contrast)
 				g = colors[i].g*contrast+bias;
 				b = colors[i].b*contrast+bias;
 				
-				colors[i].r = max(0,min(r,255));
-				colors[i].g = max(0,min(g,255));
-				colors[i].b = max(0,min(b,255));
+				colors[i].r = (std::max)(0,(std::min)(int(r),255));
+				colors[i].g = (std::max)(0,(std::min)(int(g),255));
+				colors[i].b = (std::max)(0,(std::min)(int(b),255));
 			}
 			PIPE->set_texture_palette(texID,0,256,colors);
 		}*/
@@ -4494,7 +4594,7 @@ void SoftwareFGRender::Clone(RenderMaterial **rm,bool bCopyBuffers)
 
 		//pad for cache read-ahead
 		fgr->faces_ptr = (U8 *)malloc(sizeof(ArchetypeFaceInfo)*(new_face_cnt+1)+31);
-		fgr->faces = (ArchetypeFaceInfo *)((U32(faces_ptr)+31) & ~31);
+		fgr->faces = AlignFaceStorage(fgr->faces_ptr);
 		memcpy(fgr->faces,faces,new_face_cnt*sizeof(ArchetypeFaceInfo));
 	}
 

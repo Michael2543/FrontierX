@@ -2,18 +2,27 @@
 //
 
 #include "stdafx.h"
+#if !defined(_WIN32)
+#include <ICamera.h>
+#include "FrontierX/NativeMeshManager.h"
+#endif
 #include <IMeshManager.h>
-#include <tcomponent.h>
+#include <TComponent.h>
 #include <da_heap_utility.h>
 #include <TSmartPointer.h>
-#include <RendPipeline.h>
-#include <System.h>
+#include <rendpipeline.h>
+#include <SYSTEM.H>
 
 #include "MeshArch.h"
-#include "MeshInstance.h"
 #include <IAnim.h>
+#include "MeshInstance.h"
 
 #define CLSID_MeshManager "IMeshManager"
+
+#if !defined(_WIN32)
+namespace FrontierXMeshManager
+{
+#endif
 
 ICOManager * DACOM = NULL;
 
@@ -117,8 +126,16 @@ GENRESULT COMAPI MeshManager::ShutdownAggregate(void)
 		meshArchList = meshArchList->next;
 		delete tmp;
 	}
-	ENGINE->Release();
-	ANIM->Release();
+	if(ENGINE)
+	{
+		ENGINE->Release();
+		ENGINE = NULL;
+	}
+	if(ANIM)
+	{
+		ANIM->Release();
+		ANIM = NULL;
+	}
 	return GR_OK;
 }
 
@@ -194,7 +211,15 @@ IMeshArchetype * MeshManager::CreateMeshArch(const char * filename)
 
 	if(objFile)
 	{
-		MeshArch * arch = new MeshArch(ENGINE->create_archetype(filename,objFile),ANIM->create_script_set_arch(objFile));
+		const ARCHETYPE_INDEX engineArch = ENGINE->create_archetype(filename,objFile);
+		const SCRIPT_SET_ARCH animationArch = ANIM->create_script_set_arch(objFile);
+		if(engineArch == INVALID_ARCHETYPE_INDEX)
+		{
+			if(animationArch != INVALID_SCRIPT_SET_ARCH)
+				ANIM->release_script_set_arch(animationArch);
+			return NULL;
+		}
+		MeshArch * arch = new MeshArch(engineArch,animationArch);
 		arch->next = meshArchList;
 		meshArchList = arch;
 
@@ -228,7 +253,11 @@ IMeshInstance * MeshManager::CreateMesh(IMeshArchetype * arch, struct IEngineIns
 
 	mesh->owner = this;
 
-	mesh->Initialize((MeshArch*)arch,engInst);
+	if(!mesh->Initialize((MeshArch*)arch,engInst))
+	{
+		delete mesh;
+		return NULL;
+	}
 
 	return mesh;
 }
@@ -239,6 +268,11 @@ IMeshInstance * MeshManager::CreateMesh(const char * filename, struct IEngineIns
 	if(arch)
 	{
 		IMeshInstance * mesh = CreateMesh(arch,engInst);//+1 arch count (extra)
+		if(!mesh)
+		{
+			arch->Release();
+			return NULL;
+		}
 		(arch->refCount)--;//fix arch count
 		return mesh;
 	}
@@ -362,6 +396,14 @@ void MeshManager::ReleaseArch(IMeshArchetype * arch)
 
 MeshManager::MeshManager()
 {
+	ENGINE = NULL;
+	ANIM = NULL;
+	OBJDIR = NULL;
+	REND = NULL;
+	PIPE = NULL;
+	CAMERA = NULL;
+	HARDPOINT = NULL;
+	MATMAN = NULL;
 	meshArchList = NULL;
 	dynamicMeshCache = NULL;
 }
@@ -382,7 +424,11 @@ MeshManager::~MeshManager()
 	}
 }
 
+#if !defined(_WIN32)
+}
+#endif
 
+#if defined(_WIN32)
 BOOL APIENTRY DllMain( HINSTANCE hModule, 
                        DWORD  ul_reason_for_call, 
                        LPVOID lpReserved
@@ -417,4 +463,20 @@ BOOL APIENTRY DllMain( HINSTANCE hModule,
 
 	return TRUE;
 }
+#endif
 
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool RegisterNativeMeshManager(ICOManager * manager)
+{
+	if (!manager) return false;
+	FrontierXMeshManager::DACOM = manager;
+	IComponentFactory * factory =
+		new DAComponentFactory2<DAComponentAggregate<FrontierXMeshManager::MeshManager>, AGGDESC>(CLSID_MeshManager);
+	const GENRESULT result = manager->RegisterComponent(factory, CLSID_MeshManager);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

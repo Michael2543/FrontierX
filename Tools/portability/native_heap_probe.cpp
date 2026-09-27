@@ -90,6 +90,27 @@ int main()
                 HEAP->GetHeapSize() == 6144 &&
                 HEAP->GetHeapFlags() == DAHEAPFLAG_NOMSGS,
             "repeated native heap initialization did not expand/update the shared owner");
+
+		// NetBuffer and NetPacket request separate private heaps; their
+		// ownership diagnostics must not inspect unrelated App allocations.
+		DAHEAPDESC privateDescriptor;
+		privateDescriptor.heapSize = 256;
+		privateDescriptor.flags = DAHEAPFLAG_PRIVATE | DAHEAPFLAG_NOMSGS;
+		IHeap *privateHeap = nullptr;
+		Require(DACOM_Acquire()->CreateInstance(&privateDescriptor,
+			reinterpret_cast<void **>(&privateHeap)) == GR_OK && privateHeap &&
+			privateHeap != HEAP && privateHeap->GetHeapSize() == 256 &&
+			privateHeap->GetHeapFlags() == privateDescriptor.flags,
+			"native private heap did not get a separate owner");
+		void *privateBlock = privateHeap->AllocateMemory(32, "packet-owner");
+		Require(privateBlock && privateHeap->DidAlloc(privateBlock) == TRUE &&
+			HEAP->DidAlloc(privateBlock) == FALSE &&
+			privateHeap->GetLargestBlock() == 224,
+			"native private heap allocation escaped into the shared owner");
+		Require(privateHeap->FreeMemory(privateBlock) == TRUE &&
+			privateHeap->GetLargestBlock() == 256 &&
+			privateHeap->Release() == 0,
+			"native private heap release/accounting failed");
         acquired->Release();
 
         std::cout << "native IHeap bootstrap passed\n";

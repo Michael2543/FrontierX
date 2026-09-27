@@ -86,7 +86,7 @@ int run(int argc, char ** argv)
                   << (entry.required ? " [required]" : " [optional]") << '\n';
     if (!FrontierX::Platform::IsDataRootUsable(startupRoot.entries))
     {
-        std::cerr << "Required data directories are missing or have incompatible names/types\n";
+        std::cerr << "Required data sources are missing or have incompatible names/types\n";
         return 3;
     }
     if (!metadataPath.empty())

@@ -2,28 +2,30 @@
 // StringTable.cpp
 //
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#endif
 #include "StringTable.h"
-#include "tcomponent.h"
-#include "typedefs.h"
+#include "TComponent.h"
+#include "TYPEDEFS.H"
 #include <malloc.h>
-#include "persistchannel.h"
-#include "filesys.h"
+#include "Filesys.h"
 #include "da_heap_utility.h"
 #include <TSmartPointer.h>
 #include "SaveLoad.h"
-#include "..\XML\tinyxml.h"
-
-#include <IConnection.h>
-#include <Engine.h>
-#include <EventSys.h>
-#include <system.h>
-#include <FileSys.h>
+#include "../XML/tinyxml.h"
+#include "FrontierX/StringTableFileText.h"
+#if !defined(_WIN32)
+#include "FrontierX/LegacyLanguageIds.h"
+#include "FrontierX/StringTableRegistration.h"
+#endif
 
 #include <list>
 #include <map>
 #include <string>
+#include <utility>
+#include <vector>
 
 #define CLSID_StringTable "IStringTable"
 
@@ -135,11 +137,13 @@ struct StringTable : public IStringTable, public ISaverLoader, public IAggregate
 		static char buffer[128];
 		memset( buffer, 0, 128 );
 
+#if defined(_WIN32)
+
 		char* pBuffer = buffer;
 		strcpy( pBuffer, "LANGUAGE\t" );
 		pBuffer = strchr(pBuffer,0);
 
-		wchar_t* wideLang = getLang(_langid);
+		const wchar_t* wideLang = getLang(_langid);
 		if( wideLang )
 		{
 			::WideCharToMultiByte( CP_ACP, 0, wideLang, (int)wcslen(wideLang), pBuffer, 96, NULL, NULL );
@@ -155,15 +159,53 @@ struct StringTable : public IStringTable, public ISaverLoader, public IAggregate
 		}
 
 		return buffer;
+#else
+		const wchar_t* primary = getLang(_langid);
+		const wchar_t* secondary = getSubLang(_langid);
+		if( !primary || !secondary ) return NULL;
+		char* output = buffer;
+		const char prefix[] = "LANGUAGE\t";
+		memcpy(output, prefix, sizeof(prefix) - 1);
+		output += sizeof(prefix) - 1;
+		for( const wchar_t* cursor = primary; *cursor; ++cursor )
+		{
+			if( *cursor > 0x7f || output + 2 >= buffer + sizeof(buffer) ) return NULL;
+			*output++ = static_cast<char>(*cursor);
+		}
+		*output++ = '\t';
+		for( const wchar_t* cursor = secondary; *cursor; ++cursor )
+		{
+			if( *cursor > 0x7f || output + 1 >= buffer + sizeof(buffer) ) return NULL;
+			*output++ = static_cast<char>(*cursor);
+		}
+		*output = 0;
+		return buffer;
+#endif
 	}
 
 	LANGID getLanguage( const char* _langname )
 	{
+#if defined(_WIN32)
 		static wchar_t buffer[128];
 		buffer[0] = 0;
 
 		::MultiByteToWideChar( CP_ACP, 0, _langname, (int)strlen(_langname), buffer, 128 );
 		return getLanguage( buffer );
+#else
+		if( !_langname || strncmp(_langname, "LANGUAGE\t", 9) != 0 ) return 0;
+		const char* primary = _langname + 9;
+		const char* separator = strchr(primary, '\t');
+		if( !separator || separator == primary || !separator[1] ||
+			strchr(separator + 1, '\t') ) return 0;
+		const std::string primaryName(primary, separator);
+		WORD primaryID = 0;
+		WORD secondaryID = 0;
+		if( !FrontierX::LookupLegacyLanguageID(primaryName.c_str(), primaryID) ||
+			!FrontierX::LookupLegacyLanguageID(separator + 1, secondaryID) ||
+			primaryName.compare(0, 5, "LANG_") != 0 ||
+			strncmp(separator + 1, "SUBLANG_", 8) != 0 ) return 0;
+		return static_cast<LANGID>((secondaryID << 10) | primaryID);
+#endif
 	}
 
 	STRING_MAP::iterator getStringByID( U32 _stringID, Dictionary& _dictionary )
@@ -180,11 +222,13 @@ struct StringTable : public IStringTable, public ISaverLoader, public IAggregate
 	}
 
 	bool      replaceStringData( const char* _tag, wchar_t* _wideString, WORD _langID);
-	wchar_t * getLang(WORD wLang);
-	wchar_t * getSubLang(WORD wLang);
+	const wchar_t * getLang(WORD wLang);
+	const wchar_t * getSubLang(WORD wLang);
+#if defined(_WIN32)
 	DWORD     getPrimaryLangID(wchar_t * lang);
 	DWORD     getSubLangID(wchar_t * lang);
 	WORD      getLanguage(wchar_t * lang);
+#endif
 	void      DEBUG_print();
 };
 
@@ -398,7 +442,11 @@ void StringTable::Reset( void )
 	m_DictionaryList.clear();
 
 	// set up default language dictionary
+#if defined(_WIN32)
 	Dictionary dict( GetSystemDefaultLCID() );
+#else
+	Dictionary dict( MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US) );
+#endif
 	m_DictionaryList.push_front( dict );
 
 	// assign default dictionary
@@ -436,14 +484,14 @@ bool StringTable::Save( class TiXmlNode& _node )
 		TiXmlElement dictionary( "DICTIONARY" );
 
 		dictionary.SetAttribute( "language", getLanguage(dict.langID) );
-		dictionary.SetAttribute( "nextStringId", dict.nextStringId );
+		dictionary.SetAttribute( "nextStringId", static_cast<unsigned long>(dict.nextStringId) );
 
 		for( Dictionary::iterator it = dict.begin(); it != dict.end(); it++ )
 		{
 			StringInfo& info = it->second;
 
 			TiXmlElement unicodeString ( it->first.c_str() );
-			unicodeString.SetAttribute( "stringID", info.stringID );
+			unicodeString.SetAttribute( "stringID", static_cast<unsigned long>(info.stringID) );
 			unicodeString.SetAttribute( "wideString", info.wideString.c_str() );
 
 			dictionary.InsertEndChild( unicodeString );
@@ -507,11 +555,13 @@ bool StringTable::Save( struct IFileSystem& _fs )
 
 	if( _fs.SetCurrentDirectory(CLSID_StringTable) )
 	{
+		bool saved = true;
 		for( DICTIONARY dit = m_DictionaryList.begin(); dit != m_DictionaryList.end(); dit++ )
 		{
 			Dictionary& dict = *dit;
 
 			char* langDir = getLanguage(dict.langID);
+			if( !langDir ) { saved = false; break; }
 
 			// turn tabs into dots
 			char* tab = strchr(langDir,'\t');
@@ -522,11 +572,19 @@ bool StringTable::Save( struct IFileSystem& _fs )
 				tab = strchr(tab,'\t');
 			}
 
-			if( _fs.CreateDirectory(langDir) && _fs.SetCurrentDirectory(langDir) )
+			_fs.CreateDirectory(langDir);
+			if( _fs.SetCurrentDirectory(langDir) )
 			{
 				for( Dictionary::iterator it = dict.begin(); it != dict.end(); it++ )
 				{
 					StringInfo& info = it->second;
+					std::vector<unsigned char> encoded;
+					if( !FrontierX::EncodeStringTableFileText(
+						info.wideString.c_str(), encoded) )
+					{
+						saved = false;
+						break;
+					}
 
 					DAFILEDESC fdesc = it->first.c_str();
 					fdesc.lpImplementation = "UTF";
@@ -537,126 +595,133 @@ bool StringTable::Save( struct IFileSystem& _fs )
 					HANDLE hFile = _fs.OpenChild(&fdesc);
 					if( hFile != INVALID_HANDLE_VALUE )
 					{
-						// prepare data
-						const wchar_t* wideString = info.wideString.c_str();
-						wchar_t nullChar = 0;
+						bool valid = true;
 						DWORD dwWritten = 0;
-						DWORD strlen = wcslen(wideString);
-
-						// for some reason just writing to the file the number of bytes wanted writes trash after the 10th bytes or so...
-						while( wideString[0] != 0 )
+						// Preserve the owner's one-code-unit write cadence.
+						for( size_t offset = 0; offset < encoded.size(); offset += 2 )
 						{
-							_fs.WriteFile( hFile, wideString, sizeof(wchar_t), &dwWritten, 0 );
-							wideString++;
+							if( !_fs.WriteFile( hFile, encoded.data() + offset, 2, &dwWritten, 0 ) ||
+								dwWritten != 2 )
+							{
+								valid = false;
+								break;
+							}
 						}
-						_fs.WriteFile( hFile, &nullChar, sizeof(nullChar), &dwWritten);
-						_fs.CloseHandle( hFile );
-
-//						// commit data
-//						_fs.WriteFile( hFile, wideString, strlen, &dwWritten, 0 );
-//						_fs.WriteFile( hFile, &nullChar, sizeof(nullChar), &dwWritten);
-//						_fs.CloseHandle( hFile );
+						if( !_fs.CloseHandle( hFile ) ) valid = false;
+						if( !valid ) saved = false;
 					}
+					else saved = false;
+					if( !saved ) break;
 				}
 
 				// out of string table
-				_fs.SetCurrentDirectory("..");
+				if( !_fs.SetCurrentDirectory("..") ) saved = false;
 			}
+			else saved = false;
+			if( !saved ) break;
 		}
 		// out of dictionary list
-		_fs.SetCurrentDirectory("..");
+		if( !_fs.SetCurrentDirectory("..") ) saved = false;
+		return saved;
 	}
 
-	return true;
+	return false;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
 bool StringTable::Load( struct IFileSystem& _fs )
 {
-	if( _fs.SetCurrentDirectory(CLSID_StringTable) )
+	if( !_fs.SetCurrentDirectory(CLSID_StringTable) ) return false;
+	struct PendingString
 	{
-		WIN32_FIND_DATA data;
-		DAFILEDESC fdesc;
+		LANGID language;
+		std::string tag;
+		std::wstring text;
+	};
+	std::vector<PendingString> pending;
 
-		HANDLE handle = _fs.FindFirstFile("*.*", &data);
-
-		if( handle == INVALID_HANDLE_VALUE )
-		{
-			return false;
-		}
-		fdesc.hFindFirst = handle;
-
+	WIN32_FIND_DATA data;
+	HANDLE handle = _fs.FindFirstFile("*.*", &data);
+	bool loaded = handle != INVALID_HANDLE_VALUE;
+	if( loaded )
+	{
 		do
 		{
-			if (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			if( !(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ) continue;
+			COMPTR<IFileSystem> directory;
+			DAFILEDESC directoryDesc = data.cFileName;
+			directoryDesc.lpImplementation = "UTF";
+			directoryDesc.dwDesiredAccess = GENERIC_READ;
+			directoryDesc.dwShareMode = 0;
+			if( _fs.CreateInstance(&directoryDesc, directory) != GR_OK ||
+				strlen(data.cFileName) >= 128 )
 			{
-
-				COMPTR<IFileSystem> f;
-				DAFILEDESC fdesc = data.cFileName;
-				fdesc.lpImplementation = "UTF";
-				fdesc.dwDesiredAccess = GENERIC_READ;
-				fdesc.dwShareMode = 0;  // no sharing
-
-				if( _fs.CreateInstance(&fdesc,f) == GR_OK )
-				{
-					char langname[128];
-					strcpy( langname, data.cFileName );
-
-					// turn dots to tabs
-					char* dot = strchr(langname,'.');
-					while(dot)
-					{
-						*dot = '\t';
-						dot++;
-						dot = strchr(dot,'.');
-					}
-
-					LANGID langid = getLanguage(langname);
-
-					if( langid )
-					{
-						WIN32_FIND_DATA fileData;
-						HANDLE fileHandle = f->FindFirstFile("*.*", &fileData);
-
-						while( fileHandle != INVALID_HANDLE_VALUE )
-						{
-							DAFILEDESC fdesc = fileData.cFileName;
-							fdesc.lpImplementation = "UTF";
-							fdesc.dwDesiredAccess = GENERIC_READ;
-							fdesc.dwShareMode = 0;  // no sharing
-
-							HANDLE hFile = f->OpenChild(&fdesc);
-							if( hFile != INVALID_HANDLE_VALUE )
-							{
-								int fileSize = f->GetFileSize(hFile);
-								wchar_t* wideString = (wchar_t*)alloca( fileSize );
-								memset( wideString, 0, fileSize );
-
-								DWORD dwWritten = 0;
-								f->ReadFile(hFile, wideString, fileSize, &dwWritten);
-								f->CloseHandle(hFile);
-
-								NewString( wideString, fileData.cFileName, langid );
-							}
-
-							if( f->FindNextFile(fileHandle, &fileData) == false )
-							{
-								fileHandle = INVALID_HANDLE_VALUE;
-							}
-						}
-					}
-
-				}
-
+				loaded = false;
+				break;
 			}
+
+			char languageName[128];
+			strcpy(languageName, data.cFileName);
+			for( char* cursor = languageName; *cursor; ++cursor )
+				if( *cursor == '.' ) *cursor = '\t';
+			const LANGID language = getLanguage(languageName);
+			if( !language )
+			{
+				loaded = false;
+				break;
+			}
+
+			WIN32_FIND_DATA fileData;
+			HANDLE fileSearch = directory->FindFirstFile("*.*", &fileData);
+			if( fileSearch == INVALID_HANDLE_VALUE ) continue;
+			do
+			{
+				DAFILEDESC fileDesc = fileData.cFileName;
+				fileDesc.lpImplementation = "UTF";
+				fileDesc.dwDesiredAccess = GENERIC_READ;
+				fileDesc.dwShareMode = 0;
+				HANDLE file = directory->OpenChild(&fileDesc);
+				if( file == INVALID_HANDLE_VALUE )
+				{
+					loaded = false;
+					break;
+				}
+				DWORD highSize = 0;
+				const DWORD fileSize = directory->GetFileSize(file, &highSize);
+				loaded = !highSize && fileSize >= 2 && fileSize != 0xffffffffU &&
+					fileSize % 2 == 0;
+				std::vector<unsigned char> bytes;
+				if( loaded ) bytes.resize(fileSize);
+				DWORD bytesRead = 0;
+				loaded = loaded && directory->ReadFile(file, bytes.data(), fileSize,
+					&bytesRead) && bytesRead == fileSize;
+				if( !directory->CloseHandle(file) ) loaded = false;
+
+				std::wstring text;
+				loaded = loaded && FrontierX::DecodeStringTableFileText(
+					bytes.data(), bytes.size(), text);
+				if( !loaded ) break;
+				pending.push_back(PendingString{language, fileData.cFileName,
+					std::move(text)});
+			}
+			while( directory->FindNextFile(fileSearch, &fileData) );
+			if( !directory->FindClose(fileSearch) ) loaded = false;
 		}
-		while( _fs.FindNextFile(handle, &data) );
-
-		_fs.FindClose(handle);
+		while( loaded && _fs.FindNextFile(handle, &data) );
+		if( !_fs.FindClose(handle) ) loaded = false;
 	}
-
-	return 1;
+	if( !_fs.SetCurrentDirectory("..") ) loaded = false;
+	if( loaded )
+	{
+		for( PendingString& entry : pending )
+		{
+			std::vector<wchar_t> terminated(entry.text.begin(), entry.text.end());
+			terminated.push_back(0);
+			NewString(terminated.data(), entry.tag.c_str(), entry.language);
+		}
+	}
+	return loaded;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -689,7 +754,7 @@ void StringTable::DEBUG_print()
 
 //--------------------------------------------------------------------------//
 //
-wchar_t * StringTable::getLang(WORD wLang)
+const wchar_t * StringTable::getLang(WORD wLang)
 {
 	wLang = PRIMARYLANGID(wLang);
 	if(wLang == LANG_AFRIKAANS)
@@ -838,7 +903,7 @@ wchar_t * StringTable::getLang(WORD wLang)
 }
 //--------------------------------------------------------------------------//
 //
-wchar_t * StringTable::getSubLang(WORD wLang)
+const wchar_t * StringTable::getSubLang(WORD wLang)
 {
 	WORD primary = PRIMARYLANGID(wLang);
 
@@ -1093,6 +1158,7 @@ wchar_t * StringTable::getSubLang(WORD wLang)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 DWORD StringTable::getPrimaryLangID(wchar_t * lang)
 {
 	if(wcscmp(lang,L"LANG_AFRIKAANS") == 0)
@@ -1453,12 +1519,14 @@ WORD StringTable::getLanguage(wchar_t * lang)
 	swscanf(str,L"%s",string3);
 	return MAKELANGID(getPrimaryLangID(string2),getSubLangID(string3));
 }
+#endif
 
 //-----------------------------------------------------------------------------------------------------
 // DllMain
 
 //--------------------------------------------------------------------------
 //  
+#if defined(_WIN32)
 BOOL COMAPI DllMain (HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
 	switch (fdwReason)
@@ -1490,6 +1558,18 @@ BOOL COMAPI DllMain (HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 
 	return TRUE;
 }
+#else
+bool RegisterTheStringTable(ICOManager * manager)
+{
+	if( !manager ) return false;
+	IComponentFactory * factory =
+		new DAComponentFactory2<DAComponentAggregate<StringTable>, AGGDESC>(CLSID_StringTable);
+	if( !factory ) return false;
+	const bool registered = manager->RegisterComponent(factory, CLSID_StringTable) == GR_OK;
+	factory->Release();
+	return registered;
+}
+#endif
 
 //-----------------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------------

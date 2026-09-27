@@ -14,10 +14,18 @@
 #include <Mesh.h>
 #include <ICamera.h>
 #include <rendpipeline.h>
-#include <IHardpoint.h>
+#include <IHardPoint.h>
 #include <IChannel2.h>
 #include <ChannelEventTypes.h>
 #include <FrontierX/RayGeometry.h>
+#if !defined(_WIN32)
+#include <FrontierX/NativeGameVertexBuffer.h>
+#endif
+
+#if !defined(_WIN32)
+namespace FrontierXMeshManager
+{
+#endif
 
 namespace
 {
@@ -55,7 +63,7 @@ MeshInstance::~MeshInstance()
 	}
 }
 
-void MeshInstance::Initialize(MeshArch * meshArch, struct IEngineInstance * engInst)
+bool MeshInstance::Initialize(MeshArch * meshArch, struct IEngineInstance * engInst)
 {
 	timer = 0.0;
 	arch = meshArch;
@@ -69,6 +77,8 @@ void MeshInstance::Initialize(MeshArch * meshArch, struct IEngineInstance * engI
 	if(!(arch->bDynamic))
 	{
 		instanceIndex = owner->GetEngine()->create_instance2(arch->GetEngineArchtype(),engInst);
+		if(instanceIndex == INVALID_INSTANCE_INDEX)
+			return false;
 
 		if(instanceIndex != INVALID_INSTANCE_INDEX)
 		{
@@ -98,6 +108,7 @@ void MeshInstance::Initialize(MeshArch * meshArch, struct IEngineInstance * engI
 			}
 		}
 	}
+	return true;
 }
 
 INSTANCE_INDEX MeshInstance::findInstanceFromArch(ARCHETYPE_INDEX baseArch)
@@ -215,8 +226,14 @@ void MeshInstance::Render()
 			owner->GetPipe()->set_default_constants(trans,cam_pos_in_object_space,4);
 
 			U32 vertexBuffer = arch->GetVertexBufferForType(mat->GetVertexType());
+#if defined(_WIN32)
 			mat->DrawVB((IDirect3DVertexBuffer9 *)vertexBuffer,arch->GetFaceArray()[face].indexBuffer,arch->GetFaceArray()[face].startVertex,
 				arch->GetFaceArray()[face].numVerts,arch->GetFaceArray()[face].startIndex,arch->GetFaceArray()[face].numIndex,modList,timer);
+#else
+			IDirect3DVertexBuffer9 nativeVertexBuffer{vertexBuffer};
+			mat->DrawVB(&nativeVertexBuffer,arch->GetFaceArray()[face].indexBuffer,arch->GetFaceArray()[face].startVertex,
+				arch->GetFaceArray()[face].numVerts,arch->GetFaceArray()[face].startIndex,arch->GetFaceArray()[face].numIndex,modList,timer);
+#endif
 		}
 	}
 }
@@ -615,3 +632,7 @@ void COMAPI MeshInstance::on_finished(unsigned int channel_id, void * user_suppl
 void COMAPI MeshInstance::on_loop(unsigned int channel_id, Transform & xform, void * user_supplied)
 {
 }
+
+#if !defined(_WIN32)
+}
+#endif

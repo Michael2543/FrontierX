@@ -12,9 +12,65 @@
 */
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppSchema.h"
+#include "FrontierX/NativeDiskSpace.h"
+#include "FrontierX/LegacyInput.h"
+#include "FrontierX/PlatformTime.h"
+#endif
 #include <stdio.h>
+#if !defined(_WIN32)
+#include <cwchar>
+#include <cstdlib>
+#include <string>
+#include <limits>
+
+static void RequireNativeMissionFileTransfer()
+{
+	if (FILETRANSFER) return;
+	std::fputs("Native mission file transfer is unavailable for a network mission\n", stderr);
+	std::abort();
+}
+
+static bool NativeFormatPlayerMessage(wchar_t *output, size_t capacity,
+                                      const wchar_t *format, const wchar_t *name)
+{
+	if (!output || !capacity || !format || !name) return false;
+	std::wstring portable;
+	for (const wchar_t *cursor = format; *cursor; ++cursor)
+	{
+		if (*cursor != L'%')
+		{
+			portable += *cursor;
+			continue;
+		}
+		portable += *cursor;
+		++cursor;
+		if (*cursor == L'%') portable += *cursor;
+		else if (*cursor == L's') portable += L"ls";
+		else if (*cursor == L'l' && cursor[1] == L's')
+		{
+			portable += L"ls";
+			++cursor;
+		}
+		else return false;
+	}
+	const int count = std::swprintf(output, capacity, portable.c_str(), name);
+	return count >= 0 && static_cast<size_t>(count) < capacity;
+}
+constexpr U32 WM_CLOSE = FrontierX::LegacyMessage::Close;
+using LARGE_INTEGER = S64;
+static BOOL QueryPerformanceCounter(LARGE_INTEGER *counter)
+{
+	if (!counter) return FALSE;
+	*counter = static_cast<S64>(FrontierX::Platform::MonotonicMicroseconds());
+	return TRUE;
+}
+#endif
 
 static FILE *g_mis_f = NULL;
 #define IGM_LOG(s) do{FILE*_igf=fopen("debug/ingame_diag.txt","a");if(_igf){fputs((s),_igf);fclose(_igf);}}while(0)
@@ -22,24 +78,29 @@ static FILE *g_mis_f = NULL;
 #define MIS_LOGF(fmt,...) do { if(!g_mis_f) g_mis_f=fopen("debug/mission_diag.txt","w"); if(g_mis_f){fprintf(g_mis_f,(fmt),__VA_ARGS__);fflush(g_mis_f);} } while(0)
 
 #include "Mission.h"
-#include "Resource.h"
+#include "resource.h"
 #include "UserDefaults.h"
 #include "ObjList.h"
 #include "Sector.h"
 #include "NetFileTransfer.h"
-#include "netpacket.h"
+#include "NetPacket.h"
 #include "Startup.h"
 #include "Menu.h"
 #include "CQTrace.h"
 #include "Cursor.h"
 #include "Hotkeys.h"
 #include "CQGame.h"
-#include "BaseHotrect.h"
+#if defined(_WIN32)
+#include "BaseHotRect.h"
+#endif
 #include "MGlobals.h"
 #include <DBaseData.h>
 #include "OpAgent.h"
 #include "IObject.h"
 #include "Camera.h"
+#if !defined(_WIN32)
+#include "ICamera.h"
+#endif
 #include "MusicManager.h"
 #include "CQLight.h"
 #include "FogOfWar.h"
@@ -47,10 +108,10 @@ static FILE *g_mis_f = NULL;
 #include "ScrollingText.h"
 #include "MapGen.h"
 #include <MScript.h>
-#include "Commpacket.h"
+#include "CommPacket.h"
 #include "IMovieCamera.h"
 #include "INugget.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "ISPlayerAI.h"
 #include "IGameProgress.h"
 #include "InProgressAnim.h"
@@ -61,15 +122,17 @@ static FILE *g_mis_f = NULL;
 #include "DrawAgent.h"
 #include "IShapeLoader.h"
 
+#if defined(_WIN32)
 #include <dplay.h>
 #include <dplobby.h>
 #include "ZoneLobby.h"
+#endif
 #include <TSmartPointer.h>
 #include <EventSys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <HeapObj.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ViewCnst.h>
 #include <WindowManager.h>
 #include <MemFile.h>
@@ -320,7 +383,7 @@ struct DACOM_NO_VTABLE Mission : public IMission,
 
 	virtual void __stdcall ToggleCheating (void);
 
-	virtual const bool _stdcall GetCheatsEnabled (void) const;
+	virtual const bool __stdcall GetCheatsEnabled (void) const;
 
 	virtual COLORREF __stdcall GetPlayerColorForDPID (U32 dpid);
 
@@ -399,6 +462,9 @@ struct DACOM_NO_VTABLE Mission : public IMission,
 //
 inline static void * GetPreprocessData (int & resourceSize)
 {
+#if !defined(_WIN32)
+	return const_cast<void *>(FrontierX::GetNativeAppSchema(resourceSize));
+#else
 	HRSRC hRes;
 
 	if ((hRes = FindResource(hResource, MAKEINTRESOURCE(IDR_PARSER1), "PARSER")) != 0)
@@ -413,6 +479,7 @@ inline static void * GetPreprocessData (int & resourceSize)
 		}
 	}
 	return 0;
+#endif
 }
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -431,8 +498,13 @@ Mission::~Mission (void)
 	if (GS && GS->QueryOutgoingInterface("ISystemEventCallback", connection) == GR_OK)
 		connection->Unadvise(systemEventHandle);
 	
+#if defined(_WIN32)
 	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
+#else
+	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+		connection->Unadvise(eventHandle);
+#endif
 
 	if (FILETRANSFER && FILETRANSFER->QueryOutgoingInterface("IFileTransferCallback", connection) == GR_OK)
 		connection->Unadvise(fileTransferHandle);
@@ -732,6 +804,14 @@ Done:
 //
 bool Mission::getDiscFreeSpace (LPCTSTR lpszPath, DWORDLONG* pnFree)
 {
+#ifndef _WIN32
+	if (!pnFree) return false;
+	std::uint64_t available = 0;
+	if (!FrontierX::Platform::AvailableDiskBytes(lpszPath, available))
+		return false;
+	*pnFree = available;
+	return true;
+#else
 	// the typedef for the function pointer to get the available disk space
 	typedef bool (CALLBACK* MYFUNCPTR)(LPCTSTR,PULARGE_INTEGER,PULARGE_INTEGER,PULARGE_INTEGER); 
 
@@ -777,6 +857,7 @@ bool Mission::getDiscFreeSpace (LPCTSTR lpszPath, DWORDLONG* pnFree)
 	}
 
 	return bRet;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -784,13 +865,22 @@ BOOL32 Mission::Save (const C8 * fileName, struct IComponentFactory * pParent)
 {
 	// make sure we have enough memory
 	DWORDLONG dwlDiskSpace=0;
-	if (getDiscFreeSpace(NULL, &dwlDiskSpace))
+	const bool diskSpaceKnown = getDiscFreeSpace(NULL, &dwlDiskSpace);
+	#ifndef _WIN32
+	if (!diskSpaceKnown)
+		return FALSE;
+	#endif
+	if (diskSpaceKnown)
 	{
 		// we need to have at least one meg of memory around in order to save our game...
 		if (dwlDiskSpace < 1024*1024)
 		{
 			// tell the user that they don't have enough available memory to save the game
+			#ifdef _WIN32
 			CQMessageBox(IDS_HELP_NODISCSPACE, IDS_ERROR, MB_OK);
+			#else
+			fprintf(stderr, "Mission save requires at least one MiB of available disk space\n");
+			#endif
 			return FALSE;
 		}
 	}
@@ -804,7 +894,11 @@ BOOL32 Mission::Save (const C8 * fileName, struct IComponentFactory * pParent)
 	else
 		buffer[0] = 0;
 	
+	#ifdef _WIN32
 	if (inFile == 0 || (fileName != 0 && stricmp(fileName,buffer)!=0))	// no current file, or it's a different file
+	#else
+	if (inFile == 0 || (fileName != 0 && strcmp(fileName,buffer)!=0))
+	#endif
 		return SaveAs(fileName, pParent);
 
 	if (strstr(buffer, ".qmission"))
@@ -846,8 +940,16 @@ BOOL32 Mission::Save (const C8 * fileName, struct IComponentFactory * pParent)
 		}
 	}
 
+#if !defined(_WIN32)
+	if (!inFile->SetCurrentDirectory("\\") || !RecursiveDelete(inFile))
+	{
+		std::fputs("Native mission save could not clear the writable archive\n", stderr);
+		goto Done;
+	}
+#else
 	inFile->SetCurrentDirectory("\\");
 	RecursiveDelete(inFile);
+#endif
 #ifdef _DEBUG
 	if (SaveParseData() == 0)
 	{
@@ -928,11 +1030,21 @@ BOOL32 Mission::SaveByDescription (const wchar_t * fileDesc, IComponentFactory *
 
 		if (IsSinglePlayerGame())
 		{
+#if defined(_WIN32)
 			wsprintf(szFile, "f%07d", saveKey);
+#else
+			if (std::snprintf(szFile, sizeof(szFile), "f%07u", saveKey) >=
+				static_cast<int>(sizeof(szFile))) return FALSE;
+#endif
 		}
 		else
 		{
-			wsprintf(szFile, "m%07d", saveKey);			
+#if defined(_WIN32)
+			wsprintf(szFile, "m%07d", saveKey);
+#else
+			if (std::snprintf(szFile, sizeof(szFile), "m%07u", saveKey) >=
+				static_cast<int>(sizeof(szFile))) return FALSE;
+#endif
 		}
 		
 		return Save(szFile, pParent);
@@ -1012,8 +1124,16 @@ BOOL32 Mission::QuickSave (const C8 * fileName, struct IComponentFactory * pPare
 		}
 	}
 
+#if !defined(_WIN32)
+	if (!inFile->SetCurrentDirectory("\\") || !RecursiveDelete(inFile))
+	{
+		std::fputs("Native mission quicksave could not clear the writable archive\n", stderr);
+		goto Done;
+	}
+#else
 	inFile->SetCurrentDirectory("\\");
 	RecursiveDelete(inFile);
+#endif
 	if (SaveParseData() == 0)
 	{
 		CQERROR0("Failed write to save game");
@@ -1136,8 +1256,16 @@ BOOL32 Mission::DynamicSave (const C8 * fileName, struct IComponentFactory * pPa
 		}
 	}
 
+#if !defined(_WIN32)
+	if (!inFile->SetCurrentDirectory("\\") || !RecursiveDelete(inFile))
+	{
+		std::fputs("Native mission quicksave could not clear the writable archive\n", stderr);
+		goto Done;
+	}
+#else
 	inFile->SetCurrentDirectory("\\");
 	RecursiveDelete(inFile);
+#endif
 	if (SaveParseData() == 0)
 	{
 		CQERROR0("Failed write to save game");
@@ -1161,7 +1289,17 @@ Done:
 //
 GENRESULT Mission::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+	const U32 param32 = U32(param);
+#else
+	const auto *msg = static_cast<const FrontierX::LegacyWindowMessage *>(param);
+	const std::uintptr_t encoded = reinterpret_cast<std::uintptr_t>(param);
+	if ((message == CQE_UPDATE || message == CQE_HOTKEY ||
+		message == CQE_DELETEPLAYER || message == CQE_MISSION_PROG_ENDING) &&
+		encoded > UINT32_MAX) return GR_INVALID_PARMS;
+	const U32 param32 = static_cast<U32>(encoded);
+#endif
 
 	switch (message)
 	{
@@ -1203,7 +1341,13 @@ GENRESULT Mission::Notify (U32 message, void *param)
 					if (MGlobals::HasPlayerResigned(slotID) == false)
 					{
 						MGlobals::GetPlayerNameFromDPID(packet->fromID, name, sizeof(name));
+#if defined(_WIN32)
 						swprintf(msg, _localLoadStringW(IDS_FORMAT_PLAYERRESIGNED), name);
+#else
+						if (!NativeFormatPlayerMessage(msg, 255,
+							_localLoadStringW(IDS_FORMAT_PLAYERRESIGNED), name))
+							return GR_GENERIC;
+#endif
 						SCROLLTEXT->SetTextString(msg);
 						CQTRACE11("RESIGNATION -- %S", msg);
 					}
@@ -1212,6 +1356,7 @@ GENRESULT Mission::Notify (U32 message, void *param)
 						MGlobals::SetPlayerResignedBySlot(slotID);
 					MGlobals::RemoveDPIDFromPlayerID(packet->fromID, playerID);
 
+#if defined(_WIN32)
 					if (ZONESCORE)
 					{
 						U32 slots[MAX_PLAYERS];
@@ -1231,6 +1376,7 @@ GENRESULT Mission::Notify (U32 message, void *param)
 							}
 						}
 					}
+#endif
 
 					if (THEMATRIX->IsMaster())
 					{
@@ -1266,12 +1412,19 @@ GENRESULT Mission::Notify (U32 message, void *param)
 							wcsncpy(name, _localLoadStringW(IDS_COMPUTER_NAME), 32);
 						}
 
+#if defined(_WIN32)
 						swprintf(msg, _localLoadStringW(IDS_FORMAT_PLAYEROUT), name);
+#else
+						if (!NativeFormatPlayerMessage(msg, 255,
+							_localLoadStringW(IDS_FORMAT_PLAYEROUT), name))
+							return GR_GENERIC;
+#endif
 						SCROLLTEXT->SetTextString(msg);
 						CQTRACE11("LOSING -- %S", msg);
 
 						MGlobals::SetPlayerResignedBySlot(i);
 
+#if defined(_WIN32)
 						if (ZONESCORE)
 						{
 							U32 flags = ZONESCORE_LOSER;
@@ -1279,6 +1432,7 @@ GENRESULT Mission::Notify (U32 message, void *param)
 								flags |= ZONESCORE_COMPUTERPLAYER;
 							ZONESCORE->SetPlayerFlags(MGlobals::GetZoneSeatFromSlot(i), flags);
 						}
+#endif
 					}
 				}
 				
@@ -1322,7 +1476,7 @@ GENRESULT Mission::Notify (U32 message, void *param)
 		// is it time to put a an endmission message box?
 		if (CQFLAGS.bGamePaused == false && deferredMissionEndTime!=0 && bHasFocus)
 		{
-			deferredMissionEndTime -= S32(param)>>10;
+			deferredMissionEndTime -= static_cast<S32>(param32)>>10;
 			if (deferredMissionEndTime <= 0)
 			{
 				deferredMissionEndTime = 0;
@@ -1364,17 +1518,27 @@ GENRESULT Mission::Notify (U32 message, void *param)
 				bOnlyHumanPlayerMsgNeeded = false;
 				// notify the player he is the only human left playing
 				if (deferredMissionEndTime==0)		// don't do this if mission is ending
+				{
+#if defined(_WIN32)
 					CQMessageBox(IDS_HELP_NOHUMANS, IDS_APP_NAMETM, MB_OK);
+#else
+					return GR_INTERFACE_UNSUPPORTED;
+#endif
+				}
 			}
 		}
 		break;
 
 
 	case CQE_HOTKEY:
-		switch (U32(param))
+		switch (param32)
 		{
 		case IDH_WIN_CLOSE:
+#if defined(_WIN32)
 			PostMessage(hMainWindow, WM_CLOSE, 0, 0);
+#else
+			return GR_INTERFACE_UNSUPPORTED;
+#endif
 			break;
 		} 
 		break; // end case CQE_HOTKEY
@@ -1390,16 +1554,16 @@ GENRESULT Mission::Notify (U32 message, void *param)
 		break;
 
 	case CQE_DELETEPLAYER:
-		if (U32(param) != PLAYERID)		// ignore booting case
+		if (param32 != PLAYERID)		// ignore booting case
 		{
-			U32 playerID = MGlobals::GetPlayerIDFromDPID(U32(param));
+			U32 playerID = MGlobals::GetPlayerIDFromDPID(param32);
 			if (playerID)
 			{
 				// notify everyone that a player has left the building
 				// has left the game
 				// scrolling text message
 
-				U32 slotID = MGlobals::GetSlotIDFromDPID(U32(param));
+				U32 slotID = MGlobals::GetSlotIDFromDPID(param32);
 				if (slotID < MAX_PLAYERS)
 				{
 					wchar_t msg[255];
@@ -1411,18 +1575,27 @@ GENRESULT Mission::Notify (U32 message, void *param)
 					U32 result = MGlobals::GetPlayerNameBySlot(slotID, name, sizeof(name));
 
 					CQASSERT(result);		// cannot be a computer player here!
+#if defined(_WIN32)
 					swprintf(msg, _localLoadStringW(IDS_FORMAT_PLAYERLEFT), name);
+#else
+					if (!NativeFormatPlayerMessage(msg, 255,
+						_localLoadStringW(IDS_FORMAT_PLAYERLEFT), name))
+						return GR_GENERIC;
+#endif
 					SCROLLTEXT->SetTextString(msg);
 					CQTRACE11("QUITTING -- %S", msg);
 
-					MGlobals::RemoveDPIDFromPlayerID(U32(param), playerID);
+					MGlobals::RemoveDPIDFromPlayerID(param32, playerID);
 					if (MGlobals::HasPlayerResigned(slotID) == false)
 					{
+#if defined(_WIN32)
 						if (ZONESCORE)
 							ZONESCORE->SetPlayerFlags(MGlobals::GetZoneSeatFromSlot(slotID), ZONESCORE_DISCONNECTED);
+#endif
 						
 						if (nPlayers == 1)
 						{
+#if defined(_WIN32)
 							if (ZONESCORE)
 							{
 								//
@@ -1434,6 +1607,7 @@ GENRESULT Mission::Notify (U32 message, void *param)
 								ZONESCORE->AddNewPlayer(buffer, 0, MGlobals::GetAllyMask(playerID), ZONESCORE_COMPUTERPLAYER, &dwSeat);
 								MGlobals::SetZoneSeatFromSlot(slotID, dwSeat);
 							}
+#endif
 							// no more human players, create a computer player
 							createPlayerAI(MGlobals::GetPlayerRace(playerID), playerID, playerAI[playerID-1]);
 						}
@@ -1450,7 +1624,7 @@ GENRESULT Mission::Notify (U32 message, void *param)
 
 	case CQE_MISSION_PROG_ENDING:
 		deferredMissionEndTime = DEFERRED_MISSION_END_TIME;
-		deferredMissionWinners = U32(param);
+		deferredMissionWinners = param32;
 		break;
 
 	case CQE_MISSION_ENDING_SPLASH:
@@ -1471,6 +1645,7 @@ GENRESULT Mission::Notify (U32 message, void *param)
 		destroyPlayerAI();
 		break;
 
+#if defined(_WIN32)
 	case WM_CHAR:
 		if (bHasFocus)
 		switch (TCHAR(msg->wParam))
@@ -1649,6 +1824,12 @@ GENRESULT Mission::Notify (U32 message, void *param)
 			break;
 		}
 		break;
+#else
+	case FrontierX::LegacyMessage::Character:
+		if (!msg || msg->message != message) return GR_INVALID_PARMS;
+		if (bHasFocus && msg->wparam == 27) return GR_INTERFACE_UNSUPPORTED;
+		break;
+#endif
 
 	}
 
@@ -1677,7 +1858,13 @@ void Mission::setAIResign (U32 playerID)
 				wchar_t name[64];
 
 				MGlobals::GetPlayerNameBySlot(slots[index], name, sizeof(name));
+#if defined(_WIN32)
 				swprintf(msg, _localLoadStringW(IDS_FORMAT_PLAYERRESIGNED), name);
+#else
+				if (!NativeFormatPlayerMessage(msg, 255,
+					_localLoadStringW(IDS_FORMAT_PLAYERRESIGNED), name))
+					CQBOMB0("Unsupported native player-status format.");
+#endif
 				SCROLLTEXT->SetTextString(msg);
 				CQTRACE11("RESIGNATION -- %S", msg);
 
@@ -1721,7 +1908,7 @@ void Mission::Update()
 			CQFLAGS.bGamePaused, CQFLAGS.bRTGamePaused, (void *)THEMATRIX);
 	if(CQFLAGS.bGamePaused==0 && CQFLAGS.bRTGamePaused==0)
 	{
-		__int64 pretick, posttick;
+		S64 pretick, posttick;
 		QueryPerformanceCounter((LARGE_INTEGER *)&pretick);
 		if (trace) MIS_LOG("Mission::Update: before matrix\n");
 		THEMATRIX->Update();
@@ -1768,6 +1955,11 @@ void Mission::Update()
 //
 BOOL32 Mission::OnAppClose (void)
 {
+#if !defined(_WIN32)
+	// Until native save and confirmation UI exist, refuse an unsafe close.
+	if (bUnsavedData || CQFLAGS.bGameActive) return TRUE;
+	return close() == 0;
+#else
 	USER_DEFAULTS * defaults = DEFAULTS->GetDefaults();
 	BOOL32 result=0;
 
@@ -1813,6 +2005,7 @@ BOOL32 Mission::OnAppClose (void)
 Done:
 	result = (close() == 0);		// do not end program if save failed
 	return result;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1844,6 +2037,9 @@ GENRESULT Mission::RemoteFileRequest (const C8 *fileName, IFileSystem ** file)
 //
 void Mission::SetMissionMRUList (HMENU hMenu)
 {
+#if !defined(_WIN32)
+	CQBOMB0("Native mission MRU menu is unavailable.");
+#else
 	MENUITEMINFO minfo;
 	DWORD i;
 	char buffer[MAX_PATH+4];
@@ -1869,6 +2065,7 @@ void Mission::SetMissionMRUList (HMENU hMenu)
 		
 		InsertMenuItem(hMenu, 0x7FFE, 1, &minfo);
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -2029,6 +2226,7 @@ void Mission::LoadFromFilter()
 //
 void Mission::SetWindowTitle (void)
 {
+#if defined(_WIN32)
 	// setup program needs to search on the official title
 	if (CQFLAGS.bNoGDI==0)
 	{
@@ -2056,11 +2254,15 @@ void Mission::SetWindowTitle (void)
 
 		::SetWindowText(hMainWindow, buffer);
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Mission::StartNetDownload (void)
 {
+#if !defined(_WIN32)
+	RequireNativeMissionFileTransfer();
+#endif
 	CQASSERT(HOSTID != PLAYERID);		//can't download if we are the host
 	CQASSERT(downloadChannel==0);
 
@@ -2096,6 +2298,10 @@ BOOL32 Mission::close (void)
 	// todo(aaj-5/6/2004): big hack to get the first splash screen up first
 	if (bDeferredMissionEndNonFail)
 	{
+#if !defined(_WIN32)
+		// The native game renderer does not yet own the mission-ending slide.
+		return 0;
+#else
 		// do the loading
 		COMPTR<IShapeLoader> loader;
 		COMPTR<IDAComponent> pComp;
@@ -2138,8 +2344,13 @@ BOOL32 Mission::close (void)
 		// do the cleanup
 		loader.free();
 		slide.free();
+#endif
 	}
 
+#if !defined(_WIN32)
+	// Without a native save prompt, refuse to discard an unsaved mission.
+	if (bUnsavedData) return 0;
+#else
 	if (bUnsavedData && CQFLAGS.bNoGDI==0)
 	{
 		switch (MessageBox(hMainWindow, "Save mission data?", "Unsaved Data", MB_YESNOCANCEL|MB_ICONEXCLAMATION))
@@ -2152,12 +2363,15 @@ BOOL32 Mission::close (void)
 			goto Done;
 		}
 	}
+#endif
 	
 	EVENTSYS->Send(CQE_MISSION_CLOSE, 0);
 
 	inFile.free();
 	SetWindowTitle();
+#if defined(_WIN32)
 	MENU->EnableMenuItem(IDM_CLOSE_MISSION, MF_BYCOMMAND | MF_GRAYED); 		
+#endif
 
 	destroyPlayerAI();
 	SECTOR->Close();
@@ -2308,6 +2522,12 @@ Done:
 //
 BOOL32 Mission::LoadParseData (IFileSystem * inFile)
 {
+#ifndef _WIN32
+	if (hPrevSymbols)
+		parser->DestroySymbols(hPrevSymbols);
+	hPrevSymbols = 0;
+	return FrontierX::LoadNativeMissionSchema(inFile, parser, hPrevSymbols);
+#else
 	BOOL32 result = 0;
 	DAFILEDESC fdesc = "\\ParseData\\Data.h";
 	DWORD len, dwRead;
@@ -2320,21 +2540,28 @@ BOOL32 Mission::LoadParseData (IFileSystem * inFile)
 	if ((hFile = inFile->OpenChild(&fdesc)) == INVALID_HANDLE_VALUE)
 		goto Done;
 	len = inFile->GetFileSize(hFile);
+	if (len == 0 || len == DWORD(-1))
+		goto Done;
+#ifndef _WIN32
+	if (len > 4U * 1024U * 1024U)
+		goto Done;
+#endif
 	if ((pTemp = (C8 *) malloc (len+1)) == 0)
 		goto Done;
-	if (inFile->ReadFile(hFile, (void *)pTemp, len, &dwRead, 0) == 0)
+	if (inFile->ReadFile(hFile, (void *)pTemp, len, &dwRead, 0) == 0 || dwRead != len)
 		goto Done;
 	pTemp[len] = 0;
 
 	hPrevSymbols = parser->ParseNewMemory(pTemp);
 
-	result=1;
+	result = (hPrevSymbols != 0);
 Done:
 	if (hFile != INVALID_HANDLE_VALUE)
 		inFile->CloseHandle(hFile);
 	::free(pTemp);
 
 	return result;
+#endif
 }
 //--------------------------------------------------------------------------
 //
@@ -2342,6 +2569,9 @@ void Mission::updateNetFile (void)
 {
 	if (downloadChannel || (bDownloadNeeded && HOSTID && HOSTID != PLAYERID))
 	{
+#if !defined(_WIN32)
+		RequireNativeMissionFileTransfer();
+#endif
 		if (bDownloadNeeded)
 		{
 			if (downloadChannel)		// remote download of mission file
@@ -2465,22 +2695,44 @@ BOOL32 Mission::ReloadMission (void)
 	else
 	{
 		// loading on of the missions 2 - 16
+		#ifdef _WIN32
 		wsprintf(fileName, "T_Mission%d", uMissionID+1); 
+		#else
+		const int written = snprintf(fileName, sizeof(fileName), "T_Mission%u", uMissionID+1);
+		if (written < 0 || written >= S32(sizeof(fileName)))
+			return FALSE;
+		#endif
 	}
+	#ifndef _WIN32
+	if (fileName[0] == 0 || !SPMAPDIR)
+		return FALSE;
+	#endif
 
 	char fileNameEx[32];
 	memset(fileNameEx, 0, sizeof(fileNameEx));
 
 	// okay, first see if we can load a *.dmission file
 	// if that fails, load a *.qmission file
+	#ifdef _WIN32
 	wsprintf(fileNameEx, "%s%s", fileName, ".dmission");
+	#else
+	const int missionNameSize = snprintf(fileNameEx, sizeof(fileNameEx), "%s.dmission", fileName);
+	if (missionNameSize < 0 || missionNameSize >= S32(sizeof(fileNameEx)))
+		return FALSE;
+	#endif
 
 	DAFILEDESC fdesc = fileNameEx;
 	if (SPMAPDIR->CreateInstance(&fdesc, inFile) != GR_OK)
 	{
 		// we couldn't find the dmission, load the qmission instead
 		memset(fileNameEx, 0, sizeof(fileNameEx));
+		#ifdef _WIN32
 		wsprintf(fileNameEx, "%s%s", fileName, ".qmission");
+		#else
+		const int fallbackNameSize = snprintf(fileNameEx, sizeof(fileNameEx), "%s.qmission", fileName);
+		if (fallbackNameSize < 0 || fallbackNameSize >= S32(sizeof(fileNameEx)))
+			return FALSE;
+		#endif
 
 		if (SPMAPDIR->CreateInstance(&fdesc, inFile) != GR_OK)
 		{
@@ -2525,10 +2777,12 @@ BOOL32 Mission::Reload (void)
 
 	ipAnim->UpdateString(IDS_PROG_INITMAP);
 	MIS_LOG("Reload: before LoadParseData\n");
-	LoadParseData(inFile);
+	if (LoadParseData(inFile) == 0)
+		goto Done;
 	ipAnim->SetProgress(0.05f);
 	MIS_LOG("Reload: before MGlobals::Load\n");
-	MGlobals::Load(inFile);
+	if (MGlobals::Load(inFile) == 0)
+		goto Done;
 	ipAnim->SetProgress(0.08f);
 
 	if (PLAYERID==0 && MGlobals::IsSinglePlayer())		// we may want to store this data in the map!
@@ -2713,7 +2967,7 @@ Done:
 		CURSOR->SetBusy(0);
 
 	// do not free the animation if we are going to call initnetgame
-	if (ipAnim != NULL && bNetloadProgressAnimation == false)
+	if (ipAnim != 0 && bNetloadProgressAnimation == false)
 	{
 		ipAnim->SetProgress(1.0f);
 		ipAnim.free();
@@ -2925,6 +3179,7 @@ void Mission::GenerateMultiplayerMap (const struct FULLCQGAME & cqgame, U32 rand
 //
 void Mission::EndMission (U32 allyMask, bool bNonWinLose)
 {
+#if defined(_WIN32)
 	if (ZONESCORE && ((allyMask & 0x80000000) == 0))
 	{
 		const CQGAME & cqgame = MGlobals::GetGameSettings();
@@ -2954,6 +3209,7 @@ void Mission::EndMission (U32 allyMask, bool bNonWinLose)
 		ZONESCORE->SendGameState(DPLOBBY, ZSTATE_END);
 		ZONESCORE->SendFinalScore(DPLOBBY);
 	}
+#endif
 
 	bool bWon = ((allyMask & (1 << (MGlobals::GetThisPlayer()-1))) != 0);		// are we allied with winners?
 	U32 result = bWon ? MISSION_END_WON : MISSION_END_LOST;
@@ -2987,6 +3243,7 @@ void Mission::EndMission (U32 allyMask, bool bNonWinLose)
 		EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
 	}
 
+#if defined(_WIN32)
 	if (result == MISSION_END_WON)
 	{
 		CQMessageBox(IDS_MISSION_PRESSOK, IDS_MISSION_SUCCESS, MB_OK);
@@ -2995,6 +3252,7 @@ void Mission::EndMission (U32 allyMask, bool bNonWinLose)
 	{
 		CQMessageBox(IDS_MISSION_PRESSOK, IDS_MISSION_FAILURE, MB_OK);
 	}
+#endif
 
 	if (bOldGamePaused==0 && ((allyMask & 0x80000000) == 0))
 	{
@@ -3508,6 +3766,9 @@ static BOOL32 ParseDefFile (void)
 
 	if (PARSER->QueryInterface("IViewConstructor2", (void **) &parser) == GR_OK)
 	{
+#if !defined(_WIN32)
+		result = FrontierX::ParseNativeAppSchema(parser) ? 1 : 0;
+#else
 		void * pPreprocessBlock;
 		char * ptr2;
 		int len=0;
@@ -3521,6 +3782,7 @@ static BOOL32 ParseDefFile (void)
 
 		result = (parser->ParseMemory(ptr2) == GR_OK);
 		::free(ptr2);
+#endif
 	}
 	else
 		result = 0;
@@ -3534,14 +3796,25 @@ extern "C" void _heap_init (void);
 struct _mission : GlobalComponent
 {
 	Mission * mission;
+#if defined(_WIN32)
 	HINSTANCE hInstance;
+#endif
 
 	virtual void Startup (void)
 	{
+#if defined(_WIN32)
 		_heap_init();
+#endif
 
-		if (CreateParser() == 0 || ParseDefFile() == 0)
+		if (!GS || CreateParser() == 0 || ParseDefFile() == 0)
+		{
+#if !defined(_WIN32)
+			std::fputs("Native mission requires a working Data schema parser\n", stderr);
+			std::abort();
+#else
 			CQBOMB0("Failed parse of the Data definition file: ..\\dinclude\\Data.h");
+#endif
+		}
 
 		memcpy(COLORTABLE, DEFCOLORTABLE, sizeof(COLORTABLE));		// init the color table
 		
@@ -3552,15 +3825,35 @@ struct _mission : GlobalComponent
 	virtual void Initialize (void)
 	{
 		COMPTR<IDAConnectionPoint> connection;
+#if defined(_WIN32)
 		DWORD dwLen;
 		char buffer[260];
 		
 		dwLen = GetModuleFileName(hInstance, buffer, sizeof(buffer));
+#endif
 
+#if !defined(_WIN32)
+		if (GS->QueryOutgoingInterface("ISystemEventCallback", connection) != GR_OK ||
+			connection->Advise(MISSION, &mission->systemEventHandle) != GR_OK)
+		{
+			std::fputs("Native mission requires the system event callback\n", stderr);
+			std::abort();
+		}
+#else
 		if (GS->QueryOutgoingInterface("ISystemEventCallback", connection) == GR_OK)
 			connection->Advise(MISSION, &mission->systemEventHandle);
+#endif
+#if !defined(_WIN32)
+		// The offline mission has no remote transfer channel. Network missions
+		// still require the production file-transfer service.
+		if (PLAYERID || HOSTID) RequireNativeMissionFileTransfer();
+		if (FILETRANSFER && FILETRANSFER->QueryOutgoingInterface("IFileTransferCallback", connection) == GR_OK)
+			connection->Advise(MISSION, &mission->fileTransferHandle);
+#else
 		if (FILETRANSFER->QueryOutgoingInterface("IFileTransferCallback", connection) == GR_OK)
 			connection->Advise(MISSION, &mission->fileTransferHandle);
+#endif
+#if defined(_WIN32)
 		if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		{
 			connection->Advise(MISSION, &mission->eventHandle);
@@ -3568,11 +3861,20 @@ struct _mission : GlobalComponent
 		}
 
 		SendMessage(hMainWindow, CQE_DATA_CHECKSUM, 3, CreateZBufferAnalog(buffer));
+#else
+		if (!EVENTSYS || EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+			connection->Advise(MISSION, &mission->eventHandle) != GR_OK)
+		{
+			std::fputs("Native mission requires the game event callback\n", stderr);
+			std::abort();
+		}
+#endif
 	}
 };
 
 static _mission mission;
 
+#if defined(_WIN32)
 void main (void)
 {
 }
@@ -3614,6 +3916,7 @@ BOOL WINAPI DllMain (HINSTANCE hInstance, DWORD fdwReason, LPVOID lpvReserved)
 
 	return 1;
 }
+#endif
 //--------------------------------------------------------------------------//
 //
 void __stdcall MissionResetHeap (IHeap * heap)

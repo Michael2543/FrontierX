@@ -7,6 +7,7 @@
 //
 
 #include "TYPEDEFS.H"
+#include <cstddef>
 
 #if defined(_WIN32)
 #include <d3d9.h>
@@ -53,9 +54,32 @@ enum D3DBLEND
 	D3DBLEND_FORCE_DWORD = 0x7fffffff
 };
 
+enum D3DFILLMODE
+{
+	D3DFILL_POINT = 1,
+	D3DFILL_WIREFRAME = 2,
+	D3DFILL_SOLID = 3
+};
+
+enum D3DSHADEMODE
+{
+	D3DSHADE_FLAT = 1,
+	D3DSHADE_GOURAUD = 2,
+	D3DSHADE_PHONG = 3
+};
+
+enum D3DCULL
+{
+	D3DCULL_NONE = 1,
+	D3DCULL_CW = 2,
+	D3DCULL_CCW = 3
+};
+
 enum D3DRENDERSTATETYPE
 {
     D3DRS_ZENABLE = 7,
+    D3DRS_FILLMODE = 8,
+    D3DRS_SHADEMODE = 9,
     D3DRS_ZWRITEENABLE = 14,
     D3DRS_ALPHATESTENABLE = 15,
     D3DRS_SRCBLEND = 19,
@@ -65,9 +89,17 @@ enum D3DRENDERSTATETYPE
     D3DRS_ALPHAREF = 24,
     D3DRS_ALPHAFUNC = 25,
     D3DRS_DITHERENABLE = 26,
+    D3DRS_FOGENABLE = 28,
     D3DRS_ALPHABLENDENABLE = 27,
+    D3DRS_SPECULARENABLE = 29,
+    D3DRS_TEXTUREFACTOR = 60,
     D3DRS_WRAP0 = 128,
     D3DRS_WRAP1 = 129,
+    D3DRS_CLIPPING = 136,
+    D3DRS_LIGHTING = 137,
+    D3DRS_COLORVERTEX = 141,
+    D3DRS_NORMALIZENORMALS = 143,
+    D3DRS_DIFFUSEMATERIALSOURCE = 145,
     D3DRS_DEPTHBIAS = 195,
     D3DRS_BLENDOPALPHA = 209,
 	D3DRS_FORCE_DWORD = 0x7fffffff
@@ -94,6 +126,7 @@ enum D3DTEXTURESTAGESTATETYPE
     D3DTSS_ALPHAOP = 4,
     D3DTSS_ALPHAARG1 = 5,
     D3DTSS_ALPHAARG2 = 6,
+    D3DTSS_TEXCOORDINDEX = 11,
     D3DTSS_CONSTANT = 32,
     D3DTSS_FORCE_DWORD = 0x7fffffff
 };
@@ -104,6 +137,7 @@ enum D3DTEXTUREOP
     D3DTOP_SELECTARG1 = 2,
     D3DTOP_SELECTARG2 = 3,
     D3DTOP_MODULATE = 4,
+    D3DTOP_ADD = 7,
     D3DTOP_FORCE_DWORD = 0x7fffffff
 };
 
@@ -111,15 +145,47 @@ enum D3DTEXTUREARGUMENT
 {
     D3DTA_DIFFUSE = 0,
     D3DTA_CURRENT = 1,
-    D3DTA_TEXTURE = 2
+    D3DTA_TEXTURE = 2,
+    D3DTA_TFACTOR = 3
 };
+
+enum D3DMATERIALCOLORSOURCE
+{
+    D3DMCS_MATERIAL = 0,
+    D3DMCS_COLOR1 = 1,
+    D3DMCS_COLOR2 = 2,
+    D3DMCS_FORCE_DWORD = 0x7fffffff
+};
+
+inline U32 D3DCOLOR_XRGB(int red, int green, int blue)
+{
+    return 0xff000000U | ((U32(red) & 0xffU) << 16) |
+           ((U32(green) & 0xffU) << 8) | (U32(blue) & 0xffU);
+}
 
 #define DDLOCK_WRITEONLY 0x00000020U
 #define DDLOCK_DISCARDCONTENTS 0x00002000U
 
 enum D3DSAMPLERSTATETYPE
 {
+	D3DSAMP_ADDRESSU = 1,
+	D3DSAMP_ADDRESSV = 2,
+	D3DSAMP_MAGFILTER = 5,
+	D3DSAMP_MINFILTER = 6,
+	D3DSAMP_MIPFILTER = 7,
 	D3DSAMP_FORCE_DWORD = 0x7fffffff
+};
+
+enum D3DTEXTUREFILTERTYPE
+{
+	D3DTEXF_POINT = 1,
+	D3DTEXF_LINEAR = 2
+};
+
+enum D3DTEXTUREADDRESS
+{
+	D3DTADDRESS_WRAP = 1,
+	D3DTADDRESS_CLAMP = 3
 };
 
 enum D3DSTATEBLOCKTYPE
@@ -131,7 +197,26 @@ enum D3DSTATEBLOCKTYPE
 };
 
 struct D3DLIGHT9;
-struct D3DMATERIAL9;
+struct D3DCOLORVALUE
+{
+	float r, g, b, a;
+};
+struct D3DMATERIAL9
+{
+	D3DCOLORVALUE Diffuse;
+	D3DCOLORVALUE Ambient;
+	D3DCOLORVALUE Specular;
+	D3DCOLORVALUE Emissive;
+	float Power;
+};
+static_assert(sizeof(D3DCOLORVALUE) == 16U);
+static_assert(sizeof(D3DMATERIAL9) == 68U);
+static_assert(offsetof(D3DMATERIAL9, Diffuse) == 0U);
+static_assert(offsetof(D3DMATERIAL9, Ambient) == 16U);
+static_assert(offsetof(D3DMATERIAL9, Specular) == 32U);
+static_assert(offsetof(D3DMATERIAL9, Emissive) == 48U);
+static_assert(offsetof(D3DMATERIAL9, Power) == 64U);
+static_assert(offsetof(D3DMATERIAL9, Power) + sizeof(float) == sizeof(D3DMATERIAL9));
 struct ID3DXEffect;
 struct IDirect3DIndexBuffer9;
 struct IDirect3DVertexDeclaration9;
@@ -144,6 +229,7 @@ struct IDirect3DVertexDeclaration9;
 #define D3DFVF_SPECULAR 0x080U
 #define D3DFVF_TEX1 0x100U
 #define D3DFVF_TEX2 0x200U
+#define D3DFVF_TEX5 0x500U
 #define D3DFVF_TEXCOUNT_MASK 0xf00U
 #define D3DFVF_TEXCOUNT_SHIFT 8U
 #endif

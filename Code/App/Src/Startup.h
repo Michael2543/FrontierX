@@ -30,6 +30,9 @@
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
+struct GlobalComponent;
+void __stdcall AddToGlobalStartupList (GlobalComponent & component);
+
 struct GlobalComponent
 {
 	GlobalComponent (void)

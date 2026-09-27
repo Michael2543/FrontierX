@@ -1,7 +1,7 @@
 #ifndef _PERSISTHARDPOINT_H_
 #define _PERSISTHARDPOINT_H_
 
-#include "persistmath.h"
+#include "PersistMath.h"
 
 const char HP_ROOT_NAME[] = "Hardpoints";
 const char HP_FIXED_NAME[] = "Fixed";

@@ -1,6 +1,14 @@
 #ifndef MGLOBALS_H
 #define MGLOBALS_H
 
+#if !defined(_WIN32) && !defined(MEXTERN)
+#define MEXTERN
+#endif
+#if !defined(_WIN32)
+#include "AppObjectContracts.h"
+#include <DMissionEnum.h>
+#endif
+
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                               MGlobals.h								//
@@ -350,4 +358,3 @@ private:
 
 
 #endif
-

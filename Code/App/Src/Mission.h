@@ -18,8 +18,12 @@
 //-------------------------------------------------------------------
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
+#include <DMissionEnum.h>
+#include "NetFileTransfer.h"
+
+struct IBaseObject;
 
 struct DACOM_NO_VTABLE IMission : public IDAComponent
 {
@@ -126,7 +130,7 @@ struct DACOM_NO_VTABLE IMission : public IDAComponent
 
 	virtual void __stdcall ToggleCheating (void) = 0;
 
-	virtual const bool _stdcall GetCheatsEnabled (void) const = 0;
+	virtual const bool __stdcall GetCheatsEnabled (void) const = 0;
 
 	// used by pause menu to display the color correctly
 	virtual COLORREF __stdcall GetPlayerColorForDPID (U32 dpid) = 0;

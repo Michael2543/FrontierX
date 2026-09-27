@@ -4,12 +4,16 @@
 
 
 
+#if defined(_WIN32)
 #include <Windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 #include "Anim.h"
-#include "PersistAnim.h"
-#include "FileSys.h"
-#include "fdump.h"
-#include "tempstr.h"
+#include "persistanim.h"
+#include "Filesys.h"
+#include "FDump.h"
+#include "TempStr.h"
 #include "channel.h"
 
 IEngine* Engine = NULL;
@@ -32,7 +36,7 @@ unsigned int EventStemLen;
 
 INSTANCE_INDEX	FindObj(INSTANCE_INDEX root, const char* child_name)
 {
-	const char const	*mname	=Engine->get_instance_part_name(root);
+	const char	*mname	=Engine->get_instance_part_name(root);
 	INSTANCE_INDEX		result	=-1;
 	INSTANCE_INDEX		child	=-1;
 
@@ -81,19 +85,23 @@ GENRESULT LoadChannels (CHANNEL_ARCH_MAP& chnldb, IFileSystem* fs)
 						DAFILEDESC cdesc (find_data.cFileName);
 						cdesc.hFindFirst = srch;
 
-						fs->CreateInstance (&cdesc, cfs);
+						const GENRESULT opened = fs->CreateInstance (&cdesc, cfs);
 
 						COMPTR<IChannel2> ptr;
 
 						DACOMDESC desc (IID_IChannel2);
 
-						GENRESULT ok = DACOM_Acquire ()->CreateInstance (&desc, ptr);
+						GENRESULT ok = opened == GR_OK && cfs ?
+							DACOM_Acquire ()->CreateInstance (&desc, ptr) : GR_GENERIC;
 						
-						if (ok == GR_OK)
+						if (ok == GR_OK && ptr)
 						{
-							if (GR_OK == (result = ptr->load (cfs)))
+							ok = ptr->load (cfs);
+							if (ok == GR_OK)
 								chnldb.insert (CHANNEL_ARCH_MAP::value_type (find_data.cFileName, ptr));
 						}
+						if (ok != GR_OK || !ptr)
+							result = GR_GENERIC;
 					}
 				}
 				
@@ -606,12 +614,13 @@ GENRESULT ScriptSet::load (IFileSystem* parent)
 	if (parent->SetCurrentDirectory ("Animation"))
 	{
 		CHANNEL_ARCH_MAP channels;
-		LoadChannels (channels, parent);
-		LoadScripts (scripts, channels, parent);
+		const GENRESULT channelsResult = LoadChannels (channels, parent);
+		const GENRESULT scriptsResult = channelsResult == GR_OK ?
+			LoadScripts (scripts, channels, parent) : GR_GENERIC;
 
 		parent->SetCurrentDirectory ("..");
 
-		gr = GR_OK;
+		gr = channelsResult == GR_OK && scriptsResult == GR_OK ? GR_OK : GR_GENERIC;
 	}
 
 	return gr;

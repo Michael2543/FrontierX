@@ -4,12 +4,12 @@
 #ifndef __XMESH_H
 #define __XMESH_H
 
-#include "FileSys.h"
-#include "Vector.h"
+#include "Filesys.h"
+#include "vector.h"
 #include "FaceProp.h"
 #include "material.h"
 #include "facegroup.h"
-#include "mesh.h"
+#include "Mesh.h"
 
 #include "ITextureLibrary.h"
 
@@ -34,7 +34,7 @@ struct Split
 	float			vD[MAX_SPLIT_POLYS*2];
 	
 
-	Split::Split()
+	Split()
 	{
 		v_cnt=f_cnt[0]=f_cnt[1]=0;
 	}
@@ -56,7 +56,7 @@ public:
 	void compute_bounds (void);
 	void compute_centroid (void);
 	void compute_face_areas (void);
-	float XMesh::compute_face_area (const FaceGroup *fg, const int fid) const;
+	float compute_face_area (const FaceGroup *fg, const int fid) const;
 	void sort_faces_by_area (void);	// largest to smallest
 
 public:
@@ -84,7 +84,7 @@ public:
 	};
 
 	XMesh* build_sub_mesh2 (const LList<GroupIndex>& groups, const Split *split_list, U8 which) const;
-	void XMesh::AssertMesh(void) const;
+	void AssertMesh(void) const;
 
 	bool split_mesh (const Vector& v0, float d, XMesh*& r2, XMesh*& r1,U32 split_polys=0, BOOL32 keep_polys=0) const;
 

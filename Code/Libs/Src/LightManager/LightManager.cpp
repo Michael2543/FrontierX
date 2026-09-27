@@ -13,24 +13,35 @@
 #pragma warning( disable: 4018 4100 4201 4244 4512 4530 4663 4688 4706 4710 4786 )
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
-#include "dacom.h"
-#include "tcomponent.h"
-#include "tsmartpointer.h"
-#include "fdump.h"
+#include "DACOM.H"
+#include "TComponent.h"
+#include "TSmartPointer.h"
+#include "FDump.h"
+#ifdef _WIN32
 #include "inv_sqrt.h"
-#include "stddat.h"
+#endif
+#include "STDDAT.H"
 #include "3dmath.h"
 #include "da_heap_utility.h"
 #include "lightman.h"
 #include "ILight.h"
 #include "ICamera.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <new>
+
 //
 // Static variables
 //
+#ifdef _WIN32
 static	ISQRT	inv_sqrt;
+#endif
 
 //
 // Compile switches
@@ -43,7 +54,7 @@ static	ISQRT	inv_sqrt;
 // Inline functions
 //
 
-#if USE_ASM_FAST_INVSQRT
+#if USE_ASM_FAST_INVSQRT && defined(_WIN32)
 const float ONE_HALF		= 0.5f;
 const float THREE_HALVES	= 1.5f;
 
@@ -76,6 +87,7 @@ __declspec (naked) float fsqrt_inv(float f)
 
 float fsqrt_inv(float f)
 {
+#ifdef _WIN32
 	long i;
 	float x2, y;
 
@@ -88,6 +100,15 @@ float fsqrt_inv(float f)
 	y = 1.5f*y - (x2*y * y*y);
 
 	return y;
+#else
+	std::uint32_t bits;
+	std::memcpy(&bits, &f, sizeof(bits));
+	bits = 0x5f3759dfU - (bits >> 1);
+	float y;
+	std::memcpy(&y, &bits, sizeof(y));
+	const float x2 = 0.5f * f;
+	return y * (1.5f - x2 * y * y);
+#endif
 }
 #endif
 
@@ -211,7 +232,7 @@ void ManagedLight::update_state(void)
 			float	cutoff_radians		=value * MUL_DEG_TO_RAD;
 			float	penumbra_radians	=1.3f * cutoff_radians;
 
-			penumbra_radians	=__min(penumbra_radians, 180.0F * MUL_DEG_TO_RAD);
+			penumbra_radians	=std::min(penumbra_radians, 180.0F * MUL_DEG_TO_RAD);
 			cos_umbra			=cos(cutoff_radians);
 			cos_penumbra		=cos(penumbra_radians);
 
@@ -431,7 +452,7 @@ int LightManager::get_active_lights (ILight ** list)
 
 //--------------------------------------------------------------------------//
 //
-static int __cdecl LSCompare(const void *elem1, const void *elem2 )
+static int DACOM_CDECL LSCompare(const void *elem1, const void *elem2 )
 {
 	const LightStruct * l1 = (const LightStruct *) elem1;
 	const LightStruct * l2 = (const LightStruct *) elem2;
@@ -539,7 +560,7 @@ int	LightManager::get_best_lights (ILight ** list, int num_lights, const Vector 
 							}
 							else if (cos_angle < l->cos_umbra)
 							{
-								register SINGLE cone_atten = (cos_angle - l->cos_penumbra) * l->one_over_delta_cos;
+								SINGLE cone_atten = (cos_angle - l->cos_penumbra) * l->one_over_delta_cos;
 								buff->score *= cone_atten;
 							}
 							else
@@ -594,7 +615,7 @@ int	LightManager::get_best_lights (ILight ** list, int num_lights, const Vector 
 //
 void LightManager::activate_lights (ILight * const * list, int num_lights)
 {
-	num_lights = __min(__max(0, num_lights), max_lights);
+	num_lights = std::min(std::max(0, num_lights), max_lights);
 
 	ILight * const * src = list;
 	for (int i = 0; i < num_lights; i++, src++)
@@ -748,7 +769,6 @@ void LightManager::light_vertices_strided (LightRGB * rgb, const U32 lstride, co
 	LightRGB *dst = rgb;
 	const Vector * p = vertices;
 	const U32 *Ni = nindices;
-	const Vector * N = &normals[*Ni];
 	int		max_c;
 
 	dst = rgb;
@@ -773,10 +793,10 @@ void LightManager::light_vertices_strided (LightRGB * rgb, const U32 lstride, co
 
 	// Store off the position and direction of each light in object space before entering the inner lighting loop
 	{
-		register ManagedLight ** light_ptr = active_light_map;
+		ManagedLight ** light_ptr = active_light_map;
 		for (int l = 0; l < max_lights; l++, light_ptr++)
 		{
-			register ManagedLight * light = *light_ptr;
+			ManagedLight * light = *light_ptr;
 			if (light)
 			{
 				if(light->flags & LIGHT_INFINITE)
@@ -821,9 +841,9 @@ void LightManager::light_vertices_strided (LightRGB * rgb, const U32 lstride, co
 		i++,
 		p=(Vector *)LM_ADD_STRIDE(p,vstride),
 		dst=(LightRGB*)LM_ADD_STRIDE(dst,lstride),
-		Ni=(U32*)LM_ADD_STRIDE(Ni,nistride),
-		N=(Vector*)LM_ADD_STRIDE(normals,nstride*(LM_IDX(*Ni))) ) 
+		Ni=(U32*)LM_ADD_STRIDE(Ni,nistride) )
 	{
+		const Vector * N = (const Vector *)LM_ADD_STRIDE(normals,nstride*(LM_IDX(*Ni)));
 		BOOL32	ValidLight;
 
 		ManagedLight ** light_ptr = active_light_map;
@@ -972,7 +992,7 @@ void LightManager::light_vertices_strided (LightRGB * rgb, const U32 lstride, co
 			if(clamp == CF_INTENSITY)
 			{
 				// assume all colors >= 0
-				if(255 < (max_c = __max(__max(dst->r, dst->g), dst->b)))
+				if(255 < (max_c = std::max(std::max(dst->r, dst->g), dst->b)))
 				{
 					dst->r = (dst->r * 255) / max_c;
 					dst->g = (dst->g * 255) / max_c;
@@ -983,7 +1003,7 @@ void LightManager::light_vertices_strided (LightRGB * rgb, const U32 lstride, co
 				{
 					LightRGB *back_dst = back_rgb + (dst - rgb);
 					// assume all colors >= 0
-					if(255 < (max_c = __max(__max(back_dst->r, back_dst->g), back_dst->b)))
+					if(255 < (max_c = std::max(std::max(back_dst->r, back_dst->g), back_dst->b)))
 					{
 						back_dst->r = (back_dst->r * 255) / max_c;
 						back_dst->g = (back_dst->g * 255) / max_c;
@@ -1024,10 +1044,10 @@ void LightManager::light_vertices (LightRGB * rgb, const Vector * vertices, cons
 
 	// Store off the position and direction of each light in object space before entering the inner lighting loop
 	{
-		register ManagedLight ** light_ptr = active_light_map;
+		ManagedLight ** light_ptr = active_light_map;
 		for (l = 0; l < max_lights; l++, light_ptr++)
 		{
-			register ManagedLight * light = *light_ptr;
+			ManagedLight * light = *light_ptr;
 			if (light)
 			{
 				if(light->flags & LIGHT_INFINITE)
@@ -1161,7 +1181,7 @@ void LightManager::light_vertices (LightRGB * rgb, const Vector * vertices, cons
 			if(clamp == CF_INTENSITY)
 			{
 				// assume all colors >= 0
-				if(255 < (max_c = __max(__max(dst->r, dst->g), dst->b)))
+				if(255 < (max_c = std::max(std::max(dst->r, dst->g), dst->b)))
 				{
 					dst->r = (dst->r * 255) / max_c;
 					dst->g = (dst->g * 255) / max_c;
@@ -1193,10 +1213,10 @@ void LightManager::light_vertices_U8( LightRGB_U8 * rgb, const Vector * vertices
 
 	// Store off the position and direction of each light in object space before entering the inner lighting loop
 	{
-		register ManagedLight ** light_ptr = active_light_map;
+		ManagedLight ** light_ptr = active_light_map;
 		for (l = 0; l < max_lights; l++, light_ptr++)
 		{
-			register ManagedLight * light = *light_ptr;
+			ManagedLight * light = *light_ptr;
 			if (light)
 			{
 				if(light->flags & LIGHT_INFINITE)
@@ -1258,11 +1278,11 @@ void LightManager::light_vertices_U8( LightRGB_U8 * rgb, const Vector * vertices
 						SINGLE	atten	=-dot;
 						S32		atten2	=S32(atten*1024); //rmarr (avoiding ftol)
 						S32 lightColor = (light->color.r * atten2)>>10;
-						dst->r	= __min(dst->r+lightColor,255);
+						dst->r	= std::min(dst->r+lightColor,255);
 						lightColor = (light->color.g * atten2)>>10;
-						dst->g	=__min(dst->g+lightColor,255);
+						dst->g	=std::min(dst->g+lightColor,255);
 						lightColor = (light->color.b * atten2)>>10;
-						dst->b	=__min(dst->b+lightColor,255);
+						dst->b	=std::min(dst->b+lightColor,255);
 					}
 				}
 				else
@@ -1319,11 +1339,11 @@ void LightManager::light_vertices_U8( LightRGB_U8 * rgb, const Vector * vertices
 							{
 								S32 atten2 = S32(net_attenuation*1024); //rmarr (avoiding ftol)
 								S32 lightColor = (light->color.r * atten2)>>10;
-								dst->r = __min(dst->r+lightColor,255);
+								dst->r = std::min(dst->r+lightColor,255);
 								lightColor = (light->color.g * atten2)>>10;
-								dst->g = __min(dst->g+lightColor,255);;
+								dst->g = std::min(dst->g+lightColor,255);;
 								lightColor = (light->color.b * atten2)>>10;
-								dst->b = __min(dst->b+lightColor,255);;
+								dst->b = std::min(dst->b+lightColor,255);;
 							}
 						}
 					}
@@ -1403,10 +1423,13 @@ void LightManager::get_ambient_light (int & r, int & g, int & b)
 
 //
 
+#ifdef _WIN32
 void main( void ) {}	// linker bug
+#endif
 
 //
 
+#ifdef _WIN32
 BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 {
 	switch (fdwReason)
@@ -1434,6 +1457,19 @@ BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 
 	return TRUE;
 }
+#else
+bool RegisterNativeLightManager(ICOManager *manager)
+{
+	if (!manager) return false;
+	IComponentFactory *factory = new (std::nothrow)
+		DAComponentFactory2<DAComponentAggregate<LightManager>, AGGDESC>(CLSID_LightManager);
+	if (!factory) return false;
+	const GENRESULT result = manager->RegisterComponent(factory, CLSID_LightManager,
+		DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+#endif
 
 
 

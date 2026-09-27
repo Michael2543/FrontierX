@@ -1,12 +1,14 @@
 
 #include "stdafx.h"
+#if defined(_WIN32)
 #include <windows.h>
+#endif
 #include "IParticleManager.h"
-#include <FDUMP.h>
+#include <FDump.h>
 
-#include <ICAMERA.h>
-#include <FileSys.h>
-#include <tsmartpointer.h>
+#include <ICamera.h>
+#include <Filesys.h>
+#include <TSmartPointer.h>
 
 #include "IMaterialManager.h"
 #include "IMeshManager.h"
@@ -15,11 +17,13 @@
 #include "da_heap_utility.h"
 
 #include "stdio.h"
+#if defined(_WIN32)
 #include "windows.h"
+#endif
 #include <stdlib.h>
 
-#include "Particlesystem.h"
-#include "ParticlesaveStructs.h"
+#include "ParticleSystem.h"
+#include "ParticleSaveStructs.h"
 #include "ParticleParamFunctions.h"
 
 #define DELTA_TIME (0.1f) //tenth of a second

@@ -17,7 +17,7 @@
 #endif
 
 #ifndef OBJWATCH_H
-#include "ObjWatch.h"
+#include "Objwatch.h"
 #endif
 
 #ifndef DMBASEDATA_H

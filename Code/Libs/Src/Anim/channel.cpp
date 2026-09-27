@@ -1,4 +1,4 @@
-#include "Channel.h"
+#include "channel.h"
 #include "PersistChannel.h"
 
 void DebugPrint (char *fmt, ...);
@@ -1213,4 +1213,3 @@ U32 VectorStream::get_data_type (void) const
 }
 
 //
-

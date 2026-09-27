@@ -10,10 +10,15 @@
 */
 //------------------------------- #INCLUDES --------------------------------//
 
+#if defined(_WIN32)
 #include "stdafx.h"
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/LegacyWindowTypes.h"
+#endif
 
 #include "IImageReader.h"
-#include <vfx.h>
+#include <VFX.H>
 #include <pixel.h>
 #include <TComponent.h>
 
@@ -639,7 +644,7 @@ void BMP_READER::getIndexFormat (U8 *buffer, const RECT * rect) const
 //-------------------------------------------------------------------------//
 //-------------------------------------------------------------------------//
 //
-void __stdcall CreateBMPReader (struct IImageReader ** reader)
+void COMAPI CreateBMPReader (struct IImageReader ** reader)
 {
 	*reader = new DAComponent<BMP_READER>;
 }

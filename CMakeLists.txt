@@ -3,7 +3,12 @@ cmake_minimum_required(VERSION 3.25)
 project(FrontierX LANGUAGES CXX)
 
 option(FRONTIERX_BUILD_SDL3 "Build the isolated SDL3 window/input backend and probe" OFF)
+option(FRONTIERX_BUILD_FFMPEG_AUDIO "Enable the external shared LGPL FFmpeg IAC decoder" OFF)
 option(FRONTIERX_BUILD_SDL3_GPU "Build the isolated SDL3 GPU rendering probe" OFF)
+
+if(FRONTIERX_BUILD_FFMPEG_AUDIO AND NOT FRONTIERX_BUILD_SDL3)
+	message(FATAL_ERROR "FRONTIERX_BUILD_FFMPEG_AUDIO requires FRONTIERX_BUILD_SDL3")
+endif()
 
 if(FRONTIERX_BUILD_SDL3_GPU AND NOT FRONTIERX_BUILD_SDL3)
 	message(FATAL_ERROR "FRONTIERX_BUILD_SDL3_GPU requires FRONTIERX_BUILD_SDL3")
@@ -41,11 +46,188 @@ add_executable(frontierx_layout_probe
 target_include_directories(frontierx_layout_probe
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/DInclude
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Include
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Sol_T
 		${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
 )
 
 target_compile_features(frontierx_layout_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_layout_probe)
+
+# Compile the selected source training script and its real helper while the
+# production MScript/module loader is brought into the native process link.
+add_library(frontierx_sol_t_script OBJECT
+	Code/App/Src/Scripts/Sol_T/Sol_T.cpp
+	Code/App/Src/Scripts/Helper/helper.cpp
+)
+target_include_directories(frontierx_sol_t_script PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/DInclude
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Include
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Include
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Sol_T
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
+)
+target_compile_features(frontierx_sol_t_script PRIVATE cxx_std_17)
+set_target_properties(frontierx_sol_t_script PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_sol_t_script PRIVATE
+		-Wno-unknown-pragmas -Wno-write-strings)
+endif()
+set(frontierx_sol_t_schema ${CMAKE_CURRENT_BINARY_DIR}/Sol_T_DataDef.i)
+add_custom_command(OUTPUT ${frontierx_sol_t_schema}
+	COMMAND ${CMAKE_CXX_COMPILER} -E -P -D_ADB
+		-MD -MF ${frontierx_sol_t_schema}.d
+		-I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/DInclude
+		-I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src
+		-I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Include
+		-I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Include
+		-I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Sol_T
+		-I${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Sol_T/DataDef.cpp
+		-o ${frontierx_sol_t_schema}
+	DEPENDS
+		Code/App/Src/Scripts/Sol_T/DataDef.cpp
+		Code/App/Src/Scripts/Sol_T/DataDef.h
+	DEPFILE ${frontierx_sol_t_schema}.d
+	VERBATIM
+)
+add_custom_target(frontierx_sol_t_schema ALL DEPENDS ${frontierx_sol_t_schema})
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_program(FRONTIERX_LLVM_RC NAMES llvm-rc REQUIRED)
+set(frontierx_app_string_rc ${CMAKE_CURRENT_BINARY_DIR}/generated/AppStrings.rc)
+set(frontierx_app_string_res ${CMAKE_CURRENT_BINARY_DIR}/generated/AppStrings.res)
+set(frontierx_app_string_include ${CMAKE_CURRENT_BINARY_DIR}/generated/NativeAppStrings.inc)
+add_custom_command(OUTPUT ${frontierx_app_string_rc}
+	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/generated
+	COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_strings.py
+		--rc ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Globals.rc
+		${frontierx_app_string_rc}
+	DEPENDS Code/App/Src/Globals.rc Tools/portability/embed_app_strings.py
+	VERBATIM)
+add_custom_command(OUTPUT ${frontierx_app_string_res}
+	COMMAND ${FRONTIERX_LLVM_RC} /C 1252 /FO ${frontierx_app_string_res}
+		/I ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src
+		/I ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/sol_t_rc_include
+		${frontierx_app_string_rc}
+	DEPENDS ${frontierx_app_string_rc} Code/App/Src/resource.h
+	VERBATIM)
+add_custom_command(OUTPUT ${frontierx_app_string_include}
+	COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_strings.py
+		--include ${frontierx_app_string_res} ${frontierx_app_string_include}
+	DEPENDS ${frontierx_app_string_res} Tools/portability/embed_app_strings.py
+		Tools/portability/embed_sol_t_strings.py
+	VERBATIM)
+add_library(frontierx_app_string_resource STATIC
+	Code/App/Src/NativeAppStrings.cpp ${frontierx_app_string_include})
+target_include_directories(frontierx_app_string_resource PRIVATE
+	${CMAKE_CURRENT_BINARY_DIR}/generated Code/App/Src Code/App/Src/Include
+	Code/Libs/Include)
+target_compile_features(frontierx_app_string_resource PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_app_string_resource)
+add_library(frontierx_native_search STATIC Code/App/Src/NativeSearch.cpp)
+target_include_directories(frontierx_native_search PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_native_search PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_search)
+add_library(frontierx_native_in_progress_anim STATIC
+	Code/App/Src/NativeInProgressAnim.cpp)
+target_include_directories(frontierx_native_in_progress_anim PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_native_in_progress_anim PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_in_progress_anim)
+set(frontierx_app_version_include
+	${CMAKE_CURRENT_BINARY_DIR}/generated/NativeAppVersion.inc)
+add_custom_command(OUTPUT ${frontierx_app_version_include}
+	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/generated
+	COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_version.py
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Conquest.rc
+		${frontierx_app_version_include}
+	DEPENDS Code/App/Src/Conquest.rc Tools/portability/embed_app_version.py
+	VERBATIM)
+add_library(frontierx_native_app_version STATIC
+	Code/App/Src/NativeAppVersion.cpp ${frontierx_app_version_include})
+target_include_directories(frontierx_native_app_version PRIVATE
+	${CMAKE_CURRENT_BINARY_DIR}/generated Code/App/Src Code/App/Src/Include
+	Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_native_app_version PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_app_version)
+add_library(frontierx_native_app_text_resources STATIC
+	Code/App/Src/NativeAppTextResources.cpp)
+target_include_directories(frontierx_native_app_text_resources PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_native_app_text_resources PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_native_app_text_resources)
+set(frontierx_sol_t_resource_dir ${CMAKE_CURRENT_BINARY_DIR}/generated/sol_t)
+set(frontierx_sol_t_rc_resource ${frontierx_sol_t_resource_dir}/Sol_T.res)
+add_custom_command(OUTPUT ${frontierx_sol_t_rc_resource}
+	COMMAND ${CMAKE_COMMAND} -E make_directory ${frontierx_sol_t_resource_dir}
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		${frontierx_sol_t_schema} ${frontierx_sol_t_resource_dir}/DataDef.i
+	COMMAND ${FRONTIERX_LLVM_RC}
+		/FO ${frontierx_sol_t_rc_resource}
+		/I ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/sol_t_rc_include
+		/I ${frontierx_sol_t_resource_dir}
+		/I ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Sol_T
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Sol_T/Sol_T.rc
+	DEPENDS ${frontierx_sol_t_schema}
+		Code/App/Src/Scripts/Sol_T/Sol_T.rc
+		Code/App/Src/Scripts/Sol_T/resource.h
+		Tools/portability/sol_t_rc_include/winres.h
+	VERBATIM)
+set(frontierx_sol_t_strings_include
+	${CMAKE_CURRENT_BINARY_DIR}/generated/NativeSolTrainStrings.inc)
+add_custom_command(OUTPUT ${frontierx_sol_t_strings_include}
+	COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_sol_t_strings.py
+		${frontierx_sol_t_rc_resource} ${frontierx_sol_t_strings_include}
+	DEPENDS ${frontierx_sol_t_rc_resource}
+		Tools/portability/embed_sol_t_strings.py
+	VERBATIM)
+add_library(frontierx_sol_t_string_resource STATIC
+	Code/App/Src/Scripts/Sol_T/NativeSolTrainStrings.cpp
+	${frontierx_sol_t_strings_include})
+target_include_directories(frontierx_sol_t_string_resource PRIVATE
+	${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_compile_features(frontierx_sol_t_string_resource PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_sol_t_string_resource)
+target_link_libraries(frontierx_sol_t_script PUBLIC frontierx_sol_t_string_resource)
+add_library(frontierx_app_script_owner OBJECT
+	Code/App/Src/MScript.cpp)
+target_link_libraries(frontierx_app_script_owner PUBLIC
+	frontierx_sol_t_string_resource)
+target_include_directories(frontierx_app_script_owner PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/DInclude
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Include
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_compile_features(frontierx_app_script_owner PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_app_script_owner PRIVATE -Wno-unknown-pragmas)
+endif()
+set(frontierx_sol_t_schema_include
+	${CMAKE_CURRENT_BINARY_DIR}/generated/NativeSolTrainSchema.inc)
+add_custom_command(OUTPUT ${frontierx_sol_t_schema_include}
+	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/generated
+	COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_schema.py
+		${frontierx_sol_t_schema} ${frontierx_sol_t_schema_include}
+		solTrainSchemaBytes
+	DEPENDS ${frontierx_sol_t_schema}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_schema.py
+	VERBATIM)
+add_library(frontierx_sol_t_schema_resource STATIC
+	Code/App/Src/Scripts/Sol_T/NativeSolTrainSchema.cpp
+	${frontierx_sol_t_schema_include})
+target_include_directories(frontierx_sol_t_schema_resource PRIVATE
+	${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_compile_features(frontierx_sol_t_schema_resource PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_sol_t_schema_resource)
+target_link_libraries(frontierx_sol_t_script PUBLIC frontierx_sol_t_schema_resource)
 
 add_library(frontierx_tinyxml STATIC
 	Code/Libs/Src/XML/tinystr.cpp
@@ -72,6 +254,14 @@ target_link_libraries(frontierx_tinyxml_probe PRIVATE frontierx_tinyxml)
 target_compile_features(frontierx_tinyxml_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_tinyxml_probe)
 
+add_executable(frontierx_string_table_file_text_probe
+	Tools/portability/string_table_file_text_probe.cpp
+)
+target_include_directories(frontierx_string_table_file_text_probe PRIVATE
+	${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include)
+target_compile_features(frontierx_string_table_file_text_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_string_table_file_text_probe)
+
 add_library(frontierx_profile_document STATIC
 	Code/Libs/Include/FrontierX/ProfileBuffer.h
 	Code/Libs/Include/FrontierX/ProfileDocument.h
@@ -90,6 +280,9 @@ add_library(frontierx_platform STATIC
 	Code/Libs/Include/FrontierX/NativeUserSettings.h
 	Code/Libs/Include/FrontierX/NativeUserSettingsOwner.h
 	Code/Libs/Include/FrontierX/NativeUtfFileSystem.h
+	Code/Libs/Include/FrontierX/NativeWritableUtfArchive.h
+	Code/Libs/Include/FrontierX/UtfMetadata.h
+	Code/Libs/Include/FrontierX/NativeDiskSpace.h
 	Code/Libs/Include/FrontierX/PlatformTime.h
 	Code/Libs/Include/FrontierX/PreferenceStore.h
 	Code/Libs/Include/FrontierX/SettingsPath.h
@@ -101,6 +294,9 @@ add_library(frontierx_platform STATIC
 	Code/Libs/Src/Platform/NativeUserSettings.cpp
 	Code/Libs/Src/Platform/NativeUserSettingsOwner.cpp
 	Code/Libs/Src/Platform/NativeUtfFileSystem.cpp
+	Code/Libs/Src/Platform/NativeUtfWriter.cpp
+	Code/Libs/Src/Platform/NativeWritableUtfArchive.cpp
+	Code/Libs/Src/Platform/NativeDiskSpace.cpp
 	Code/Libs/Src/Platform/PreferenceStore.cpp
 	Code/Libs/Src/Platform/SettingsPath.cpp
 	Code/Libs/Src/Platform/StartupDataRoot.cpp
@@ -147,6 +343,7 @@ add_executable(frontierx_data_root_probe
 )
 
 target_link_libraries(frontierx_data_root_probe PRIVATE frontierx_platform)
+target_include_directories(frontierx_data_root_probe PRIVATE Code/App/Src/Include)
 target_compile_features(frontierx_data_root_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_data_root_probe)
 
@@ -385,6 +582,84 @@ target_link_libraries(frontierx_native_heap_probe
 target_compile_features(frontierx_native_heap_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_native_heap_probe)
 
+# Production DOCUVIEW parser core: the game script loader consumes its Win32
+# symbol layout through IViewConstructor2. Viewer/window ownership is separate.
+add_library(frontierx_view_parser_core STATIC
+	Code/Libs/Src/Viewer/DOCUVIEW/SYMTABLE.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/PARS1.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/LXTABLES.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/SCANNER.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/NUMBER.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/PRTTOKEN.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/FERROR.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/FILESTRM.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/DataParser.cpp)
+target_include_directories(frontierx_view_parser_core PUBLIC
+	Code/Libs/Include Code/Libs/Src/Viewer/DOCUVIEW)
+target_link_libraries(frontierx_view_parser_core PUBLIC frontierx_native_heap)
+target_compile_features(frontierx_view_parser_core PUBLIC cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_view_parser_core PRIVATE
+		-Wall -Wextra -Wpedantic)
+endif()
+
+add_library(frontierx_view_constructor STATIC
+	Code/Libs/Src/Viewer/DOCUVIEW/ViewCnst.cpp
+	Code/Libs/Src/Viewer/DOCUVIEW/ViewSymbolCopy.cpp)
+target_link_libraries(frontierx_view_constructor PUBLIC
+	frontierx_view_parser_core)
+target_compile_features(frontierx_view_constructor PUBLIC cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_view_constructor PRIVATE
+		-Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(frontierx_view_parser_probe
+	Tools/portability/view_parser_probe.cpp)
+set(FRONTIERX_APP_SCHEMA_INCLUDE
+	${CMAKE_CURRENT_BINARY_DIR}/generated/NativeAppSchema.inc)
+add_custom_command(
+	OUTPUT ${FRONTIERX_APP_SCHEMA_INCLUDE}
+	COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/generated
+	COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_schema.py
+		${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/data.i
+		${FRONTIERX_APP_SCHEMA_INCLUDE}
+	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/data.i
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_schema.py
+	VERBATIM)
+add_library(frontierx_native_app_schema STATIC
+	Code/App/Src/NativeAppSchema.cpp ${FRONTIERX_APP_SCHEMA_INCLUDE})
+target_include_directories(frontierx_native_app_schema PUBLIC
+	Code/App/Src/Include)
+target_include_directories(frontierx_native_app_schema PRIVATE
+	${CMAKE_CURRENT_BINARY_DIR}/generated Code/Libs/Include)
+target_compile_features(frontierx_native_app_schema PUBLIC cxx_std_17)
+add_library(frontierx_native_global_data_format STATIC
+	Code/App/Src/NativeGlobalDataFormat.cpp)
+target_include_directories(frontierx_native_global_data_format PUBLIC
+	Code/App/Src/Include)
+target_include_directories(frontierx_native_global_data_format PRIVATE
+	Code/App/DInclude Code/App/Src Code/Libs/Include)
+target_compile_features(frontierx_native_global_data_format PUBLIC cxx_std_17)
+add_library(frontierx_native_music_data_format STATIC
+	Code/App/Src/NativeMusicDataFormat.cpp)
+target_include_directories(frontierx_native_music_data_format PUBLIC
+	Code/App/Src/Include)
+target_include_directories(frontierx_native_music_data_format PRIVATE
+	Code/App/DInclude Code/App/Src Code/Libs/Include Code/Libs/Src/Include)
+target_compile_features(frontierx_native_music_data_format PUBLIC cxx_std_17)
+target_link_libraries(frontierx_view_parser_probe PRIVATE
+	frontierx_native_app_version
+	frontierx_view_constructor frontierx_native_dacom_bootstrap frontierx_platform
+	frontierx_native_global_data_format frontierx_native_music_data_format
+	frontierx_native_app_schema
+	frontierx_sol_t_schema_resource frontierx_sol_t_string_resource)
+target_include_directories(frontierx_view_parser_probe PRIVATE
+	Code/App/DInclude Code/App/Src Code/App/Src/Scripts/Sol_T)
+target_compile_features(frontierx_view_parser_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_view_parser_probe)
+
 add_executable(frontierx_preference_store_probe
 	Tools/portability/preference_store_probe.cpp
 )
@@ -452,11 +727,62 @@ target_include_directories(frontierx_particle_context_probe PRIVATE Code/Libs/In
 target_compile_features(frontierx_particle_context_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_particle_context_probe)
 
+add_library(frontierx_native_app_math STATIC
+	Code/App/Src/NativeAppMath.cpp)
+target_include_directories(frontierx_native_app_math PRIVATE Code/Libs/Include)
+target_compile_features(frontierx_native_app_math PRIVATE cxx_std_17)
+
+add_library(frontierx_native_app_globals STATIC
+	Code/App/Src/NativeAppGlobals.cpp)
+target_link_libraries(frontierx_data_root_probe PRIVATE frontierx_native_app_globals)
+target_include_directories(frontierx_native_app_globals PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_native_app_globals PRIVATE cxx_std_17)
+
+add_library(frontierx_native_app_diagnostics STATIC
+	Code/App/Src/NativeAppDiagnostics.cpp)
+target_include_directories(frontierx_native_app_diagnostics PRIVATE
+	Code/App/Src Code/App/Src/Include Code/Libs/Include)
+target_compile_features(frontierx_native_app_diagnostics PRIVATE cxx_std_17)
+
+add_library(frontierx_native_app_render_state STATIC
+	Code/App/Src/NativeAppRenderState.cpp)
+target_include_directories(frontierx_native_app_render_state PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_native_app_render_state PRIVATE cxx_std_17)
+target_link_libraries(frontierx_native_app_render_state PUBLIC
+	frontierx_native_app_diagnostics)
+
+# The production mission-object distance table is used by ObjectList's
+# selection/movement logic and must retain its scalar evaluation order.
+add_library(frontierx_app_grid_vector_owner OBJECT
+	Code/App/Src/GridVector.cpp)
+target_include_directories(frontierx_app_grid_vector_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_app_grid_vector_owner PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_app_grid_vector_owner PRIVATE -ffp-contract=off)
+endif()
+
+# The original static circle table is consumed by BaseObject selection rings.
+add_library(frontierx_app_circle_lines_owner OBJECT
+	Code/App/Src/StacticInit.cpp)
+target_include_directories(frontierx_app_circle_lines_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_app_circle_lines_owner PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_app_circle_lines_owner PRIVATE -ffp-contract=off)
+endif()
+
 add_executable(frontierx_math_core_probe
 	Tools/portability/math_core_probe.cpp
-)
+	$<TARGET_OBJECTS:frontierx_app_grid_vector_owner>
+	$<TARGET_OBJECTS:frontierx_app_circle_lines_owner>)
+target_include_directories(frontierx_math_core_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
 
-target_link_libraries(frontierx_math_core_probe PRIVATE frontierx_math)
+target_link_libraries(frontierx_math_core_probe PRIVATE
+	frontierx_math frontierx_native_app_math)
 target_compile_features(frontierx_math_core_probe PRIVATE cxx_std_17)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 	target_compile_options(frontierx_math_core_probe PRIVATE -ffp-contract=off)
@@ -515,8 +841,37 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 target_link_libraries(frontierx_native_render_primitive
 	PUBLIC frontierx_native_render_pipeline)
+add_library(frontierx_app_primitive_builder_owner OBJECT
+	Code/App/Src/NativeAppPrimitiveBuilder.cpp)
+target_include_directories(frontierx_app_primitive_builder_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_app_primitive_builder_owner PRIVATE cxx_std_17)
+add_library(frontierx_app_cursor_owner OBJECT
+	Code/Libs/Src/Platform/NativeAppCursor.cpp)
+target_include_directories(frontierx_app_cursor_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_app_cursor_owner PRIVATE cxx_std_17)
+target_link_libraries(frontierx_app_cursor_owner PRIVATE PkgConfig::SDL3)
+
+# The production nugget manager owns mission-visible resources, updates and
+# save/load; retain the original object and factory rather than a global stub.
+add_library(frontierx_app_nugget_owner OBJECT
+	Code/App/Src/Nugget.cpp)
+target_include_directories(frontierx_app_nugget_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_app_nugget_owner PRIVATE cxx_std_17)
+
+add_library(frontierx_app_fog_owner OBJECT
+	Code/App/Src/FogOfWar.cpp)
+target_include_directories(frontierx_app_fog_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_app_fog_owner PRIVATE cxx_std_17)
+
 add_executable(frontierx_render_submission_probe
-	Tools/portability/render_submission_probe.cpp)
+	Tools/portability/render_submission_probe.cpp
+	$<TARGET_OBJECTS:frontierx_app_primitive_builder_owner>)
+target_include_directories(frontierx_render_submission_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
 target_link_libraries(frontierx_render_submission_probe
 	PRIVATE frontierx_native_render_pipeline frontierx_native_render_primitive)
 frontierx_enable_strict_warnings(frontierx_render_submission_probe)
@@ -575,6 +930,15 @@ target_include_directories(frontierx_native_math_accessor PUBLIC Code/Libs/Inclu
 target_link_libraries(frontierx_native_math_accessor PUBLIC frontierx_native_dacom_bootstrap)
 target_compile_features(frontierx_native_math_accessor PUBLIC cxx_std_17)
 
+# Compile the production scalar I3DMathEngine provider used by engine transforms.
+add_library(frontierx_x86_math_owner OBJECT Code/Libs/Src/x86Math/x86math.cpp)
+target_include_directories(frontierx_x86_math_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/x86Math)
+target_compile_features(frontierx_x86_math_owner PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_x86_math_owner PRIVATE -ffp-contract=off)
+endif()
+
 add_executable(frontierx_math_accessor_probe Tools/portability/math_accessor_probe.cpp)
 target_link_libraries(frontierx_math_accessor_probe PRIVATE frontierx_native_math_accessor)
 target_compile_features(frontierx_math_accessor_probe PRIVATE cxx_std_17)
@@ -600,38 +964,443 @@ target_link_libraries(frontierx_render_batcher_runtime_probe PRIVATE
 target_compile_features(frontierx_render_batcher_runtime_probe PRIVATE cxx_std_17)
 
 # Exercise the production manager through DACOM and the real native pipeline.
-add_executable(frontierx_vertex_buffer_manager_probe
+add_library(frontierx_vertex_buffer_manager_owner OBJECT
 	Code/Libs/Src/VertexBufferManager/VertexBufferManager.cpp
-	Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp
+	Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp)
+target_include_directories(frontierx_vertex_buffer_manager_owner PRIVATE Code/Libs/Include)
+target_compile_features(frontierx_vertex_buffer_manager_owner PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_vertex_buffer_manager_owner)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_vertex_buffer_manager_owner PRIVATE
+		${FRONTIERX_RB_HEADER_WARNS} -Wno-unused-parameter)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(frontierx_vertex_buffer_manager_owner PRIVATE
+		-Wno-delete-non-virtual-dtor)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_vertex_buffer_manager_owner PRIVATE
+		-Wno-delete-abstract-non-virtual-dtor
+		-Wno-delete-non-abstract-non-virtual-dtor)
+endif()
+add_executable(frontierx_vertex_buffer_manager_probe
+	$<TARGET_OBJECTS:frontierx_vertex_buffer_manager_owner>
 	Tools/portability/vertex_buffer_manager_probe.cpp)
 target_link_libraries(frontierx_vertex_buffer_manager_probe PRIVATE
 	frontierx_native_dacom_bootstrap frontierx_native_render_pipeline)
 target_compile_features(frontierx_vertex_buffer_manager_probe PRIVATE cxx_std_17)
 frontierx_enable_strict_warnings(frontierx_vertex_buffer_manager_probe)
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-	target_compile_options(frontierx_vertex_buffer_manager_probe PRIVATE
-		${FRONTIERX_RB_HEADER_WARNS} -Wno-unused-parameter)
-endif()
+
+# The production StringTable is consumed by MScript through ISaverLoader.
+# Link its actual aggregate against the native DACOM and UTF archive owners.
+add_library(frontierx_string_table_owner OBJECT
+	Code/Libs/Src/StringTable/StringTable.cpp)
+target_include_directories(frontierx_string_table_owner PRIVATE Code/Libs/Include)
+target_compile_features(frontierx_string_table_owner PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_string_table_owner)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-	target_compile_options(frontierx_vertex_buffer_manager_probe PRIVATE
+	target_compile_options(frontierx_string_table_owner PRIVATE
 		-Wno-delete-non-virtual-dtor)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	target_compile_options(frontierx_vertex_buffer_manager_probe PRIVATE
-		-Wno-delete-abstract-non-virtual-dtor
-		-Wno-delete-non-abstract-non-virtual-dtor)
+	target_compile_options(frontierx_string_table_owner PRIVATE
+		-Wno-delete-abstract-non-virtual-dtor)
 endif()
+add_executable(frontierx_string_table_owner_probe
+	$<TARGET_OBJECTS:frontierx_string_table_owner>
+	Tools/portability/string_table_owner_probe.cpp)
+target_include_directories(frontierx_string_table_owner_probe PRIVATE
+	Code/App/Src/Include Code/Libs/Include)
+target_link_libraries(frontierx_string_table_owner_probe PRIVATE
+	frontierx_native_dacom_bootstrap frontierx_tinyxml frontierx_platform)
+target_compile_features(frontierx_string_table_owner_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_string_table_owner_probe)
+
+# Compile the production texture-library owner and link its aggregate into the
+# material check, including the bounded UTF RGB565 upload path.
+add_library(frontierx_texture_library_owner OBJECT
+	Code/Libs/Src/Shading/TextureLibrary/TextureLibrary.cpp)
+target_include_directories(frontierx_texture_library_owner PRIVATE Code/Libs/Include)
+target_compile_features(frontierx_texture_library_owner PRIVATE cxx_std_17)
+
+# Compile the active PolyMesh mesh owner used by the supported game. Its
+# runtime material and renderer closure is not linked natively yet.
+add_library(frontierx_polymesh_mesh_owner OBJECT
+	Code/Libs/Src/RendComp/PolyMesh/Mesh.cpp
+	Code/Libs/Src/RendComp/PolyMesh/sortq.cpp)
+target_include_directories(frontierx_polymesh_mesh_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/RendComp/PolyMesh)
+target_compile_features(frontierx_polymesh_mesh_owner PRIVATE cxx_std_17)
+
+# Compile the production renderer component used by RenderMgr's game mesh path.
+add_library(frontierx_polymesh_component_owner OBJECT
+	Code/Libs/Src/RendComp/PolyMesh/polymesh.cpp)
+target_include_directories(frontierx_polymesh_component_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/RendComp/PolyMesh)
+target_compile_features(frontierx_polymesh_component_owner PRIVATE cxx_std_17)
+
+# Compile the production lighting owner used by PolyMesh and App MeshRender.
+add_library(frontierx_light_manager_owner OBJECT
+	Code/Libs/Src/LightManager/LightManager.cpp)
+target_include_directories(frontierx_light_manager_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/LightManager)
+target_compile_features(frontierx_light_manager_owner PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_light_manager_owner PRIVATE
+		-Wall -Wextra -Wpedantic -ffp-contract=off)
+endif()
+
+add_executable(frontierx_light_manager_probe
+	Tools/portability/light_manager_probe.cpp
+	$<TARGET_OBJECTS:frontierx_light_manager_owner>
+	$<TARGET_OBJECTS:frontierx_x86_math_owner>)
+target_include_directories(frontierx_light_manager_probe PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include)
+target_link_libraries(frontierx_light_manager_probe PRIVATE
+	frontierx_native_dacom_bootstrap frontierx_native_math_accessor frontierx_math)
+target_compile_features(frontierx_light_manager_probe PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+	target_compile_options(frontierx_light_manager_probe PRIVATE
+		-Wall -Wextra -Wpedantic)
+endif()
+
+# Compile the active App mesh caller beside its production material/renderer
+# owners. Effect passes remain explicitly unsupported on the native path.
+add_library(frontierx_app_mesh_render_owner OBJECT
+	Code/App/Src/MeshRender.cpp
+	Code/App/Src/MeshInfo.cpp
+	Code/App/Src/SuperTrans.cpp)
+target_include_directories(frontierx_app_mesh_render_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/RendComp/PolyMesh Code/Libs/Src/TextureManager)
+target_compile_features(frontierx_app_mesh_render_owner PRIVATE cxx_std_17)
+
+# Production ParticleEffect aggregate and its filter/parameter implementation.
+add_library(frontierx_particle_owner OBJECT
+	Code/Libs/Src/ParticleEffect/ParticleEffect.cpp
+	Code/Libs/Src/ParticleEffect/Particles.cpp
+	Code/Libs/Src/ParticleEffect/ParticleParamFunctions.cpp
+	Code/Launcher/NativeParticleValidation.cpp)
+target_include_directories(frontierx_particle_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/ParticleEffect)
+target_compile_features(frontierx_particle_owner PRIVATE cxx_std_17)
+
+# Production MeshManager aggregate, archetypes and instances.
+add_library(frontierx_mesh_manager_owner OBJECT
+	Code/Libs/Src/MeshManager/MeshManager.cpp
+	Code/Libs/Src/MeshManager/MeshArch.cpp
+	Code/Libs/Src/MeshManager/MeshInstance.cpp)
+target_include_directories(frontierx_mesh_manager_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/MeshManager)
+target_compile_features(frontierx_mesh_manager_owner PRIVATE cxx_std_17)
+
+# Production animation aggregate, script/channel runtime and motion stack.
+add_library(frontierx_animation_owner OBJECT
+	Code/Libs/Src/Anim/Anim.cpp
+	Code/Libs/Src/Anim/AnimComponent.cpp
+	Code/Libs/Src/Anim/channel.cpp
+	Code/Libs/Src/Anim/mstack.cpp)
+target_include_directories(frontierx_animation_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/Anim)
+target_compile_features(frontierx_animation_owner PRIVATE cxx_std_17)
+
+# Production IChannel2 archive decoder used by the animation owner.
+add_library(frontierx_channel_owner OBJECT
+	Code/Libs/Src/Channel/channel.cpp)
+target_include_directories(frontierx_channel_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include)
+target_compile_features(frontierx_channel_owner PRIVATE cxx_std_17)
+
+add_library(frontierx_native_animation_validation OBJECT
+	Code/Launcher/NativeAnimationValidation.cpp)
+target_include_directories(frontierx_native_animation_validation PRIVATE
+	Code/Launcher Code/Libs/Include)
+target_compile_features(frontierx_native_animation_validation PRIVATE cxx_std_17)
+
+# Production Engine hardpoint aggregate and archetype metadata.
+add_library(frontierx_hardpoint_owner OBJECT
+	Code/Libs/Src/EngComps/Hardpoint/HardPoint.cpp)
+target_include_directories(frontierx_hardpoint_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/EngComps/Hardpoint)
+target_compile_features(frontierx_hardpoint_owner PRIVATE cxx_std_17)
+
+# Production render component requested by the source profile.
+add_library(frontierx_optics_owner OBJECT
+	Code/Libs/Src/RendComp/Optics/optics.cpp
+	Code/Libs/Src/RendComp/Optics/ParticleSystemArchetype.cpp
+	Code/Libs/Src/RendComp/Optics/ParticleSystemInstance.cpp)
+target_include_directories(frontierx_optics_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/RendComp/Optics)
+target_compile_features(frontierx_optics_owner PRIVATE cxx_std_17)
+
+# Compile the active App startup container used by GameSystem::startup.
+# Its CQPipeline wrapper and full system profile are separate integration gates.
+add_library(frontierx_app_system_container_owner OBJECT
+	Code/App/Src/SysContainer.cpp)
+target_include_directories(frontierx_app_system_container_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include)
+target_compile_features(frontierx_app_system_container_owner PRIVATE cxx_std_17)
+
+# Compile the production general-data owner consumed by MGlobals.
+add_library(frontierx_app_gen_data_owner OBJECT
+	Code/App/Src/GenData.cpp)
+target_include_directories(frontierx_app_gen_data_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include)
+target_compile_features(frontierx_app_gen_data_owner PRIVATE cxx_std_17)
+
+# Compile the production mission-global owner; linking its App services is
+# the next integration gate before Mission::Reload can enter MGlobals::Load.
+add_library(frontierx_app_mglobals_owner OBJECT
+	Code/App/Src/MGlobals.cpp)
+target_include_directories(frontierx_app_mglobals_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_mglobals_owner PRIVATE cxx_std_17)
+
+# Object-pointer watcher lifetime is needed by the camera manager without MGlobals.
+add_library(frontierx_app_objwatch_owner OBJECT
+	Code/App/Src/Objwatch.cpp)
+target_include_directories(frontierx_app_objwatch_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_objwatch_owner PRIVATE cxx_std_17)
+
+# Compile the production object/archetype owner used by mission loading.
+# Its App service link closure remains a separate integration gate.
+add_library(frontierx_app_object_list_owner OBJECT
+	Code/App/Src/ObjList.cpp
+	Code/App/Src/BaseObject.cpp
+	Tools/portability/app_object_template_header.cpp)
+target_include_directories(frontierx_app_object_list_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_object_list_owner PRIVATE cxx_std_17)
+
+# Compile the production mission owner before closing its App service link graph.
+add_library(frontierx_app_object_map_owner OBJECT
+	Code/App/Src/ObjMap.cpp
+	Code/App/Src/ObjMapIterator.cpp)
+target_include_directories(frontierx_app_object_map_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_object_map_owner PRIVATE cxx_std_17)
+
+add_library(frontierx_app_event_scheduler_owner OBJECT
+	Code/App/Src/EventScheduler.cpp)
+target_include_directories(frontierx_app_event_scheduler_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_event_scheduler_owner PRIVATE cxx_std_17)
+
+add_library(frontierx_app_movie_camera_manager_owner OBJECT
+	Code/App/Src/MovieCamera.cpp)
+target_include_directories(frontierx_app_movie_camera_manager_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_movie_camera_manager_owner PRIVATE cxx_std_17)
+
+
+add_library(frontierx_app_mission_owner OBJECT
+	Code/App/Src/Mission.cpp)
+target_include_directories(frontierx_app_mission_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_mission_owner PRIVATE cxx_std_17)
+
+add_library(frontierx_app_music_manager_owner OBJECT
+	Code/App/Src/MusicManager.cpp)
+target_include_directories(frontierx_app_music_manager_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_music_manager_owner PRIVATE cxx_std_17)
+
+# Bind the selected mission's native ISystemMap contract without Win32 GDI/UI.
+add_library(frontierx_native_system_map_owner OBJECT
+	Code/Libs/Src/Platform/NativeSystemMap.cpp)
+target_include_directories(frontierx_native_system_map_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_native_system_map_owner PRIVATE cxx_std_17)
+target_sources(frontierx_data_root_probe PRIVATE
+	$<TARGET_OBJECTS:frontierx_native_system_map_owner>
+	$<TARGET_OBJECTS:frontierx_app_global_startup_owner>)
+target_include_directories(frontierx_data_root_probe PRIVATE
+	Code/App/Src Code/App/DInclude)
+
+# Compile the production operation/simulation owner used by Mission::Update.
+add_library(frontierx_app_op_agent_owner OBJECT
+	Code/App/Src/OpAgent.cpp)
+target_include_directories(frontierx_app_op_agent_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_op_agent_owner PRIVATE cxx_std_17)
+
+# Compile the production single-player packet queue used by NetPacket/OpAgent.
+add_library(frontierx_app_net_buffer_owner OBJECT
+	Code/App/Src/NetBuffer.cpp)
+target_include_directories(frontierx_app_net_buffer_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_net_buffer_owner PRIVATE cxx_std_17)
+
+# Compile the production packet manager that routes offline NETF_ECHO input.
+add_library(frontierx_app_net_packet_owner OBJECT
+	Code/App/Src/NetPacket.cpp)
+target_include_directories(frontierx_app_net_packet_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_net_packet_owner PRIVATE cxx_std_17)
+
+add_executable(frontierx_net_buffer_probe
+	Tools/portability/net_buffer_probe.cpp
+	Tools/portability/camera_save_support.cpp
+	$<TARGET_OBJECTS:frontierx_app_net_buffer_owner>
+	$<TARGET_OBJECTS:frontierx_app_net_packet_owner>
+	$<TARGET_OBJECTS:frontierx_app_movie_camera_manager_owner>
+	$<TARGET_OBJECTS:frontierx_app_objwatch_owner>
+	$<TARGET_OBJECTS:frontierx_app_mesh_render_owner>
+	$<TARGET_OBJECTS:frontierx_app_global_startup_owner>)
+target_include_directories(frontierx_net_buffer_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include)
+target_link_libraries(frontierx_net_buffer_probe PRIVATE
+	frontierx_native_search
+	frontierx_native_app_globals frontierx_native_app_diagnostics
+	frontierx_native_user_defaults frontierx_native_dacom_bootstrap
+	frontierx_event_system frontierx_platform
+	frontierx_native_math_accessor frontierx_math
+	frontierx_native_app_math frontierx_native_app_render_state)
+target_compile_features(frontierx_net_buffer_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_net_buffer_probe)
+
+# Share the original App registrar and two-phase startup contract with Linux.
+add_library(frontierx_app_global_startup_owner OBJECT
+	Code/App/Src/GlobalStartup.cpp)
+target_include_directories(frontierx_app_global_startup_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include)
+target_compile_features(frontierx_app_global_startup_owner PRIVATE cxx_std_17)
+
+# Guard the production App registrar order across the 26-entry node boundary.
+add_executable(frontierx_app_global_startup_probe
+	Tools/portability/app_global_startup_probe.cpp
+	$<TARGET_OBJECTS:frontierx_app_global_startup_owner>)
+target_include_directories(frontierx_app_global_startup_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_compile_features(frontierx_app_global_startup_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_app_global_startup_probe)
+
+# Cursor creation needs a real host display; SDL's dummy driver rejects it.
+add_executable(frontierx_app_cursor_probe
+	Tools/portability/native_app_cursor_probe.cpp
+	$<TARGET_OBJECTS:frontierx_app_global_startup_owner>
+	$<TARGET_OBJECTS:frontierx_app_cursor_owner>)
+target_include_directories(frontierx_app_cursor_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
+target_link_libraries(frontierx_app_cursor_probe PRIVATE
+	frontierx_native_app_globals PkgConfig::SDL3)
+target_compile_features(frontierx_app_cursor_probe PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_app_cursor_probe)
+
+# Compile the production engine that aggregates RenderMgr and dispatches
+# archetype and instance ownership through the game component graph.
+add_library(frontierx_engine_owner OBJECT
+	Code/Libs/Src/Engine/engine.cpp)
+target_include_directories(frontierx_engine_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/Engine)
+target_compile_features(frontierx_engine_owner PRIVATE cxx_std_17)
+
+# Compile the production engine component that dispatches game render
+# archetypes and instances to PolyMesh.
+add_library(frontierx_render_manager_owner OBJECT
+	Code/Libs/Src/EngComps/RenderMgr/RenderMgr.cpp
+	Code/Libs/Src/EngComps/RenderMgr/chull.cpp)
+target_include_directories(frontierx_render_manager_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/Include Code/Libs/Src/EngComps/RenderMgr)
+target_compile_features(frontierx_render_manager_owner PRIVATE cxx_std_17)
+
+# Compile the game's material-manager owner without its Win32 dialog and DLL
+# registration. Linking its material, texture and script runtime follows.
+add_library(frontierx_game_material_manager_owner OBJECT
+	Code/Libs/Src/MaterialManager/MaterialManager.cpp
+	Code/Libs/Src/MaterialManager/Material.cpp
+	Code/Libs/Src/MaterialManager/Modifier.cpp)
+# The CQ2 manager's global Material is unrelated to the legacy mesh Material.
+# Distinct native symbol names keep their destructors separate in one ELF.
+target_compile_definitions(frontierx_game_material_manager_owner PRIVATE
+	Material=NativeGameMaterial)
+target_include_directories(frontierx_game_material_manager_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/MaterialManager)
+target_compile_features(frontierx_game_material_manager_owner PRIVATE cxx_std_17)
+
+# Compile the game's production ITManager with the TGA/BMP readers used by
+# this native material closure. VFX still depends on Win32 assembly.
+add_library(frontierx_game_texture_manager_owner OBJECT
+	Code/Libs/Src/TextureManager/TextureManager.cpp
+	Code/Libs/Src/TextureManager/Tgaread.cpp
+	Code/Libs/Src/TextureManager/BmpRead.cpp)
+target_include_directories(frontierx_game_texture_manager_owner PRIVATE
+	Code/Libs/Include Code/Libs/Src/TextureManager)
+target_compile_features(frontierx_game_texture_manager_owner PRIVATE cxx_std_17)
+
+# A separate executable avoids combining the game's IMaterial with the
+# unrelated shading-library IMaterial in one test program.
+add_executable(frontierx_game_material_manager_probe
+	$<TARGET_OBJECTS:frontierx_game_material_manager_owner>
+	$<TARGET_OBJECTS:frontierx_app_mesh_render_owner>
+	$<TARGET_OBJECTS:frontierx_game_texture_manager_owner>
+	$<TARGET_OBJECTS:frontierx_polymesh_mesh_owner>
+	$<TARGET_OBJECTS:frontierx_polymesh_component_owner>
+	$<TARGET_OBJECTS:frontierx_engine_owner>
+	$<TARGET_OBJECTS:frontierx_render_manager_owner>
+	$<TARGET_OBJECTS:frontierx_x86_math_owner>
+	$<TARGET_OBJECTS:frontierx_light_manager_owner>
+	$<TARGET_OBJECTS:frontierx_texture_library_owner>
+	Tools/portability/PolyMeshFixture.cpp
+	Tools/portability/game_material_manager_probe.cpp)
+target_include_directories(frontierx_game_material_manager_probe PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/RendComp/PolyMesh Code/Libs/Src/TextureManager)
+target_link_libraries(frontierx_game_material_manager_probe PRIVATE
+	frontierx_native_app_globals
+	frontierx_native_dacom_bootstrap frontierx_native_math_accessor
+	frontierx_math frontierx_native_render_pipeline frontierx_native_render_primitive frontierx_platform
+	frontierx_native_app_math frontierx_native_app_render_state)
+target_compile_features(frontierx_game_material_manager_probe PRIVATE cxx_std_17)
+target_compile_definitions(frontierx_game_material_manager_probe PRIVATE
+	FRONTIERX_VERTEX_COLOR_SOURCE="${PROJECT_SOURCE_DIR}/Data/mat/shaders/VertexColor.fx")
 
 # Execute the production StateMaterial owner through its DACOM factory and a
 # cached indexed draw at the established renderer boundary.
 add_executable(frontierx_state_material_probe
+	$<TARGET_OBJECTS:frontierx_texture_library_owner>
+	$<TARGET_OBJECTS:frontierx_polymesh_mesh_owner>
+	Tools/portability/MaterialTextureFixture.cpp
+	Tools/portability/PolyMeshFixture.cpp
+	Code/Libs/Src/Shading/Materials/MaterialLibrary.cpp
+	Code/Libs/Src/Shading/Materials/SimpleMaterial.cpp
 	Code/Libs/Src/Shading/Materials/StateMaterial.cpp
 	Code/Libs/Src/VertexBufferManager/VertexBufferManager.cpp
 	Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp
 	Tools/portability/state_material_probe.cpp)
-target_include_directories(frontierx_state_material_probe PRIVATE Code/Libs/Include)
+target_include_directories(frontierx_state_material_probe PRIVATE
+	Code/Libs/Include Code/Libs/Src/RendComp/PolyMesh)
 target_link_libraries(frontierx_state_material_probe PRIVATE
-	frontierx_native_dacom_bootstrap frontierx_native_render_primitive
-	frontierx_native_render_pipeline)
+	frontierx_native_dacom_bootstrap frontierx_native_math_accessor
+	frontierx_native_render_primitive
+	frontierx_native_render_pipeline frontierx_platform)
 target_compile_features(frontierx_state_material_probe PRIVATE cxx_std_17)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 	target_compile_options(frontierx_state_material_probe PRIVATE
@@ -692,10 +1461,11 @@ if(FRONTIERX_BUILD_SDL3)
 	frontierx_enable_strict_warnings(frontierx_sdl3_event_pump)
 	add_library(frontierx_native_window_manager STATIC
 		Code/Libs/Include/FrontierX/NativeWindowManager.h
-		Code/Libs/Src/Platform/NativeWindowManager.cpp)
+		Code/Libs/Src/Platform/NativeWindowManager.cpp
+		Code/Libs/Src/Platform/NativeStreamer.cpp)
 	target_include_directories(frontierx_native_window_manager PUBLIC Code/Libs/Include)
 	target_link_libraries(frontierx_native_window_manager
-		PUBLIC frontierx_sdl3_platform)
+		PUBLIC frontierx_sdl3_platform PRIVATE PkgConfig::SDL3)
 	target_compile_features(frontierx_native_window_manager PUBLIC cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_native_window_manager)
 	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -706,18 +1476,65 @@ if(FRONTIERX_BUILD_SDL3)
 			-Wno-delete-non-abstract-non-virtual-dtor
 			-Wno-delete-abstract-non-virtual-dtor)
 	endif()
+	if(FRONTIERX_BUILD_FFMPEG_AUDIO)
+		pkg_check_modules(FRONTIERX_AV REQUIRED IMPORTED_TARGET libavcodec>=63.1.101 libavformat>=63.1.101 libavutil>=61.1.101)
+		foreach(library IN LISTS FRONTIERX_AV_LINK_LIBRARIES)
+			if(library MATCHES "\\.a$")
+				message(FATAL_ERROR "Native IAC requires replaceable shared FFmpeg libraries")
+			endif()
+		endforeach()
+		include(CheckCXXSourceRuns)
+		set(CMAKE_REQUIRED_LIBRARIES PkgConfig::FRONTIERX_AV)
+		unset(FRONTIERX_FFMPEG_LGPL CACHE)
+		check_cxx_source_runs([=[
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+}
+#include <cstring>
+int main() {
+ return std::strcmp(avcodec_license(), "LGPL version 2.1 or later") ||
+        std::strcmp(avformat_license(), "LGPL version 2.1 or later") ||
+        std::strcmp(avutil_license(), "LGPL version 2.1 or later");
+}
+]=] FRONTIERX_FFMPEG_LGPL)
+		unset(CMAKE_REQUIRED_LIBRARIES)
+		if(NOT FRONTIERX_FFMPEG_LGPL)
+			message(FATAL_ERROR "Native IAC requires a separately reviewed shared LGPL 2.1 FFmpeg build; GPL/nonfree builds are rejected")
+		endif()
+		target_sources(frontierx_native_window_manager PRIVATE Code/Libs/Src/Platform/NativeIacWave.cpp)
+		target_compile_definitions(frontierx_native_window_manager PRIVATE FRONTIERX_HAVE_IAC_DECODER=1)
+		target_link_libraries(frontierx_native_window_manager PRIVATE PkgConfig::FRONTIERX_AV)
+	endif()
 	add_executable(frontierx_native_shell Code/Launcher/NativeShell.cpp)
 	add_dependencies(frontierx_native_shell frontierx_event_system_module)
 	target_link_libraries(frontierx_native_shell
 		PRIVATE
+			frontierx_native_app_globals
+			frontierx_app_string_resource
+			frontierx_native_search
+			frontierx_native_in_progress_anim
+			frontierx_native_app_version
+			frontierx_native_app_text_resources
+			frontierx_native_app_schema
+			frontierx_native_music_data_format
 			frontierx_dacom_core
 			frontierx_event_system
 			frontierx_hotkey_event
 			frontierx_native_dacom_bootstrap
 			frontierx_native_user_defaults
 			frontierx_native_window_manager
+			frontierx_view_constructor
 			frontierx_platform
 			PkgConfig::SDL3)
+	target_sources(frontierx_native_shell PRIVATE
+		$<TARGET_OBJECTS:frontierx_app_system_container_owner>
+		$<TARGET_OBJECTS:frontierx_app_global_startup_owner>
+		$<TARGET_OBJECTS:frontierx_app_cursor_owner>
+		$<TARGET_OBJECTS:frontierx_app_movie_camera_manager_owner>
+		$<TARGET_OBJECTS:frontierx_app_music_manager_owner>
+		$<TARGET_OBJECTS:frontierx_app_objwatch_owner>
+		$<TARGET_OBJECTS:frontierx_native_system_map_owner>)
 	target_compile_features(frontierx_native_shell PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_native_shell)
 	set_property(TARGET frontierx_native_shell PROPERTY ENABLE_EXPORTS ON)
@@ -726,6 +1543,15 @@ if(FRONTIERX_BUILD_SDL3)
 	target_compile_features(frontierx_sdl3_window_probe PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_sdl3_window_probe)
 	if(FRONTIERX_BUILD_SDL3_GPU)
+		target_sources(frontierx_native_shell PRIVATE
+			$<TARGET_OBJECTS:frontierx_app_gen_data_owner>
+			$<TARGET_OBJECTS:frontierx_particle_owner>
+			$<TARGET_OBJECTS:frontierx_mesh_manager_owner>
+			$<TARGET_OBJECTS:frontierx_animation_owner>
+			$<TARGET_OBJECTS:frontierx_channel_owner>
+			$<TARGET_OBJECTS:frontierx_native_animation_validation>
+			$<TARGET_OBJECTS:frontierx_hardpoint_owner>
+			$<TARGET_OBJECTS:frontierx_optics_owner>)
 		find_program(FRONTIERX_GLSLC_EXECUTABLE NAMES glslc REQUIRED)
 		add_library(frontierx_sdl3_gpu_renderer STATIC
 			Code/Libs/Include/FrontierX/SdlGpuRenderer.h
@@ -736,15 +1562,52 @@ if(FRONTIERX_BUILD_SDL3)
 		target_compile_features(frontierx_sdl3_gpu_renderer PUBLIC cxx_std_17)
 		frontierx_enable_strict_warnings(frontierx_sdl3_gpu_renderer)
 		target_link_libraries(frontierx_native_shell PRIVATE
+			frontierx_native_app_globals
+			frontierx_native_app_diagnostics
+			frontierx_native_app_math
+			frontierx_native_app_render_state
+			frontierx_native_render_pipeline
+			frontierx_native_dacom_bootstrap
+			frontierx_tinyxml
+			frontierx_math
 			frontierx_native_render_primitive
 			frontierx_native_math_accessor
 			frontierx_render_smoke_scene
 			frontierx_sdl3_gpu_renderer)
+		target_link_libraries(frontierx_game_material_manager_probe PRIVATE
+			frontierx_sdl3_gpu_renderer frontierx_render_smoke_scene PkgConfig::SDL3)
+		target_compile_definitions(frontierx_game_material_manager_probe PRIVATE
+			FRONTIERX_GAME_GPU=1)
 		target_sources(frontierx_native_shell PRIVATE
+			Code/Launcher/NativeGameSystem.cpp
+			Code/Launcher/NativeGameScene.cpp
+			$<TARGET_OBJECTS:frontierx_app_mesh_render_owner>
+			$<TARGET_OBJECTS:frontierx_game_material_manager_owner>
+			$<TARGET_OBJECTS:frontierx_game_texture_manager_owner>
+			$<TARGET_OBJECTS:frontierx_polymesh_mesh_owner>
+			$<TARGET_OBJECTS:frontierx_polymesh_component_owner>
+			$<TARGET_OBJECTS:frontierx_engine_owner>
+			$<TARGET_OBJECTS:frontierx_render_manager_owner>
+			$<TARGET_OBJECTS:frontierx_x86_math_owner>
+			$<TARGET_OBJECTS:frontierx_light_manager_owner>
+			$<TARGET_OBJECTS:frontierx_vertex_buffer_manager_owner>
+			$<TARGET_OBJECTS:frontierx_string_table_owner>
+			$<TARGET_OBJECTS:frontierx_texture_library_owner>
 			$<TARGET_OBJECTS:frontierx_render_batcher_object>
 			$<TARGET_OBJECTS:frontierx_bmpooljr_object>)
+		set(frontierx_game_scene_header_warns
+			${FRONTIERX_RB_HEADER_WARNS} -Wno-switch -Wno-ignored-qualifiers)
+		if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+			list(APPEND frontierx_game_scene_header_warns -Wno-class-memaccess)
+		endif()
+		set_source_files_properties(Code/Launcher/NativeGameScene.cpp PROPERTIES
+			COMPILE_OPTIONS "${frontierx_game_scene_header_warns}")
+		# The bridge includes the same legacy ENGINE.H contract as the scene owner.
+		set_source_files_properties(Code/Launcher/NativeGameSystem.cpp PROPERTIES
+			COMPILE_OPTIONS "${frontierx_game_scene_header_warns}")
 		target_include_directories(frontierx_native_shell PRIVATE
-			Code/App/Src Code/App/Src/Include Code/App/DInclude)
+			Code/App/Src Code/App/Src/Include Code/App/DInclude
+			Code/Libs/Src/RendComp/PolyMesh Code/Libs/Src/TextureManager)
 		target_compile_definitions(frontierx_native_shell PRIVATE
 			FRONTIERX_HAS_SDL_GPU_RENDERER=1)
 		set(FRONTIERX_GPU_SHADER_SOURCE_DIR
@@ -757,6 +1620,8 @@ if(FRONTIERX_BUILD_SDL3)
 			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe.frag.spv)
 		set(FRONTIERX_GPU_T4_VERTEX_SHADER
 			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe_t4.vert.spv)
+		set(FRONTIERX_GPU_MT_VERTEX_SHADER
+			${FRONTIERX_GPU_SHADER_BINARY_DIR}/sdl3_gpu_probe_mt.vert.spv)
 		add_custom_command(
 			OUTPUT ${FRONTIERX_GPU_VERTEX_SHADER}
 			COMMAND ${CMAKE_COMMAND} -E make_directory ${FRONTIERX_GPU_SHADER_BINARY_DIR}
@@ -787,12 +1652,29 @@ if(FRONTIERX_BUILD_SDL3)
 				${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe_t4.vert
 			DEPENDS ${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe_t4.vert
 			VERBATIM)
+		add_custom_command(
+			OUTPUT ${FRONTIERX_GPU_MT_VERTEX_SHADER}
+			COMMAND ${CMAKE_COMMAND} -E make_directory ${FRONTIERX_GPU_SHADER_BINARY_DIR}
+			COMMAND ${FRONTIERX_GLSLC_EXECUTABLE}
+				--target-env=vulkan1.0
+				-fshader-stage=vert
+				-o ${FRONTIERX_GPU_MT_VERTEX_SHADER}
+				${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe_mt.vert
+			DEPENDS ${FRONTIERX_GPU_SHADER_SOURCE_DIR}/sdl3_gpu_probe_mt.vert
+			VERBATIM)
 		add_custom_target(frontierx_sdl3_gpu_shaders DEPENDS
 			${FRONTIERX_GPU_VERTEX_SHADER}
 			${FRONTIERX_GPU_FRAGMENT_SHADER}
-			${FRONTIERX_GPU_T4_VERTEX_SHADER})
+			${FRONTIERX_GPU_T4_VERTEX_SHADER}
+			${FRONTIERX_GPU_MT_VERTEX_SHADER})
+		add_dependencies(frontierx_game_material_manager_probe
+			frontierx_sdl3_gpu_shaders)
 		add_executable(frontierx_sdl3_gpu_probe
+			$<TARGET_OBJECTS:frontierx_texture_library_owner>
+			Tools/portability/MaterialTextureFixture.cpp
 			Tools/portability/sdl3_gpu_probe.cpp
+			Code/Libs/Src/Shading/Materials/MaterialLibrary.cpp
+			Code/Libs/Src/Shading/Materials/SimpleMaterial.cpp
 			Code/Libs/Src/Shading/Materials/StateMaterial.cpp
 			Code/Libs/Src/VertexBufferManager/VertexBufferManager.cpp
 			Code/Libs/Src/VertexBufferManager/CopyVertexBufferDesc.cpp)
@@ -801,6 +1683,8 @@ if(FRONTIERX_BUILD_SDL3)
 			PRIVATE
 				frontierx_native_dacom_bootstrap
 				frontierx_native_render_primitive
+				frontierx_native_render_pipeline
+				frontierx_platform
 				frontierx_render_smoke_scene
 				frontierx_sdl3_gpu_renderer
 				PkgConfig::SDL3)
@@ -833,12 +1717,16 @@ if(FRONTIERX_BUILD_SDL3)
 	add_executable(frontierx_native_window_manager_probe
 		Tools/portability/native_window_manager_probe.cpp)
 	target_link_libraries(frontierx_native_window_manager_probe
-		PRIVATE
+		PRIVATE frontierx_platform
 			frontierx_dacom_core
 			frontierx_native_window_manager
 			PkgConfig::SDL3)
 	target_compile_features(frontierx_native_window_manager_probe PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_native_window_manager_probe)
+	if(FRONTIERX_BUILD_FFMPEG_AUDIO)
+		target_compile_definitions(frontierx_native_window_manager_probe PRIVATE FRONTIERX_HAVE_IAC_DECODER=1)
+		target_include_directories(frontierx_native_window_manager_probe PRIVATE Code/Libs/Src/Platform)
+	endif()
 endif()
 
 include(CTest)
@@ -855,6 +1743,11 @@ if(BUILD_TESTING)
 	add_test(NAME portability.profile_buffer COMMAND frontierx_profile_buffer_probe)
 	add_test(NAME portability.layout COMMAND frontierx_layout_probe)
 	add_test(NAME portability.tinyxml COMMAND frontierx_tinyxml_probe)
+	add_test(NAME portability.string_table_file_text
+		COMMAND frontierx_string_table_file_text_probe)
+	add_test(NAME portability.string_table_owner
+		COMMAND frontierx_string_table_owner_probe
+			${CMAKE_CURRENT_BINARY_DIR}/string-table-owner-fixture.utf)
 	add_test(NAME portability.platform_time COMMAND frontierx_platform_time_probe)
 	add_test(NAME portability.data_root COMMAND frontierx_data_root_probe --self-test)
 	add_test(NAME portability.event_queue COMMAND frontierx_event_queue_probe)
@@ -868,12 +1761,23 @@ if(BUILD_TESTING)
 	add_test(NAME portability.profile_parser COMMAND frontierx_profile_parser_probe)
 	add_test(NAME portability.native_dacom_bootstrap COMMAND frontierx_native_dacom_bootstrap_probe)
 	add_test(NAME portability.native_heap COMMAND frontierx_native_heap_probe)
+	add_test(NAME portability.view_parser COMMAND frontierx_view_parser_probe)
+	add_test(NAME portability.app_schema COMMAND frontierx_view_parser_probe
+		--app-schema ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/data.i)
+	add_test(NAME portability.sol_t_schema COMMAND frontierx_view_parser_probe
+		--script-schema ${frontierx_sol_t_schema})
+	add_test(NAME portability.light_manager COMMAND frontierx_light_manager_probe)
 	add_test(NAME portability.preference_store COMMAND frontierx_preference_store_probe)
 	add_test(NAME portability.native_user_settings COMMAND frontierx_native_user_settings_probe)
 	add_test(NAME portability.native_user_defaults COMMAND frontierx_native_user_defaults_probe)
 	add_test(NAME portability.encoded_handle COMMAND frontierx_encoded_handle_probe)
 	add_test(NAME portability.dacom_runtime COMMAND frontierx_dacom_runtime_probe)
 	add_test(NAME portability.dacom_interface COMMAND frontierx_dacom_interface_probe)
+	add_test(NAME portability.app_global_startup COMMAND frontierx_app_global_startup_probe)
+	add_test(NAME portability.app_cursor COMMAND frontierx_app_cursor_probe)
+	set_tests_properties(portability.app_cursor PROPERTIES SKIP_RETURN_CODE 77)
+	add_test(NAME portability.net_buffer COMMAND frontierx_net_buffer_probe
+		${CMAKE_CURRENT_BINARY_DIR}/net-buffer-probe-defaults)
 	add_test(NAME portability.stack_address COMMAND frontierx_stack_address_probe)
 	add_test(NAME portability.particle_context COMMAND frontierx_particle_context_probe)
 	add_test(NAME portability.math_core COMMAND frontierx_math_core_probe)
@@ -882,7 +1786,14 @@ if(BUILD_TESTING)
 	add_test(NAME portability.render_pipeline COMMAND frontierx_render_pipeline_probe)
 	add_test(NAME portability.render_batcher_header COMMAND frontierx_render_batcher_header_probe)
 	add_test(NAME portability.vertex_buffer_manager COMMAND frontierx_vertex_buffer_manager_probe)
-	add_test(NAME portability.state_material COMMAND frontierx_state_material_probe)
+	add_test(NAME portability.state_material COMMAND frontierx_state_material_probe
+		${CMAKE_CURRENT_BINARY_DIR}/material_library_fixture.utf)
+	add_test(NAME portability.game_material_manager COMMAND frontierx_game_material_manager_probe
+		${CMAKE_CURRENT_BINARY_DIR}/game_material_manager_fixture.utf)
+	add_test(NAME portability.game_material_manager_cr COMMAND frontierx_game_material_manager_probe
+		${CMAKE_CURRENT_BINARY_DIR}/game_material_manager_cr_fixture.utf cr)
+	add_test(NAME portability.game_material_manager_missing_end COMMAND frontierx_game_material_manager_probe
+		${CMAKE_CURRENT_BINARY_DIR}/game_material_manager_missing_end_fixture.utf missing-end)
 	add_test(NAME portability.math_accessor COMMAND frontierx_math_accessor_probe)
 	add_test(NAME portability.render_batcher_runtime COMMAND frontierx_render_batcher_runtime_probe)
 	add_test(NAME portability.bmpooljr COMMAND frontierx_bmpooljr_probe)
@@ -893,18 +1804,30 @@ if(BUILD_TESTING)
 		set_tests_properties(portability.legacy_input PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 		add_test(NAME portability.native_window_manager COMMAND frontierx_native_window_manager_probe)
 		set_tests_properties(portability.native_window_manager PROPERTIES
-			ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+			ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
 		add_test(NAME portability.native_shell COMMAND ${Python3_EXECUTABLE}
 			${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/test_native_shell.py
 			$<TARGET_FILE:frontierx_native_shell>
 			$<TARGET_FILE:frontierx_event_system_module>
-			${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Hotkeys.utf)
+			${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Hotkeys.utf
+			$<BOOL:${FRONTIERX_BUILD_SDL3_GPU}>)
 	endif()
 	if(TARGET frontierx_sdl3_gpu_probe)
+		# Existing production closure: Engine -> RenderMgr -> PolyMesh -> SDL GPU.
+		# The regular material probe cannot establish visible runtime execution.
+		add_test(NAME portability.game_material_gpu COMMAND frontierx_game_material_manager_probe
+			${CMAKE_CURRENT_BINARY_DIR}/game_material_gpu_fixture.utf
+			--gpu ${FRONTIERX_GPU_VERTEX_SHADER}
+			${FRONTIERX_GPU_FRAGMENT_SHADER}
+			${FRONTIERX_GPU_T4_VERTEX_SHADER}
+			${FRONTIERX_GPU_MT_VERTEX_SHADER})
+		set_tests_properties(portability.game_material_gpu PROPERTIES SKIP_RETURN_CODE 77)
 		add_test(NAME portability.sdl3_gpu COMMAND frontierx_sdl3_gpu_probe
 			${FRONTIERX_GPU_VERTEX_SHADER}
 			${FRONTIERX_GPU_FRAGMENT_SHADER}
 			${FRONTIERX_GPU_T4_VERTEX_SHADER}
+			${CMAKE_CURRENT_BINARY_DIR}/sdl_gpu_material_texture_fixture.utf
+			${FRONTIERX_GPU_MT_VERTEX_SHADER}
 			--visible)
 		set_tests_properties(portability.sdl3_gpu PROPERTIES SKIP_RETURN_CODE 77)
 	endif()

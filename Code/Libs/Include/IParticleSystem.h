@@ -8,7 +8,7 @@
 #define __IParticleSystem_h__
 
 //
-#include "DACOM.h"
+#include "DACOM.H"
 #include "ParticleSystemParameters.h"
 
 //
@@ -34,4 +34,3 @@ struct IParticleSystem : public IDAComponent
 
 
 #endif // EOF
-

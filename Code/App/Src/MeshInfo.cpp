@@ -11,11 +11,18 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "CQTrace.h"
+#include "Include/NativeAppGlobals.h"
+#endif
 
 #include "MeshRender.h"
 
+#include <ICamera.h>
+#include <ENGINE.H>
 #include <renderer.h>
 	
 struct MeshInfoTree : IMeshInfoTree
@@ -303,10 +310,14 @@ MeshChain::~MeshChain()
 MeshInfo::MeshInfo()
 {
 	fgi = 0;
+	faceGroupCnt = 0;
 	ec_list = 0;
 	parent = 0;
 	mr = 0;
 	sphere_center.zero();
+	radius = 0.0f;
+	instanceIndex = INVALID_INSTANCE_INDEX;
+	bWhole = bCacheValid = bOwnsInstance = bBroken = 0;
 	bHasMesh = bSuppressEmissive = 0;
 	faceRenders = 0;
 	cameraMoveCnt = 0;

@@ -2,7 +2,7 @@
 #define __IRENDERCOMPONENT_H
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 #ifndef DAVARIANT_H

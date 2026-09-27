@@ -21,12 +21,20 @@ constexpr std::uint32_t kTriangleFan = 6U;
 
 constexpr std::uint32_t kFvfXyz = 0x002U;
 constexpr std::uint32_t kFvfDiffuse = 0x040U;
+constexpr std::uint32_t kFvfSpecular = 0x080U;
 constexpr std::uint32_t kFvfTex1 = 0x100U;
 constexpr std::uint32_t kFvfTex2 = 0x200U;
+constexpr std::uint32_t kFvfTex5 = 0x500U;
 constexpr std::uint32_t kRpVertexFvf = kFvfXyz | kFvfDiffuse | kFvfTex1;
 constexpr std::uint32_t kRpVertex2Fvf = kFvfXyz | kFvfDiffuse | kFvfTex2;
+constexpr std::uint32_t kMtVertexFvf =
+    kFvfXyz | kFvfDiffuse | kFvfSpecular | kFvfTex2;
+constexpr std::uint32_t kGameStandardFvf =
+    kFvfXyz | 0x010U | kFvfDiffuse | kFvfTex5;
 static_assert(kRpVertexFvf == 0x142U, "unexpected RPVertex FVF value");
 static_assert(kRpVertex2Fvf == 0x242U, "unexpected Vertex2 FVF value");
+static_assert(kMtVertexFvf == 0x2c2U, "unexpected PolyMesh FVF value");
+static_assert(kGameStandardFvf == 0x552U, "unexpected game StandardVertex FVF value");
 } // namespace LegacyD3d9
 
 enum class LegacySubmissionStatus : std::uint8_t
@@ -170,6 +178,60 @@ inline LegacySubmissionStatus AdaptLegacyRpVertex2Submission(
     std::memmove(destination,
                  input.vertices,
                  input.vertexCount * sizeof(RenderVertexP3DiffuseT4));
+    output = candidate;
+    return LegacySubmissionStatus::Ok;
+}
+
+inline LegacySubmissionStatus AdaptLegacyMtVertexSubmission(
+    const LegacySubmissionInput &input,
+    RenderVertexP3DiffuseSpecularT4 *destination,
+    std::size_t destinationCapacity,
+    RenderSubmissionView3 &output) noexcept
+{
+    output = {PrimitiveTopology::PointList, nullptr, 0U, nullptr, 0U};
+    PrimitiveTopology topology = PrimitiveTopology::PointList;
+    if (!MapLegacyPrimitiveTopology(input.primitiveType, topology))
+        return LegacySubmissionStatus::UnsupportedPrimitiveType;
+    if (input.vertexFormat != LegacyD3d9::kMtVertexFvf)
+        return LegacySubmissionStatus::UnsupportedVertexFormat;
+    if (topology == PrimitiveTopology::PointList && input.indexCount != 0U)
+        return LegacySubmissionStatus::UnsupportedIndexedPointList;
+    if (!input.vertices || input.vertexCount == 0U || !destination ||
+        (input.indices == nullptr) != (input.indexCount == 0U))
+        return LegacySubmissionStatus::InvalidInput;
+    if (destinationCapacity < input.vertexCount)
+        return LegacySubmissionStatus::InsufficientDestination;
+    const RenderSubmissionView3 candidate{
+        topology, destination, input.vertexCount, input.indices, input.indexCount};
+    if (!candidate.IsValid()) return LegacySubmissionStatus::InvalidInput;
+    std::memmove(destination, input.vertices,
+                 input.vertexCount * sizeof(RenderVertexP3DiffuseSpecularT4));
+    output = candidate;
+    return LegacySubmissionStatus::Ok;
+}
+
+inline LegacySubmissionStatus AdaptLegacyGameStandardSubmission(
+    const LegacySubmissionInput &input,
+    RenderVertexP3N3DiffuseT5 *destination,
+    std::size_t destinationCapacity,
+    RenderSubmissionView4 &output) noexcept
+{
+    output = {PrimitiveTopology::PointList, nullptr, 0U, nullptr, 0U};
+    if (input.primitiveType != LegacyD3d9::kTriangleList)
+        return LegacySubmissionStatus::UnsupportedPrimitiveType;
+    if (input.vertexFormat != LegacyD3d9::kGameStandardFvf)
+        return LegacySubmissionStatus::UnsupportedVertexFormat;
+    if (!input.vertices || input.vertexCount == 0U || !destination ||
+        (input.indices == nullptr) != (input.indexCount == 0U))
+        return LegacySubmissionStatus::InvalidInput;
+    if (destinationCapacity < input.vertexCount)
+        return LegacySubmissionStatus::InsufficientDestination;
+    const RenderSubmissionView4 candidate{
+        PrimitiveTopology::TriangleList, destination, input.vertexCount,
+        input.indices, input.indexCount};
+    if (!candidate.IsValid()) return LegacySubmissionStatus::InvalidInput;
+    std::memmove(destination, input.vertices,
+                 input.vertexCount * sizeof(RenderVertexP3N3DiffuseT5));
     output = candidate;
     return LegacySubmissionStatus::Ok;
 }

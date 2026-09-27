@@ -10,14 +10,32 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <ICamera.h>
+#define BASE_MAX_CREW 250
+#define BASE_MAX_METAL 220
+#define BASE_MAX_GAS 180
+#define RENDER_FRAMERATE 30.0F
+#define CQE_HOTKEY 0x1003
+#define CQE_OBJECTIVES_CHANGE 0x1053
+#define CQE_OBJECTIVE_ADDED 0x1054
+#define __max(a,b) (((a) > (b)) ? (a) : (b))
+#define __min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
 #include <MGlobals.h>
 
 
 #include <wchar.h>
+#ifndef _WIN32
+#include "Include/NativeGlobalDataFormat.h"
+#endif
 
-#include "Resource.h"
+#include "resource.h"
 #include "Startup.h"
 #include "UserDefaults.h"
 #include "menu.h"
@@ -37,7 +55,7 @@
 #include "RandomNum.h"
 #include "Sector.h"
 
-#include "Objlist.h"
+#include "ObjList.h"
 #include "IMissionActor.h"
 #include "Objwatch.h"
 #include "CQGame.h"
@@ -48,14 +66,14 @@
 #include <DMBaseData.h>
 
 #include <IDocClient.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <Viewer.h>
 #include <EventSys.h>
 #include <3dmath.h>
-#include <Engine.h>
+#include <ENGINE.H>
 #include <MemFile.h>
 #include <IConnection.h>
 
@@ -74,6 +92,7 @@ using namespace CQGAMETYPES;
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
+#ifdef _WIN32
 struct WindowPosStruct : WINDOWPLACEMENT
 {
 	WindowPosStruct (void)
@@ -81,12 +100,17 @@ struct WindowPosStruct : WINDOWPLACEMENT
 		length = sizeof(*this);
 	}
 };
+#endif
 
 //----------------------------------------------------------------------------
 
 static MT_GlobalData globalData;
 static GT_GLOBAL_VALUES globalValues;
+#ifdef _WIN32
 static void updateGlobalViewer (void);
+#else
+static bool updateGlobalViewer (void);
+#endif
 static U8 twoWayAllyMask[MAX_PLAYERS];
 static bool resignState[MAX_PLAYERS];	// valid from 0 to 7
 
@@ -311,6 +335,7 @@ static void initGlobalData (void)
 }
 //----------------------------------------------------------------------------
 
+#ifdef _WIN32
 struct DACOM_NO_VTABLE GlobalViewer : IEventCallback, IDocumentClient
 {
 	//
@@ -847,6 +872,7 @@ GENRESULT GlobalViewer::Notify (U32 message, void *param)
 
 	return GR_OK;
 }
+#endif
 //---------------------------------------------------------------------------
 //---------------------------Begin MGlobals class----------------------------
 //---------------------------------------------------------------------------
@@ -978,19 +1004,31 @@ void MGlobals::SetAllyData (const U8 * buffer, U32 bufferSize)
 				// are we friend of foe now?
 				if (allyMask & (1 << (hisID-1)))
 				{
+					#ifdef _WIN32
 					swprintf(buffer, L"%s %s", name, _localLoadStringW(IDS_MESSAGE_ALLY_BOTH));
+					#else
+					swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), L"%ls %ls", name, _localLoadStringW(IDS_MESSAGE_ALLY_BOTH));
+					#endif
 					SCROLLTEXT->SetTextString(buffer);
 				}
 				else if (newAlliances[i] & (1 << thisID))
 				{
 					// the other guy wishes to be friends
+					#ifdef _WIN32
 					swprintf(buffer, L"%s %s", name, _localLoadStringW(IDS_MESSAGE_ALLY_FRIEND));
+					#else
+					swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), L"%ls %ls", name, _localLoadStringW(IDS_MESSAGE_ALLY_FRIEND));
+					#endif
 					SCROLLTEXT->SetTextString(buffer);
 				}
 				else
 				{
 					// the other guy doesn't care for you at all
+					#ifdef _WIN32
 					swprintf(buffer, L"%s %s", name, _localLoadStringW(IDS_MESSAGE_ALLY_ENEMY));
+					#else
+					swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), L"%ls %ls", name, _localLoadStringW(IDS_MESSAGE_ALLY_ENEMY));
+					#endif
 					SCROLLTEXT->SetTextString(buffer);
 				}
 			}
@@ -1308,9 +1346,15 @@ struct IBaseObject * MGlobals::CreateInstance (PARCHETYPE pArchetype, U32 newPar
 	{
 		initMissionData(part, newPartID);
 
+		#ifndef _WIN32
+		snprintf(part->partName+1, sizeof(part->partName)-1, "%X", newPartID);
+		#else
 		_ltoa(newPartID, part->partName+1, 16);
+		#endif
 		part->partName[0] = '#';
+		#ifdef _WIN32
 		strupr(part->partName);
+		#endif
 		int len = strlen(part->partName);
 		part->partName[len++] = '#';
 		part->partName[len] = 0;
@@ -1732,6 +1776,9 @@ static BOOL32 __stdcall save (IFileSystem * outFile, U32 version)
 	HANDLE hFile;
 	DAFILEDESC fdesc = "Globals";
 	DWORD dwWritten;
+#ifndef _WIN32
+	FrontierX::GlobalDataDiskBytes diskData;
+#endif
 
 	fdesc.dwDesiredAccess |= GENERIC_WRITE;
 	fdesc.dwShareMode = 0;
@@ -1741,11 +1788,21 @@ static BOOL32 __stdcall save (IFileSystem * outFile, U32 version)
 	if (outFile->SetCurrentDirectory("\\MT_GlobalData")==0)
 		goto Done;
 
+#ifndef _WIN32
+	globalData.gameSettings.version = version;
+	if (FrontierX::EncodeGlobalData(globalData, diskData) == false)
+		goto Done;
+#endif
 	if ((hFile = outFile->OpenChild(&fdesc)) == INVALID_HANDLE_VALUE)
 		goto Done;
 
+#ifndef _WIN32
+	result = outFile->WriteFile(hFile, diskData.data(), diskData.size(), &dwWritten, 0) &&
+		dwWritten == diskData.size();
+#else
 	globalData.gameSettings.version = version;
 	result = outFile->WriteFile(hFile, &globalData, sizeof(globalData), &dwWritten, 0);
+#endif
 	outFile->CloseHandle(hFile);
 
 Done:
@@ -1765,7 +1822,13 @@ BOOL32 MGlobals::Load (IFileSystem * inFile)
 	HANDLE hFile;
 	DAFILEDESC fdesc = "Globals";
 	DWORD dwRead;
+#ifndef _WIN32
+	FrontierX::GlobalDataDiskBytes buffer = {};
+	FrontierX::GlobalDataDiskBytes correlated = {};
+	MT_GlobalData loadedData = {};
+#else
 	U8 buffer[sizeof(globalData) * 2];
+#endif
 
 	if (inFile->SetCurrentDirectory("\\MT_GlobalData")==0)
 		goto Done;
@@ -1773,13 +1836,38 @@ BOOL32 MGlobals::Load (IFileSystem * inFile)
 	if ((hFile = inFile->OpenChild(&fdesc)) == INVALID_HANDLE_VALUE)
 		goto Done;
 
+#ifndef _WIN32
+	if (inFile->GetFileSize(hFile, 0) == buffer.size() &&
+		inFile->ReadFile(hFile, buffer.data(), buffer.size(), &dwRead, 0) &&
+		dwRead == buffer.size() &&
+		MISSION->CorrelateSymbol("MT_GlobalData", buffer.data(), correlated.data()) == GR_OK)
+	{
+		FrontierX::DecodeGlobalData(correlated, loadedData);
+		result = 1;
+	}
+	if (inFile->CloseHandle(hFile) == 0)
+		result = 0;
+	if (result == 0)
+		goto Done;
+	globalData = loadedData;
+#else
 	result = inFile->ReadFile(hFile, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("MT_GlobalData", buffer, &globalData);
+#endif
 	recalcAllyMasks();
 	memset(resignState, 0, sizeof(resignState));
+	#ifndef _WIN32
+	if (!updateGlobalViewer())
+	{
+		result = 0;
+		goto Done;
+	}
+	#else
 	updateGlobalViewer();
-
+	#endif
+#ifdef _WIN32
 	inFile->CloseHandle(hFile);
+#endif
 
 	techCheckSum = computeTechCheckSum(&globalData);
 	resourceCheckSum = computeResourceCheckSum(&globalData);
@@ -1800,7 +1888,7 @@ U32 MGlobals::GetFileDescription (const C8 * fileName, wchar_t * string, U32 buf
 
 	SAVEDIR->CreateInstance(&fdesc, tempFile);
 
-	if (tempFile == NULL || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
+	if (!tempFile || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
 	{
 		return string[0] = 0;
 	}
@@ -1834,7 +1922,7 @@ U32 MGlobals::GetFileDescription (IFileSystem * fileDir, const C8 * fileName, wc
 
 	fileDir->CreateInstance(&fdesc, tempFile);
 
-	if (tempFile == NULL || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
+	if (!tempFile || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
 	{
 		return string[0] = 0;
 	}
@@ -1868,7 +1956,7 @@ U32 MGlobals::GetFileMaxPlayers (IFileSystem * fileDir, const C8 * fileName, U32
 
 	fileDir->CreateInstance(&fdesc, tempFile);
 
-	if (tempFile == NULL || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
+	if (!tempFile || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
 	{
 		return 0;
 	}
@@ -1902,7 +1990,7 @@ U32 MGlobals::GetFileMaxPlayers (const C8 * fileName, U32 & maxPlayers)
 
 	SAVEDIR->CreateInstance(&fdesc, tempFile);
 
-	if (tempFile == NULL || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
+	if (!tempFile || tempFile->SetCurrentDirectory("\\MT_GlobalData") == 0)
 	{
 		return 0;
 	}
@@ -1949,7 +2037,11 @@ BOOL32 MGlobals::New (void)
 	// initialize global data structure
 	//
 	initGlobalData();
+	#ifndef _WIN32
+	if (!updateGlobalViewer()) return 0;
+	#else
 	updateGlobalViewer();
+	#endif
 
 	return 1;
 }
@@ -3951,6 +4043,7 @@ const U32 MGlobals::GetObjectiveStringID (const U32 index)
 }
 //----------------------------------------------------------------------------------------------
 //
+#ifdef _WIN32
 struct _globalViewer : GlobalComponent
 {
 	GlobalViewer* viewer;
@@ -3988,6 +4081,18 @@ void updateGlobalViewer (void)
 	if (globalViewer.viewer->doc3==0)
 		globalViewer.viewer->createViewer3();
 }
+#else
+static bool updateGlobalViewer (void)
+{
+	U32 dataSize = 0;
+	const GT_GLOBAL_VALUES * values = GENDATA ?
+		(const GT_GLOBAL_VALUES *)GENDATA->GetArchetypeData("GlobalValues", dataSize) : 0;
+	if (!values || dataSize != sizeof(globalValues))
+		return false;
+	globalValues = *values;
+	return true;
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //----------------------------END MGlobals.cpp------------------------------//

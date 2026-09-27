@@ -9,8 +9,13 @@
     $Header: /Conquest/App/Src/ObjMapIterator.cpp 8     10/06/00 7:50p Jasony $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "MyVertex.h"
+#endif
 
 #include "ObjMapIterator.h"
 
@@ -27,7 +32,11 @@
 #endif
 
 #ifndef OBJWATCH_H
+#if defined(_WIN32)
 #include "ObjWatch.h"
+#else
+#include "Objwatch.h"
+#endif
 #endif
 
 #include "ObjList.h"

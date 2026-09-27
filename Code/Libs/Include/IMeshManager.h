@@ -19,18 +19,25 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
-#include <FileSys.h>
+#include <Filesys.h>
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
-#include "ENGINE.h"
+#include "ENGINE.H"
 
-#include "IANIM.h"
+#if defined(_WIN32)
+#include "IAnim.h"
+#else
+// Only these declarations are needed by this public mesh interface.
+#include <cstdint>
+using SCRIPT_SET_ARCH = std::intptr_t;
+struct IAnimation;
+#endif
 
 #ifndef _NO_VTABLE	
   #if (_MSC_VER < 1100)      // 1100 = VC++ 5.0

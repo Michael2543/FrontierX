@@ -1,6 +1,742 @@
 # Linux Port Readiness Plan
 
-Status: implementation in progress, 2026-09-25. Native-Windows VS2022 Win32 Debug and Final
+Latest UTF-save-format gate, 2026-09-27: a native UTF 1.01 encoder
+now produces fixed 56-byte headers and 44-byte records. The existing
+data-root check round-trips a generated save-shaped archive through
+the production `IFileSystem` reader under GCC/Clang; malformed and
+duplicate paths fail. This is a prerequisite, not a writable
+`SAVEDIR`: the combined mission link still lacks 70 references over
+28 symbols, and the mission remains unstarted. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-utf-save-format-encoder-gate-2026-09-27).
+Entries below are historical.
+
+Latest mission-message link gate, 2026-09-27: native `SCROLLTEXT`
+now delivers source App strings and direct wide messages to stderr.
+The optional beacon cue is disabled only with explicit
+`--skip-notification-cue`; without a sound owner or that flag, an
+actual message fails loudly. GCC/Clang executed this branch with the
+lawful external training mission, which remains unstarted. The
+temporary combined link now lacks 70 references across 28 symbols,
+led by writable `SAVEDIR`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-scrolling-message-and-explicit-cue-policy-gate-2026-09-27).
+Entries below are historical.
+
+Latest App resource-client gate, 2026-09-27: native `STATUS` and
+`HINTBOX` now use the production `Resource` priority/notification
+template, expose their client connection points, and present requested
+text on stderr. GCC/Clang built and executed the existing shell check
+with lawful external `Sol_Train.dmission`; it still did not start the
+mission. The temporary combined link now fails on 85 references across
+29 symbols, led by `SCROLLTEXT` and writable `SAVEDIR`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-status-and-hint-resource-client-gate-2026-09-27).
+Entries below are historical.
+
+Latest native load-progress/build-version gate, 2026-09-27: the
+`Mission::Reload` `IPANIM` contract now has a text-based native owner,
+and `GetBuildVersion` is generated from the original `Conquest.rc`
+VERSIONINFO. GCC/Clang executed both owners in existing checks; the
+lawful `Sol_Train.dmission` has saved version zero. The combined App
+link still fails on 115 references across 31 symbols, so the mission
+has not started. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-load-progress-and-source-build-version-gate-2026-09-27).
+Entries below are historical.
+
+Latest native packet-selection search gate, 2026-09-27: the
+first-match `dwordsearch` contract from `Search.asm` now has a native
+scalar implementation. The existing offline packet check executed
+duplicate/absent/zero-length cases under GCC and Clang. A temporary
+combined mission link still fails on 121 references across 33 symbols;
+the mission remains unstarted. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-packet-selection-search-gate-2026-09-27).
+Entries below are historical.
+
+Latest App localization/link gate, 2026-09-27: source `Globals.rc`
+English RT_STRING entries now compile to a native resource, and both
+`_localLoadString` variants execute in the GCC/Clang external training
+mission shell. A temporary combined App/script link still fails with
+126 unresolved references across 34 symbols, led by UI and save owners;
+`Mission::Reload` has not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#source-app-string-resource-link-gate-2026-09-27).
+Entries below are historical.
+
+Latest production-music-owner gate, 2026-09-27: the original App
+`MusicManager.cpp` now builds and links in the native shell. Linux
+`Load`/`Save` use the checked 176-byte disk conversion; the shell
+creates the owner after initializing `IStreamer`, registers its event
+callback, and releases it before audio/system teardown. GCC and Clang
+executed that startup on the lawful external training mission, which
+still was not started. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-music-manager-owner-startup-gate-2026-09-27).
+Entries below are historical.
+
+Latest mission audio-ownership gate, 2026-09-27: the GPU shell now
+binds the source-profile `IStreamer` aggregate and external `Music`
+filesystem to App globals, initializes its SDL device after the window
+callback, and releases the binding before `GameSystem`. GCC/Clang
+executed the external `Sol_Train.dmission` shell with dummy audio;
+the mission still was not started. The production `MusicManager`
+remains the next loader owner. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-mission-audio-ownership-gate-2026-09-27).
+Entries below are historical.
+
+Latest saved-music layout gate, 2026-09-27: a bounded Linux-only
+converter maps the selected mission's four 44-byte Win32 music songs
+to native `SONG`, discards obsolete saved stream handles, and writes
+fixed-width records. GCC and Clang executed a round trip against the
+lawful external `Sol_Train.dmission`; the production `MusicManager`
+still is not in the native mission link. No gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-music-save-layout-conversion-gate-2026-09-27).
+Entries below are historical.
+
+Latest selected-music decode gate, 2026-09-27: `Sol_T` requests the
+external `solarian_game14.wav` IAC track. The native FFmpeg-enabled
+`IStreamer` now accepts its 160448512-byte decoded PCM within a
+256-MiB output bound; GCC and Clang started/stopped the track through
+SDL dummy audio with identical PCM fingerprints. The mission also has
+a 176-byte saved music record whose Win32 44-byte song stride differs
+from native pointer-sized `SONG`. The productive `MusicManager` remains
+outside the mission link. No gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-training-music-decode-and-disk-layout-gate-2026-09-27).
+Entries below are historical.
+
+Latest selected-system-map gate, 2026-09-27: the lawfully external
+`Sol_Train.dmission` has no `SysMapSaveload/SysMap` child. A bounded
+native `ISystemMap` adapter now executes that source-compatible fresh
+load through the existing mission-filesystem check under GCC and Clang;
+unsupported map display/animation operations abort explicitly. A
+temporary combined link no longer lacks `SYSMAP`, but still fails on
+37 distinct production symbols. The shell does not start the mission;
+no gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-system-map-fresh-load-gate-2026-09-27).
+Entries below are historical.
+
+Latest combined mission-link ownership gate, 2026-09-27: native
+`Sol_T` now references the host's `HEAP` instead of defining a second
+one. A temporary GCC link of the shell plus 19 compiled App/script
+objects has no multiple definitions, but still fails on 194 references
+across 38 missing production symbols. It was not executed; no gameplay
+gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#combined-mission-script-heap-link-gate-2026-09-27).
+Entries below are historical.
+
+Latest selected-script localization gate, 2026-09-27: `llvm-rc` now
+compiles the source `Sol_T.rc` into build-local counted strings, and
+native `MScript` accepts only the selected program and complete required
+resources. GCC/Clang executed the existing schema check against those
+strings and confirmed the lawful external mission names `Sol_T.dll` with
+update count zero. `MScript`/`Sol_T` still are not linked to the shell;
+no gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-localization-and-fresh-loader-gate-2026-09-27).
+Entries below are historical.
+
+Latest production script-owner build gate, 2026-09-27: `MScript.cpp`
+now builds as a native object under GCC and Clang. Native-only guards
+separate Win32 editor dialogs, while script save/layout and event code
+remain in the compiled owner. Required module loading, local string
+resources and full-screen video fail explicitly until implemented;
+the owner is not linked into the shell or executing the training
+mission. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-mscript-owner-build-and-required-resource-gates-2026-09-27).
+No gameplay gate passed. Entries below are historical.
+
+Latest selected-script resource gate, 2026-09-27: GCC/Clang now embed
+their generated `Sol_T_DataDef.i` bytes in a native resource owner.
+The existing production parser check compares those bytes with the
+generated file and verifies the selected script layout. The source
+mission object is still not registered with `MScript` in the native
+shell; the external training mission still does not start. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-native-schema-resource-gate-2026-09-27).
+No gameplay gate passed. Entries below are historical.
+
+Latest selected-program build gate, 2026-09-27: the original `Sol_T`
+program and helper compile as Linux objects under GCC/Clang. The
+production parser accepts a compiler-generated `DataDef.i` with the
+selected mission's 292-byte global record and movement checkpoint.
+Neither `MScript` nor native script-module initialization is linked to
+the shell; lawfully external training-mission runs still report
+"mission not started". See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-program-and-schema-build-gate-2026-09-27).
+No gameplay gate passed. Entries below are historical.
+
+Latest selected-script data gate, 2026-09-27: the original `Sol_T`
+`DataDef.h` now compiles under GCC/Clang, and the existing layout check
+protects its 292-byte `MissionData`, Forger/Taos/Acropolis offsets and
+four-byte movement checkpoint. The external training mission has four
+QuickSave objects but no saved `Script/GlobalData`; native `Sol_T`
+program initialization is the next mandatory script step. `MScript`
+and `Sol_T` are not built or executed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-script-data-and-fresh-start-gate-2026-09-27).
+No gameplay gate passed. Entries below are historical.
+
+Latest training-script reference layout gate, 2026-09-27: the
+selected `Sol_T` mission stores `MPartRef` fields in script global
+data. Native `MPartRef` now keeps the Win32 16-byte stride and
+four-byte alignment; debugger-only slots cannot receive narrowed
+runtime pointers. GCC/Clang executed the existing layout check, but
+`MScript` and the campaign module remain outside the native build.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#training-script-mpartref-save-layout-gate-2026-09-27).
+No gameplay gate passed. Entries below are historical.
+
+Latest spatial-iterator build gate, 2026-09-27: original
+`ObjMapIterator.cpp` builds with `ObjMap.cpp` under GCC and Clang,
+including the debug iterator slot. `ObjectList` and `MScript` use its
+map traversal, but no mission iterator has executed. The native shell
+still parses external `Sol_Train.dmission` and reports "mission not
+started". The productive `MScript`/campaign-module loader and App
+services remain outside the mission link. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-spatial-iterator-build-gate-2026-09-27).
+No gameplay gate passed. Entries below are historical.
+
+Latest movie-camera manager gate, 2026-09-27: the original manager
+builds under GCC and Clang, and its registration, mission-close event,
+and cleanup execute in the offline App check. The production camera
+`Save`/`Load` methods now round-trip a 44-byte Win32 position record
+and queued spot through a writable test filesystem under both
+compilers, rejecting malformed lengths. Full mission save/reload has
+not executed.
+The combined mission link still lacks 50 distinct production symbols,
+led by `SCROLLTEXT`, `SYSMAP`, `MUSICMANAGER`, `STATUS`, and `HINTBOX`.
+Both external `Sol_Train.dmission` shells still report "mission not
+started". See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-movie-camera-manager-gate-2026-09-27).
+No gameplay gate passed. Entries below are historical.
+
+Latest camera-template closure gate, 2026-09-27: the native
+`TObjFrame`/`TObjTrans`/`TObjRender` chain now compiles in the App
+object-list target under GCC and Clang. `MovieCamera.cpp` syntax
+diagnosis advances past those errors and first reaches the Win32
+`BaseHotRect` and editor-dialog layer. The camera owner is still not
+linked; external `Sol_Train.dmission` stops before startup. No
+gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#camera-object-template-closure-2026-09-27).
+Entries below are historical.
+
+Latest selection-ring table gate, 2026-09-27: the production
+`StacticInit.cpp` initializer executes under GCC and Clang in the
+existing math check, supplying the 80 `circleLines` positions that
+`BaseObject` draws. A temporary App link resolves that symbol but
+still lacks 51 distinct production symbols. Direct compilation of
+`MovieCamera.cpp` confirms its object-template and Win32 UI chain
+needs further porting; its unbuildable target was removed. External
+`Sol_Train.dmission` still stops before mission startup. No gameplay
+gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-selection-ring-table-gate-2026-09-27).
+Entries below are historical.
+
+Latest simulation event-owner gate, 2026-09-27: production
+`EventScheduler.cpp` compiles under GCC and Clang, and the native
+`SCHEDULER` slot resolves in a temporary combined App link. That
+link still lacks 52 distinct production symbols; the lawfully
+external training mission still stops before startup. The next
+service closure begins with `SCROLLTEXT`, `SYSMAP`, `MUSICMANAGER`,
+`STATUS` and `CAMERAMANAGER`. No gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-event-scheduler-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest spatial-object map build gate, 2026-09-27: the production
+`ObjMap.cpp` compiles under GCC and Clang and its native `OBJMAP`
+global is defined. A temporary combined App link resolves that slot
+but still lacks 53 distinct production symbols; external
+`Sol_Train.dmission` shells stop before mission startup. The next
+blocking owner is the production App UI/mission service closure,
+starting at `SCROLLTEXT` and `CAMERAMANAGER`. No gameplay gate passed.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-spatial-object-map-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest fog-owner build gate, 2026-09-27: the production
+`FogOfWar.cpp` owner now compiles under GCC and Clang with its
+mission `New/Save/Load`, update and render methods. A combined App
+link including it still lacks 54 distinct production symbols;
+external `Sol_Train.dmission` shells still report "mission not
+started". No gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-fog-of-war-native-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest nugget-owner build gate, 2026-09-27: the original
+`Nugget.cpp` manager and factory compile under GCC and Clang, including
+their mission update and save/load methods. A temporary combined App
+link still lacks 53 distinct production symbols after including the
+owner; the largest remaining service is `FOGOFWAR`. The external
+training mission still reports "mission not started". No gameplay
+gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-nugget-manager-native-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest native cursor-service gate, 2026-09-27: the real App
+`ICursorResource` contract now has a platform-backed owner for the
+training slice. GCC and Clang executed its default/move/busy,
+resource-notification and teardown paths on the visible Wayland host.
+The combined mission link still lacks 50 distinct production symbols,
+beginning with `NUGGETMANAGER`; external `Sol_Train.dmission` shells
+still report "mission not started". No gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-cursor-service-2026-09-27).
+Entries below are historical.
+
+Latest App draw-owner gate, 2026-09-27: native `PrimitiveBuilder2 PB`
+now executes a production App quad submission through the existing
+CPU render adapter under GCC and Clang. The temporary combined mission
+link still lacks 51 distinct production symbols, starting with the
+cursor service, and external `Sol_Train.dmission` shells still report
+"mission not started". No gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-primitive-builder-owner-2026-09-27).
+Entries below are historical.
+
+Latest production grid-distance gate, 2026-09-27: the real
+`GridVector.cpp` owner now builds and executes in the existing math
+check under GCC and Clang. Both produced the same 4096-position
+distance-table fingerprint; a combined App link now lacks 54 distinct
+symbols. External `Sol_Train.dmission` shells still report "mission
+not started"; no gameplay gate passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-grid-distance-owner-for-mission-objects-2026-09-27).
+Entries below are historical.
+
+Latest production base-object build gate, 2026-09-27: `BaseObject.cpp`
+now compiles with the real `ObjList.cpp` target under GCC and Clang,
+providing the missing `IBaseObject` virtual definitions to the App
+link. The shell binds actual window dimensions through its
+`IWindowManager` for future selection coordinates. A combined link
+still lacks 55 distinct production symbols; external training-mission
+shells still report "mission not started". No gameplay acceptance gate
+passed. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-base-object-owner-in-the-native-link-graph-2026-09-27).
+Entries below are historical.
+
+Latest native save-cleanup gate, 2026-09-27: the production App save
+callers now have a native `RecursiveDelete` entry that rejects read-only
+retail archives and reports cleanup failure. An existing generated UTF
+archive check executed under GCC and Clang and confirmed its marker
+remained intact. Both full Linux Debug presets built and passed their
+executing checks, while two GPU checks skipped per preset. A combined
+App link still lacks 80 distinct symbols, and external `Sol_Train`
+shell runs still report "mission not started". Writable UTF output,
+mission input/simulation and save/reload remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-save-archive-cleanup-2026-09-27).
+Entries below are historical.
+
+Latest offline mission-registrar gate, 2026-09-27: native App globals now
+expose the real registrar slots and Win32 player colors. The mission
+registrar skips only the absent offline network file-transfer callback;
+remote download, missing schema parser or event callback aborts explicitly. GCC/Clang
+builds and 47 executing CTests per preset passed; a combined App link
+still lacks 81 distinct production symbols. External training-mission
+shell runs still report "mission not started". No gameplay gate passed.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-offline-mission-registrar-contract-2026-09-27).
+Entries below are historical.
+
+Latest offline packet-dispatch gate, 2026-09-27: the production
+`NetPacket` and `NetBuffer` owners executed `NETF_ECHO` through the
+real EventSystem to `CQE_NETPACKET` under GCC and Clang. The native
+heap now honors private ownership. Both complete CTest presets
+executed 47 passing checks and skipped two GPU checks. Lawful external
+`Sol_Train.dmission` shell runs still reported "mission not started";
+no gameplay acceptance condition passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-offline-packet-dispatch-2026-09-27).
+The current combined App link still lacks 87 production symbols,
+beginning with mission ownership, cursor, nuggets, fog and UI services.
+Entries below are historical.
+
+Latest local packet execution gate, 2026-09-27: the production
+`NetBuffer` offline queue delivered and freed two ordered packets in a
+focused GCC/Clang process using native DACOM and real user defaults.
+`NetPacket` remains unlinked; source review identified its offline
+`NETF_ECHO` path as the next real input-command boundary. Both full
+CTest presets executed 47 passing checks with two GPU skips, while
+both lawful external training-mission shells still reported "mission
+not started". See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-local-packet-buffer-build-gate-2026-09-27).
+No gameplay acceptance condition passed. Entries below are historical.
+
+Latest packet-buffer build gate, 2026-09-27: production `NetBuffer.cpp`
+compiles under GCC and Clang with its original local self-send queue;
+native DirectPlay-only operations fail explicitly. It is not linked into
+the shell, and the lawful external `Sol_Train.dmission` still stops before
+mission startup. Both full CTest presets executed 46 passing checks and
+skipped two GPU checks. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-local-packet-buffer-build-gate-2026-09-27).
+No gameplay acceptance condition passed. Entries below are historical.
+
+Latest operation-owner build gate, 2026-09-27: production
+`OpAgent.cpp` now compiles under GCC and Clang, preserving the
+Singleplayer operation/update/persistence path. It is not linked
+into the shell; a temporary combined link still has 91 unresolved
+App symbols, and external data runs still stop before mission startup.
+No gameplay acceptance condition passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-operation-owner-native-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest shared App-startup gate, 2026-09-27: the original registrar and
+cleanup owner now links into the GCC/Clang native shell. A focused
+execution verified 30 reverse-order callbacks across its 26-entry
+node boundary. The real mission/object owners are still unlinked; a
+temporary combined link identified 89 unresolved production symbols.
+No gameplay acceptance condition passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#shared-app-global-startup-and-cleanup-owner-2026-09-27).
+Entries below are historical.
+
+Latest mission-owner build gate, 2026-09-27: production `Mission.cpp`
+compiles in a native GCC/Clang CMake object target. It is not linked
+into the shell; both external-data shell runs still report "mission not
+started". The next blocker is real App global startup and the required
+mission/object service link closure. No gameplay acceptance condition
+passed. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-mission-owner-native-build-gate-2026-09-27).
+Entries below are historical.
+
+Latest native object-owner build gate, 2026-09-27: the real
+`ObjList.cpp` compiles as `frontierx_app_object_list_owner` under GCC and
+Clang. A temporary shell link exposed 80 unique unresolved real App
+symbols; the object was kept outside the linked shell. No gameplay
+acceptance condition passed. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-object-owner-build-and-link-closure-2026-09-27).
+Entries below are historical.
+
+Latest native GameTypes input gate, 2026-09-27: the shell accepts an
+explicit lawfully external `--game-types` UTF archive, checks the selected
+training mission's Forger type record, and retains the archive for the
+future production `ObjectList::loadTypesData` call. GCC and Clang external
+shell runs opened the 856-byte record, then stopped at schema loading;
+neither started the mission. Native source now translates Win32 44-byte
+archetype-record offsets to LP64 table indices; independent i386 shape
+compilations passed, but `ObjList.cpp` next stops at legacy input events
+and the supported MSVC ABI remains unmeasured.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-gametypes-source-binding-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest native App event-owner gate, 2026-09-27: the shell retains the
+active production `IEventSystem` as `EVENTSYS` throughout its event
+loop, with an executed identity check under GCC and Clang on lawful
+external data. Native `ObjectList` source now subscribes its existing
+callback there while Windows retains `FULLSCREEN`; that object owner
+remains uncompiled and unexecuted. Direct source checks next expose
+real particle/fog and render-state services. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-object-list-event-owner-contract-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest production frame-clock source gate, 2026-09-27: native
+`ObjList.cpp` now uses the existing monotonic platform clock at a
+matching 1-MHz counter frequency, with Windows timing unchanged.
+Direct GCC/Clang source checks advance through `BeginFrame` and expose
+required event, nugget, camera and scheduler owners. Full Linux builds,
+45 executing CTests per compiler and separate external-data shell runs
+passed; two GPU tests skipped and neither shell started the mission.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#object-list-native-frame-clock-source-contract-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest object-debug source gate, 2026-09-27: direct GCC/Clang syntax
+checks now pass `ObjList.cpp`'s Windows performance-report, MSVC
+64-bit clock declarations and editor-dialog code, and first fail at
+`FULLSCREEN` ownership and the `BeginFrame` performance counter.
+The owner remains outside the native build, with no mission gameplay.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#object-list-debug-and-clock-declarations-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest production object-owner source gate, 2026-09-27: direct GCC and
+Clang syntax checks of `ObjList.cpp` now pass the Windows PCH and
+case-sensitive include barriers and reach its body. Win32 debug font,
+dialog and timing code still prevents compilation; the owner is not in
+the native graph. Full Linux builds and 45 executing CTests per compiler
+passed, with two GPU skips. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#object-list-native-source-boundary-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest mission object-input gate, 2026-09-27: the existing native
+data-root probe under GCC and Clang enumerated the selected lawful
+external `Sol_Train.dmission` QuickSave archetypes and completely read
+the Forger, two Taos and Acropolis object records through the same
+filesystem operations used by production `ObjectList::Load`. The
+production object owner has not compiled or run natively. It also has
+LP64 pointer-to-`U32` archetype-ID arithmetic requiring a save/ABI audit.
+Full Linux builds and 45 executing CTests per compiler passed; two GPU
+tests skipped. Separate external shells still report "mission not
+started". See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mission-quicksave-object-input-boundary-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest mission-owner platform gate, 2026-09-27: direct `Mission.cpp`
+compilation under GCC and Clang now passes its first App declarations
+and Win32-only disk-space helper. The Linux save branch calls a checked
+platform free-space service and fails if the query cannot run; the
+existing data-root test exercises its error contract. `Mission.cpp`
+remains outside the native graph and still stops at required App
+save/runtime owners, starting with `RecursiveDelete` and camera/music
+services. No mission or save ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mission-save-space-platform-contract-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest complete global-owner compile gate, 2026-09-27: the production
+`MGlobals.cpp` and `Objwatch.cpp` now compile in a native CMake object
+target under GCC and Clang. A shell link attempt exposed the remaining
+real App service closure, including `MISSION`, `EVENTSYS`, `ARCHLIST`
+and localization; the target is not linked into the successful shell.
+Full Linux builds and CTests passed, while separate external-data shells
+still stopped at mission schema parsing. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#complete-mglobals-compile-and-link-closure-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest global-values source boundary, 2026-09-27: native `MGlobals.cpp`
+now excludes its Win32 development viewer but loads the real 1640-byte
+`GlobalValues` through `GENDATA`, failing `New`/`Load` if it is absent or
+wrong-sized. GCC/Clang direct syntax checks reach later gameplay methods
+and stop on missing App text, player, matrix and object-list services.
+The owner is not linked; no gameplay acceptance condition has passed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mglobals-global-values-source-contract-2026-09-27).
+Entries below are historical.
+
+Latest general-data gate, 2026-09-27: GCC and Clang native shells now
+load the external Steam `gendata.db` through the production `GenData.cpp`
+owner and retain its required 1640-byte `GlobalValues` archetype. The
+native UTF `FindFirstFile` now reports file sizes and distinguishes empty
+directories from errors. Both external-data shell processes exited 0
+after mission schema parsing, but `MGlobals.cpp` and `Mission.cpp` remain
+unlinked and no gameplay acceptance condition has passed. The next owner
+boundary is the App global/service closure and `MGlobals::Load`; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-general-data-owner-2026-09-27).
+Entries below are historical.
+
+Latest global-owner compile gate, 2026-09-27: direct GCC/Clang
+`MGlobals.cpp` syntax compilation now reaches its implementation body
+after native PCH and case-sensitive include fixes. It still fails on
+missing App globals, Windows `GlobalViewer` window state and shared
+Engine type declarations. The production owner is not linked. The next
+integration work is the `System.cpp` global-component lifecycle and the
+required game owners, rather than placeholder pointers; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mglobals-native-owner-compile-boundary-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest mission ParseData gate, 2026-09-27: both compiler shells now parse
+the external `Sol_Train.dmission` secondary schema through the active App
+system's production view constructor. The same Linux-only read/parse
+contract is called by `Mission::LoadParseData` in source, and malformed
+secondary schemas now fail instead of returning a usable-looking handle.
+The mission owner remains uncompiled because required App globals and
+services are missing; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-parsedata-owner-contract-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest native App resource gate, 2026-09-27: both compiler shells parse the
+build-embedded repository `data.i` through their profile-owned production
+view constructor before opening the lawful external `Sol_Train.dmission`.
+The resource's four invalid `static_assert` entries were removed while
+header layout checks remain; native parser errors now fail rather than
+returning success. `Mission::ParseDefFile` is still unlinked. The next
+blocker is the App globals/service closure needed to compile and enter
+`Mission.cpp` and `MGlobals.cpp`; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-parser-resource-binding-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest App schema gate, 2026-09-27: the production view parser now reads
+the repository `data.i` used by `Mission::ParseDefFile` under GCC and Clang
+and finds a 3236-byte `MT_GlobalData`, the same size as the selected
+external mission record. Direct `Mission.cpp` syntax compilation reaches
+its function bodies but still fails on App globals and Win32 resource APIs;
+the owner is not in the native graph. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#repository-app-schema-and-mission-source-body-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest App/script compile gate, 2026-09-27: the normal-command packet enum
+now has one unchanged 67-value definition for Windows and native App code.
+The `MScript` registration header compiles on Linux x86_64 with checked
+pointer-sized runtime layouts; the Win32 layout checks remain. Both full
+compiler builds and the external-data shell paths still pass, but
+`Mission.cpp` and `MGlobals.cpp` remain outside the native graph. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#app-declarations-and-script-registration-abi-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest mission-owner compile gate, 2026-09-27: the `IMission` interface
+header compiles under GCC and Clang with its defining types included. Direct
+`Mission.cpp` compilation now reaches the Windows-only Zone lobby RPC header;
+`MGlobals.cpp` still stops at the Windows PCH. These are measured App-owner
+closure blockers, not mission execution. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#mission-owner-native-compile-boundary-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest native App source-binding gate, 2026-09-27: GCC and Clang shells now
+bind lawful external `Objects` and `Maps/Campaign` mounts and the explicit
+material source to `OBJECTDIR`, `SPMAPDIR` and `MATERIALDIR` after the
+unchanged source-profile startup. Both opened `Sol_Train.dmission` through
+`SPMAPDIR`, then created and destroyed the external Forger Engine/MeshManager
+instance through the bound object/material sources in the same bounded
+process (13 face groups, exit 0). This is real data and object-instance
+execution, not a mission, player unit or gameplay. The next concrete gate is
+the production App mission-owner closure: `Mission.cpp`, `MGlobals.cpp`,
+camera, object-list and required script/factory registration before
+`Mission::Reload` can run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-mission-source-bindings-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest global-record gate, 2026-09-27: the existing view-parser executable
+now correlates the lawful external `Sol_Train.dmission` global record through
+the production parser and round-trips all 3236 bytes through a Linux-only
+fixed-width `MT_GlobalData` adapter under GCC and Clang. The source
+`MGlobals::Load`/`Save` branches call that adapter, preserving the Win32 path,
+but `MGlobals.cpp` remains outside the native build. The next integration
+gate is App global-owner startup and actual `Mission::Reload`; writable save
+filesystem ownership and the separate metadata readers remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-global-data-format-and-owner-call-2026-09-27).
+No mission gameplay or save/reload ran. Entries below are historical.
+
+Latest mission-loader data gate, 2026-09-27: the native production
+`IFileSystem` resolves the selected `Sol_Train.dmission` loader's
+root-absolute backslash paths. GCC and Clang opened the lawful external
+ParseData schema and global save record, and the production
+`IViewConstructor2` parsed the schema. This removes one concrete path blocker
+but does not execute `Mission::Reload`. The next measured portability blocker
+is `MT_GlobalData`: the external parsed symbol is 3236 bytes while the native
+runtime structure is 3812 bytes because nine wide-string fields have Linux
+four-byte `wchar_t` elements. A fixed-width disk representation and checked
+conversion in the global-data owner must precede correlation and save/load.
+See [the focused single-player record](NATIVE_SINGLEPLAYER_SLICE.md#mission-loader-paths-and-global-schema-2026-09-27).
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest production object-instance gate, 2026-09-27: GCC and Clang now
+create and destroy a real Engine/MeshManager instance of the lawful
+external Forger compound object through the source profile. The shell
+checks that an Engine root appears for the instance and disappears after
+release; both runs reported 13 face groups and exited 0. A failed
+`create_instance2` now propagates through the internal MeshInstance owner
+instead of returning a non-null unusable mesh. The next gate is the App
+global owner sequence: its data directories and camera depend on the
+Win32-bound Menu/Fullscreen startup path, before the selected
+`Sol_Train.dmission` can be loaded as gameplay. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-forger-engine-instance-2026-09-27).
+No mission, input, simulation, save/reload or visible GPU gameplay ran.
+Entries below are historical.
+
+Latest production mesh-archetype gate, 2026-09-27: after source-profile
+`GameSystem::startup`, the shell now initializes the real texture, material
+and mesh managers and calls `IMeshManager::CreateMeshArch` for the lawful
+external Forger object. GCC and Clang each returned 13 face groups and exited 0; see the
+focused [single-player record](NATIVE_SINGLEPLAYER_SLICE.md#production-forger-mesh-archetype-2026-09-27)
+for compiler validation. MeshManager rejects an Engine archetype load failure
+instead of returning an unusable success object. The next production gate is
+the App `CreateGlobalComponents` owner sequence, including its real camera
+and object directories, then a Forger instance in `Sol_Train.dmission`.
+No gameplay acceptance condition has passed. Entries below are historical.
+
+Latest animation-data gate, 2026-09-27: the production `IChannel2` factory now
+serves the real `Anim::LoadChannels`/`ScriptSet::load` caller. GCC and Clang
+each loaded `ssforger.cmp/Animation/Script/Sc_build` from the lawful external
+Steam `objects` archive through the unchanged source profile; the script
+count was one and duration was 1.6 seconds. The existing shell process test
+also loads a generated channel and rejects truncated frames. This proves one
+production object-animation data path, not an Engine instance, mission,
+simulation, input or save/load. The next App integration gate remains the
+post-`GAME.startup` owner sequence and selected mission loader; see
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-channel-and-forger-animation-data-2026-09-27).
+Entries below are earlier gates.
+
+Latest production startup gate, 2026-09-27: GCC and Clang now create the real
+`IAnimation` and `IHardpoint` Engine aggregates and the `Optics` render
+component from the unchanged source
+`Conquest.ini` and complete `GameSystem::startup` with ten lawfully external
+Steam data archives, explicit `--material-root Data/mat`, and explicit
+`--skip-movies`. Both bounded SDL dummy-window processes exit 0. This is
+native startup execution, not `Conquest.cpp` App initialization, mission
+loading, simulation, visible gameplay or save/load. Native `RenderMgr` now
+fails when a named render component is absent, and the existing shell check
+covers both production `Optics` creation and an unknown component's failure.
+The next concrete integration
+step is the post-`GameSystem::startup` App owner sequence in `Conquest.cpp`,
+starting with `CreateGlobalComponents` and the production manager
+initializations; see
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-animation-and-hardpoint-startup-2026-09-27).
+Entries below record earlier gates.
+
+Latest production-owner gate, 2026-09-27: GCC and Clang create the real
+`IMeshManager` and Engine `IRenderer` from the unchanged source profile on
+lawful external data with explicit movie skip; both next fail at required
+`IAnimation` (exit 3). The linked MeshManager classes and a generated
+profile's pre-init teardown execute in the existing shell check, but no
+mission, simulation or save/load has run. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-mesh-manager-owner-2026-09-27).
+Entries below record earlier gates.
+
+Previous particle-owner gate, 2026-09-27: GCC and Clang now create the real
+`IParticleManager` from the unchanged source profile on lawful external data
+with explicit `--skip-movies`, then fail at required `IMeshManager` (exit 3).
+The existing native-shell suite creates and releases a real point-emitter
+program. This is startup/owner execution, not mission or gameplay runtime.
+See [NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#production-particle-owner-2026-09-27).
+Earlier gate records below are historical snapshots.
+
+Earlier optional-movie gate, 2026-09-27: `--skip-movies` explicitly sets the
+production `CQFLAGS.bSkipMovies` guard and omits only native profile creation
+of `IVideoSystem`. The selected training movement checkpoint uses audio and
+Talking-Head animation, not full-screen movies; those services remain required.
+With this option, GCC/Clang startup on external data now fails at
+`IParticleManager`. Without it, missing video remains fatal. This is startup
+execution and source-reviewed MovieScreen exclusion, not native mission or
+MovieScreen execution. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#explicit-full-screen-movie-policy-2026-09-27).
+
+Earlier audio gate, 2026-09-27: the optional shared-LGPL FFmpeg adapter now
+decodes external `STMG03.wav` through native `IStreamer`. GCC and Clang
+completed host PipeWire playback with identical decoded PCM fingerprints.
+The default SDL-only build still rejects IAC explicitly. The unmodified
+profile's next creation failure remains `IVideoSystem`; full App audio
+initialization and mission integration remain open. No media service was
+disabled and no mission ran. See
+[NATIVE_AUDIO_STREAMER.md](NATIVE_AUDIO_STREAMER.md#optional-iac-decoder-2026-09-27).
+
+Earlier material-source gate, 2026-09-27: `--material-root Data/mat` opens
+the repository-owned CQ2 material directory through read-only `IFileSystem`.
+With the external Steam `DATA` root, GCC and Clang pass data validation,
+retain ten archive mounts and fail at `IStreamer` in the unmodified profile
+(exit 3). No media service was disabled. Physical shader/material/TGA reads
+also execute in the existing generated material test and visible CQ2 scene.
+This does not assign the full App globals or load a mission. See
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#explicit-material-directory-source-2026-09-27).
+Earlier entries below record the preceding gates.
+
+Packed startup-source gate, 2026-09-27: native startup now recognizes
+validated UTF archives and mounts their virtual directories through
+`IFileSystem`; generated packed-map shell startup and focused sanitizer
+checks pass. GCC/Clang headless execution on the external Steam data root
+now identifies only `Mat` as missing. Both compilers also opened the real
+training mission through the new inspected campaign mount. `Mat` remains
+required by the current production App; source-data composition is the next
+data blocker. No media service was disabled and no mission or simulation ran.
+See the current mount validation in
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#packed-startup-source-mounts-2026-09-27).
+
+Nested mission-file gate, 2026-09-27: native `IFileSystem::CreateInstance`
+now opens a UTF file embedded in another UTF archive, using the existing
+validated reader and independently owned bytes. The existing StringTable
+test exercises `Maps/Campaign/Training.dmission`-shaped nesting and the
+production App load function after outer interfaces and files are gone.
+GCC and Clang also opened the user's external `Sol_Train.dmission` through
+the same native interface sequence and enumerated its five root entries.
+This is filesystem execution on retail input, not execution of
+`Mission::LoadBriefing`, simulation or gameplay. The directory-only startup
+gate described below still needs packed-data mounting.
+
+Current playable-slice work, 2026-09-27: the user-supplied external Steam
+installation contains readable `Campaign/Sol_Train.dmission` inside its
+packed `DATA/maps` UTF archive. The chosen acceptance path is Forger
+selection/movement through the training script's `SelectAll` checkpoint,
+followed by save/reload and GCC/Clang repetition; see
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md). No mission
+has started natively. The actual data root is rejected before profile startup
+because the shell requires unpacked directories and CQ2 `Mat` data. Fix
+archive mounting and the retail/source-layout distinction rather than
+manufacturing empty directories. Independently, game material/texture
+factories now register before profile loading and the scene reuses those
+container-owned instances with explicit cleanup. Visible GCC/Clang and
+focused sanitizer execution passed on generated inputs. The unmodified
+source profile still stops at `IStreamer`; omitting both media services for
+diagnosis now reaches `IParticleManager`. Neither omission is an implemented
+media policy or a successful retail startup.
+
+The 2026-09-27 native StringTable step now compiles and executes the
+production `IStringTable`/`ISaverLoader` aggregate against generated XML and
+UTF archive data, and the GPU shell accepts a generated nine-service system
+profile containing it. A diagnostic source-profile copy omitting only
+`IStreamer` advances through nine services and stops at `IVideoSystem`.
+This is synthetic runtime, not `MScript` execution or retail game startup.
+The unaltered `Conquest.ini` still blocks at `IStreamer`;
+see [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+The linked production StringTable loader now also follows `MScript`'s
+DOS-root child request through the same App load function called by
+`MScript.cpp`, and rolls back dictionary mutations when a later generated
+UTF entry fails validation. Native `MScript::Load` and retail
+archives remain unexecuted.
+
+Status: implementation in progress, 2026-09-26. Native-Windows VS2022 Win32 Debug and Final
 no-deploy rebuilds completed through the campaign modules on a physical Windows 11 host, and
 original retail campaign imports resolved against fresh modules. The restored Final executable
 and rebuilt D3D9 renderer reached the main menu, Quick Battle setup and first Terran campaign
@@ -70,9 +806,54 @@ The production `StateMaterial` now executes one cached indexed draw through
 DACOM, native state/texture callbacks and the existing material vtable in both
 a synthetic CPU check and visible GCC, Clang and focused sanitizer Vulkan
 probes. The bounded material readback and material-driven alternate/copy texture
-checks agree across compilers and repeated scene runs. Material-library loading,
-real media, game composition and Windows comparison remain open; see
+checks agree across compilers and repeated scene runs. A linked CPU check now
+loads `StateMaterial` and `SimpleMaterial` classes through `MaterialLibrary`;
+the latter reads synthetic diffuse and opacity fields and submits a cached
+indexed CPU draw. A generated RGB565 UTF texture now loads through production
+`TextureLibrary` and reaches `SimpleMaterial`'s frame in a linked CPU check.
+The GPU scene now loads the material through production `MaterialLibrary`,
+resolves its texture frame through `SimpleMaterial::verify`/`update` and binds
+that frame through `StateMaterial` under GCC, Clang and focused ASan/UBSan, with bounded
+readback and repeated teardown. Other texture formats, `SimpleMaterial` GPU
+application, real media, game composition and Windows comparison
+remain open; see
 [STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md).
+The supported game's mesh path instead uses `IMaterialManager` and
+`DrawVB` through `PolyMesh` and the app `MeshRender.cpp`. The native
+`IMaterialLibrary` fixture exercises a distinct material system; the active
+`XMesh::read` CPU check now traverses the CQ2 material directory and calls a
+counting `IMaterialManager` test interface once. A separate native executable
+now compiles and runs the production `MaterialManager`/`Material` owners and
+reads a saved float parameter through their real shader/material script
+path. That executable now also connects production `XMesh::read` and
+`TextureLibrary` to the manager: a generated CQ2 mesh resolves the same
+`IMaterial` object and calls `Realize`. The unsupported generated
+`Synthetic.fx` effect still rejects its draw. A separate source-pinned
+`VertexColor.fx` effect now applies its pass, material constants and TGA
+through both direct `Material::DrawVB` and the App caller to visible
+SDL/Vulkan output. This is synthetic runtime in the linked check; the shell
+now separately composes a repeated legacy or CQ2 game mesh scene while
+pumping window and event messages. The
+native UTF file view now provides the read-only mapping calls used by the
+production `TManager::createTextureFromFile`; its bytes and rejection paths
+execute in the existing linked CPU check. The production game `ITManager`
+and TGA reader now also link into the separate synthetic game-material check:
+a script texture resolves from `Tile.tga`, uploads all 16 expected RGBA
+pixels through the native pipeline's CPU callbacks, and is released through
+`ITManager::Flush`. A separate generated `PolyMesh` instance now loads an
+embedded RGB565 texture through the production `TextureLibrary` and reaches
+visible SDL/Vulkan output through the Engine/RenderMgr caller. The
+game ownership and next falsifiable gates are mapped in
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+The native UTF filesystem now provides nested read-only `IFileSystem` views
+through `CreateInstance`, the directory access required by production
+`TextureLibrary::load_texture`. A synthetic nested-directory check passes;
+the production `TextureLibrary` owner now compiles and initializes in the
+linked Linux material check. The generated 2-by-2 RGB565 texture is decoded,
+uploaded as RGBA8, released and rejected transactionally on a failed second
+upload. The GPU probe also binds the production texture and verifies its
+image change and restoration; see
+[TEXTURE_LIBRARY_PORTABILITY.md](TEXTURE_LIBRARY_PORTABILITY.md).
 
 ## Evidence Labels
 
@@ -238,6 +1019,18 @@ Initial implemented slice, with compile and automated-check evidence from 2026-0
   attribute handling, malformed-input errors, and LP64 `unsigned long` conversion.
 - GCC 16.2.1 and Clang 22.1.8 build the library and pass its registered CTest with target-scoped
   warnings treated as errors.
+- On 2026-09-27, the production TinyXML wide-attribute methods gained bounded, width-independent
+  UTF-16 hex conversion for the next StringTable owner gate. The existing CTest exercised a
+  supplementary character, long attribute and malformed input under both compilers, plus focused
+  Clang ASan/UBSan with LeakSanitizer disabled. At that gate the StringTable
+  owner had not executed; its later integration is recorded in
+  [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+- A separate generated `frontierx_string_table_file_text_probe` now compiles the public StringTable
+  header and exercises the UTF-16LE codec used by the production file save/load methods. GCC,
+  Clang and focused Clang ASan/UBSan passed exact-byte, malformed-input and ID-width checks.
+  The later production owner target now compiles and executes through DACOM,
+  TinyXML and a generated UTF archive, including a failed-load rollback case;
+  see [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
 - The existing Windows owner is `StringTable.vcxproj`; a full Windows regression build remains
   pending.
 - The source snapshot's exact upstream version is unknown and blocks distribution, as recorded in
@@ -247,7 +1040,7 @@ Remaining work:
 
 - Select the next engine-owned library slice from measured solution dependencies.
 - Keep compiler compatibility changes isolated from game and simulation logic.
-- Validate the unchanged `StringTable` owner through a full Windows rebuild.
+- Validate the changed `StringTable` owner through a full Windows rebuild and ABI check.
 - Resolve TinyXML's exact upstream-version provenance before any distribution.
 
 Exit criteria:
@@ -326,7 +1119,9 @@ Initial implemented slice, with compile and automated-check evidence from 2026-0
   transactional global/player stores.
 - `frontierx_native_user_defaults` implements the unchanged real interface as a DACOM service,
   maps all live fields/flags without serializing the legacy struct, persists named values and MRU
-  mutations transactionally, and performs the shell's global/player shutdown save. Its UI,
+  mutations transactionally, and performs the shell's global/player shutdown save. The shell
+  now invokes its `LoadDefaults` before production `GameSystem::startup`, matching the
+  `Conquest.cpp` owner order with synthetic data. Its UI,
   installation-metadata and EULA methods fail explicitly until portable owners exist.
 
 Remaining work:
@@ -484,9 +1279,114 @@ The focused **first production render-boundary slice** now satisfies its six acc
 production direct/indexed submissions, inspectable repository fixture, bounded native lifecycle,
 GCC/Clang and focused sanitizer execution, a same-input Windows D3D9 image comparison, and
 documented evidence. This is a synthetic native-shell scene. **Milestone 5 as a whole remains
-open** under its broader goal and exit criteria: no Linux game scene or production
-material-library/data path exists, and D3DX9 replacement owners are incomplete. The next
-integration target is that native game composition; the Windows first-Terran and Quick Battle
+open** under its broader goal and exit criteria: the linked checks now
+draw a textured production `PolyMesh`, an older-format App mesh and one
+CQ2 `IMaterialManager`/`VertexColor.fx` App mesh. The shell now composes
+production Engine/RenderMgr/PolyMesh into repeated textured frames from supplied
+UTF files, and its CQ2 branch also executes App `MeshRender::Render` with
+the production `VertexColor.fx` material and TGA. It pumps events but does not
+advance simulation or run gameplay.
+D3DX9
+replacement owners are incomplete. A 2026-09-26 linked Linux CPU check
+now uses native UTF directory enumeration to discover `StateMaterial` and
+`SimpleMaterial` classes through the production `MaterialLibrary`, reads
+synthetic diffuse and opacity fields, loads a generated RGB565 texture through
+production `TextureLibrary`, resolves its frame from `SimpleMaterial`, then
+executes both material owners' indexed CPU draws; see
+[STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md). The next
+integration target is to extend the source-pinned native effect boundary
+beyond `VertexColor.fx`, connect simulation and a playable native game scene,
+and compare the same game material input on Windows. The existing CQ2 App check now
+executes the production material's pass, `c30`/`c31` constants and texture
+through the native renderer. The source-pinned `VertexColor.fx` pass now
+restores earlier sampler and texture-stage values after an injected backend
+failure; visible GCC, Clang and focused sanitizer runs verify an unchanged
+bounded image and later successful draw. See
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md) and
+[NATIVE_SHELL.md](NATIVE_SHELL.md). The shell's repeated-frame composition uses the
+same production owners;
+the production `PolyMesh/Mesh.cpp`, `polymesh.cpp`, `Engine/engine.cpp` and
+`RenderMgr/RenderMgr.cpp` owners now compile in both Linux debug presets.
+The linked native CPU check loads `IRenderer` and `PolyMesh` through the
+production Engine profile, creates a generated CQ2 mesh archetype and engine
+instance, and retrieves its mesh through `IRenderer`. A synthetic CPU call
+enters `render_instance` with the production scalar math provider, reads
+native `RP_TEXTURE`, and forwards model/view through a native primitive
+receiver. Its indexed `MTVERTEX` draw reaches a rejecting CPU callback; the
+production component now stops subsequent passes after that failed draw.
+The SDL GPU model/view, projection and 36-byte game-vertex pipelines now
+execute under the desktop Wayland/Vulkan session. The same generated
+`PolyMesh` instance reaches a visible GPU frame with its production-loaded
+RGB565 texture and 496 changed readback pixels under GCC and Clang. The
+white fallback gives a distinct checksum. The GPU CTests skip only in the
+command sandbox. The App mesh draw first reached a CPU callback; a later
+linked check also presented the older-format App draw with bounded
+Vulkan readback. At this earlier gate, no composed native shell game frame
+had executed; the later shell result is recorded in
+[NATIVE_SHELL.md](NATIVE_SHELL.md).
+The separate App `StandardVertex` FVF now has a checked 68-byte native CPU
+buffer and optional primitive callback. A native U16 index-buffer object
+lets the production `Material::DrawVB` method execute against generated
+vertices and indices with exact byte comparison. The production App caller
+now compiles as a native object; its runtime entry and D3DX effect execution
+remain open.
+An updated 2026-09-27 source preflight of `MeshRender.cpp` passed the
+`IObject` PCH-owned reference declarations after native-only header fixes.
+Native x86_64 `GridVector` preserves the x87 conversion instruction pair,
+and `ARMOR_DATA` has asserted native size and offsets. The preflight now
+passes the native archetype/camera declarations and reaches `ObjList.h`'s
+PCH-owned types and further D3DX dependencies.
+The selected-unit capacity, timing slots and interface IDs now have one
+shared App header; a native App-global declaration subset lets GCC and
+Clang syntax-check the actual `MeshRender.cpp` source. D3DX matrix/vector
+and effect facilities were the next compile boundary. A bounded native
+D3DX math replacement now passes synthetic matrix/vector checks under GCC
+and Clang. The material-pointer batching cast is now a native material-state
+token whose reserved range is disjoint from bounded native texture handles.
+Native D3DX effect branches return explicitly after state cleanup; they
+do not execute an effect or draw. Seven face-buffer alignment paths now
+use pointer-sized arithmetic; clone paths point into their own storage.
+GCC and Clang compile the production App translation unit as the
+`frontierx_app_mesh_render_owner` object target, but it is not linked
+into a native game executable or executed; see
+[GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+The same target now compiles the actual `MeshInfo` lifecycle and
+`SuperTrans` transform owner. A native `get_angle` replacement executes
+bounded quadrant and axis checks in `portability.math_core`; Windows
+floating-point parity is unmeasured. Native App owners now resolve the
+globals, diagnostics and `SetupDiffuseBlend`, and the three production App
+mesh objects link into the generated game-material executable. The CPU
+check creates and destroys a `MeshInfoTree` around a real Engine/RenderMgr/
+PolyMesh instance; the instance remains Engine-owned and valid afterward.
+This is synthetic App lifecycle execution. The
+same fixture now executes `MeshRender::Init`, its vertex-buffer restore path
+and `SetupMeshInfo` against generated geometry, with nonempty vertices,
+faces and balanced App buffer-owner registration. The same linked check
+now calls `MeshRender::Render` for both older-format and CQ2 material
+instances; the original CQ2 fixture resolves `Synthetic.fx` and rejects
+its draw because that effect is unavailable. A second CQ2 fixture resolves
+the production `VertexColor.fx` material and submits its App draw to visible
+SDL/Vulkan. A direct pipeline check separately verifies the 68-byte indexed
+geometry callback. The
+older-format App branch now reaches visible SDL/Vulkan geometry through a
+68-byte pipeline and a distinct 64-by-64 readback taken while its
+texture-factor and clockwise culling states are active. A white-factor
+and opposite-cull readback each differs from that App image. The
+diffuse-state helper now executes its vertex-color/unlit, stage-zero combine,
+sampler clamp/wrap and later-stage disable sequence through a synthetic
+`IRenderPrimitive` CPU receiver. The SDL/Vulkan sampler switch also changes
+a bounded readback and restores the original checksum under GCC, Clang and
+focused sanitizers. Other material/effect states remain open. The full GCC/Clang
+debug presets again passed 40 checks each with the GPU check skipped; all
+three fixture variants passed focused Clang ASan/UBSan. A native game scene,
+Windows Debug/Final and ABI, retail runtime and same-input game-image
+comparison remain open.
+`XMesh::read`
+executes against a generated mesh UTF archive with
+one older-format material in the linked CPU check. This covers geometry,
+legacy material texture-frame binding and face-area sorting, not a
+game draw or native game scene;
+the Windows first-Terran and Quick Battle
 regressions remain separate restoration work.
 
 ## Milestone 6: First Playable Single-Player Slice
@@ -558,10 +1458,10 @@ Exit criteria:
 | Win32/MSVC assumptions in shared headers | 150 direct-header matches and 1,342 extension matches measured lexically | Compile selected owner closures with GCC and Clang | 1-2 |
 | 32-bit runtime assumptions versus LP64 | Both measured object/address truncations and encoded DOSFile-handle casts are eliminated in source | Validate all affected modules and interfaces on native Windows, then continue the wider implicit-conversion audit | 1-3 |
 | Legacy solution dependency graph is unmapped | Source-review requirement | Map one selected library and link a real consumer | 2 |
-| Production game startup owner remains Windows-bound | Headless and shell initialization, shared profile callbacks, native preferences and data-root checks pass | Compile and connect the first real game-startup owner without changing Windows registry behavior | 3 |
+| Production game startup owner remains Windows-bound | Headless and shell initialization, shared profile callbacks, native preferences and data-root checks pass. The shell calls native `IUserDefaults::LoadDefaults` before `GameSystem::startup`, matching the App owner order. The active App `SysContainer.cpp` loads EventSystem/WindowManager aggregates from synthetic `[System]` entries or a bounded external profile. Native App and Engine loaders now reject missing sections or uncreatable components explicitly; generated invalid profiles fail before window startup. The native primitive and pipeline now support profile aggregation and bind after GPU startup. Supplying the checked-in source `Conquest.ini` passes `IEventSystem`, `IRenderPrimitive`, `IRenderPipeline`, `IWindowManager` and `IViewConstructor`, then stops at its sixth `[System]` entry, `IStreamer`. The production `DOCUVIEW` parser core preserves Win32 four-byte `long`/pointer sizes and offsets 0/4/8; the linked constructor check executes `IDataParser` creation, same/changed schema decisions, field correlation and heap teardown through the public interfaces. The production `MScript` caller remains unexecuted. A generated nine-service profile aggregates the production `TextureLibrary`, `LightManager`, `VertexBufferManager` and `IStringTable` and passes native startup; the latter initializes after pipeline binding and cleans up before unbinding. The linked light check shades generated RGB and U8 vertices above ambient and restores ambient after deactivation. The production PolyMesh legacy-mesh caller now receives that owner from system services and submits different vertex colors at two ambient settings. A generated seven-service profile presents that mesh through Vulkan under GCC and Clang, and the scene reuses its profile-owned TextureLibrary; the CQ2 App branch remains a separate light integration gate. The checked-in profile still stops first at `IStreamer`; a diagnostic copy with only that entry omitted advances through nine services and stops at `IVideoSystem`. The production StringTable reads a generated UTF archive through the same DOS-root child contract used by `MScript`; `MScript.cpp` itself remains unexecuted. The audio service remains unimplemented. The GPU shell draws the fixture through its GameSystem Engine. The App container owns production `ITManager`, `IMaterialManager` and `TextureLibrary` aggregates and can own profile-created primitive and pipeline aggregates; targeted removal releases all four added aggregates after Engine teardown while event/window aggregates survive. See [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md) | Connect the production `IStreamer` and remaining profile owners, then connect `Conquest.cpp` and a lawfully supplied retail profile, including game-level `IUserDefaults` selection, without changing Windows registry behavior | 3 |
 | Linux path case and asset lookup are unmeasured | Known platform difference | Scan, then exercise external data discovery on a case-sensitive filesystem | 3 |
 | SDL3 integration is locally prototyped but not approved for distribution | System package, neutral backend, production-event batch pump, native DACOM `IWindowManager`, shell integration and Wayland smoke | Connect real application cadence, compare Windows behavior, and review provenance/notice packaging | 4 |
-| Native rendering path is undecided | The shell-selected SDL GPU owner presents equivalent direct, U16-indexed and one alpha-depth queued-pool repository scene through the actual App-side `RenderBatcher`, real `IRenderPipeline` vtable and registered `IRenderPrimitive`. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers and routes direct/indexed slices through the registered owner. Visible GCC, Clang and focused sanitizer pooled draws produced bounded readback exactly matching the immediate indexed fixture; the linked CPU check also covers opaque and merged alpha-depth pools. A separate indexed RPVERTEX2 GPU probe shows second-UV sampling. Unsupported native state setters still fail explicitly. The same repository fixture now passes a Windows D3D9/Linux Vulkan image comparison | Connect production texture/material loading and a real native game scene before selecting a backend; exercise additional material and pool modes | 5 |
+| Native rendering path is undecided | The shell-selected SDL GPU owner presents equivalent direct, U16-indexed and one alpha-depth queued-pool repository scene through the actual App-side `RenderBatcher`, real `IRenderPipeline` vtable and registered `IRenderPrimitive`. The native pipeline owns checked RPVertex/RPVERTEX2 CPU buffers and routes direct/indexed slices through the registered owner. Visible GCC, Clang and focused sanitizer pooled draws produced bounded readback exactly matching the immediate indexed fixture; the linked CPU check also covers opaque and merged alpha-depth pools. A separate indexed RPVERTEX2 GPU probe shows second-UV sampling. Unsupported native state setters still fail explicitly. The same repository fixture now passes a Windows D3D9/Linux Vulkan image comparison. A generated RGB565 UTF texture also loads through production `TextureLibrary`, is resolved by a `SimpleMaterial` loaded from production `MaterialLibrary`, and reaches a `StateMaterial` GPU readback under GCC, Clang and focused sanitizers | Connect the remaining production texture/material formats and a real native game scene before selecting a backend; exercise additional material and pool modes | 5 |
 | Windows D3D9 same-fixture image oracle | The physical Windows 11/NVIDIA host captured the repository smoke fixture through its production D3D9 pipeline. A 64-by-64 P6 comparison with visible Linux Vulkan passed the documented bidirectional one-pixel/color tolerance: mean channel error 2.7085, neighborhood maximum 8. The first Terran mission still shows no units or progress, while a separate Celareon report saw two ships | Retain this fixture check while advancing native game composition and investigating mission-specific Windows restoration | 5 |
 | D3DX9 replacement remains incomplete | 155 lexical matches in eight files after production ray-geometry replacement | Characterize and replace shared renderer matrices/tangents, effects and cubemap decoding | 5 |
 | Campaign DLL model may not map directly to ELF | Native DACOM ELF registration/unload passes a synthetic module test; campaign ABI remains Windows-only and separate | Define and test one campaign C export/ABI strategy | 6 |

@@ -8,7 +8,7 @@
 //
 
 #include <stdlib.h>
-#include "typedefs.h"
+#include "TYPEDEFS.H"
 #include "ITextureLibrary.h"
 
 //
@@ -536,6 +536,7 @@ inline HRESULT Material::load_from_filesystem_old( IFileSystem *parent )
 		
 		ITL_TEXTURE_ID tid;
 		PixelFormat pf;
+		bool has_format = false;
 
 		if( SUCCEEDED( texturelib->get_texture_id( map_name, &tid ) ) ) {
 			texturelib->add_ref_texture_id( tid, &diffuse_texture_ref );
@@ -543,6 +544,7 @@ inline HRESULT Material::load_from_filesystem_old( IFileSystem *parent )
 			if( FAILED( texturelib->get_texture_format( tid, 0, &pf ) ) ) {
 				pf.init( 16, 5,6,5,0 );	// pulling this out of my ass.
 			}
+			has_format = true;
 
 			texturelib->release_texture_id( tid );
 		}
@@ -556,7 +558,7 @@ inline HRESULT Material::load_from_filesystem_old( IFileSystem *parent )
 			texture_flags = 0;
 		}
 
-		if( pf.has_alpha_channel() ) {
+		if( has_format && pf.has_alpha_channel() ) {
 			texture_flags |= TF_F_HAS_ALPHA;
 		}
 	}

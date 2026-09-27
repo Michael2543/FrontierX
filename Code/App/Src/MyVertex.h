@@ -21,6 +21,10 @@
 #ifndef CQTRACE_H
 #include "CQTrace.h"
 #endif
+#if !defined(_WIN32)
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 #undef MYVERTEXEXTERN
 #if !defined(_WIN32)
@@ -192,6 +196,15 @@ inline PrimitiveBuilder2::PrimitiveBuilder2(UINT blocksize)
 {
 	vertex_buffer = NULL;
 	vertex_buffer_real = NULL;
+#if !defined(_WIN32)
+	render_pipeline = NULL;
+	render_primitive = NULL;
+	current_vertex = 0;
+	current_vertex_ptr = NULL;
+	insert_at_end = false;
+	watch_quad = false;
+	quad_vert_count = 0;
+#endif
 	num_vertex = 0;
 	block_size = blocksize;
 	type = D3DPT_POINTLIST;
@@ -347,11 +360,31 @@ inline void PrimitiveBuilder2::End( void )
 	}
 
 	if( render_primitive ) {
+#if !defined(_WIN32)
+		if( render_primitive->draw_primitive( type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 ) != GR_OK ) {
+			std::fputs("PrimitiveBuilder2: native draw failed\n", stderr);
+			std::abort();
+		}
+#else
 		render_primitive->draw_primitive( type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 );
+#endif
 	}
 	else if( render_pipeline ) {
+#if !defined(_WIN32)
+		if( render_pipeline->draw_primitive( type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 ) != GR_OK ) {
+			std::fputs("PrimitiveBuilder2: native draw failed\n", stderr);
+			std::abort();
+		}
+#else
 		render_pipeline->draw_primitive( type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 );
+#endif
 	}
+#if !defined(_WIN32)
+	else {
+		std::fputs("PrimitiveBuilder2: native render receiver missing\n", stderr);
+		std::abort();
+	}
+#endif
 }
 
 // --------------------------------------------------------------------------
@@ -359,11 +392,31 @@ inline void PrimitiveBuilder2::End( void )
 inline void PrimitiveBuilder2::Draw( D3DPRIMITIVETYPE _type )
 {
 	if( render_primitive ) {
+#if !defined(_WIN32)
+		if( render_primitive->draw_primitive( _type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 ) != GR_OK ) {
+			std::fputs("PrimitiveBuilder2: native draw failed\n", stderr);
+			std::abort();
+		}
+#else
 		render_primitive->draw_primitive( type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 );
+#endif
 	}
 	else if( render_pipeline ) {
+#if !defined(_WIN32)
+		if( render_pipeline->draw_primitive( _type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 ) != GR_OK ) {
+			std::fputs("PrimitiveBuilder2: native draw failed\n", stderr);
+			std::abort();
+		}
+#else
 		render_pipeline->draw_primitive( _type, D3DFVF_RPVERTEX, vertex_buffer, current_vertex, 0 );
+#endif
 	}
+#if !defined(_WIN32)
+	else {
+		std::fputs("PrimitiveBuilder2: native render receiver missing\n", stderr);
+		std::abort();
+	}
+#endif
 }
 
 //This may not belong here

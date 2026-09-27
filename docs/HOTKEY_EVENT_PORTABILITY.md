@@ -59,9 +59,12 @@ the stricter checks can be treated as cross-platform parity.
 `FrontierX/NativeUtfFileSystem.h` exposes a narrow owner for the existing `IFileSystem` contract.
 It validates a UTF 1.01 container with the shared metadata reader, loads requested children by
 exact case, and exposes sequential reads, size, position, beginning-relative seek and close.
-Writes, mappings, enumeration and directory mutation fail explicitly. Runtime child handles are
-pointer-width encoded table tokens starting at one; they are not pointers and never enter the UTF
-bytes. Closed tokens are rejected and reusable slots own their payload bytes.
+Writes, mappings and directory mutation fail explicitly. A later 2026-09-26
+material-library integration added read-only, exact-case directory navigation
+and wildcard enumeration through the same validated UTF tree; see
+[STATE_MATERIAL_PORTABILITY.md](STATE_MATERIAL_PORTABILITY.md). Runtime file and
+search handles are pointer-width monotonic table tokens; they are not pointers
+and never enter the UTF bytes. Closed tokens stay invalid when slots are reused.
 
 The adapter deliberately calls the bounded `ReadUtfEntry` path for each opened child. This
 revalidates the container and avoids mapping compiler-owned structs onto disk. It currently rejects

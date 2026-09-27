@@ -3,15 +3,19 @@
 //
 
 #include <stdio.h>
-#include "Channel.h"
-#include "MStack.h"
-#include "fdump.h"
+#include "channel.h"
+#include "mstack.h"
+#include "FDump.h"
 
 extern IEngine* Engine;
 
 //
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 #include <stdarg.h>
 void DebugPrint (char *fmt, ...)
 {
@@ -21,10 +25,14 @@ void DebugPrint (char *fmt, ...)
 
 		va_list va;
 		va_start(va,fmt);
-		vsprintf(work,fmt,va);
+		vsnprintf(work,sizeof(work),fmt,va);
 		va_end(va);
 
+#if defined(_WIN32)
 		OutputDebugString(work);
+#else
+		fputs(work,stderr);
+#endif
 	}
 }
 

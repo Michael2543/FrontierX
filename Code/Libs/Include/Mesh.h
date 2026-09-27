@@ -7,15 +7,16 @@
 
 //
 #include <string.h>
+#include <algorithm>
 
-#include "3DMath.h"
+#include "3dmath.h"
 #include "FaceProp.h"
-#include "EdgeProp.h"
-#include "Material.h"
-#include "UVChannel.h"
-#include "cont_lod.h"
-#include "FaceGroup.h"
-#include "fdump.h"
+#include "edgeprop.h"
+#include "material.h"
+#include "uvchannel.h"
+#include "CONT_LOD.H"
+#include "facegroup.h"
+#include "FDump.h"
 #include "TextureCoord.h"
 #include "IMaterialManager.h"
 
@@ -605,8 +606,8 @@ struct Mesh
 			if( (fabs(fraction - lod_fraction) > lod_threshold) || 
 				((fraction == 1.0f || fraction == 0.0f) && fraction != lod_fraction) )
 			{
-				const int new_step =  __max(0, (int)ceil(fraction	  * lod_step_cnt) - 1);
-				const int last_step = __max(0, (int)ceil(lod_fraction * lod_step_cnt) - 1);
+				const int new_step =  (std::max)(0, (int)ceil(fraction	  * lod_step_cnt) - 1);
+				const int last_step = (std::max)(0, (int)ceil(lod_fraction * lod_step_cnt) - 1);
 
 				const float sub_fraction = (fraction * lod_step_cnt) - new_step;
 

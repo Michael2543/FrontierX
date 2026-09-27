@@ -9,8 +9,19 @@
     $Header: /Conquest/App/Src/ObjMap.cpp 21    10/27/00 11:47a Jasony $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "MyVertex.h"
+#include <DMBaseData.h>
+#include <TComponent.h>
+#include <algorithm>
+using std::min;
+using std::max;
+#endif
+#include <cstdint>
 
 #include "ObjMap.h"
 #include "ObjMapIterator.h"
@@ -18,13 +29,22 @@
 #include "IObject.h"
 #include "Startup.h"
 #include "GridVector.h"
+#if defined(_WIN32)
 #include "ObjWatch.h"
+#else
+#include "Objwatch.h"
+#endif
 #include "ObjList.h"
 #include "IExplosion.h"
 #include "ILauncher.h"
+#include "CQTrace.h"
 
 
+#if defined(_WIN32)
 #include <Heapobj.h>
+#else
+#include <HeapObj.h>
+#endif
 
 //////////////////////////////
 
@@ -117,7 +137,7 @@ ObjMapNode * ObjMap::AddObjectToMap(IBaseObject *obj,U32 systemID,int square_id,
 		return NULL;
 	CQASSERT(systemID != 0);
 	CQASSERT(square_id < maps[systemID-1].square_cnt);
-	CQASSERT((U32(obj->next) & 0xff000000) != 0xff000000);
+	CQASSERT((reinterpret_cast<std::uintptr_t>(obj->next) & 0xff000000) != 0xff000000);
 
 	// exclude child nuggets, and explosion
 /*#ifndef FINAL_RELEASE
@@ -169,7 +189,7 @@ void ObjMap::RemoveObjectFromMap(IBaseObject *obj,U32 systemID,int square_id)
 				ObjMapNode *deadguy;
 				while (pos->next && pos->next->obj != obj)
 				{
-					CQASSERT1((U32(pos->next->obj->next) & 0xff000000) != 0xff000000, "Dead unit 0x%X found in OBJMAP", pos->next->dwMissionID);
+					CQASSERT1((reinterpret_cast<std::uintptr_t>(pos->next->obj->next) & 0xff000000) != 0xff000000, "Dead unit 0x%X found in OBJMAP", pos->next->dwMissionID);
 					pos = pos->next;
 				}
 
@@ -365,7 +385,7 @@ struct _objmap : GlobalComponent
 	virtual void Startup (void)
 	{
 		OBJMAP = om = new DAComponent<ObjMap>;
-		AddToGlobalCleanupList(&OBJMAP);
+		AddToGlobalCleanupList((IDAComponent **) &OBJMAP);
 	}
 	
 	virtual void Initialize (void)

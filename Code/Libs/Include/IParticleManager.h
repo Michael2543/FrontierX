@@ -19,14 +19,14 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 #include "xform.h"
-#include <FileSys.h>
+#include <Filesys.h>
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
 #include "FrontierX/ParticleContext.h"
@@ -207,7 +207,7 @@ struct _NO_VTABLE IParticleListener
 
 struct _NO_VTABLE IParticleInstance
 {
-	virtual void SetContext(FrontierX::ParticleContext _context);
+	virtual void SetContext(FrontierX::ParticleContext _context) = 0;
 
 	virtual void Initialize(FrontierX::ParticleContext _context) = 0;
 

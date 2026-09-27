@@ -15,19 +15,43 @@
 //--------------------------------------------------------------------------//
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <stdlib.h>
 
-#include "dacom.h"						// DA component manager
+#include "DACOM.H"						// DA component manager
 #include "da_heap_utility.h"
 #include "TComponent.h"
+#ifdef _WIN32
 #include "inv_sqrt.h"
+#else
+#include "FrontierX/MathCore.h"
+#include "FrontierX/NativeMathEngine.h"
+#endif
 
 #include "3dmath.h"
 #include "fastdot.h"
 
 static const C8 interface_name[] = "I3DMathEngine";	// Interface name used for registration
 static const C8 implementation_name[] = "x86";		// The implementation we want
+
+static int CompareImplementationName(const C8 *left, const C8 *right)
+{
+#ifdef _WIN32
+	return stricmp(left, right);
+#else
+	while (*left && *right)
+	{
+		const unsigned char lhs = *left >= 'A' && *left <= 'Z' ? *left - 'A' + 'a' : *left;
+		const unsigned char rhs = *right >= 'A' && *right <= 'Z' ? *right - 'A' + 'a' : *right;
+		if (lhs != rhs) return lhs < rhs ? -1 : 1;
+		++left;
+		++right;
+	}
+	return *left == *right ? 0 : *left ? 1 : -1;
+#endif
+}
 
 struct x86MathEngine * global_instance = NULL;
 
@@ -42,7 +66,9 @@ const SINGLE MIN_DET = 1e-8f;
 
 struct x86MathEngine : public I3DMathEngine, IComponentFactory
 {
+#ifdef _WIN32
 	static ISQRT inv_sqrt_obj;
+#endif
 
 //	BEGIN_DACOM_MAP_INBOUND(x86MathEngine)
 //	DACOM_INTERFACE_ENTRY(I3DMathEngine)
@@ -50,7 +76,9 @@ struct x86MathEngine : public I3DMathEngine, IComponentFactory
 	
 	x86MathEngine()
       {
+#ifdef _WIN32
 		inv_sqrt_obj.ISQRT::ISQRT();
+#endif
       }
 
 	~x86MathEngine()
@@ -95,7 +123,7 @@ struct x86MathEngine : public I3DMathEngine, IComponentFactory
 			) &&
 			(
 				info->implementation==0 ||
-				stricmp (::implementation_name, info->implementation)==0
+				CompareImplementationName(::implementation_name, info->implementation)==0
 			)
 		)
 	   {
@@ -174,11 +202,14 @@ struct x86MathEngine : public I3DMathEngine, IComponentFactory
 	DEFMETHOD(Sqrt)	(SINGLE & dst, const SINGLE x);
 };
 
+#ifdef _WIN32
 ISQRT x86MathEngine::inv_sqrt_obj;
+#endif
 
 //
 // Provide main() stub and request heap resources
 //
+#ifdef _WIN32
 void main(void)
 {
 }
@@ -232,6 +263,22 @@ BOOL COMAPI DllMain(HINSTANCE hinstDLL,  //)
 
 	return TRUE;
 }
+#else
+bool FrontierX::RegisterNativeMathEngine(ICOManager *manager)
+{
+	if (!manager) return false;
+	static x86MathEngine *nativeMathEngine = new x86MathEngine;
+	global_instance = nativeMathEngine;
+	if (manager->RegisterComponent(nativeMathEngine, interface_name, DACOM_LOW_PRIORITY) != GR_OK)
+		return false;
+	if (manager->RegisterComponent(nativeMathEngine, IID_I3DMathEngine, DACOM_LOW_PRIORITY) != GR_OK)
+	{
+		manager->UnregisterComponent(nativeMathEngine, interface_name);
+		return false;
+	}
+	return true;
+}
+#endif
 
 //
 // x86 implementation of I3DMathEngine interface.
@@ -812,9 +859,16 @@ GENRESULT COMAPI x86MathEngine::quat_slerp(Quaternion & dst, const Quaternion & 
 
 GENRESULT COMAPI x86MathEngine::transform(Vector & dst, const Quaternion & q, const Vector & v)
 {
+#ifdef _WIN32
 	dst = v * (q.s * q.s - dot_product(q.v, q.v));
 	dst += q.v * 2.0f * dot_product(q.v, v);
 	dst += cross_product(q.v, v) * q.s * 2.0f;
+#else
+	const Vector qv(q.x, q.y, q.z);
+	dst = v * (q.w * q.w - dot_product(qv, qv));
+	dst += qv * 2.0f * dot_product(qv, v);
+	dst += cross_product(qv, v) * q.w * 2.0f;
+#endif
 
 	return GR_OK;
 }
@@ -823,21 +877,40 @@ GENRESULT COMAPI x86MathEngine::transform(Vector & dst, const Quaternion & q, co
 
 GENRESULT COMAPI x86MathEngine::mul(Quaternion & dst, const Quaternion & q1, const Quaternion & q2)
 {
+#ifdef _WIN32
 	dst.s = q1.s * q2.s - dot_product(q1.v, q2.v);
 	dst.v = q1.v * q2.s + q2.v * q1.s + cross_product(q1.v, q2.v);
+#else
+	const Vector q1v(q1.x, q1.y, q1.z);
+	const Vector q2v(q2.x, q2.y, q2.z);
+	const SINGLE scalar = q1.w * q2.w - dot_product(q1v, q2v);
+	const Vector vector = q1v * q2.w + q2v * q1.w + cross_product(q1v, q2v);
+	dst.w = scalar;
+	dst.x = vector.x;
+	dst.y = vector.y;
+	dst.z = vector.z;
+#endif
 
 	return GR_OK;
 }
 
 GENRESULT COMAPI x86MathEngine::InvSqrt(SINGLE & dst, const SINGLE x)
 {
+#ifdef _WIN32
 	dst = inv_sqrt_obj.InvSqrt(x);
+#else
+	dst = frontierx::inverse_sqrt(x);
+#endif
 	return GR_OK;
 }
 
 GENRESULT COMAPI x86MathEngine::Sqrt(SINGLE & dst, const SINGLE x)
 {
+#ifdef _WIN32
 	dst = x * inv_sqrt_obj.InvSqrt(x);
+#else
+	dst = frontierx::legacy_sqrt(x);
+#endif
 	return GR_OK;
 }
 

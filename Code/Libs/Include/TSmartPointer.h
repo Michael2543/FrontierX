@@ -15,7 +15,7 @@
  */
 
 #ifndef DACOM_H
-#include "DACOM.h"
+#include "DACOM.H"
 #endif
 
 //-------------------------------------------------------------------
@@ -137,12 +137,20 @@ public:
 
 	bool operator == (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr == (Type *)i);
+#else
+		return i == 0 && ptr == nullptr;
+#endif
 	}
 
 	bool operator != (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr != (Type *)i);
+#else
+		return !(*this == i);
+#endif
 	}
 };
 

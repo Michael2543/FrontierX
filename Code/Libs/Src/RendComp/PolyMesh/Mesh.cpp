@@ -3,26 +3,26 @@
 
 #define PCI
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 #include <stdlib.h>
 
 #define MATERIAL_H_INCLUDE_LOAD_CODE 1
 
-#include "DACOM.h"
-#include "tempstr.h"
+#include "DACOM.H"
+#include "TempStr.h"
 #include "TSmartPointer.h"
-
 #include "FileSys_Utility.h"
 #include "ITextureLibrary.h"
-#include "IRenderComponent.h"
 #include "renderer.h"
-
-#include "DAVariant.h"
 #include "Mesh.h"
 
 
-#include "XMesh.h"
+#include "xmesh.h"
 
 
 #undef MATERIAL_H_INCLUDE_LOAD_CODE 
@@ -35,12 +35,33 @@
 static FILE *g_xmeshDiag;
 #define XM_DIAG(...) do { if (!g_xmeshDiag) g_xmeshDiag = fopen("debug/xmesh_diag.txt", "w"); if (g_xmeshDiag) { fprintf(g_xmeshDiag, __VA_ARGS__); fflush(g_xmeshDiag); } } while (0)
 
-#include "RPUL.h"
 #include "IMaterialManager.h"
 
 
 
 #define S_WARN_OLD_FORMAT MAKE_HRESULT( SEVERITY_SUCCESS, 0, 1 )
+
+bool pm_simple_map_gen( TC_UVGENERATORCONTEXT *ctx, void *user_context )
+{
+	float N_dot_L = dot_product( ctx->N, ctx->L );
+
+//	if( N_dot_L >= 0.0 ) {
+
+		if( ctx->SpecularMode == 2 ) {
+			Vector n = ctx->Tov->rotate(ctx->N);
+			if( n.z > 0 ) {
+				// intersect r with view xy plane.
+				//
+			ctx->u = 0.5 + n.x * 0.5 * 2.0f;
+			ctx->v  = 0.5 + n.y * 0.5 * 2.0f;
+
+			return true;
+		}
+	}
+//	}
+
+	return false;
+}
 
 
 #ifndef NDEBUG
@@ -187,9 +208,10 @@ inline void Swap32(void * const a, void * const b)
 {	
 	if(a != b)
 	{
-		*(unsigned long*)a ^= *(unsigned long*)b;
-		*(unsigned long*)b ^= *(unsigned long*)a;
-		*(unsigned long*)a ^= *(unsigned long*)b;
+		U32 value;
+		memcpy(&value, a, sizeof(value));
+		memcpy(a, b, sizeof(value));
+		memcpy(b, &value, sizeof(value));
 	}
 }
 
@@ -234,11 +256,17 @@ int compare_faces_by_area(const void *pt1, const void *pt2, const void *)
   return 0;
 }
 
-extern void  __cdecl sortQ(void *, size_t, size_t, 
-						 int (__cdecl *)(const void *, const void *, const void *),
+#if defined(_WIN32)
+#define MESH_SORTQ_CALL __cdecl
+#else
+#define MESH_SORTQ_CALL
+#endif
+extern void MESH_SORTQ_CALL sortQ(void *, size_t, size_t,
+						 int (MESH_SORTQ_CALL *)(const void *, const void *, const void *),
 						 const void *comp_lib,
-						 void (__cdecl *swap)(void *, const int id1, const int id2),
+						 void (MESH_SORTQ_CALL *swap)(void *, const int id1, const int id2),
 						 void *swap_lib);
+#undef MESH_SORTQ_CALL
 
 // largest to smallest
 void XMesh::sort_faces_by_area (void)
@@ -574,7 +602,7 @@ void GetFullName(IFileSystem * fs, char * full_name)
 		full_name[0] = 0;
 		
 		COMPTR<IFileSystem> parent;
-		if(GR_OK == fs->GetParentSystem( parent ) && parent != NULL)
+		if(GR_OK == fs->GetParentSystem( parent ) && static_cast<IFileSystem *>(parent) != nullptr)
 		{
 			GetFullName(parent, full_name);
 		
@@ -861,75 +889,86 @@ HRESULT XMesh::read_material_library( IFileSystem *parent, ITextureLibrary *text
 
 	if(parent->SetCurrentDirectory( "CQ2_Material_Library" ) ) 
 	{
-		if( SUCCEEDED( read_type( parent, "Material count", &imaterial_cnt ) ) || (imaterial_cnt <= 0) ) 
-		{	
-			if( (imaterial_list = new IMaterial*[imaterial_cnt]) != NULL ) 
+		if( !matMan || FAILED( read_type( parent, "Material count", &imaterial_cnt ) ) || imaterial_cnt < 0 )
+		{
+			parent->SetCurrentDirectory( ".." );
+			return E_FAIL;
+		}
+		if( (imaterial_list = new IMaterial*[imaterial_cnt]()) != NULL )
+		{
+			HANDLE          hMatSearch;
+			WIN32_FIND_DATA MatSearchData;
+			int material_entry = 0;
+
+			if( (hMatSearch = parent->FindFirstFile( "*.*", &MatSearchData )) != INVALID_HANDLE_VALUE )
 			{
-
-				HANDLE          hMatSearch;
-				WIN32_FIND_DATA MatSearchData;
-				int material_entry = 0;
-
-				if( (hMatSearch = parent->FindFirstFile( "*.*", &MatSearchData )) != INVALID_HANDLE_VALUE ) 
+				do
 				{
-					do 
+					if( !(MatSearchData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+						( strcmp( MatSearchData.cFileName, "." ) == 0 ) ||
+						( strcmp( MatSearchData.cFileName, ".." ) == 0 ) )
 					{
-						if( !(MatSearchData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
-							 ( strcmp( MatSearchData.cFileName, "." ) == 0 ) ||
-							 ( strcmp( MatSearchData.cFileName, ".." ) == 0 ) ) 
-						{
-
-							continue;
-						}
-						imaterial_list[material_entry] = matMan->FindMaterial(MatSearchData.cFileName);
-						if(imaterial_list[material_entry])  
-						{
-							imaterial_list[material_entry]->Realize();
-						}
-						else
-						{
-							GENERAL_WARNING( TEMPSTR( "Unable to find CQ2 material '%s'", MatSearchData.cFileName ) );
-						}
-						material_entry++; 
-					} while( parent->FindNextFile( hMatSearch, &MatSearchData ) );
-					parent->FindClose(hMatSearch);
-				}
+						continue;
+					}
+					if( material_entry >= imaterial_cnt )
+					{
+						parent->FindClose(hMatSearch);
+						parent->SetCurrentDirectory( ".." );
+						return E_FAIL;
+					}
+					imaterial_list[material_entry] = matMan->FindMaterial(MatSearchData.cFileName);
+					if(imaterial_list[material_entry])
+					{
+						imaterial_list[material_entry]->Realize();
+					}
+					else
+					{
+						GENERAL_WARNING( TEMPSTR( "Unable to find CQ2 material '%s'", MatSearchData.cFileName ) );
+					}
+					material_entry++;
+				} while( parent->FindNextFile( hMatSearch, &MatSearchData ) );
+				parent->FindClose(hMatSearch);
 			}
 		}
+		parent->SetCurrentDirectory( ".." );
 		return S_OK;
 	}
 	else if(parent->SetCurrentDirectory( "Material library" ) ) 
 	{
 
-		if( SUCCEEDED( read_type( parent, "Material count", &material_cnt ) ) || (material_cnt <= 0) ) {
-			
-			if( (material_list = new Material[material_cnt]) != NULL ) 
+		if( FAILED( read_type( parent, "Material count", &material_cnt ) ) || material_cnt < 0 ) {
+			parent->SetCurrentDirectory( ".." );
+			return E_FAIL;
+		}
+		if( (material_list = new Material[material_cnt]) != NULL )
+		{
+			HANDLE          hMatSearch;
+			WIN32_FIND_DATA MatSearchData;
+			int material_entry = 0;
+
+			if( (hMatSearch = parent->FindFirstFile( "*.*", &MatSearchData )) != INVALID_HANDLE_VALUE )
 			{
-				HANDLE          hMatSearch;
-				WIN32_FIND_DATA MatSearchData;
-				int material_entry = 0;
-
-				if( (hMatSearch = parent->FindFirstFile( "*.*", &MatSearchData )) != INVALID_HANDLE_VALUE ) {
-
-					do {
-
-						if( !(MatSearchData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
-							 ( strcmp( MatSearchData.cFileName, "." ) == 0 ) ||
-							 ( strcmp( MatSearchData.cFileName, ".." ) == 0 ) ) {
-
-							continue;
-						}
-
-						if( SUCCEEDED( read_material( parent, texturelib, material_entry, MatSearchData.cFileName, material_list, material_cnt ) ) ) {
-							material_entry++; 
-						}
-						else {
-							GENERAL_WARNING( TEMPSTR( "Unable to read material '%s'", MatSearchData.cFileName ) );
-						}
+				do {
+					if( !(MatSearchData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+						( strcmp( MatSearchData.cFileName, "." ) == 0 ) ||
+						( strcmp( MatSearchData.cFileName, ".." ) == 0 ) ) {
+						continue;
 					}
-					while( parent->FindNextFile( hMatSearch, &MatSearchData ) );
-					parent->FindClose(hMatSearch);
+					if( material_entry >= material_cnt ) {
+						parent->FindClose(hMatSearch);
+						parent->SetCurrentDirectory( ".." );
+						return E_FAIL;
+					}
+
+					if( SUCCEEDED( read_material( parent, texturelib, material_entry, MatSearchData.cFileName, material_list, material_cnt ) ) ) {
+						material_entry++;
+					}
+					else {
+						GENERAL_WARNING( TEMPSTR( "Unable to read material '%s'", MatSearchData.cFileName ) );
+					}
 				}
+				while( parent->FindNextFile( hMatSearch, &MatSearchData ) );
+				parent->FindClose(hMatSearch);
 			}
 		}
 
@@ -951,11 +990,11 @@ HRESULT XMesh::read_material( IFileSystem *parent, ITextureLibrary *texturelib, 
 
 		int material_index;
 
-		if( FAILED( hr = read_type( parent, "Material identifier", &material_index ) ) ) {
-			ASSERT(0);
+		if( FAILED( hr = read_type( parent, "Material identifier", &material_index ) ) ||
+			material_index < 0 || material_index >= material_cnt ) {
+			parent->SetCurrentDirectory( ".." );
+			return E_FAIL;
 		}
-
-		ASSERT( material_index < material_cnt );
 
 		Material *material = &material_list[material_entry];
 		material->initialize();

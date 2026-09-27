@@ -11,9 +11,15 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <cmath>
+#endif
 
+#include <vector.h>
 #include "GridVector.h"
 #include "CQTrace.h"
 
@@ -34,7 +40,7 @@ struct __gridvector_setup
 			x = i >> 6;
 			y = i & 0x3F;
 
-			g_grid.table[i] = sqrt( ((SINGLE(x)*SINGLE(x)) + (SINGLE(y)*SINGLE(y))) /16);
+			table[i] = sqrt( ((SINGLE(x)*SINGLE(x)) + (SINGLE(y)*SINGLE(y))) /16);
 		}
 	}
 

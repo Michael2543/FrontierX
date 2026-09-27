@@ -17,24 +17,32 @@
 
 #pragma warning( disable : 4786 )
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/LegacyWindowTypes.h"
+#endif
 #include <limits.h>
+#include <limits>
 #include <map>
+#include <new>
 #include <stdio.h>
 
 static FILE *g_polyMeshDiag;
 #define PM_DIAG(...) do { if (!g_polyMeshDiag) g_polyMeshDiag = fopen("debug/polymesh_diag.txt", "w"); if (g_polyMeshDiag) { fprintf(g_polyMeshDiag, __VA_ARGS__); fflush(g_polyMeshDiag); } } while (0)
 
-#include "dacom.h"
+#include "DACOM.H"
 #include "TComponent.h"
 #include "TSmartPointer.h"
-#include "FDUMP.h"
+#include "FDump.h"
 #include "TempStr.h"
 
 #include "3dmath.h"
-#include "typedefs.h"
-#include "view2d.h"
+#include "matrix4.h"
+#include "TYPEDEFS.H"
+#include "View2d.h"
 #include "SysConsumerDesc.h"
 #include "FaceProp.h"
 #include "RPUL/MTPrimitiveBuilder.h"
@@ -42,17 +50,20 @@ static FILE *g_polyMeshDiag;
 #include "packed_argb.h"
 #include "TextureCoord.h"
 
-#include "engine.h"
-#include "filesys.h"
-#include "renderer.h"
 #include "ICamera.h"
+#include "ENGINE.H"
+#include "Filesys.h"
+#include "renderer.h"
 #include "ILight.h"
 #include "IProfileParser_Utility.h"
 #include "IRenderComponent.h"
-#include "LightMan.h"
-#include "RendPipeline.h"
+#include "lightman.h"
+#include "rendpipeline.h"
 #include "IRenderPrimitive.h"
 #include "IMaterialManager.h"
+#if !defined(_WIN32)
+#include "FrontierX/NativePolyMesh.h"
+#endif
 
 #include "Tfuncs.h"
 #include "handlemap.h"
@@ -60,7 +71,7 @@ static FILE *g_polyMeshDiag;
 //
 
 #include "MeshInstance.h"
-#include "XMesh.h"
+#include "xmesh.h"
 
 //
 
@@ -127,7 +138,7 @@ protected: // Interface
 	void verify_lists( int faces, int verts );
 	void delete_lists( void );
 
-	void render_facegroup_with_material( U32 rwm_flags, MeshInstance *object, const XMesh *mesh, FaceGroup *fgroup, Material *mat, U16 *index_list, U32 index_cnt, U16 *spec_index_list, U32 spec_index_cnt, U32 dip_flags, int local_light_map, Matrix4 &texxform );
+	GENRESULT render_facegroup_with_material( U32 rwm_flags, MeshInstance *object, const XMesh *mesh, FaceGroup *fgroup, Material *mat, U16 *index_list, U32 index_cnt, U16 *spec_index_list, U32 spec_index_cnt, U32 dip_flags, int local_light_map, Matrix4 &texxform );
 	vis_state render( struct ICamera * camera, INSTANCE_INDEX object, MeshInstance *mesh_instance, const XMesh * mesh, const float lod_fraction, U32 flags, const Transform *tr);
 
 protected:	// Data
@@ -179,6 +190,11 @@ protected:	// Data
 	float				min_poly_size;			// smallest polygon size in pixels.  anythig smaller will not be rendered
 
 	U32					cont_lod_mode;				// 0 no lod, 1 per instance lod(default), 2 per archetype lod
+#if !defined(_WIN32)
+	std::map<const Material *, std::pair<U32, U32>> material_state_ids;
+	U32 next_material_state_id = 0x40000000U;
+#endif
+
 };
 
 //
@@ -709,8 +725,8 @@ bool COMAPI POLYMESH::query_instance_interface( INSTANCE_INDEX, RENDER_ARCHETYPE
 
 void POLYMESH::get_pipe_info( void )
 {
-	U32 value, modes[4];
-	RPDEVICEINFO rpdi;
+	U32 value = 0, modes[4] = {};
+	RPDEVICEINFO rpdi = {};
 	
 	ICOManager *DACOM = DACOM_Acquire();
 
@@ -727,7 +743,9 @@ void POLYMESH::get_pipe_info( void )
 		value = 0;
 	}
 
-	renderpipeline->get_device_info( &rpdi );
+	if( FAILED( renderpipeline->get_device_info( &rpdi ) ) ) {
+		rpdi.device_chipset_id = RP_D_UNKNOWN;
+	}
 
 	switch( rpdi.device_chipset_id ) {
 
@@ -848,30 +866,6 @@ bool pm_reflection_map_gen( TC_UVGENERATORCONTEXT *ctx, void *user_context )
 			}
 		}
 	}
-
-	return false;
-}
-
-//
-
-bool pm_simple_map_gen( TC_UVGENERATORCONTEXT *ctx, void *user_context )
-{
-	float N_dot_L = dot_product( ctx->N, ctx->L );
-	
-//	if( N_dot_L >= 0.0 ) {
-
-		if( ctx->SpecularMode == 2 ) {
-			Vector n = ctx->Tov->rotate(ctx->N);
-			if( n.z > 0 ) {
-				// intersect r with view xy plane.
-				//
-				ctx->u = 0.5 + n.x * 0.5 * 2.0f;
-				ctx->v  = 0.5 + n.y * 0.5 * 2.0f;
-		
-				return true;
-			}
-		}
-//	}
 
 	return false;
 }
@@ -1043,11 +1037,11 @@ void POLYMESH::verify_lists( int faces, int verts )
 
 #define RWM_DONT_TEXTURE	(1<<0)
 
-void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *object, const XMesh *mesh, FaceGroup *fgroup, Material *mat, U16 *index_list, U32 index_cnt, U16 *spec_index_list, U32 spec_index_cnt, U32 dip_flags, int local_light_map, Matrix4 &texxform )
+GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *object, const XMesh *mesh, FaceGroup *fgroup, Material *mat, U16 *index_list, U32 index_cnt, U16 *spec_index_list, U32 spec_index_cnt, U32 dip_flags, int local_light_map, Matrix4 &texxform )
 {
 	// avoid setting unnecassary state
 	if( !index_cnt )
-		return;
+		return GR_OK;
 
 	// NOTES
 	//
@@ -1057,8 +1051,24 @@ void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *obje
 	// o Try to put _CURRENT in ARG2 for similar reasons (ATI?)
 	//
 
-//	U32 mat_uid = (((U32)mat)<<16) | (mat->unique<<8);
+#if defined(_WIN32)
 	U32 mat_uid = (U32)mat+mat->unique;
+#else
+	// RPR_STATE_ID is a 32-bit batching key. Keep native addresses out of it.
+	auto found = material_state_ids.find(mat);
+	if (found == material_state_ids.end() || found->second.first != mat->unique)
+	{
+		if (next_material_state_id > (std::numeric_limits<U32>::max)() - 8U)
+		{
+			GENERAL_ERROR("POLYMESH: Material state IDs exhausted");
+			return GR_GENERIC;
+		}
+		found = material_state_ids.insert_or_assign(mat,
+			std::make_pair(mat->unique, next_material_state_id)).first;
+		next_material_state_id += 8U;
+	}
+	U32 mat_uid = found->second.second;
+#endif
 
 
 	// Set common state for all passes
@@ -1269,6 +1279,7 @@ void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *obje
 	}
 	
 	renderprimitive->set_state( RPR_STATE_ID, mat_uid++ );
+	GENRESULT draw_result = GR_OK;
 
 	if( mat->num_passes > 1 ) {
 	
@@ -1278,7 +1289,11 @@ void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *obje
 		// do multiple passes.
 		
 		// Stage0 will already be setup above
-		renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags );
+		draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags );
+		if( FAILED(draw_result) ) {
+			renderprimitive->set_state( RPR_STATE_ID, 0 );
+			return draw_result;
+		}
 		
 		if( enable_specular && specular_mode == 1 ) {
 			renderprimitive->set_render_state( D3DRS_SPECULARENABLE, FALSE );
@@ -1323,7 +1338,11 @@ void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *obje
 			
 			renderprimitive->set_state( RPR_STATE_ID, mat_uid++ );
 		
-			renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
+			draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
+			if( FAILED(draw_result) ) {
+				renderprimitive->set_state( RPR_STATE_ID, 0 );
+				return draw_result;
+			}
 		}
 
 		// Emissive
@@ -1357,14 +1376,22 @@ void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *obje
 			
 			renderprimitive->set_state( RPR_STATE_ID, mat_uid++ );
 
-			renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
+			draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
+			if( FAILED(draw_result) ) {
+				renderprimitive->set_state( RPR_STATE_ID, 0 );
+				return draw_result;
+			}
 		
 			renderprimitive->set_render_state( D3DRS_ZFUNC, D3DCMP_LESS ) ;
 		}
 	}
 	else if( mat->num_passes >= 0 ) {
 
-		renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
+		draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
+		if( FAILED(draw_result) ) {
+			renderprimitive->set_state( RPR_STATE_ID, 0 );
+			return draw_result;
+		}
 	}
 
 	if( enable_specular && specular_mode == 2 ) {
@@ -1412,12 +1439,16 @@ void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *obje
 			renderprimitive->get_state( RPR_BATCH_TRANSLUCENT_MODE, &btm );
 			renderprimitive->set_state( RPR_BATCH_TRANSLUCENT_MODE, RPR_TRANSLUCENT_UNSORTED );
 
-			renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX, pbSpecGood.vertex_buffer, pbSpecGood.current_vertex, spec_index_list, spec_index_cnt, dip_flags ) ;
+			draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX, pbSpecGood.vertex_buffer, pbSpecGood.current_vertex, spec_index_list, spec_index_cnt, dip_flags ) ;
 //PTEX		renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
 			
 			renderprimitive->set_render_state( D3DRS_ZFUNC, D3DCMP_LESS ) ;
 
 			renderprimitive->set_state( RPR_BATCH_TRANSLUCENT_MODE, btm );
+			if( FAILED(draw_result) ) {
+				renderprimitive->set_state( RPR_STATE_ID, 0 );
+				return draw_result;
+			}
 
 			Matrix4 I;
 
@@ -1428,6 +1459,7 @@ void POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *obje
 	}
 
 	renderprimitive->set_state( RPR_STATE_ID, 0 );
+	return GR_OK;
 }
 
 //
@@ -1581,9 +1613,11 @@ vis_state POLYMESH::render( ICamera * camera, INSTANCE_INDEX object_index, MeshI
 			}
 		}
 
-		U32 rwm_flags;
+		U32 rwm_flags = 0;
 
-		renderpipeline->get_pipeline_state( RP_TEXTURE, &rwm_flags );
+		if( FAILED( renderpipeline->get_pipeline_state( RP_TEXTURE, &rwm_flags ) ) ) {
+			return VS_UNKNOWN;
+		}
 		if( !rwm_flags ) {
 			rwm_flags = RWM_DONT_TEXTURE;
 		}
@@ -1608,7 +1642,9 @@ vis_state POLYMESH::render( ICamera * camera, INSTANCE_INDEX object_index, MeshI
 		ctx.Tow = &object_to_world;
 		ctx.Vo = cam_pos_in_object_space;
 
-		num_lights = lightmanager->get_active_lights( lights );
+		if( lightmanager ) {
+			num_lights = lightmanager->get_active_lights( lights );
+		}
 
 		if( specular_mode != 0 && lightmanager && num_lights != 0 && mesh->tc_user_generator ) {
 
@@ -1675,7 +1711,9 @@ vis_state POLYMESH::render( ICamera * camera, INSTANCE_INDEX object_index, MeshI
 //PTEX					texxform = proj * lightmv;
 		}
 
-		renderprimitive->set_modelview( object_to_view ) ;
+		if( FAILED( renderprimitive->set_modelview( object_to_view ) ) ) {
+			return VS_UNKNOWN;
+		}
 
 		// done by polymesh itself
 		renderprimitive->set_render_state( D3DRS_CULLMODE, D3DCULL_NONE ) ;
@@ -2041,7 +2079,9 @@ vis_state POLYMESH::render( ICamera * camera, INSTANCE_INDEX object_index, MeshI
 				}
 			}
 
-			render_facegroup_with_material( rwm_flags, object, mesh, group, mat, index_list, idx_ptr-index_list, spec_good_index_list, spec_good_idx_ptr-spec_good_index_list, 0, light_map, texxform );
+			if( FAILED(render_facegroup_with_material( rwm_flags, object, mesh, group, mat, index_list, idx_ptr-index_list, spec_good_index_list, spec_good_idx_ptr-spec_good_index_list, 0, light_map, texxform )) ) {
+				return VS_UNKNOWN;
+			}
 		}
 	}
 
@@ -2122,6 +2162,7 @@ GENRESULT COMAPI POLYMESH::release_unique_instance_mesh( INSTANCE_INDEX inst_ind
 
 //
 
+#if defined(_WIN32)
 BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 {
    IComponentFactory *server;
@@ -2145,4 +2186,21 @@ BOOL COMAPI DllMain( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 
    return TRUE;
 }
+#endif
 
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool RegisterNativePolyMesh(ICOManager *manager)
+{
+	if (!manager) return false;
+	IComponentFactory *factory = new (std::nothrow)
+		DAComponentFactory<DAComponent<POLYMESH>, RendCompDesc>(CLSID_PolyMesh);
+	if (!factory) return false;
+	const GENRESULT result = manager->RegisterComponent(
+		factory, CLSID_PolyMesh, DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif

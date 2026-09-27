@@ -6,28 +6,42 @@
 //                                                                          //
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "stdafx.h"
+#else
+#include "FrontierX/LegacyFileTypes.h"
+#endif
 
 #include "TManager.h"
 #include "THashList.h"
 #include "IImageReader.h"
-#include "System.h"
-#include <FDUMP.h>
+#include "SYSTEM.H"
+#include <FDump.h>
 
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
 #include <HeapObj.h>
-#include <RendPipeline.h>
+#include <rendpipeline.h>
 #include <TComponent.h>
 #include <da_heap_utility.h>
 
+#include <algorithm>
+#include <limits>
+#include <new>
+
 struct TManager;
 
-void __stdcall CreateBMPReader (struct IImageReader ** reader);
-void __stdcall CreateTGAReader (struct IImageReader ** reader);
-void __stdcall CreateVFXReader (struct IImageReader ** reader);
+void COMAPI CreateBMPReader (struct IImageReader ** reader);
+void COMAPI CreateTGAReader (struct IImageReader ** reader);
+#if defined(_WIN32)
+void COMAPI CreateVFXReader (struct IImageReader ** reader);
+#endif
 
+#if defined(_WIN32)
 ICOManager * DACOM = NULL;
+#else
+extern ICOManager * DACOM;
+#endif
 
 
 //--------------------------------------------------------------------------//
@@ -40,7 +54,7 @@ struct TMNODE
 	// adding all ASCII character values modulo 256
 	//
 	
-	static inline U32 TMNODE::hash (const char *ptr)
+	static inline U32 hash (const char *ptr)
 	{
 		U8 result = 0;
 		char a=*ptr++;
@@ -153,33 +167,33 @@ struct DACOM_NO_VTABLE TManager : public ITManager, ISystemComponent
 
 	/* ITManager methods */
 
-	virtual U32 __stdcall CreateTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name);
+	virtual U32 COMAPI CreateTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name);
 
-	virtual U32 __stdcall CreateTextureFromFile (const char *fileName, IComponentFactory *parentFile, DA::FILETYPE type, const PixelFormat &format);
+	virtual U32 COMAPI CreateTextureFromFile (const char *fileName, IComponentFactory *parentFile, DA::FILETYPE type, const PixelFormat &format);
 
-	virtual U32 __stdcall AddTextureRef (U32 textureID);
+	virtual U32 COMAPI AddTextureRef (U32 textureID);
 
-	virtual U32 __stdcall ReleaseTextureRef (U32 textureID);
+	virtual U32 COMAPI ReleaseTextureRef (U32 textureID);
 
-	virtual void __stdcall Flush (void);
+	virtual void COMAPI Flush (void);
 
-	virtual U32 __stdcall GetFirstTexture();
+	virtual U32 COMAPI GetFirstTexture();
 
-	virtual U32 __stdcall GetNextTexture(U32 textureID);
+	virtual U32 COMAPI GetNextTexture(U32 textureID);
 
-	virtual U32 __stdcall GetPrevTexture(U32 textureID);
+	virtual U32 COMAPI GetPrevTexture(U32 textureID);
 
-	virtual U32 __stdcall CreateDrawAgentTexture (U32 resolution, bool bAlpha);
+	virtual U32 COMAPI CreateDrawAgentTexture (U32 resolution, bool bAlpha);
 
-	virtual void __stdcall ReleaseDrawAgentTexture (U32 textureID);
+	virtual void COMAPI ReleaseDrawAgentTexture (U32 textureID);
 
 	virtual void Initialize(InitInfo & info);
 
 	/* TManager methods */
 
-	static U32 __stdcall createTextureFromFile (const char *fileName, IComponentFactory *parentFile, DA::FILETYPE type, const PixelFormat &format, IRenderPipeline * PIPE);
+	static U32 COMAPI createTextureFromFile (const char *fileName, IComponentFactory *parentFile, DA::FILETYPE type, const PixelFormat &format, IRenderPipeline * PIPE);
 
-	static U32 __stdcall createTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name, IRenderPipeline * PIPE);
+	static U32 COMAPI createTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name, IRenderPipeline * PIPE, U32 fileSize = 0);
 
 	void reset (void);
 
@@ -210,20 +224,17 @@ TManager::~TManager (void)
 }
 //------------------------------------------------------------------------
 //
-static U32 __fastcall nearestPower (S32 number)
+static U32 nearestPower (S32 number)
 {
-	int i = 31;
-
-	while (number > 0)
+	if (number <= 0) return 0;
+	const U32 target = static_cast<U32>(number);
+	U32 result = 1;
+	while (result < target)
 	{
-		number <<= 1;
-		i--;
+		if (result > std::numeric_limits<U32>::max() / 2U) return 0;
+		result <<= 1U;
 	}
-
-	if (i && (number==0 || (number << 1) != 0))
-		i++;	// round up
-
-	return (1 << i);
+	return result;
 }
 //------------------------------------------------------------------------
 //
@@ -630,7 +641,7 @@ void convertBumpmap(COLORREF * src,COLORREF * dst, int originalWidth, int origin
 
 
 
-U32 TManager::createTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name, IRenderPipeline * PIPE)
+U32 TManager::createTextureFromMemory (void *pMemory, DA::FILETYPE type, const PixelFormat &format, const char *name, IRenderPipeline * PIPE, U32 fileSize)
 {
 	U32 textureID=0;
 	COLORREF *bits = texLoadBitsA;
@@ -649,15 +660,22 @@ U32 TManager::createTextureFromMemory (void *pMemory, DA::FILETYPE type, const P
 		CreateTGAReader(reader);
 		break;
 	case DA::VFX:
+#if defined(_WIN32)
 		CreateVFXReader(reader);
 		break;
+#else
+		goto Done;
+#endif
 	default:
 		goto Done;
 	}
 
-	reader->LoadImage(pMemory, 0, 0);
+	if (reader->LoadImage(pMemory, fileSize, 0) != GR_OK)
+		goto Done;
 	width = reader->GetWidth();
 	height = reader->GetHeight();
+	if (!width || !height || width > MAX_TEX_DIM || height > MAX_TEX_DIM)
+		goto Done;
 
 	{
 		U32 nearWidth, nearHeight;
@@ -678,7 +696,7 @@ U32 TManager::createTextureFromMemory (void *pMemory, DA::FILETYPE type, const P
 	rect.bottom = height - 1;
 
 	{
-	int minDim = __min(width,height);
+	int minDim = std::min(width,height);
 	int numMipmapLevels = log((float)minDim)/log(2.0f) -1;
 
 
@@ -760,6 +778,7 @@ U32 TManager::createTextureFromFile (const char *fileName, IComponentFactory *pa
 	DAFILEDESC fdesc = fileName;
 	HANDLE hMapping;
 	U8 * pMemory;
+	U32 fileSize;
 
 	fdesc.lpImplementation = "DOS";
  
@@ -773,33 +792,48 @@ U32 TManager::createTextureFromFile (const char *fileName, IComponentFactory *pa
 	}
 
 	hMapping = file->CreateFileMapping();
+	if (hMapping == INVALID_HANDLE_VALUE || !hMapping) goto Done;
+	fileSize = file->GetFileSize();
 	pMemory = (U8*) file->MapViewOfFile(hMapping);
+	if (!pMemory)
+	{
+		file->CloseHandle(hMapping);
+		goto Done;
+	}
 
 	if (type == DA::UNKTYPE)
 	{
-		U32 filetype = ((U32 *)(fileName + strlen(fileName) - 4))[0] & ~0x20202000;
-
-		switch (filetype)
+		const size_t nameLength = strlen(fileName);
+		if (nameLength >= 4)
 		{
-		case 'PMB.':
-			type = DA::BMP;
-			break;
-		case 'PHS.':
-			type = DA::VFX;
-			break;
-		case 'AGT.':
-			type = DA::TGA;
-			break;
+			const char *suffix = fileName + nameLength - 4;
+			const auto matches = [suffix](const char *expected) {
+				for (int index = 0; index < 4; ++index)
+				{
+					char value = suffix[index];
+					if (value >= 'a' && value <= 'z') value -= 'a' - 'A';
+					if (value != expected[index]) return false;
+				}
+				return true;
+			};
+			if (matches(".BMP")) type = DA::BMP;
+			else if (matches(".SHP")) type = DA::VFX;
+			else if (matches(".TGA")) type = DA::TGA;
 		}
 	}
 
 	switch (type)
 	{
 	case DA::BMP:
-		textureID = createTextureFromMemory(pMemory+14, type, format, fileName,PIPE);
+		if (fileSize > 14 && fileSize != 0xffffffffU)
+			textureID = createTextureFromMemory(pMemory+14, type, format, fileName,PIPE, fileSize - 14);
+		break;
+	case DA::TGA:
+	case DA::VFX:
+		if (fileSize != 0xffffffffU)
+			textureID = createTextureFromMemory(pMemory, type, format, fileName,PIPE, fileSize);
 		break;
 	default:
-		textureID = createTextureFromMemory(pMemory, type, format, fileName,PIPE);
 		break;
 	}
 
@@ -880,6 +914,7 @@ DANODE::~DANODE (void)
 //--------------------------------------------------------------------------//
 //
 
+#if defined(_WIN32)
 BOOL APIENTRY DllMain( HINSTANCE hModule, 
                        DWORD  ul_reason_for_call, 
                        LPVOID lpReserved
@@ -914,6 +949,24 @@ BOOL APIENTRY DllMain( HINSTANCE hModule,
 
 	return TRUE;
 }
+#endif
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool RegisterNativeGameTextureManager(ICOManager *manager)
+{
+	if (!manager) return false;
+	IComponentFactory *factory = new (std::nothrow)
+		DAComponentFactory2<DAComponentAggregate<TManager>, AGGDESC>(CLSID_ITManager);
+	if (!factory) return false;
+	const GENRESULT result = manager->RegisterComponent(
+		factory, CLSID_ITManager, DACOM_NORMAL_PRIORITY);
+	factory->Release();
+	return result == GR_OK;
+}
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //----------------------------End TManager.cpp-------------------------------//

@@ -562,7 +562,7 @@ void RegisterTheVertexBufferManager(ICOManager * manager)
 {
 	if (!manager) return;
 	IComponentFactory * factory =
-		new DAComponentFactory<DAComponent<VertexBufferManager>, AGGDESC>(CLSID_VertexBufferManager);
+		new DAComponentFactory2<DAComponentAggregate<VertexBufferManager>, AGGDESC>(CLSID_VertexBufferManager);
 	if (!factory) return;
 	manager->RegisterComponent(factory, CLSID_VertexBufferManager);
 	factory->Release();

@@ -11,8 +11,17 @@
 
 #include <IMeshManager.h>
 #include "IInternalMeshManager.h"
+#if defined(_WIN32)
 #include <d3d9.h>
+#else
+#include "FrontierX/NativeGameIndexBuffer.h"
+#endif
 #include <IMaterialManager.h>
+
+#if !defined(_WIN32)
+namespace FrontierXMeshManager
+{
+#endif
 
 struct MeshFace
 {
@@ -154,5 +163,9 @@ public:
 
 	~MeshArch();
 };
+
+#if !defined(_WIN32)
+}
+#endif
 
 #endif

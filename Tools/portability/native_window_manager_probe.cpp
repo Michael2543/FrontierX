@@ -1,5 +1,13 @@
 #include "FrontierX/NativeComponentManager.h"
 #include "FrontierX/NativeWindowManager.h"
+#include "FrontierX/NativeStreamer.h"
+#include "FrontierX/NativeUtfFileSystem.h"
+#include "Streamer.h"
+#if defined(FRONTIERX_HAVE_IAC_DECODER)
+#include "NativeIacWave.h"
+#endif
+#include <filesystem>
+#include <fstream>
 #include "FrontierX/LegacyInput.h"
 #include "IConnection.h"
 #include "SYSTEM.H"
@@ -25,6 +33,7 @@ struct MessageRecord
 
 std::vector<MessageRecord> messages;
 int exit_calls = 0;
+IStreamer * closeOnInit = nullptr;
 
 void DACOM_CDECL ExitHandler(int code)
 {
@@ -34,6 +43,8 @@ void DACOM_CDECL ExitHandler(int code)
 LRESULT COMAPI WindowCallback(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     messages.push_back({window, message, wparam, lparam});
+    if (message == 0x500 && wparam == IStreamer::INITSUCCESS && closeOnInit)
+        closeOnInit->CloseHandle(reinterpret_cast<HSTREAM>(lparam));
     return 0;
 }
 
@@ -45,6 +56,170 @@ void Require(bool condition, const char * message)
 void Push(SDL_Event & event)
 {
     Require(SDL_PushEvent(&event), SDL_GetError());
+}
+
+// IStreamer blocks the source profile; SoundManager depends on deferred init and
+// completion via this window callback. Extend this owner/pump check, not a mock.
+void CheckStreamer(FrontierX::NativeComponentManager & manager, IWindowManager * window)
+{
+    Require(FrontierX::RegisterNativeStreamer(&manager), "streamer registration failed");
+    AGGDESC descriptor("IStreamer", "Streamer");
+    void * raw = nullptr;
+    Require(manager.CreateInstance(&descriptor, &raw) == GR_OK, "streamer creation failed");
+    auto * aggregate = static_cast<IAggregateComponent *>(raw);
+    IStreamer * streamer = nullptr;
+    Require(aggregate->QueryInterface(IID_IStreamer, reinterpret_cast<void **>(&streamer)) == GR_OK,
+            "streamer query failed");
+    Require(aggregate->Initialize() == GR_OK, "streamer aggregate init failed");
+    STREAMERDESC init;
+    init.hMainWindow = window->GetWindowHandle();
+    init.uMsg = 0x500;
+    Require(!streamer->Open("missing", nullptr, 0), "uninitialized stream accepted");
+    STREAMERDESC invalid = init;
+    invalid.hMainWindow = static_cast<HWND>(-1);
+    Require(!streamer->Init(&invalid), "invalid notification window accepted");
+    if (!streamer->Init(&init)) throw std::runtime_error(SDL_GetError());
+    Require(!streamer->Init(&init), "duplicate initialization accepted");
+    std::cout << "SDL audio driver: " << SDL_GetCurrentAudioDriver() << '\n';
+    const auto root = std::filesystem::current_path() / "native_streamer_fixture";
+    std::filesystem::create_directories(root);
+    std::vector<unsigned char> wav(44 + 1600, 0);
+    std::memcpy(wav.data(), "RIFF", 4);
+    std::memcpy(wav.data() + 8, "WAVEfmt ", 8);
+    auto put = [&](std::size_t offset, unsigned value, unsigned width) {
+        for (unsigned i = 0; i < width; ++i) wav[offset + i] = static_cast<unsigned char>(value >> (8 * i));
+    };
+    put(4, static_cast<unsigned>(wav.size() - 8), 4);
+    put(16, 16, 4); put(20, 1, 2); put(22, 1, 2); put(24, 8000, 4);
+    put(28, 16000, 4); put(32, 2, 2); put(34, 16, 2);
+    std::memcpy(wav.data() + 36, "data", 4); put(40, 1600, 4);
+    for (std::size_t i = 44; i < wav.size(); i += 2) put(i, (i / 16) % 2 ? 1000 : 64536, 2);
+    std::ofstream file(root / "tone.wav", std::ios::binary);
+    file.write(reinterpret_cast<const char *>(wav.data()), static_cast<std::streamsize>(wav.size()));
+    file.close();
+    std::ofstream(root / "invalid.wav") << "not a wave";
+    IFileSystem * source = nullptr;
+    std::string error;
+    Require(FrontierX::OpenNativeDirectoryFileSystem(root, &source, error), error.c_str());
+    Require(!streamer->Open("missing.wav", source, 0) &&
+            !streamer->Open("invalid.wav", source, 0), "bad audio accepted");
+    const auto before = messages.size();
+    HSTREAM stream = streamer->Open("TONE.WAV", source, 0);
+    Require(stream && streamer->GetStatus(stream) == IStreamer::STOPPED && messages.size() == before,
+            "Open must defer initialization notification");
+    window->ServeMessageQueue(WMF_BACKGROUND);
+    Require(messages.back().message == 0x500 && messages.back().wparam == IStreamer::INITSUCCESS &&
+            messages.back().lparam == reinterpret_cast<LPARAM>(stream), "init message mismatch");
+    S32 volume = 0;
+    Require(streamer->SetVolume(stream, -2000) && streamer->GetVolume(stream, &volume) && volume == -2000 &&
+            !streamer->SetVolume(stream, 1), "volume contract failed");
+    Require(streamer->Restart(stream) && streamer->Stop(stream), "pause failed");
+    SDL_Delay(150);
+    window->ServeMessageQueue(WMF_BACKGROUND);
+    Require(streamer->GetStatus(stream) == IStreamer::STOPPED, "paused stream completed");
+    Require(streamer->Restart(stream), "resume failed");
+    const Uint64 deadline = SDL_GetTicks() + 3000;
+    while (streamer->GetStatus(stream) != IStreamer::COMPLETED && SDL_GetTicks() < deadline)
+    { window->ServeMessageQueue(WMF_BACKGROUND); SDL_Delay(5); }
+    Require(streamer->GetStatus(stream) == IStreamer::COMPLETED &&
+            messages.back().wparam == IStreamer::COMPLETED && !streamer->Restart(stream),
+            "playback did not complete or replay was accepted");
+    std::vector<WPARAM> states;
+    for (const auto & record : messages)
+        if (record.message == 0x500 && record.lparam == reinterpret_cast<LPARAM>(stream))
+            states.push_back(record.wparam);
+    Require(states == std::vector<WPARAM>{IStreamer::INITSUCCESS, IStreamer::EOFREACHED, IStreamer::COMPLETED},
+            "stream notification order or multiplicity changed");
+    Require(streamer->CloseHandle(stream) && !streamer->CloseHandle(stream) &&
+            streamer->GetStatus(stream) == IStreamer::INVALID, "stale handle accepted");
+    HSTREAM loop = streamer->Open("tone.wav", source, STRMFL_LOOPING | STRMFL_PLAY);
+    Require(loop && loop != stream, "loop handle was reused");
+    const Uint64 loopUntil = SDL_GetTicks() + 350;
+    while (SDL_GetTicks() < loopUntil) { window->ServeMessageQueue(WMF_BACKGROUND); SDL_Delay(5); }
+    Require(streamer->GetStatus(loop) == IStreamer::PLAYING && streamer->CloseHandle(loop),
+            "loop prematurely completed");
+    HSTREAM cancelled = streamer->Open("tone.wav", source, STRMFL_PLAY);
+    Require(cancelled != nullptr, "cancel test open failed");
+    closeOnInit = streamer;
+    window->ServeMessageQueue(WMF_BACKGROUND);
+    closeOnInit = nullptr;
+    Require(streamer->GetStatus(cancelled) == IStreamer::INVALID,
+            "notification callback close did not invalidate stream");
+    wav[20] = 2; wav[21] = 4;
+    wav.resize(40); // Truncated IAC must fail even with an available decoder.
+    std::ofstream unsupported(root / "iac.wav", std::ios::binary);
+    unsupported.write(reinterpret_cast<const char *>(wav.data()), static_cast<std::streamsize>(wav.size()));
+    unsupported.close();
+    Require(!streamer->Open("iac.wav", source, 0), "truncated IAC falsely succeeded");
+#if defined(FRONTIERX_HAVE_IAC_DECODER)
+    SDL_AudioSpec rejectedSpec{SDL_AUDIO_U8, 2, 1234};
+    std::vector<Uint8> rejectedSamples{1, 2, 3};
+    Require(!FrontierX::DecodeNativeIacWave(wav, rejectedSpec, rejectedSamples) &&
+            rejectedSamples == std::vector<Uint8>{1, 2, 3} && rejectedSpec.freq == 1234,
+            "failed IAC decode mutated caller output");
+#endif
+    if (const char * archive = std::getenv("FRONTIERX_STREAMER_ARCHIVE"))
+    {
+        IFileSystem * external = nullptr;
+        Require(FrontierX::OpenNativeUtfFileSystem(archive, &external, error), error.c_str());
+        const char * entry = std::getenv("FRONTIERX_STREAMER_ENTRY");
+        Require(entry && *entry, "external audio requires an explicit entry");
+        Uint64 durationMs = 0;
+#if defined(FRONTIERX_HAVE_IAC_DECODER)
+        WIN32_FIND_DATA found{};
+        HANDLE search = external->FindFirstFile(entry, &found);
+        Require(search != INVALID_HANDLE_VALUE && external->FindClose(search), "external entry lookup failed");
+        DAFILEDESC waveEntry(found.cFileName);
+        HANDLE input = external->OpenChild(&waveEntry);
+        Require(input != INVALID_HANDLE_VALUE, "external entry open failed");
+        const DWORD size = external->GetFileSize(input);
+        Require(size <= 64U * 1024U * 1024U, "external wave too large");
+        std::vector<Uint8> compressed(size);
+        DWORD read = 0;
+        Require(external->ReadFile(input, compressed.data(), size, &read, nullptr) && read == size &&
+                external->CloseHandle(input), "external wave read failed");
+        SDL_AudioSpec decodedSpec{};
+        std::vector<Uint8> decodedSamples;
+        Require(FrontierX::DecodeNativeIacWave(compressed, decodedSpec, decodedSamples), "IAC decode failed");
+        durationMs = 1000ULL * decodedSamples.size() /
+            (sizeof(float) * static_cast<Uint64>(decodedSpec.channels) *
+             static_cast<Uint64>(decodedSpec.freq));
+        std::uint64_t hash = 14695981039346656037ULL;
+        for (Uint8 byte : decodedSamples) { hash ^= byte; hash *= 1099511628211ULL; }
+        std::cout << "IAC PCM: frequency " << decodedSpec.freq << "; channels " << decodedSpec.channels
+                  << "; bytes " << decodedSamples.size() << "; FNV1a64 " << hash << '\n';
+#endif
+        const Uint64 speechStart = SDL_GetTicks();
+        HSTREAM speech = streamer->Open(entry, external, STRMFL_PLAY);
+        external->Release();
+        Require(speech != nullptr, "external WAV failed to decode/open");
+        if (durationMs > 45000)
+        {
+            const Uint64 limit = SDL_GetTicks() + 150;
+            while (SDL_GetTicks() < limit)
+            { window->ServeMessageQueue(WMF_BACKGROUND); SDL_Delay(5); }
+            Require(streamer->GetStatus(speech) == IStreamer::PLAYING &&
+                    streamer->Stop(speech) && streamer->CloseHandle(speech),
+                    "external long WAV did not play and stop");
+            std::cout << "External long WAV played and stopped through native IStreamer; elapsed-ms "
+                      << SDL_GetTicks() - speechStart << '\n';
+        }
+        else
+        {
+            const Uint64 limit = SDL_GetTicks() + 45000;
+            while (streamer->GetStatus(speech) != IStreamer::COMPLETED && SDL_GetTicks() < limit)
+            { window->ServeMessageQueue(WMF_BACKGROUND); SDL_Delay(5); }
+            Require(streamer->GetStatus(speech) == IStreamer::COMPLETED && streamer->CloseHandle(speech),
+                    "external WAV did not complete");
+            std::cout << "External WAV playback completed through native IStreamer; elapsed-ms "
+                      << SDL_GetTicks() - speechStart << '\n';
+        }
+    }
+    source->Release();
+    streamer->Release();
+    aggregate->Release();
+    messages.clear();
+    std::cout << "Native IStreamer: decoded WAV, deferred init, pause/resume, completion, loop and stale handles passed\n";
 }
 
 struct CloseCallback final : ISystemEventCallback
@@ -194,6 +369,8 @@ int main()
         Push(event);
         window->ServeMessageQueue(WMF_BACKGROUND);
         Require(exit_calls == 1, "quit event did not invoke the configured exit callback");
+
+        CheckStreamer(manager, window);
 
         Require(close_point->Unadvise(close_token) == GR_OK,
             "close callback unsubscribe failed");

@@ -41,9 +41,18 @@ Read the smallest relevant authoritative document before changing code:
   temporary GPU after startup; a supplied profile can also create the `IRenderPipeline` aggregate, and
   both bind after GPU startup. The production `IViewConstructor` and
   `TextureLibrary` now aggregate from a supplied profile; the checked-in
-  `Conquest.ini` next stops at
-  `IStreamer`. Retail profiles and game
-  startup remain open.
+  `Conquest.ini` creates the native SDL-backed `IStreamer`; explicit
+  `--skip-movies` uses the existing App flag to omit only full-screen
+  `IVideoSystem`. The unchanged source profile now completes
+  `GameSystem::startup` with the production particle, mesh, animation,
+  hardpoint and Optics owners on external data under GCC and Clang. The existing shell
+  check creates and releases a real point-emitter program. The production
+  `IChannel2` decoder now loads the external Forger `Sc_build` animation
+  through `IAnimation` under both compilers. App global-owner
+  initialization, mission startup and particle initialization remain open.
+  Generated PCM playback works; an explicit external shared-LGPL FFmpeg
+  configuration also decodes and plays the selected training speech. See `docs/NATIVE_AUDIO_STREAMER.md`.
+  The native shell has not entered the retail game or a mission.
 - The production `DOCUVIEW` parser core now compiles and parses a generated
   Win32-shaped record in a native check. Its `long` and pointer field sizes
   match four-byte Win32 layout, and production `IDataParser` enumerates its
@@ -319,9 +328,12 @@ cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```
 
-Use `linux-clang-debug` for the corresponding Clang sequence. The checked-in presets currently
+Use `linux-clang-debug` for the corresponding Clang sequence. The optional IAC
+path uses `-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON -DCMAKE_PREFIX_PATH=/external/lgpl-prefix`
+at configure; see `docs/NATIVE_AUDIO_STREAMER.md` for the reviewed external
+shared-LGPL dependency build. Default builds remain SDL-only and reject IAC. The checked-in presets currently
 enable SDL3 and the isolated SDL GPU target and therefore require SDL3's `pkg-config` module and
-`glslc`. These commands build the documented native graph, not the game. For the latest measured
+`glslc`; the selected `Sol_T` source-resource target also requires Python 3 and `llvm-rc`. These commands build the documented native graph, not the game. For the latest measured
 targets and results, use [docs/BUILD_GRAPH.md](docs/BUILD_GRAPH.md).
 
 Use `Tools/abicheck`, schema readers, compile-time layout assertions and
