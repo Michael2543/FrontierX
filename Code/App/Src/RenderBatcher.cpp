@@ -40,6 +40,7 @@ extern IVertexBufferManager *VB_MANAGER;
 #include "TempStr.h"
 #include <algorithm>
 #include <cfloat>
+#include <cstdio>
 
 #ifndef EDITOR
 	#define USE_HEAP 1
@@ -2327,6 +2328,11 @@ DA_METHOD(	draw_primitive,(D3DPRIMITIVETYPE type, U32 vertex_format, const void 
 	}
 	
 	GENRESULT result = PIPE->draw_primitive( type, vertex_format, verts, num_verts, flags );
+#if !defined(_WIN32)
+	if (result != GR_OK)
+		std::fprintf(stderr, "Native RenderBatcher draw rejected: result=%d topology=%u fvf=%u vertices=%d flags=%u\n",
+			int(result), unsigned(type), unsigned(vertex_format), num_verts, unsigned(flags));
+#endif
 
 //	QueryPerformanceCounter((LARGE_INTEGER *)&time2);
 

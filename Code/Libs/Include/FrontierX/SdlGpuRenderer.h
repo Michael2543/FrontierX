@@ -13,6 +13,9 @@
 
 class Transform;
 class Matrix4;
+struct SDL_GPUCommandBuffer;
+struct SDL_GPUColorTargetInfo;
+struct SDL_GPUDepthStencilTargetInfo;
 
 namespace FrontierX
 {
@@ -57,6 +60,7 @@ public:
     GENRESULT SetRenderState(const RenderStateSnapshot & state);
     GENRESULT SetModelview(const Transform & modelview);
     GENRESULT SetProjection(const Matrix4 & projection);
+    GENRESULT SetViewport(int x, int y, int width, int height);
     GENRESULT SetVertexConstants(std::uint32_t firstRegister,
                                  const float * values,
                                  std::uint32_t registerCount);
@@ -69,6 +73,10 @@ public:
     GENRESULT DestroyTexture(std::uint32_t handle);
     GENRESULT BindTexture(std::uint32_t stage, std::uint32_t handle);
     bool IsTexture(std::uint32_t handle) const;
+    static GENRESULT ClearFrameCallback(void * context, U32 color, U32 depth);
+    static GENRESULT PresentFrameCallback(void * context);
+    bool BeginFrame(std::string & error);
+    std::size_t FrameSubmissionCount() const;
     bool Present(bool & presented, std::string & error);
     bool Readback64(SdlGpuReadback & result, std::string & error);
     void Shutdown();
@@ -87,6 +95,8 @@ public:
         void * context, const Transform & modelview);
     static GENRESULT DACOM_CDECL ProjectionCallback(
         void * context, const Matrix4 & projection);
+    static GENRESULT DACOM_CDECL ViewportCallback(
+        void * context, int x, int y, int width, int height);
     static GENRESULT DACOM_CDECL VertexConstantsCallback(
         void * context, UINT firstRegister, const FLOAT * values,
         UINT registerCount);
@@ -120,9 +130,15 @@ public:
     std::uint32_t FixtureTextureHandle() const;
 
 private:
+    bool DrawCapturedFrame(SDL_GPUCommandBuffer * commandBuffer,
+                           SDL_GPUColorTargetInfo * colorTarget,
+                           SDL_GPUDepthStencilTargetInfo * depthTarget, std::uint32_t width,
+                           std::uint32_t height, bool readback,
+                           std::string & error);
     GENRESULT SubmitBytes(const void * vertices, std::size_t vertexCount,
                           std::size_t vertexStride, const std::uint16_t * indices,
-                          std::size_t indexCount, unsigned vertexFormat);
+                          std::size_t indexCount, unsigned vertexFormat,
+                          PrimitiveTopology topology = PrimitiveTopology::TriangleList);
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

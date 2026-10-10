@@ -386,7 +386,7 @@ void MScript::SetScriptData (const CQSCRIPTDATADESC & desc)
 //
 static void saveParseData (IFileSystem * outFile)
 {
-#ifdef _DEBUG
+#if defined(_DEBUG) || !defined(_WIN32)
 	COMPTR<IFileSystem> file;
 	DAFILEDESC fdesc = "\\Script\\ParseData";
 	DWORD dwWritten;
@@ -396,7 +396,19 @@ static void saveParseData (IFileSystem * outFile)
 	fdesc.dwShareMode = 0;  // no sharing
 	fdesc.dwCreationDistribution = CREATE_ALWAYS;
 	if (outFile->CreateInstance(&fdesc, file) == GR_OK)
+	{
+#if !defined(_WIN32)
+		const BOOL written = file->WriteFile(0, g_preprocessData, g_preprocessSize, &dwWritten, 0);
+		if (!written || dwWritten != g_preprocessSize)
+			std::abort();
+#else
 		file->WriteFile(0, g_preprocessData, g_preprocessSize, &dwWritten, 0);
+#endif
+	}
+#if !defined(_WIN32)
+	else
+		std::abort();
+#endif
 #endif
 }
 //--------------------------------------------------------------------------//
@@ -412,13 +424,31 @@ static void saveGlobalData (IFileSystem * outFile)
 	fdesc.dwShareMode = 0;  // no sharing
 	fdesc.dwCreationDistribution = CREATE_ALWAYS;
 	if (outFile->CreateInstance(&fdesc, file) == GR_OK)
+	{
+#if !defined(_WIN32)
+		const BOOL written = file->WriteFile(0, g_pScriptData, g_scriptDataSize, &dwWritten, 0);
+		if (!written || dwWritten != g_scriptDataSize)
+			std::abort();
+#else
 		file->WriteFile(0, g_pScriptData, g_scriptDataSize, &dwWritten, 0);
+#endif
+	}
+#if !defined(_WIN32)
+	else
+		std::abort();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 static void saveProgramData (IFileSystem * outFile)
 {
+#if !defined(_WIN32)
+	const BOOL programsDirectory = outFile->CreateDirectory("Programs");
+	if (!programsDirectory)
+		std::abort();
+#else
 	outFile->CreateDirectory("Programs");
+#endif
 	if (outFile->SetCurrentDirectory("Programs") != 0)
 	{
 		COMPTR<IFileSystem> file;
@@ -443,28 +473,62 @@ static void saveProgramData (IFileSystem * outFile)
 				std::abort();
 #endif
 			if (outFile->CreateInstance(&fdesc, file) == GR_OK)
+			{
+#if !defined(_WIN32)
+				const BOOL written = file->WriteFile(0, ((char *)node->pProgram) + node->pScript->saveOffset, node->pScript->saveSize, &dwWritten, 0);
+				if (!written || dwWritten != node->pScript->saveSize)
+					std::abort();
+#else
 				file->WriteFile(0, ((char *)node->pProgram) + node->pScript->saveOffset, node->pScript->saveSize, &dwWritten, 0);
+#endif
+			}
+#if !defined(_WIN32)
+			else
+				std::abort();
+#endif
 
 			node = node->pNext;
 		}
 	}
+#if !defined(_WIN32)
+	else
+		std::abort();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MScript::Save (IFileSystem * outFile)
 {
+#if !defined(_WIN32)
+	const BOOL scriptDirectory = outFile->CreateDirectory("\\Script");
+	if (!scriptDirectory)
+		std::abort();
+#else
 	outFile->CreateDirectory("\\Script");
+#endif
 	if (outFile->SetCurrentDirectory("\\Script") == 0)
+#if !defined(_WIN32)
+		std::abort();
+#else
 		goto Done;
+#endif
 
 	RecursiveDelete(outFile);
 
-	if (g_hScriptDLL && g_preprocessData)
+	if (g_preprocessData
+#if defined(_WIN32)
+		&& g_hScriptDLL
+#endif
+	)
 	{
 		saveParseData(outFile);
 		saveGlobalData(outFile);
 		saveProgramData(outFile);
 	}
+#if !defined(_WIN32)
+	else
+		std::abort();
+#endif
 
 	MGlobals::SetLastStreamID(SOUNDMANAGER->GetLastStreamID());
 	MGlobals::SetLastTeletypeID(TELETYPE->GetLastTeletypeID());
@@ -702,13 +766,13 @@ void MScript::Load (IFileSystem * inFile)
 	{
 		std::fprintf(stderr, "Native training script prerequisites missing: %s\n",
 			scriptName);
+		std::fprintf(stderr, "scripts=%d start=%d parser=%d sound=%d teletype=%d string=%d scripting=%d\n",
+			g_pScripts != NULL, findScript("SolTrain_Start") != NULL,
+			PARSER != NULL, SOUNDMANAGER != NULL, TELETYPE != NULL,
+			STRINGTABLE != NULL, SCRIPTING != NULL);
 		std::abort();
 	}
-	if (MGlobals::GetUpdateCount() != 0)
-	{
-		std::fputs("Native saved script reload is not implemented\n", stderr);
-		std::abort();
-	}
+	const U32 updateCount = MGlobals::GetUpdateCount();
 	FrontierXInitializeSolTrainScript();
 	SOUNDMANAGER->SetLastStreamID(MGlobals::GetLastStreamID());
 	TELETYPE->SetLastTeletypeID(MGlobals::GetLastTeletypeID());
@@ -721,6 +785,11 @@ void MScript::Load (IFileSystem * inFile)
 			std::abort();
 		}
 		loadParseData(inFile, parser);
+		if (updateCount > 0)
+		{
+			loadGlobalData(inFile, parser);
+			loadProgramData(inFile, parser);
+		}
 		loadStringTable(*inFile);
 		loadScripts(*inFile);
 	}
@@ -3934,9 +4003,18 @@ S32 MScript::GetGameSpeed (void)
 /* audio video text */
 //--------------------------------------------------------------------------//
 //
+static bool NativeShowSubtitle()
+{
+#if !defined(_WIN32)
+	if (NATIVE_SKIP_SUBTITLES) return false;
+	CQASSERT(SUBTITLE);
+#endif
+	return true;
+}
+
 void MScript::BriefingSubtitle(U32 soundHandle, U32 subtitle)
 {
-	if(subtitle)
+	if(subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewBriefingSubtitle(GetCountedString(subtitle),soundHandle);
 	}
@@ -3953,7 +4031,7 @@ bool MScript::IsAudioThere (const char * fileName)
 U32 MScript::PlayAudio (const char * fileName, U32 subtitle)
 {
 	U32 handle = SOUNDMANAGER->PlayAudioMessage(fileName);
-	if(handle && subtitle)
+	if(handle && subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewSubtitle(GetCountedString(subtitle),handle);
 	}
@@ -3965,7 +4043,7 @@ U32 MScript::PlayAudio (const char * fileName,const MPartRef & speaker, U32 subt
 {
 	MCachedPart & object = speaker.getPartFromCache();
 	U32 handle = SOUNDMANAGER->PlayAudioMessage(fileName,object.obj);
-	if(handle && subtitle)
+	if(handle && subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewSubtitle(GetCountedString(subtitle),handle);
 	}
@@ -3977,7 +4055,7 @@ U32 MScript::PlayCommAudio (const char * fileName,const MPartRef & speaker, U32 
 {
 	MCachedPart & object = speaker.getPartFromCache();
 	U32 handle = SOUNDMANAGER->PlayCommMessage(fileName,NULL,object.obj);
-	if(handle && subtitle)
+	if(handle && subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewSubtitle(GetCountedString(subtitle),handle);
 	}
@@ -3988,7 +4066,7 @@ U32 MScript::PlayCommAudio (const char * fileName,const MPartRef & speaker, U32 
 U32 MScript::PlayAnimatedMessage (const char * filename, const char * animType, S32 x, S32 y,U32 subtitle)
 {
 	U32 handle = SOUNDMANAGER->PlayAnimatedMessage(filename, animType, x, y);
-	if(subtitle)
+	if(subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewSubtitle(GetCountedString(subtitle),handle);
 	}
@@ -4000,7 +4078,7 @@ U32 MScript::PlayAnimatedMessage (const char * filename, const char * animType, 
 {
 	MCachedPart & object = speaker.getPartFromCache();
 	U32 handle = SOUNDMANAGER->PlayAnimatedMessage(filename, animType, x, y, object.obj);
-	if(subtitle)
+	if(subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewSubtitle(GetCountedString(subtitle),handle);
 	}

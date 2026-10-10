@@ -31,9 +31,20 @@
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectPhysics : public Base
 {
-	struct InitNode			initNode;
+#if defined(_WIN32)
+	struct InitNode initNode;
 	struct PhysUpdateNode physUpdateNode;
 	typename typedef Base::INITINFO PHYSICSINITINFO;
+#else
+	typename Base::InitNode initNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typedef typename Base::INITINFO PHYSICSINITINFO;
+	using typename Base::InitProc;
+	using typename Base::PhysUpdateProc;
+	using Base::transform;
+	using Base::velocity;
+	using Base::ang_velocity;
+#endif
 
 	bool bEnablePhysics;
 

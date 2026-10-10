@@ -1,5 +1,272 @@
 # Native GameSystem startup boundary
 
+Current playable mission startup, 2026-10-10: the active native
+GameSystem/App composition loaded lawful external `Sol_Train`, kept the
+source-profile `IStreamer` bound for Music/SFX/Speech/MSpeech and omitted
+full-screen `IVideoSystem` only with explicit `--skip-movies`. Original
+mission/global/script, object/input/offline operation and simulation owners
+ran through a normal mouse-selected Forger move. GCC and Clang separate
+visible Vulkan processes completed 299/298 source updates respectively, training
+objectives 1 and 2, and a source mission save/reload preserving the moved
+player unit and both flags. Other optional media/UI exclusions and exact
+runtime evidence are in [the focused acceptance record](NATIVE_SINGLEPLAYER_SLICE.md#playable-solarian-training-checkpoint-2026-10-10).
+The source `CQDoModal` render/scene contract remains the next broader-loop
+gate; unit voice and teletype visuals are incomplete startup-facing
+presentation contracts. Native Windows/ABI and retail parity are open.
+Entries below are historical snapshots.
+
+Current first-frame startup, 2026-10-10: the original external `Sol_Train`
+mission loads a player-owned Forger and runs `CQE_GAME_ACTIVE` plus one
+`CQE_UPDATE` under GCC and Clang visible Linux GPU processes. Source camera
+initialization and native `IRenderPrimitive::set_perspective` now allow 28
+production draws to reach a visible SDL/Vulkan frame. The source-profile
+`IStreamer` is required and initialized. `--skip-movies` explicitly omits
+only full-screen `IVideoSystem`; the diagnostic run separately excludes
+unsupported IAC training speech and optional presentation layers. Source
+`Mission::Save` and `Mission::Load` now preserve the player Forger's static
+owner and position in an isolated native save under both compilers. No
+normal input loop, move or post-move save/reload has run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#source-perspective-and-multi-draw-mission-frame-2026-10-10).
+Entries below are historical snapshots.
+
+Current external mission startup, 2026-10-10: original `Planetoid.cpp` and
+relative Windows-style archive child paths resolved the earlier planet
+placement failure. GCC and Clang visible native processes each completed
+`Mission::Load`, counted one player-owned Forger, sent `CQE_GAME_ACTIVE` and
+completed one `CQE_UPDATE`. Required source-profile `IStreamer` initialized;
+default SDL-only decoding rejects IAC training speech, which the diagnostic
+run explicitly disabled along with portrait/subtitle presentation. Explicit
+`--skip-movies` alone omits full-screen `IVideoSystem`. The current render
+pass made no GPU submission because the source Forger projected outside the
+pane; normal input and save/reload remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-planet-owner-game-active-update-and-first-object-render-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission startup result, 2026-10-10: GCC and Clang visible
+Wayland/Vulkan external-data runs now link the original Jumpgate, Waypoint,
+Trigger, Gunboat and build-support Platform registrations along with Forger.
+The present `Mission::Load` aborts when a `Cocoonr` platform has no planet
+instance to park around; `Planetoid.cpp` is not linked. Required
+source-profile `IStreamer` remains active, while only explicit `--skip-movies`
+omits full-screen `IVideoSystem`. No source update loop or gameplay has run.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#source-mission-object-chain-through-platform-placement-2026-10-10).
+Entries below are historical snapshots.
+
+Current production startup result, 2026-10-10: the native source-profile
+`IStreamer` remains required and initialized, while explicit `--skip-movies`
+omits only full-screen `IVideoSystem`. GCC/Clang visible external-data
+`Sol_Train` runs now link the original Forger factory/ship closure, complete
+`Mission::Load`, and count one Forger in the production object list. A
+validated native UTF archive index and case-insensitive `IFileSystem` lookup
+made the Forger mesh available. The next source `CQE_GAME_ACTIVE` transition
+aborts in `MScript::GetPartByName` for `Wormhole to Kasse (Solar)` because
+the original jumpgate provider is absent. No update/render/input loop or
+save/reload executed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-forger-instance-and-next-script-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current object-owner gate, 2026-10-10: the original Forger factory source
+builds as a native GCC/Clang object, but a production shell trial link failed
+on original ship/movement templates and App services. Its registrar has not
+run, and the preceding full mission load still has no Forger. Required
+`IStreamer` remains in the source profile; full-screen `IVideoSystem` is
+excluded only by explicit `--skip-movies`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#forger-object-compile-and-first-production-link-inventory-2026-10-10).
+Entries below are historical snapshots.
+
+Current factory boundary, 2026-10-10: original `Fabricator.cpp` owns the
+static startup registrar needed by the production ObjectList, but is not in
+the native shell link. Its native source closure now reaches instantiated
+selection templates under direct GCC/Clang checks and still fails to compile.
+The existing GameSystem/mission-load runtime result below remains the last
+external-data execution; no new factory or gameplay ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#forger-factory-source-closure-remains-open-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission startup, 2026-10-10: the active GameSystem, App global
+startup and original `Mission::Load` complete on lawful external `Sol_Train`
+under GCC and Clang visible Vulkan. Required `IStreamer` is bound to Music,
+SFX, Speech and MSpeech. Native App mission-facing sound/teletype owners
+provide the script's saved-ID contract; unsupported playback/display requests
+fail explicitly. `IVideoSystem` is omitted by `--skip-movies`, and inherited
+menu music by separate `--skip-mission-music`. The source in-game event is
+sent before load to initialize fog dimensions. Missing original object
+factories leave the production list without its Forger, so the shell exits 6 before the
+game loop. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-sol_train-load-completion-before-playable-objects-2026-10-10).
+Entries below are historical snapshots.
+
+Current production script boundary, 2026-10-10: the native shell's active
+GameSystem and original `Mission::Load` reach 88% on external `Sol_Train`
+under GCC and Clang visible Vulkan. Original App `VertexBuffer.cpp` and
+`scripting.cpp` now join global startup. The selected `Sol_T` source program
+is registered, but original SoundManager and Teletype aggregates remain
+uninitialized, so `MScript::Load` aborts before script execution. Required
+`IStreamer` ran; `IVideoSystem` was explicitly omitted by `--skip-movies`.
+No unit, mission frame or save/load ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#external-sol_train-load-reaches-the-script-boundary-2026-10-10).
+Entries below are historical snapshots.
+
+Current production mission load, 2026-10-10: the native shell links the
+original Sector and SpaceEnvironment registrars, completes App global
+startup, initializes source particle/mesh/texture/material services and
+calls `IMission::Load` on external `Sol_Train.dmission`. GCC/Clang visible
+runs reached 25% ObjectList loading and stopped at an Anim2D texture
+assertion after logging three missing object factories. Explicit options
+omit the GDI sector map, background effects, unit labels and full-screen
+movies; required `IStreamer` executed. No playable mission or save/load
+result exists. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-sol_train-load-through-objectlist-2026-10-10).
+Entries below are historical snapshots.
+
+Current `Sector` source closure, 2026-10-10: direct GCC/Clang syntax
+checks now reach the original `Sector` class after native include and
+declaration corrections, but fail in the Win32 sector-map UI and event
+contract. The native shell still lacks the `Sector` registrar, so
+`CreateGlobalComponents` cannot complete. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#sector-source-closure-inventory-2026-10-10).
+Entries below are historical snapshots.
+
+Current Sector prerequisite, 2026-10-10: the original terrain-map owner
+now compiles and links into the GPU shell under GCC and Clang, but its
+factory has not executed. The production `Sector` registrar and its Linux
+UI/resource dependencies still block `CreateGlobalComponents`, before
+`Mission::ReloadMission`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-terrainmap-compile-boundary-for-sector-2026-10-10).
+Entries below are historical snapshots.
+
+Current production App startup, 2026-10-10: the explicit visible
+`--mission-start` path now calls `CreateGlobalComponents` with the active
+GameSystem's required App aggregates bound. GCC and Clang lawful external
+training-data runs initialized required `IStreamer`, parsed the App primary
+schema, and aborted at the missing production `Sector` registrar during App
+light initialization. Only full-screen `IVideoSystem` was explicitly skipped.
+The mission reloader, simulation and save/load did not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-app-startup-attempt-and-sector-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission Engine composition, 2026-10-03: the shell's explicit
+`--mission-engine` path passes the supplied source profile to the original
+`IEngine::load_engine_components`, queries its production `IRenderer`,
+and binds them plus source-profile `IRenderPipeline` and
+`IRenderPrimitive` as native App globals for the shell lifetime. The
+render interfaces are not yet GPU-backed.
+GCC and Clang ran that path on lawfully external training data. The
+synthetic profile without a renderer fails explicitly when this mode is
+requested. App `CreateGlobalComponents` and mission reload still do not
+run; GPU binding for the profile render interfaces and remaining globals are the next startup
+boundary. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-engine-composition-2026-10-03).
+Entries below are historical snapshots.
+
+Current App camera boundary, 2026-10-03: the GPU shell now links the
+production App mission, simulation, input and camera objects and original
+`Sol_T` script under GCC and Clang. Linux excludes the Windows-only debug
+data viewer and menu,
+keeps the camera behavior and subscribes its event callback to the active
+EventSystem. The native shell binds the source hotkey service to `HOTKEY`
+and uses the production `CQE_HOTKEY` message. Neither the camera registrar
+nor the App global startup sequence has executed in the shell. The selected
+external mission remains unopened by `Mission::ReloadMission`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-camera-and-hotkey-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current App startup closure, 2026-10-03: the native shell now links its
+2D App draw owner and PrimitiveBuilder, while temporary GCC/Clang
+combined links include the selected production mission/script objects
+without unresolved symbols. Both combined executables completed the
+existing lawful external-data shell path but did not call
+`CreateGlobalComponents` or `Mission::ReloadMission`. The real App
+camera and further service globals remain the next startup blockers.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-2d-and-combined-mission-link-2026-10-03).
+Entries below are historical snapshots.
+
+Current native renderer handoff, 2026-10-03: the shell's native
+primitive descriptor now binds checked ortho and viewport operations
+to SDL GPU; GCC/Clang CPU contract and full Debug checks passed, and
+separate visible Vulkan runs verified viewport clipping. The
+production Camera/DrawAgent 2D owners are still absent from the shell,
+and `Mission::Reload` has not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-orthographic-and-viewport-contract-2026-10-03).
+Entries below are historical snapshots.
+
+Current native profile and App-owner boundary, 2026-10-03: the shell
+retains the mounted Profiles archive as App `PROFILEDIR`. GCC and Clang
+executed `CreateProfileParser` through the production `IProfileParser2`
+on a synthetic file in the existing shell check; both external
+`Sol_Train` shell runs still reported `mission not started`. Original
+Blast, light, MapGen, MorphMesh and fleet-pool code now compiles as
+native objects, but those objects have not run through
+`CreateGlobalComponents` or `Mission::Reload`. The App light owner
+explicitly aborts if its unsupported D3D9 dynamic/ambient light state
+is requested. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-light-profile-and-fleet-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current native App SFX owner, 2026-10-03: the shell now constructs and
+retains a native `ISFX` after the required source-profile `IStreamer`
+starts. GCC/Clang shell runs exercised the source-mapped `BUTTONPRESS1`
+effect from lawful external training data through FFmpeg and SDL dummy
+audio. Positional playback remains an explicit unsupported call, and
+`Mission::Reload` has not run. Full-screen `IVideoSystem` and the
+notification cue were omitted only with explicit options. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-isfx-and-field-object-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current mission SFX source binding, 2026-10-03: the native shell now
+retains the external SFX filesystem with Music and the required
+`IStreamer`; a missing SFX source fails mission-source startup. GCC and
+Clang shell processes loaded lawful external training data but still
+reported `mission not started`. The full-screen `IVideoSystem` and the
+notification cue were omitted only with explicit options. `ISFX`
+playback remains the next production contract. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#external-sfx-source-binding-2026-10-03).
+Entries below are historical snapshots.
+
+Current App field-owner boundary, 2026-10-03: original field, App 2D
+animation and dust owners now compile under GCC and Clang, but are not
+yet linked into an executing mission. The combined App/script link
+still lacks the production SFX and other dependencies; the external
+training-data shell continues to report `mission not started`.
+`IStreamer` initializes as a required profile service. Full-screen
+`IVideoSystem` is omitted only with explicit `--skip-movies`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#field-and-animation-owner-compile-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current App system binding, 2026-10-03: the native shell now queries
+the source-profile `IParticleManager` from its active GameSystem and
+retains it in the App global for the mission-source path. Both GCC and
+Clang process checks and lawful external training-data shell runs
+exercised this binding. `Conquest.cpp`'s later `InitParticles` call and
+`CreateGlobalComponents` remain unexecuted, so no mission tick ran.
+Required `IStreamer` still initializes; full-screen `IVideoSystem` is
+omitted only with explicit `--skip-movies`. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-command-tracker-and-app-particle-binding-2026-10-03).
+Entries below are historical snapshots.
+
+Current mission-owner closure, 2026-10-03: the selected external
+training mission has no saved player-AI directories, and the native
+factory aborts if AI creation is requested. The production
+`UnbornMeshList` compiles but has not executed through App startup.
+`Mission::Reload` still cannot link because 23 App/service symbols
+remain; `COMMTRACK` is the next production owner. Required
+`IStreamer` and explicit `--skip-movies` remain the media policy. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-mission-ai-and-app-render-owner-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current save/startup boundary, 2026-10-03: the native shell can bind a
+writable `SAVEDIR` only with explicit `--save-root` outside the retail
+data root; the platform UTF writer supplies `IUTFWriter::Flush`. The
+existing generated create/flush/reopen check now passes with GCC and
+Clang after a first-flush temporary-path fix. This does not execute
+`Mission::Save` or `Mission::Reload`; the combined App/script link
+still has 27 missing symbols with the existing native primitive
+builder included. `IStreamer` remains a required initialized source
+profile service. The full-screen `IVideoSystem` omission still
+requires explicit `--skip-movies`; the selected pre-combat movement
+checkpoint does not require a movie. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#writable-save-flush-and-current-mission-link-check-2026-10-03).
+Entries below are historical snapshots.
+
 Latest save-format gate, 2026-09-27: the native platform layer can
 encode deterministic UTF 1.01 bytes from a bounded directory tree;
 the existing data-root check reopens those bytes through the

@@ -57,9 +57,40 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <DEffectOpts.h>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#endif
 
+#if !defined(_WIN32)
+#include "TObjFrame.h"
+#endif
 #include "TSpaceShip.h"
 #include "TobjArtifact.h"
 #include "ObjList.h"
@@ -81,12 +112,12 @@
 
 #include <TComponent.h>
 #include <IConnection.h>
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <HKEvent.h>
-#include <3DMath.h>
-#include <Physics.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <physics.h>
+#include <Filesys.h>
 #include <WindowManager.h>
 #include <IAnim.h>
 #include <IHardPoint.h>
@@ -795,7 +826,7 @@ BOOL32 Gunboat::updateBoat (void)
 
 		if (bSpecialAttack==0 && bArtifactUse==0)		// don't cancel attacks for special attacks
 		{
-			MPart part = target;
+			MPart part = target.Ptr();
 			if (part.isValid()==0 || part->hullPoints==0)
 				cancelAttack();
 			else
@@ -1409,7 +1440,7 @@ void Gunboat::OnAllianceChange (U32 allyMask)
 			U32 dummy;
 			U8 hisPlayerID=0;
 			
-			VOLPTR(IExtent) extentObj = target;
+			VOLPTR(IExtent) extentObj = target.Ptr();
 			
 			if (extentObj)
 			{
@@ -3194,7 +3225,9 @@ BOOL32 GunboatFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	GUNBOATTEXMEMUSED = 0;
@@ -3213,7 +3246,14 @@ IBaseObject * GunboatFactory::CreateInstance (HANDLE hArchetype)
 void GunboatFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fprintf(stderr, "Native Gunboat editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

@@ -425,7 +425,11 @@ struct DACOM_NO_VTABLE IBaseCamera : public IDAComponent
 
 	DEFMETHOD_(SINGLE,GetCameraLOD) (void) = 0;
 
-	virtual bool SphereInFrustrum(const Vector &pos,float radius_3d,float & cx,float & cy,float & radius_2d,float & depth);
+	virtual bool SphereInFrustrum(const Vector &pos,float radius_3d,float & cx,float & cy,float & radius_2d,float & depth)
+#if !defined(_WIN32)
+		= 0
+#endif
+		;
 
 	virtual bool SphereInFrustrumFast(const Vector &pos,float radius_3d) = 0;
 

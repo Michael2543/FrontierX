@@ -11,18 +11,47 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <3dmath.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <renderer.h>
+#include <DEffectOpts.h>
+#include <ENGINE.H>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#endif
 
 #include "Sector.h"
 //#include "TObjTrans.h"
 //#include "TObjControl.h"
-//#include "TObjFrame.h"
+#if !defined(_WIN32)
+#include "TObjFrame.h"
+#endif
 #include "TSpaceShip.h"
-#include <DSpaceShip.h>
+#include <DSpaceship.h>
 #include "TObject.h"
-#include "Objlist.h"
-#include "Iplanet.h"
+#include "ObjList.h"
+#include "IPlanet.h"
 #include "Startup.h"
 #include "TFabricator.h"
 #include "Mission.h"
@@ -36,7 +65,7 @@
 #include <IConnection.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <EventSys.h>
 
 #define NO_PATH_DIST 8000
@@ -3015,7 +3044,12 @@ void Fabricator::receiveOperationData (U32 agentID, void *buffer, U32 bufferSize
 
 			if(workTarg)
 			{
-				MPart part = workTarg;
+				MPart part =
+#if defined(_WIN32)
+					workTarg;
+#else
+					workTarg.Ptr();
+#endif
 				oldHullPoints = part->hullPoints;
 
 				Vector pos,dir;
@@ -3876,7 +3910,9 @@ BOOL32 FabricatorFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -3893,7 +3929,14 @@ IBaseObject * FabricatorFactory::CreateInstance (HANDLE hArchetype)
 void FabricatorFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fprintf(stderr, "Native Fabricator editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

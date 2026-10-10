@@ -950,10 +950,13 @@ BOOL32 Mission::Save (const C8 * fileName, struct IComponentFactory * pParent)
 	inFile->SetCurrentDirectory("\\");
 	RecursiveDelete(inFile);
 #endif
-#ifdef _DEBUG
+#if defined(_DEBUG) || !defined(_WIN32)
 	if (SaveParseData() == 0)
 	{
 		CQERROR0("Failed write to save game");
+		#if !defined(_WIN32)
+		goto Done;
+		#endif
 	}
 #endif
 
@@ -962,7 +965,15 @@ BOOL32 Mission::Save (const C8 * fileName, struct IComponentFactory * pParent)
 	savePlayerAI(inFile);
 	CAMERAMANAGER->Save(inFile);
 	NUGGETMANAGER->Save(inFile);
+	#if !defined(_WIN32)
+	if (!OBJLIST->Save(inFile))
+	{
+		std::fputs("Native mission object-list save failed\n", stderr);
+		goto Done;
+	}
+	#else
 	OBJLIST->Save(inFile);
+	#endif
 	THEMATRIX->Save(inFile);
 	MUSICMANAGER->Save(inFile);
 	FOGOFWAR->Save(inFile);
@@ -3923,6 +3934,12 @@ void __stdcall MissionResetHeap (IHeap * heap)
 {
 	HEAP = heap;
 }
+#if !defined(_WIN32)
+BOOL32 LoadNativeSelectedMission(const C8 *name, IComponentFactory *source)
+{
+	return MISSION && name && source && MISSION->Load(name, source);
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 //------------------------------------------------------------------------------------//

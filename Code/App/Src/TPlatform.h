@@ -29,7 +29,7 @@
 #endif
 
 #ifndef ANIM2D_H
-#include "Anim2D.h"
+#include "anim2d.h"
 #endif
 
 #ifndef IBLINKERS_H
@@ -41,7 +41,7 @@
 #endif
 
 #ifndef IFABRICATOR_H
-#include "IFabricator.h"
+#include "ifabricator.h"
 #endif
 
 #ifndef OBJMAP_H
@@ -49,7 +49,7 @@
 #endif
 
 #ifndef SYSMAP_H
-#include "sysmap.h"
+#include "SysMap.h"
 #endif
 
 #ifndef FIELD_H
@@ -59,7 +59,7 @@
 #include "TerrainMap.h"
 #include "IWeapon.h"
 #include "IPlanet.h"
-#include "FogofWar.h"
+#include "FogOfWar.h"
 #include "Mission.h"
 #include "MPart.h"
 #include <DPlatform.h>
@@ -79,6 +79,28 @@
 #include "CQLight.h"
 
 #include <DEffectOpts.h>
+
+#if !defined(_WIN32)
+namespace FrontierXPlatform
+{
+inline void Lower(char *text)
+{
+    for (; *text; ++text)
+        if (*text >= 'A' && *text <= 'Z') *text = static_cast<char>(*text + ('a' - 'A'));
+}
+inline bool CaseEqual(const char *left, const char *right)
+{
+    while (*left && *right)
+    {
+        char a = *left++, b = *right++;
+        if (a >= 'A' && a <= 'Z') a = static_cast<char>(a + ('a' - 'A'));
+        if (b >= 'A' && b <= 'Z') b = static_cast<char>(b + ('a' - 'A'));
+        if (a != b) return false;
+    }
+    return *left == *right;
+}
+}
+#endif
 
 #ifndef __IANIM_H
 #include <IAnim.h>
@@ -722,7 +744,7 @@ void Platform<SaveStruct,InitStruct>::ResolveAssociations (void)
 template <class SaveStruct, class InitStruct>
 void Platform<SaveStruct,InitStruct>::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = static_cast<const char *>(partName);
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_PLATFORM_QLOAD");
@@ -1600,7 +1622,7 @@ void Platform<SaveStruct,InitStruct>::detachChildren(U32 playerIndex)
 				if(shadowExt[i].addIndex != INVALID_INSTANCE_INDEX)
 				{	
 					if(shadowExt[i].addEffect)
-						delete shadowExt[i].addEffect;
+						delete shadowExt[i].addEffect.Ptr();
 					ENGINE->create_joint(instIndexShadowList,shadowExt[i].addIndex,&(shadowExt[i].addJointInfo));
 					meshShadow->AttachChild(instIndexShadowList,shadowExt[i].add_mesh_info);
 
@@ -1608,7 +1630,7 @@ void Platform<SaveStruct,InitStruct>::detachChildren(U32 playerIndex)
 				if(shadowExt[i].removeIndex != INVALID_INSTANCE_INDEX)
 				{
 					if(shadowExt[i].removeEffect)
-						delete shadowExt[i].removeEffect;
+						delete shadowExt[i].removeEffect.Ptr();
 					else //must still be connected
 					{
 						ENGINE->destroy_joint(instIndexShadowList,shadowExt[i].removeIndex);
@@ -3033,6 +3055,11 @@ bool PLATFORM_INIT<BT_TYPE>::loadPlatformArchetype (BT_TYPE * data, PARCHETYPE _
 	pArchetype = _pArchetype;
 
 	meshArch = MESHMAN->CreateMeshArch(data->fileName);
+	if (!meshArch)
+		return false;
+	archIndex = meshArch->GetEngineArchtype();
+	if (archIndex == INVALID_ARCHETYPE_INDEX)
+		return false;
 
 	// ambientEffect field removed from BASE_PLATFORM_DATA (not in VS6 binary); no ambient effect loaded from archetype data.
 	ambientEffect = NULL;
@@ -3097,7 +3124,12 @@ bool PLATFORM_INIT<BT_TYPE>::loadPlatformArchetype (BT_TYPE * data, PARCHETYPE _
 	if (data->blinkers.light_script[0])
 	{
 		const char *blink_ext = strrchr(data->blinkers.light_script, '.');
+#if defined(_WIN32)
 		if (blink_ext && (_stricmp(blink_ext, ".ini") == 0 || _stricmp(blink_ext, ".lsc") == 0))
+#else
+		if (blink_ext && (FrontierXPlatform::CaseEqual(blink_ext, ".ini") ||
+		                  FrontierXPlatform::CaseEqual(blink_ext, ".lsc")))
+#endif
 			blink_arch = CreateBlinkersArchetype(data->blinkers.light_script, archIndex);
 		fname = data->blinkers.textureName;
 		if (fname && fname[0])
@@ -3143,7 +3175,11 @@ bool PLATFORM_INIT<BT_TYPE>::loadPlatformArchetype (BT_TYPE * data, PARCHETYPE _
 	{
 		char outName[64];
 		strcpy(outName,pData->fileName);
+#if defined(_WIN32)
 		strlwr(outName);
+#else
+		FrontierXPlatform::Lower(outName);
+#endif
 		char * extenpos = strstr(outName,".3db");
 		if (extenpos == 0)
 			extenpos = strstr(outName,".cmp");

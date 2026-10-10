@@ -14,6 +14,7 @@
 #endif
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -85,6 +86,7 @@ public:
         samplerCallback_ = descriptor->sampler;
         modelviewCallback_ = descriptor->modelview;
         projectionCallback_ = descriptor->projection;
+        viewportCallback_ = descriptor->viewport;
         context_ = descriptor->context;
         vertexPipeline_ = std::move(vertexPipeline);
         return GR_OK;
@@ -120,6 +122,7 @@ public:
         samplerCallback_ = nullptr;
         modelviewCallback_ = nullptr;
         projectionCallback_ = nullptr;
+        viewportCallback_ = nullptr;
         context_ = nullptr;
         renderState_ = {};
         stateId_ = 0U;
@@ -130,6 +133,7 @@ public:
                        0.0F, 1.0F, 0.0F, 0.0F,
                        0.0F, 0.0F, 1.0F, 0.0F}};
         projection_ = Matrix4(true);
+        viewport_ = {{0, 0, 0, 0}};
         converted_.clear();
         converted2_.clear();
         converted3_.clear();
@@ -178,18 +182,72 @@ public:
         modelview.translation.z = modelview_[11];
         return GR_OK;
     }
-    GENRESULT COMAPI set_viewport(int, int, int, int) override { return GR_NOT_IMPLEMENTED; }
-    GENRESULT COMAPI get_viewport(int *, int *, int *, int *) override
+    GENRESULT COMAPI set_viewport(int x, int y, int width, int height) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!viewportCallback_) return GR_NOT_IMPLEMENTED;
+        if (x < 0 || y < 0 || width <= 0 || height <= 0 ||
+            x > INT32_MAX - width || y > INT32_MAX - height)
+            return GR_INVALID_PARMS;
+        const GENRESULT result = viewportCallback_(context_, x, y, width, height);
+        if (result == GR_OK) viewport_ = {{x, y, width, height}};
+        return result;
     }
-    GENRESULT COMAPI set_ortho(float, float, float, float, float, float) override
+    GENRESULT COMAPI get_viewport(int * x, int * y, int * width, int * height) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!viewportCallback_) return GR_NOT_IMPLEMENTED;
+        if (!x || !y || !width || !height) return GR_INVALID_PARMS;
+        *x = viewport_[0]; *y = viewport_[1];
+        *width = viewport_[2]; *height = viewport_[3];
+        return GR_OK;
     }
-    GENRESULT COMAPI set_perspective(float, float, float, float) override
+    GENRESULT COMAPI set_ortho(float left, float right, float bottom, float top,
+                               float nearval, float farval) override
     {
-        return GR_NOT_IMPLEMENTED;
+        if (!projectionCallback_) return GR_NOT_IMPLEMENTED;
+        if (!std::isfinite(left) || !std::isfinite(right) ||
+            !std::isfinite(bottom) || !std::isfinite(top) ||
+            !std::isfinite(nearval) || !std::isfinite(farval) ||
+            left == right || bottom == top || nearval == farval)
+            return GR_INVALID_PARMS;
+        Matrix4 projection(true);
+        projection.d[0][0] = 2.0F / (right - left);
+        projection.d[1][1] = 2.0F / (top - bottom);
+        projection.d[2][2] = 1.0F / (farval - nearval);
+        projection.d[0][3] = -(right + left) / (right - left);
+        projection.d[1][3] = -(top + bottom) / (top - bottom);
+        projection.d[2][3] = -nearval / (farval - nearval);
+        for (unsigned row = 0U; row < 4U; ++row)
+            for (unsigned column = 0U; column < 4U; ++column)
+                if (!std::isfinite(projection.d[row][column]))
+                    return GR_INVALID_PARMS;
+        return set_projection(projection);
+    }
+    GENRESULT COMAPI set_perspective(float fovyHalfAngle, float aspect,
+                                    float nearval, float farval) override
+    {
+        if (!projectionCallback_) return GR_NOT_IMPLEMENTED;
+        if (!std::isfinite(fovyHalfAngle) || !std::isfinite(aspect) ||
+            !std::isfinite(nearval) || !std::isfinite(farval) ||
+            fovyHalfAngle <= 0.0F || fovyHalfAngle >= 90.0F ||
+            aspect <= 0.0F || nearval <= 0.0F || farval <= nearval)
+            return GR_INVALID_PARMS;
+        constexpr float radiansPerDegree = 0.01745329251994329577F;
+        const float cotangent = 1.0F /
+            std::tan(fovyHalfAngle * radiansPerDegree);
+        const float depthRange = farval - nearval;
+        Matrix4 projection(0.0F);
+        projection.d[0][0] = cotangent / aspect;
+        projection.d[1][1] = cotangent;
+        // The game camera looks down -Z; the Win32 D3D owner flips Z before
+        // applying its left-handed projection.
+        projection.d[2][2] = -farval / depthRange;
+        projection.d[2][3] = -farval * nearval / depthRange;
+        projection.d[3][2] = -1.0F;
+        for (unsigned row = 0U; row < 4U; ++row)
+            for (unsigned column = 0U; column < 4U; ++column)
+                if (!std::isfinite(projection.d[row][column]))
+                    return GR_INVALID_PARMS;
+        return set_projection(projection);
     }
     GENRESULT COMAPI set_projection(const Matrix4 & projection) override
     {
@@ -625,10 +683,12 @@ private:
     NativeSamplerStateCallback samplerCallback_ = nullptr;
     NativeModelviewCallback modelviewCallback_ = nullptr;
     NativeProjectionCallback projectionCallback_ = nullptr;
+    NativeViewportCallback viewportCallback_ = nullptr;
     std::array<float, 12> modelview_{{1.0F, 0.0F, 0.0F, 0.0F,
                                       0.0F, 1.0F, 0.0F, 0.0F,
                                       0.0F, 0.0F, 1.0F, 0.0F}};
     Matrix4 projection_{true};
+    std::array<int, 4> viewport_{{0, 0, 0, 0}};
     void * context_ = nullptr;
     RenderStateSnapshot renderState_{};
     U32 stateId_ = 0U;

@@ -14,8 +14,18 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "DMissionEnum.h"
+#include <cstdint>
+#include <cstdlib>
+#include <algorithm>
+#include <matrix4.h>
+#include <rendpipeline.h>
+#endif
 
 #include "Camera.h"
 #include "TDocClient.h"
@@ -26,21 +36,23 @@
 #include "DBHotkeys.h"
 #include "Sector.h"
 #include "EventPriority.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "lightman.h"
 #include "Startup.h"
-#include "Resource.h"
+#include "resource.h"
 #include "DCamera.h"
 #include "VideoSurface.h"
 #include "CQBatch.h"
 
-#include <BaseCam.h>
+#include <BASECAM.H>
 #include <TComponent.h>
 #include <TSmartPointer.h>
 #include <IConnection.h>
-#include <Engine.h>
-#include <3DMath.h>
-#include <VFX.h>
+#include <ENGINE.H>
+#include <3dmath.h>
+#include <VFX.H>
 #include <Viewer.h>
 #include <ViewCnst.h>
 #include <Document.h>
@@ -324,11 +336,18 @@ Camera::Camera (void) : BaseCamera(ENGINE, 0)
 //
 Camera::~Camera (void)
 {
+#if defined(_WIN32)
 	if (FULLSCREEN)
+#else
+	if (EVENTSYS)
+#endif
 	{
 		COMPTR<IDAConnectionPoint> connection;
-		
+#if defined(_WIN32)
 		if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#else
+		if (EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#endif
 			connection->Unadvise(eventHandle);
 	}
 
@@ -963,7 +982,14 @@ static S32 get_closest_90_degree (S32 angle)
 //
 GENRESULT Camera::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	const std::uintptr_t eventPayload = reinterpret_cast<std::uintptr_t>(param);
+	if ((message == CQE_HOTKEY || message == CQE_UPDATE) && eventPayload > UINT32_MAX)
+		return GR_GENERIC;
+	const U32 eventValue = static_cast<U32>(eventPayload);
+#endif
 
 	switch (message)
 	{
@@ -973,15 +999,23 @@ GENRESULT Camera::Notify (U32 message, void *param)
 	case CQE_SET_FOCUS:
 		bHasFocus = 1;
 		break;
+#if defined(_WIN32)
 	case WM_CLOSE:
 		if (viewer)
 			viewer->set_display_state(0);
 		break;
+#endif
 	
 	case CQE_HOTKEY:
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
-			switch ((U32)param)
+			switch (
+#if defined(_WIN32)
+				(U32)param
+#else
+				eventValue
+#endif
+			)
 			{                   
 			case IDH_TOGGLE_ZOOM:
 				handleToggleZoom();
@@ -1070,6 +1104,7 @@ GENRESULT Camera::Notify (U32 message, void *param)
 		} // end if (bHasFocus)
 		break; // end case CQE_HOTKEY
 	
+#if defined(_WIN32)
 	case WM_COMMAND:
 		if (LOWORD(msg->wParam) == menuID)
 		{
@@ -1087,22 +1122,32 @@ GENRESULT Camera::Notify (U32 message, void *param)
 			onMouseWheel(short(HIWORD(msg->wParam)));
 		if (s_camLog) { fprintf(s_camLog, "Camera::Notify WM_MOUSEWHEEL done\n"); fflush(s_camLog); }
 		break;
+#endif
 
 	case CQE_UPDATE:
-		updateShake((U32(param)>>10)/1000.0f);
+#if defined(_WIN32)
+		const U32 updateValue = U32(param);
+#else
+		const U32 updateValue = eventValue;
+#endif
+		updateShake((updateValue>>10)/1000.0f);
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
+#if !defined(_WIN32)
+			if (!HOTKEY)
+				return GR_GENERIC;
+#endif
 			if (HOTKEY->GetHotkeyState(IDH_ROTATE_WORLD_LEFT))
-				updateRotationKeys(IDH_ROTATE_WORLD_LEFT, U32(param) >> 10);
+				updateRotationKeys(IDH_ROTATE_WORLD_LEFT, updateValue >> 10);
 			if (HOTKEY->GetHotkeyState(IDH_ROTATE_WORLD_RIGHT))
-				updateRotationKeys(IDH_ROTATE_WORLD_RIGHT, U32(param) >> 10);
-			if (DBHOTKEY->GetHotkeyState(IDH_ROTATE_WORLD_UP))
-				updateRotationKeys(IDH_ROTATE_WORLD_UP, U32(param) >> 10);
-			if (DBHOTKEY->GetHotkeyState(IDH_ROTATE_WORLD_DOWN))
-				updateRotationKeys(IDH_ROTATE_WORLD_DOWN, U32(param) >> 10);
-			updateZoom(U32(param) >> 10);
+				updateRotationKeys(IDH_ROTATE_WORLD_RIGHT, updateValue >> 10);
+			if (DBHOTKEY && DBHOTKEY->GetHotkeyState(IDH_ROTATE_WORLD_UP))
+				updateRotationKeys(IDH_ROTATE_WORLD_UP, updateValue >> 10);
+			if (DBHOTKEY && DBHOTKEY->GetHotkeyState(IDH_ROTATE_WORLD_DOWN))
+				updateRotationKeys(IDH_ROTATE_WORLD_DOWN, updateValue >> 10);
+			updateZoom(updateValue >> 10);
 		}
-		updateRotation(U32(param) >> 10);
+		updateRotation(updateValue >> 10);
 //		updateMovieMode(U32(param) >> 10);
 		break;
 	}
@@ -1299,8 +1344,10 @@ void Camera::SetCameraDefaults (struct CAMERA_DATA & cameraData) const
 //
 BOOL32 Camera::CreateViewer (void)
 {
+#if defined(_WIN32)
 	DOCDESC ddesc = "CameraData";
 	COMPTR<IFileSystem> pMemFile;
+#endif
 
 	if (DEFAULTS->GetDataFromRegistry(szRegKey, &data, sizeof(data)) != sizeof(data) || data.version != CAMERA_DATA_VERSION)
 	{
@@ -1312,6 +1359,10 @@ BOOL32 Camera::CreateViewer (void)
 		data.toggleZoomZ = 0;
 	}
 
+#if !defined(_WIN32)
+	// The data editor is a Windows debug window, not part of the game camera.
+	return 1;
+#else
 	if (CQFLAGS.bNoGDI)
 		return 1;
 
@@ -1353,6 +1404,7 @@ BOOL32 Camera::CreateViewer (void)
 	}
 
 	return (viewer != 0);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1529,7 +1581,11 @@ BOOL32 Camera::UpdateViewer (void)
 	if (pitch+fovy < 0)
 	{
 		SINGLE dist = transform.translation.z/sin((-pitch+fovy)*PI/180.0);
+#if defined(_WIN32)
 		set_near_plane_distance(max(dist-12000.0,100.0));
+#else
+		set_near_plane_distance(std::max(dist-12000.0,100.0));
+#endif
 		dist = transform.translation.z/sin((-pitch-fovy)*PI/180.0);
 		set_far_plane_distance(dist*1.3);
 	}
@@ -1586,7 +1642,12 @@ BOOL32 Camera::SetStateInfo (const struct CAMERA_DATA * cameraData, BOOL32 updat
 {
 	if (cameraData->version != CAMERA_DATA_VERSION)
 	{
+#if defined(_WIN32)
 		CQTRACE12("Ignoring CAMERA_DATA with old version number=%d (Should be %d)", cameraData->version, CAMERA_DATA_VERSION);
+#else
+		fprintf(stderr, "Ignoring CAMERA_DATA with old version number=%u (expected %u)\n",
+			cameraData->version, CAMERA_DATA_VERSION);
+#endif
 	}
 	else
 		data = *cameraData;
@@ -1719,6 +1780,7 @@ GENRESULT Camera::SetModelView (const class Transform *object_to_world)
 
 //--------------------------------------------------------------------------
 //
+#if defined(_WIN32)
 void OrthoView (const PANE *pane)
 {
 	//bPerspective = FALSE;
@@ -1749,6 +1811,7 @@ void OrthoView (const PANE *pane)
 
 	BATCH->set_render_state( D3DRS_CULLMODE, D3DCULL_NONE);
 }
+#endif
 //--------------------------------------------------------------------------//
 //
 BOOL32 Camera::SetLookAtPosition (const Vector &newPos)
@@ -2195,6 +2258,7 @@ struct _camera : GlobalComponent
 
 		camera->CreateViewer(); // viewer is a debug tool; failure is non-fatal
 
+#if defined(_WIN32)
 //		if (info->flags & CIF_MENUID)
 		{
 			HMENU hMenu = MENU->GetSubMenu(MENUPOS_VIEW);
@@ -2216,6 +2280,11 @@ struct _camera : GlobalComponent
 			connection->Advise(camera->getBase(), &camera->eventHandle);
 
 		FULLSCREEN->SetCallbackPriority(camera,EVENT_PRIORITY_CAMERA);
+#else
+		if (!EVENTSYS || EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+			connection->Advise(camera->getBase(), &camera->eventHandle) != GR_OK)
+			std::abort();
+#endif
 	}
 };
 static _camera camera;

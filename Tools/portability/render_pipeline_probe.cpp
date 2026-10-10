@@ -768,6 +768,34 @@ GENRESULT DestroyLockTexture(void * context, U32 handle)
     return GR_OK;
 }
 
+bool CheckRgb565AlphaPlane()
+{
+    LockTextureBackend backend;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &backend;
+    operations.create = CreateLockTexture;
+    operations.upload = UploadLockTexture;
+    operations.destroy = DestroyLockTexture;
+    FrontierX::NativeRenderPipeline pipeline{nullptr, operations};
+    PixelFormat source;
+    source.init(16, 5, 6, 5, 0);
+    const PixelFormat output(PF_RGBA8);
+    const std::array<std::uint8_t, 8> colors{{
+        0x00U, 0xf8U, 0xe0U, 0x07U, 0x1fU, 0x00U, 0xffU, 0xffU}};
+    const std::array<std::uint8_t, 4> alphas{{0U, 64U, 128U, 255U}};
+    const std::array<std::uint8_t, 16> expected{{
+        255U, 0U, 0U, 0U, 0U, 255U, 0U, 64U,
+        0U, 0U, 255U, 128U, 255U, 255U, 255U, 255U}};
+    U32 handle = 0U;
+    return Expect(pipeline.create_texture(2, 2, output, 0, 0U, handle) == GR_OK &&
+                      pipeline.set_texture_level_data(handle, 0, 2, 2, 4, source,
+                          colors.data(), alphas.data(), nullptr) == GR_OK &&
+                      backend.committed == expected,
+                  "RGB565 color and separate alpha plane reach native RGBA8 upload") &&
+        Expect(pipeline.destroy_texture(handle) == GR_OK,
+               "RGB565 alpha texture releases its native owner");
+}
+
 bool CheckTextureLockLifecycle()
 {
     LockTextureBackend backend;
@@ -915,8 +943,65 @@ bool CheckTextureBlit()
 
 } // namespace
 
+// CQDoModal clears, begins, ends and swaps via IRenderPipeline. The existing
+// probe protects ordering and callback failures before enabling the GPU caller.
+bool CheckFrameLifecycle()
+{
+    struct Capture { U32 color = 0, depth = 0; int clears = 0, swaps = 0;
+                     bool fail = false; } capture;
+    CapturingRenderPrimitive target;
+    FrontierX::NativeRenderPipeline pipeline{&target};
+    const U32 both = RP_CLEAR_COLOR_BIT | RP_CLEAR_DEPTH_BIT;
+    if (pipeline.clear_buffers(both, nullptr) != GR_NOT_IMPLEMENTED ||
+        pipeline.BindFrames({}) != GR_INVALID_PARMS) return false;
+    FrontierX::NativeFrameOperations callbacks{&capture,
+        [](void * p, U32 color, U32 depth) -> GENRESULT {
+            auto & c = *static_cast<Capture *>(p);
+            if (c.fail) return GR_GENERIC;
+            c.color = color; c.depth = depth; ++c.clears; return GR_OK;
+        },
+        [](void * p) -> GENRESULT {
+            auto & c = *static_cast<Capture *>(p);
+            if (c.fail) return GR_GENERIC;
+            ++c.swaps; return GR_OK;
+        }};
+    RECT rectangle{};
+    U32 value = 0;
+    if (pipeline.BindFrames(callbacks) != GR_OK ||
+        pipeline.begin_scene() == GR_OK || pipeline.end_scene() == GR_OK ||
+        pipeline.swap_buffers() == GR_OK ||
+        pipeline.clear_buffers(both, &rectangle) != GR_NOT_IMPLEMENTED ||
+        pipeline.clear_buffers(RP_CLEAR_DEPTH_BIT, nullptr) != GR_NOT_IMPLEMENTED ||
+        pipeline.set_pipeline_state(RP_CLEAR_COLOR, 0xff123456U) != GR_OK ||
+        pipeline.set_pipeline_state(RP_CLEAR_DEPTH, 0x80000000U) != GR_OK ||
+        pipeline.get_pipeline_state(RP_CLEAR_DEPTH, &value) != GR_OK ||
+        value != 0x80000000U) return false;
+    capture.fail = true;
+    if (pipeline.clear_buffers(both, nullptr) == GR_OK ||
+        pipeline.begin_scene() == GR_OK) return false;
+    capture.fail = false;
+    if (pipeline.clear_buffers(both, nullptr) != GR_OK || capture.clears != 1 ||
+        capture.color != 0xff123456U || capture.depth != 0x80000000U ||
+        pipeline.begin_scene() != GR_OK || pipeline.begin_scene() == GR_OK ||
+        pipeline.clear_buffers(both, nullptr) == GR_OK ||
+        pipeline.swap_buffers() == GR_OK || pipeline.end_scene() != GR_OK ||
+        pipeline.end_scene() == GR_OK) return false;
+    capture.fail = true;
+    if (pipeline.swap_buffers() == GR_OK || pipeline.begin_scene() == GR_OK) return false;
+    capture.fail = false;
+    if (pipeline.swap_buffers() != GR_OK || capture.swaps != 1 ||
+        pipeline.swap_buffers() == GR_OK ||
+        pipeline.clear_buffers(both, nullptr) != GR_OK ||
+        pipeline.begin_scene() != GR_OK || pipeline.end_scene() != GR_OK ||
+        pipeline.swap_buffers() != GR_OK || capture.swaps != 2 ||
+        pipeline.UnbindScene() != GR_OK ||
+        pipeline.clear_buffers(both, nullptr) != GR_NOT_IMPLEMENTED) return false;
+    return true;
+}
+
 int main()
 {
+    if (!Expect(CheckFrameLifecycle(), "native frame lifecycle and failure rollback")) return 1;
     // The profile aggregate uses this same owner before and after scene binding.
     CapturingRenderPrimitive deferredCapture;
     FrontierX::NativeRenderPipeline deferred;
@@ -948,7 +1033,7 @@ int main()
     if (!CheckInterfaceRegressions() || !CheckPipelineRegressions() ||
         !CheckOwnedVertexBufferRegressions() ||
         !CheckExtendedSubmissionRegressions() || !CheckTextureHandleCollision() ||
-        !CheckTextureStateIdBoundary() ||
+        !CheckTextureStateIdBoundary() || !CheckRgb565AlphaPlane() ||
         !CheckTextureLockLifecycle() || !CheckTextureBlit())
     {
         return 1;

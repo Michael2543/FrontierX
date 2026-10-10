@@ -11,18 +11,32 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <da_d3dtypes.h>
+#include <IRenderPrimitive.h>
+struct IMeshArchetype;
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#endif
 
-#include "Minefield.h"
+#include "MineField.h"
 #include "IMissionActor.h"
 #include "IConnection.h"
 #include "DMinefield.h"
 #include "Field.h"
 #include "DField.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "Camera.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "IWeapon.h"
 #include "MGlobals.h"
 #include "Startup.h"
@@ -36,9 +50,9 @@
 #include "MPart.h"
 #include "ObjMapIterator.h"
 #include "ObjMap.h"
-#include "Sysmap.h"
+#include "SysMap.h"
 
-#include <FileSys.h>
+#include <Filesys.h>
 
 #define MINE_ACCELERATION 50
 
@@ -495,7 +509,7 @@ void Minefield::TestVisible (const USER_DEFAULTS & defaults, const U32 currentSy
 	if(bVisible)
 	{
 		//as long as the cammera never goes on it's side this will work
-		RECT screenRect = { 0, 0, SCREENRESX, SCREENRESY };
+		RECT screenRect = { 0, 0, static_cast<LONG>(SCREENRESX), static_cast<LONG>(SCREENRESY) };
 		RECT rect;
 		S32 xCent,yCent,zXLoc,zYLoc;
 		Vector myPos = gridPos;
@@ -1037,7 +1051,11 @@ void Minefield::InitMineField( GRIDVECTOR _gridPos, U32 _systemID)
 	gridPos = _gridPos;
 	setTerrainFootprint(map);
 	M_STRING buffer;
+#if defined(_WIN32)
 	_itoa(dwMissionID,buffer,10);
+#else
+	std::snprintf(buffer.string, sizeof(buffer.string), "%u", dwMissionID);
+#endif
 	partName = ARCHLIST->GetArchName(archetype->pArchetype);
 	strcat(partName," ");
 	strcat(partName,buffer);
@@ -1063,7 +1081,11 @@ void Minefield::initMission ()
 	hullPoints = archetype->pData->maxMineNumber;
 
 	M_STRING buffer;
+#if defined(_WIN32)
 	_itoa(dwMissionID,buffer,10);
+#else
+	std::snprintf(buffer.string, sizeof(buffer.string), "%u", dwMissionID);
+#endif
 
 	partName = ARCHLIST->GetArchName(archetype->pArchetype);
 	strcat(partName," ");

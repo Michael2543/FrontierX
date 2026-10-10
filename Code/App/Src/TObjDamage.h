@@ -27,7 +27,7 @@
 #endif
 
 #ifndef ANIM2D_H
-#include "Anim2d.h"
+#include "anim2d.h"
 #endif
 
 //for extents
@@ -58,7 +58,7 @@
 #endif
 
 #ifndef SFX_H
-#include "Sfx.h"
+#include "SFX.h"
 #endif
 
 #ifndef CQBATCH_H
@@ -95,6 +95,8 @@ struct Fire
 	TRANSFORM trans;
 	U16 timer;
 };
+
+struct IEffectChannel;
 
 /*enum FACE_STATE
 {
@@ -235,6 +237,7 @@ void GetAllChildren (INSTANCE_INDEX instanceIndex,INSTANCE_INDEX *array,S32 &las
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectDamage : public Base, IShipDamage, DAMAGE_SAVELOAD
 {
+#if defined(_WIN32)
 	struct PostRenderNode	postRenderNode;
 	struct UpdateNode		updateNode;
 	struct PhysUpdateNode	physUpdateNode;
@@ -245,6 +248,44 @@ struct _NO_VTABLE ObjectDamage : public Base, IShipDamage, DAMAGE_SAVELOAD
 
 	typename typedef Base::INITINFO DAMAGEINITINFO;
 	typename typedef Base::SAVEINFO DMGSAVEINFO;
+#else
+	typename Base::PostRenderNode postRenderNode;
+	typename Base::UpdateNode updateNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typename Base::InitNode initNode;
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::ResolveNode resolveNode;
+	typedef typename Base::INITINFO DAMAGEINITINFO;
+	typedef typename Base::SAVEINFO DMGSAVEINFO;
+	using typename Base::SaveLoadProc;
+	using typename Base::RenderProc;
+	using typename Base::UpdateProc;
+	using typename Base::InitProc;
+	using typename Base::PhysUpdateProc;
+	using typename Base::ResolveProc;
+	using Base::GetPosition;
+	using Base::GetObjectBox;
+	using Base::extentData;
+	using Base::box;
+	using Base::transform;
+	using Base::bExploding;
+	using Base::instanceIndex;
+	using Base::hullPointsMax;
+	using Base::hullPoints;
+	using Base::building;
+	using Base::bReady;
+	using Base::GetExtentRect;
+	using Base::AddChildBlast;
+	using Base::systemID;
+	using Base::childBlastList;
+	using Base::fieldFlags;
+	using Base::bVisible;
+	using Base::ApplyAOEDamage;
+	using Base::GetModelCollisionPosition;
+	using Base::playerID;
+	using Base::race;
+#endif
 	
 	Fire fire[NUM_FIRES];
 	int numFires;

@@ -28,7 +28,7 @@
 #endif
 
 #ifndef DSPACESHIP_H
-#include <DSpaceShip.h>
+#include <DSpaceship.h>
 #endif
 
 #ifndef _INC_STDLIB
@@ -36,7 +36,7 @@
 #endif 
 
 #ifndef OPAGENT_H
-#include "OPAgent.h"
+#include "OpAgent.h"
 #endif
 
 #ifndef GRIDVECTOR_H
@@ -56,7 +56,7 @@
 #endif
 
 #ifndef OBJSET_H
-#include "Objset.h"
+#include "ObjSet.h"
 #endif
 
 #ifndef ISHIPMOVE_H
@@ -89,6 +89,7 @@ extern TRUEANIMPOS g_trueAnimPos;
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectMove : public Base, private SPACESHIP_SAVELOAD::TOBJMOVE, private IFindPathCallback, public IShipMove
 {
+#if defined(_WIN32)
 	struct SaveNode   saveNode;
 	struct LoadNode   loadNode;
 	struct InitNode   initNode;
@@ -103,6 +104,68 @@ struct _NO_VTABLE ObjectMove : public Base, private SPACESHIP_SAVELOAD::TOBJMOVE
 
 	typename typedef Base::SAVEINFO MOVESAVEINFO;
 	typename typedef Base::INITINFO MOVEINITINFO;
+#else
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::InitNode initNode;
+	typename Base::UpdateNode updateNode;
+	typename Base::OnOpCancelNode onOpCancelNode;
+	typename Base::PreTakeoverNode preTakeoverNode;
+	typename Base::GeneralSyncNode genSyncNode;
+	typename Base::GeneralSyncNode genSyncNode2;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typename Base::ReceiveOpDataNode receiveOpDataNode;
+	typename Base::ExplodeNode explodeNode;
+	typedef typename Base::SAVEINFO MOVESAVEINFO;
+	typedef typename Base::INITINFO MOVEINITINFO;
+	using typename Base::SaveLoadProc;
+	using typename Base::InitProc;
+	using typename Base::UpdateProc;
+	using typename Base::PhysUpdateProc;
+	using typename Base::OnOpCancelProc;
+	using typename Base::PreTakeoverProc;
+	using typename Base::ReceiveOpDataProc;
+	using typename Base::ExplodeProc;
+	using typename Base::SyncGetProc;
+	using typename Base::SyncPutProc;
+	using Base::systemID;
+	using Base::transform;
+	using Base::partName;
+	using Base::velocity;
+	using Base::setDynamicsData;
+	using Base::getDynamicsData;
+	using Base::maxVelocity;
+	using Base::fleetID;
+	using Base::mObjClass;
+	using Base::playerID;
+	using Base::fieldFlags;
+	using Base::effectFlags;
+	using Base::bDerelict;
+	using Base::aliasPlayerID;
+	using Base::objMapNode;
+	using Base::bReady;
+	using Base::box;
+	using Base::dwMissionID;
+	using Base::bMoveDisabled;
+	using Base::bExploding;
+	using Base::restoreDynamicsData;
+	using Base::bVisible;
+	using Base::ang_velocity;
+	using Base::DEBUG_resetInputCounter;
+	using Base::restoreLinearDynamicsData;
+	using Base::setAbsOverridePosition;
+	using Base::setDestabilize;
+	using Base::overrideAbsShipRotate;
+	using Base::bEnablePhysics;
+	using Base::fixAngle;
+	using Base::boxRadius;
+	using Base::maxLinearVelocity;
+	using Base::bRecallFighters;
+	using Base::sensorRadius;
+	using Base::restoreAngDynamicsData;
+	using Base::instanceIndex;
+	using Base::calculateCoastingDistance;
+#endif
 
 private:
 	ROCKING_DATA rockingData;

@@ -9,6 +9,8 @@
 #include <vector.h>
 class Transform;
 #include "SysMap.h"
+#include "StringData.h"
+#include "NativeAppMissionMedia.h"
 #include "NativeAppGlobals.h"
 
 #include <array>
@@ -69,9 +71,74 @@ bool WriteMaps(const std::filesystem::path &path, bool campaign = true)
     return output.good();
 }
 
+// UnitComm::getFilename consumes production StringData lookup. StringData
+// must retain opaque StringPack records, including editor files. Extend the
+// archive probe to cover owning storage, traversal and ambiguous names.
+bool CheckUnitSpeechStrings(const std::filesystem::path &root)
+{
+    for (unsigned scenario = 0; scenario < 5; ++scenario)
+    {
+        IFileSystem *archive = nullptr;
+        std::string error;
+        if (!FrontierX::OpenNativeWritableUtfArchive(root / "speech.utf", &archive, error))
+            return false;
+        const auto write = [&](const char *name, const void *bytes, DWORD size) {
+            DAFILEDESC desc(name);
+            desc.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+            desc.dwCreationDistribution = CREATE_ALWAYS;
+            const HANDLE file = archive->OpenChild(&desc);
+            if (file == INVALID_HANDLE_VALUE) return false;
+            DWORD written = 0;
+            const bool result = archive->WriteFile(file, bytes, size, &written, nullptr) && written == size;
+            return archive->CloseHandle(file) && result;
+        };
+        std::array<char, 64> pack{};
+        std::memcpy(pack.data(), "first.wav", 10);
+        std::memcpy(pack.data() + 32, "second.wav", 11);
+        if (scenario == 2) pack.fill('x');
+        bool valid = archive->CreateDirectory("Voices") &&
+            archive->SetCurrentDirectory("Voices");
+        if (scenario != 4)
+            valid = valid && write("SyntheticSelection", pack.data(), scenario == 1 ? 63U : 64U);
+        valid = valid && archive->SetCurrentDirectory("..") &&
+            archive->CreateDirectory("Parsed Files") && archive->SetCurrentDirectory("Parsed Files") &&
+            write("EditorOnly", "x", 1) && archive->SetCurrentDirectory("..");
+        if (scenario == 3) valid = valid && write("SyntheticSelection", pack.data(), 64);
+        IStringData *owner = valid ? FrontierX::CreateNativeStringData(archive) : nullptr;
+        if (scenario < 3)
+        {
+            U32 size = 0;
+            auto *bytes = owner ? static_cast<const char *>(owner->GetArchetypeData("SyntheticSelection", size)) : nullptr;
+            archive->Release(); archive = nullptr;
+            valid = owner && bytes && size == (scenario == 1 ? 63U : 64U) &&
+                std::memcmp(bytes, pack.data(), size) == 0 &&
+                owner->GetArchetypeData("SyntheticSelection") == bytes &&
+                owner->GetArchetypeData("syntheticselection", size) == nullptr && size == 0 &&
+                owner->GetArchetypeData("EditorOnly") == nullptr;
+        }
+        else valid = valid && !owner;
+        if (owner) owner->Release();
+        if (archive) archive->Release();
+        if (!valid) return false;
+    }
+    return true;
+}
+
 int RunSelfTest()
 {
 	using FrontierX::Platform::SelectDataRootPath;
+	wchar_t wide[8] = {};
+	char narrow[8] = {};
+	if (_localAnsiToWide("Sol_T", wide, sizeof(wide)) != 6 ||
+		_localWideToAnsi(wide, narrow, sizeof(narrow)) != 6 ||
+		std::string(narrow) != "Sol_T" ||
+		_localAnsiToWide("Sol_T", wide, sizeof(wchar_t) * 5) != 0 ||
+		_localAnsiToWide("\xc3\xa9", wide, sizeof(wide)) != 0 ||
+		_localWideToAnsi(L"\u00e9", narrow, sizeof(narrow)) != 0)
+	{
+		std::cerr << "Native App name conversion changed\n";
+		return 1;
+	}
 	// Mission::SaveAs needs a UTF 1.01 writer. Protect its fixed-width
 	// directory/sibling layout against the production reader before binding
 	// a writable IFileSystem to SAVEDIR.
@@ -163,8 +230,18 @@ int RunSelfTest()
 			bytesRead == sizeof(readback) &&
 			std::equal(std::begin(readback), std::end(readback), loaded.begin()) &&
 			archive->CloseHandle(child);
+		DAFILEDESC foldedDescriptor("mt_globaldata\\globals");
+		const HANDLE foldedChild = archive->OpenChild(&foldedDescriptor);
+		unsigned char foldedReadback[4] = {};
+		DWORD foldedBytesRead = 0;
+		const bool foldedValid = foldedChild != INVALID_HANDLE_VALUE &&
+			archive->ReadFile(foldedChild, foldedReadback, sizeof(foldedReadback),
+				&foldedBytesRead, nullptr) &&
+			foldedBytesRead == sizeof(foldedReadback) &&
+			std::equal(std::begin(foldedReadback), std::end(foldedReadback), loaded.begin()) &&
+			archive->CloseHandle(foldedChild);
 		archive->Release();
-		if (!valid)
+		if (!valid || !foldedValid)
 		{
 			std::cerr << "Native UTF writer output did not round trip through IFileSystem\n";
 			std::filesystem::remove_all(root, error);
@@ -245,8 +322,36 @@ int RunSelfTest()
 			handle = archive->OpenChild(&record);
 			saved = handle != INVALID_HANDLE_VALUE &&
 				archive->WriteFile(handle, value, sizeof(value), &written, nullptr) &&
-				written == sizeof(value) && archive->CloseHandle(handle) &&
-				archive->QueryInterface(IID_IUTFWriter,
+				written == sizeof(value) && archive->CloseHandle(handle);
+			IFileSystem * instanceDirectory = nullptr;
+			IFileSystem * nestedRecord = nullptr;
+			DAFILEDESC instance("MISSION!!TRIGGER\\0");
+			instance.lpImplementation = "DOS";
+			instance.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+			instance.dwCreationDistribution = CREATE_ALWAYS;
+			DAFILEDESC child("JUMPGATE_SAVELOAD");
+			child.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+			child.dwCreationDistribution = CREATE_ALWAYS;
+			DWORD nestedWritten = 0;
+			saved = saved && archive->SetCurrentDirectory("\\") &&
+				archive->CreateDirectory("\\ObjectList") &&
+				archive->SetCurrentDirectory("\\ObjectList") &&
+				archive->CreateDirectory("Instances") &&
+				archive->SetCurrentDirectory("Instances") &&
+				archive->CreateDirectory("MISSION!!TRIGGER") &&
+				archive->CreateDirectory("MISSION!!TRIGGER\\0") &&
+				archive->CreateInstance(&instance,
+					reinterpret_cast<void **>(&instanceDirectory)) == GR_OK &&
+				instanceDirectory &&
+				instanceDirectory->CreateInstance(&child,
+					reinterpret_cast<void **>(&nestedRecord)) == GR_OK &&
+				nestedRecord &&
+				nestedRecord->WriteFile(nullptr, value, sizeof(value),
+					&nestedWritten, nullptr) && nestedWritten == sizeof(value);
+			if (nestedRecord) nestedRecord->Release();
+			if (instanceDirectory) instanceDirectory->Release();
+			// Mission::Save uses the source's unversioned interface name.
+			saved = saved && archive->QueryInterface("IUTFWriter",
 					reinterpret_cast<void **>(&flush)) == GR_OK && flush;
 		}
 		if (saved) flush->Flush();
@@ -282,6 +387,10 @@ int RunSelfTest()
 		if (!reopened || !loadedFromInterface ||
 			!FrontierX::ReadUtfEntry(root / "saved.mission",
 			"MT_GlobalData/Globals", persisted, utfError) ||
+			persisted != std::vector<unsigned char>(std::begin(value), std::end(value)) ||
+			!FrontierX::ReadUtfEntry(root / "saved.mission",
+			"ObjectList/Instances/MISSION!!TRIGGER/0/JUMPGATE_SAVELOAD",
+			persisted, utfError) ||
 			persisted != std::vector<unsigned char>(std::begin(value), std::end(value)))
 		{
 			std::cerr << "Native save-directory create/flush/reopen failed: " << utfError << '\n';
@@ -331,6 +440,28 @@ int RunSelfTest()
 	std::filesystem::remove_all(root / "Maps", error);
 	if (!WriteMaps(root / "maps")) return 1;
 	const auto packedEntries = FrontierX::Platform::InspectDataRoot(root);
+	// PlanetFactory's MeshManager asks IFileSystem::CreateInstance for a
+	// nested Windows-style mesh path; the archive must resolve it safely.
+	IFileSystem *archive = nullptr;
+	if (!FrontierX::OpenNativeUtfFileSystem(root / "maps", &archive, utfError)) return 1;
+	DAFILEDESC nested("Campaign\\Marker");
+	IFileSystem *nestedFile = nullptr;
+	const GENRESULT nestedResult = archive->CreateInstance(
+		&nested, reinterpret_cast<void **>(&nestedFile));
+	DAFILEDESC traversal("Campaign\\..\\Marker");
+	IFileSystem *traversed = nullptr;
+	const GENRESULT traversalResult = archive->CreateInstance(
+		&traversal, reinterpret_cast<void **>(&traversed));
+	const bool nestedOpened = nestedFile != nullptr;
+	const bool traversalOpened = traversed != nullptr;
+	if (traversed) traversed->Release();
+	if (nestedFile) nestedFile->Release();
+	archive->Release();
+	if (nestedResult != GR_OK || !nestedOpened || traversalResult == GR_OK || traversalOpened)
+	{
+		std::cerr << "Nested archive child or traversal validation failed\n";
+		return 1;
+	}
 	bool mounted = false;
 	for (const auto &entry : packedEntries)
 	{
@@ -387,6 +518,12 @@ int RunSelfTest()
 		HasStatus(invalidEntries, "Textures", FrontierX::Platform::DataRootEntryStatus::Ambiguous) &&
 		HasStatus(invalidEntries, "Maps/Multiplayer", FrontierX::Platform::DataRootEntryStatus::Missing);
 
+    if (!CheckUnitSpeechStrings(root))
+    {
+        std::cerr << "Production StringData unit speech slot contract failed\n";
+        std::filesystem::remove_all(root, error);
+        return 1;
+    }
 	std::filesystem::remove_all(root, error);
 	if (!passed)
 	{
@@ -432,9 +569,21 @@ int InspectMissionFilesystem(const std::filesystem::path &root, const std::strin
 	const auto release = [](IFileSystem *file) { if (file) file->Release(); };
 	FileOwner campaign(nullptr, release);
 	FileOwner mission(nullptr, release);
+	FileOwner effects(nullptr, release);
+	std::string effectsError;
 	const auto entries = FrontierX::Platform::InspectDataRoot(root);
 	for (const auto &entry : entries)
 	{
+		if (entry.expectedPath == "SFX")
+		{
+			IFileSystem *opened = nullptr;
+			if (entry.status == FrontierX::Platform::DataRootEntryStatus::PresentArchive)
+				FrontierX::Platform::OpenDataRootArchive(root, entry, &opened, effectsError);
+			else if (entry.status == FrontierX::Platform::DataRootEntryStatus::Present)
+				FrontierX::OpenNativeDirectoryFileSystem(root / entry.actualPath, &opened, effectsError);
+			effects.reset(opened);
+			continue;
+		}
 		if (entry.expectedPath != "Maps/Campaign") continue;
 		IFileSystem *opened = nullptr;
 		std::string error;
@@ -448,8 +597,47 @@ int InspectMissionFilesystem(const std::filesystem::path &root, const std::strin
 					root / entry.actualPath, &opened, error)) break;
 		}
 		campaign.reset(opened);
-		break;
+		continue;
 	}
+	// SFX::BUTTONPRESS1 maps to interface1.wav in the source sfxdata.xmf.
+	// The native App sound owner must read through this same external source.
+	DAFILEDESC effectDescriptor("interface1.wav");
+	HANDLE effect = effects ? effects->OpenChild(&effectDescriptor) : INVALID_HANDLE_VALUE;
+	if (effect == INVALID_HANDLE_VALUE && effects)
+	{
+		WIN32_FIND_DATA found = {};
+		const HANDLE search = effects->FindFirstFile("interface1.wav", &found);
+		if (search != INVALID_HANDLE_VALUE)
+		{
+			WIN32_FIND_DATA next = {};
+			const bool unique = !effects->FindNextFile(search, &next);
+			if (effects->FindClose(search) && unique &&
+				!(found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			{
+				DAFILEDESC actual(found.cFileName);
+				effect = effects->OpenChild(&actual);
+			}
+		}
+	}
+	std::array<unsigned char, 64> waveHeader = {};
+	DWORD effectBytes = 0;
+	bool effectReadable = false;
+	if (effect != INVALID_HANDLE_VALUE)
+	{
+		effectReadable = effects->ReadFile(effect, waveHeader.data(), waveHeader.size(),
+			&effectBytes, nullptr) && effectBytes == waveHeader.size() &&
+			std::memcmp(waveHeader.data(), "RIFF", 4) == 0 &&
+			std::memcmp(waveHeader.data() + 8, "WAVEfmt ", 8) == 0;
+		effectReadable = effects->CloseHandle(effect) && effectReadable;
+	}
+	if (!effectReadable)
+	{
+		std::cerr << "Selected mission sound effect source unavailable (archive: "
+			<< (effects ? "mounted" : "missing") << "; " << effectsError << ")\n";
+		return 2;
+	}
+	const unsigned waveFormat = waveHeader[20] | (unsigned(waveHeader[21]) << 8);
+	std::cout << "Source-mapped SFX WAV format: " << waveFormat << '\n';
 	if (!campaign)
 	{
 		std::cerr << "Campaign source unavailable\n";
@@ -508,6 +696,29 @@ int InspectMissionFilesystem(const std::filesystem::path &root, const std::strin
 	}
 	if (missionName == "Sol_Train.dmission")
 	{
+		// Mission::loadPlayerAI probes PLAYERAI/Player02..PlayerNN in a defined mission.
+		// This decides whether the selected fresh path requires the full AI factory.
+		unsigned savedAiPlayers = 0;
+		for (unsigned player = 2; player <= MAX_PLAYERS; ++player)
+		{
+			char aiDirectory[32];
+			std::snprintf(aiDirectory, sizeof(aiDirectory), "\\PLAYERAI\\Player%02u", player);
+			if (mission->SetCurrentDirectory(aiDirectory))
+			{
+				++savedAiPlayers;
+				if (!mission->SetCurrentDirectory("\\"))
+				{
+					std::cerr << "Mission player-AI directory reset failed\n";
+					return 2;
+				}
+			}
+		}
+		std::cout << "Mission saved player-AI directories: " << savedAiPlayers << '\n';
+		if (savedAiPlayers != 0)
+		{
+			std::cerr << "Selected mission requires the production player-AI owner\n";
+			return 2;
+		}
 		// MusicManager::Load treats an absent MT_MUSIC_DATA/Music child as fresh playlist state.
 		DAFILEDESC musicDescriptor("\\MT_MUSIC_DATA\\Music");
 		const HANDLE music = mission->OpenChild(&musicDescriptor);

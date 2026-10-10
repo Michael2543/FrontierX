@@ -80,9 +80,10 @@ class NativeUtfFileSystem final : public IFileSystem
 public:
     explicit NativeUtfFileSystem(std::filesystem::path path, std::string directory = {},
         std::shared_ptr<const std::vector<unsigned char>> archive = {}, bool physical = false,
-        IFileSystem * parent = nullptr)
+        IFileSystem * parent = nullptr,
+        std::shared_ptr<const UtfArchiveIndex> diskIndex = {})
         : path_(std::move(path)), directory_(std::move(directory)), archive_(std::move(archive)),
-          physical_(physical), parent_(parent)
+          diskIndex_(std::move(diskIndex)), physical_(physical), parent_(parent)
     { if (parent_) parent_->AddRef(); }
 
     NativeUtfFileSystem(std::filesystem::path path, std::string entry,
@@ -140,7 +141,7 @@ public:
                 return GR_INVALID_PARMS;
             try
             {
-                *instance = static_cast<IFileSystem *>(new NativeUtfFileSystem(path_, {}, archive_, physical_));
+                *instance = static_cast<IFileSystem *>(new NativeUtfFileSystem(path_, {}, archive_, physical_, nullptr, diskIndex_));
                 return GR_OK;
             }
             catch (const std::bad_alloc &)
@@ -149,10 +150,7 @@ public:
             }
         }
         if (!file->lpFileName || !*file->lpFileName ||
-            std::strchr(file->lpFileName, '/') ||
-            std::strchr(file->lpFileName, '\\') ||
-            std::strcmp(file->lpFileName, ".") == 0 ||
-            std::strcmp(file->lpFileName, "..") == 0 ||
+            file->lpFileName[0] == '/' || file->lpFileName[0] == '\\' ||
             file->dwDesiredAccess != GENERIC_READ)
             return GR_INVALID_PARMS;
         try
@@ -160,8 +158,8 @@ public:
             std::string directory;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                directory = directory_.empty() ? file->lpFileName :
-                    directory_ + "/" + file->lpFileName;
+                if (!ResolveVirtualPath(directory_, file->lpFileName, false, directory))
+                    return GR_INVALID_PARMS;
             }
             std::vector<UtfDirectoryEntry> entries;
             std::string error;
@@ -177,7 +175,7 @@ public:
                 }
                 else
                     *instance = static_cast<IFileSystem *>(
-                        new NativeUtfFileSystem(path_, std::move(directory), archive_, false));
+                        new NativeUtfFileSystem(path_, std::move(directory), archive_, false, nullptr, diskIndex_));
             }
             else
             {
@@ -591,6 +589,7 @@ private:
     std::mutex mutex_;
     std::string directory_;
     std::shared_ptr<const std::vector<unsigned char>> archive_;
+    std::shared_ptr<const UtfArchiveIndex> diskIndex_;
     bool physical_ = false;
     IFileSystem * parent_ = nullptr;
     bool ResolvePhysical(const std::string & relative, std::filesystem::path & resolved,
@@ -637,6 +636,13 @@ private:
             error.clear();
             return true;
         }
+        if (diskIndex_ && !archive_)
+        {
+            std::string exact;
+            if (!ResolveIndexedUtfDirectory(*diskIndex_, directory, exact))
+            { error = "UTF directory not found"; return false; }
+            return ListIndexedUtfDirectory(*diskIndex_, exact, entries, error);
+        }
         return archive_ ? ListUtfDirectory(*archive_, directory, entries, error) :
                           ListUtfDirectory(path_, directory, entries, error);
     }
@@ -663,6 +669,13 @@ private:
             error.clear();
             return true;
         }
+        if (diskIndex_ && !archive_)
+        {
+            std::string exact;
+            if (!ResolveIndexedUtfFile(*diskIndex_, entry, exact))
+            { error = "UTF entry not found"; return false; }
+            return ReadIndexedUtfEntry(path_, *diskIndex_, exact, bytes, error);
+        }
         return archive_ ? ReadUtfEntry(*archive_, entry, bytes, error) :
                           ReadUtfEntry(path_, entry, bytes, error);
     }
@@ -687,11 +700,11 @@ bool OpenNativeUtfFileSystem(const std::filesystem::path & path,
         return false;
     }
     *output = nullptr;
-    UtfMetadata metadata;
-    if (!InspectUtfMetadata(path, metadata, error)) return false;
+    auto index = std::make_shared<UtfArchiveIndex>();
+    if (!BuildUtfArchiveIndex(path, *index, error)) return false;
     try
     {
-        *output = new NativeUtfFileSystem(path);
+        *output = new NativeUtfFileSystem(path, {}, {}, false, nullptr, index);
     }
     catch (const std::bad_alloc &)
     {
@@ -709,9 +722,9 @@ bool OpenNativeUtfFileSystemWithParent(const std::filesystem::path & path,
     if (!output || !parent)
     { error = "saved UTF reader requires output and parent"; return false; }
     *output = nullptr;
-    UtfMetadata metadata;
-    if (!InspectUtfMetadata(path, metadata, error)) return false;
-    try { *output = new NativeUtfFileSystem(path, {}, {}, false, parent); }
+    auto index = std::make_shared<UtfArchiveIndex>();
+    if (!BuildUtfArchiveIndex(path, *index, error)) return false;
+    try { *output = new NativeUtfFileSystem(path, {}, {}, false, parent, index); }
     catch (const std::bad_alloc &)
     { error = "cannot allocate saved UTF reader"; return false; }
     error.clear();

@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import wave
 
 EXECUTABLE = str(Path(sys.argv.pop(1)).resolve())
 EVENT_MODULE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else ''
@@ -22,8 +23,15 @@ class NativeShellTests(unittest.TestCase):
         self.data = self.root / 'Data'
         for directory in [
                 'Objects', 'Interface', 'Textures', 'Mat', 'Profiles',
-                'Maps/Campaign', 'Maps/Multiplayer', 'Music']:
+                'Maps/Campaign', 'Maps/Multiplayer', 'Music', 'SFX']:
             (self.data / directory).mkdir(parents=True)
+        with wave.open(str(self.data / 'SFX/interface1.wav'), 'wb') as sound:
+            sound.setnchannels(1)
+            sound.setsampwidth(2)
+            sound.setframerate(22050)
+            sound.writeframes(b'\0\0' * 220)
+        (self.data / 'Profiles/native-smoke.ini').write_text(
+            '[NativeSmoke]\nValue = ready\n')
 
     def run_shell(self, *arguments, data_root='', video_driver='dummy'):
         environment = os.environ.copy()
@@ -105,7 +113,14 @@ class NativeShellTests(unittest.TestCase):
             profile = self.root / 'mission.ini'
             profile.write_text('[System]\nIEventSystem\nIStreamer\n'
                                'IWindowManager = WindowManager\n'
-                               'IViewConstructor\n[Engine]\n')
+                               'IViewConstructor\nIParticleManager\n[Engine]\n')
+            result = self.run_shell('--data-root', self.data,
+                                    '--system-profile', profile,
+                                    '--mission-source', 'Sol_Train.dmission',
+                                    '--mission-engine', '--smoke-ms', '1', '--hidden')
+            self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
+            self.assertIn('Native App mission Engine components or IRenderer unavailable',
+                          result.stderr)
             result = self.run_shell('--data-root', self.data,
                                     '--system-profile', profile,
                                     '--mission-source', 'Sol_Train.dmission',
@@ -130,12 +145,14 @@ class NativeShellTests(unittest.TestCase):
                                     '--mission-source', 'Sol_Train.dmission',
                                     '--save-root', save_root,
                                     '--skip-notification-cue',
+                                    '--sfx-smoke',
+                                    '--profile-smoke', 'native-smoke.ini',
                                     '--smoke-ms', '1', '--hidden')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('Native App parser schema loaded from embedded data.i',
                           result.stdout)
             self.assertIn('Native App mission source opened through SPMAPDIR', result.stdout)
-            self.assertIn('Native App mission IStreamer initialized with Music source',
+            self.assertIn('Native App mission IStreamer initialized with Music and SFX sources',
                           result.stdout)
             self.assertIn('Native App source string resources initialized', result.stdout)
             self.assertIn('Native App writable save directory initialized outside retail data',
@@ -150,7 +167,20 @@ class NativeShellTests(unittest.TestCase):
             self.assertIn('Native App mission progress owner initialized', result.stdout)
             self.assertIn('Native mission loading: 5%', result.stderr)
             self.assertIn('Native App MusicManager initialized', result.stdout)
+            self.assertIn('Native ISFX BUTTONPRESS1 preload/open/play/stop checked', result.stdout)
+            self.assertIn('Native App PROFILEDIR CreateProfileParser checked', result.stdout)
             self.assertIn('mission not started', result.stdout)
+            (self.data / 'SFX/interface1.wav').unlink()
+            (self.data / 'SFX').rmdir()
+            result = self.run_shell('--data-root', self.data,
+                                    '--system-profile', profile,
+                                    '--mission-source', 'Sol_Train.dmission',
+                                    '--save-root', save_root,
+                                    '--skip-notification-cue',
+                                    '--smoke-ms', '1', '--hidden')
+            self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
+            self.assertIn('mission audio source or IStreamer unavailable', result.stderr)
+            (self.data / 'SFX').mkdir()
             result = self.run_shell('--data-root', self.data,
                                     '--system-profile', profile,
                                     '--mission-source', 'Sol_Train.dmission',
@@ -160,16 +190,16 @@ class NativeShellTests(unittest.TestCase):
             self.assertIn('Native App save-directory binding failed', result.stderr)
             profile.write_text('[System]\nIEventSystem\n'
                                'IWindowManager = WindowManager\n'
-                               'IViewConstructor\n[Engine]\n')
+                               'IViewConstructor\nIParticleManager\n[Engine]\n')
             result = self.run_shell('--data-root', self.data,
                                     '--system-profile', profile,
                                     '--mission-source', 'Sol_Train.dmission',
                                     '--smoke-ms', '1', '--hidden')
             self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
-            self.assertIn('mission music source or IStreamer unavailable', result.stderr)
+            self.assertIn('mission audio source or IStreamer unavailable', result.stderr)
             profile.write_text('[System]\nIEventSystem\nIStreamer\n'
                                'IWindowManager = WindowManager\n'
-                               'IViewConstructor\n[Engine]\n')
+                               'IViewConstructor\nIParticleManager\n[Engine]\n')
             invalid_gen_data = self.root / 'invalid-gendata.db'
             invalid_gen_data.write_bytes(b'not a UTF archive')
             result = self.run_shell('--data-root', self.data,
@@ -251,6 +281,15 @@ class NativeShellTests(unittest.TestCase):
                 ('--mesh-object',), ('--mesh-object', '../Forger'),
                 ('--mission-source',), ('--mission-source', '../Sol_Train.dmission'),
                 ('--mission-source', 'Sol_Train.mission'),
+                ('--mission-start',),
+                ('--skip-sector-map',),
+                ('--skip-space-background',),
+                ('--skip-unit-labels',),
+                ('--base-textures-only',),
+                ('--skip-legacy-lighting',),
+                ('--skip-training-speech',),
+                ('--skip-mission-music',),
+                ('--mission-start', '--mission-source', 'Sol_Train.dmission'),
                 ('--render-smoke', 'vertex.spv'),
                 ('--render-smoke', 'vertex.spv', '--hidden'), ('--unknown',)]:
             self.assertEqual(self.run_shell(*arguments).returncode, 1, arguments)

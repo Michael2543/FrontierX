@@ -11,26 +11,45 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <IRenderPrimitive.h>
+#include <IMeshManager.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#endif
 
 #include <MGlobals.h>
 #include "TObject.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "DExplosion.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "IExplosion.h"
 #include "SuperTrans.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "TObjTrans.h"
 #include "IBlast.h"
 #include "ArchHolder.h"
 #include "FogOfWar.h"
-#include "mesh.h"
+#include <Mesh.h>
 #include "INugget.h"
 #include "UserDefaults.h"
 #include "DMBaseData.h"
@@ -44,11 +63,11 @@
 
 #include <TComponent.h>
 #include <lightman.h>
-#include <Engine.h>
-#include <FileSys.h>
-#include <Vector.h>
-#include <Physics.h>
-#include <Renderer.h>
+#include <ENGINE.H>
+#include <Filesys.h>
+#include <vector.h>
+#include <physics.h>
+#include <renderer.h>
 
 #include <stdlib.h>
 
@@ -1204,7 +1223,7 @@ void Explosion::RevealFog (const U32 currentSystem)
 {
 	if (systemID==currentSystem && playerID && MGlobals::AreAllies(playerID, MGlobals::GetThisPlayer()) && timeToLive+FOG_PAUSE > 0)
 	{
-		SINGLE fogFactor = min((timeToLive+FOG_PAUSE)/totalTime,1);
+		SINGLE fogFactor = std::min<SINGLE>((timeToLive+FOG_PAUSE)/totalTime,1.0F);
 		FOGOFWAR->RevealZone(this, sensorRadius*fogFactor,0);
 	}
 }
@@ -1416,7 +1435,7 @@ BOOL32 Explosion::InitExplosion (IBaseObject * _owner,U32 _playerID,U16 _sensorR
 
 	REND->get_archetype_centroid(HARCH(ownerIdx),LODPERCENT,c_of_mass);//GetCenterOfMass(ownerIdx);
 //	c_of_mass = trans.inverse_rotate_translate(c_of_mass);
-	total_mass = max(mass,0);
+	total_mass = std::max<SINGLE>(mass,0.0F);
 
 	{
 		OBJPTR<IExtent> extentObj;

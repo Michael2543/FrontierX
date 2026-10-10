@@ -9,9 +9,9 @@
 
 //
 
-#include "DACOM.h"
-#include "Vector.h"
-#include "Matrix.h"
+#include "DACOM.H"
+#include "vector.h"
+#include "matrix.h"
 
 #include "IRigidBody.h"
 

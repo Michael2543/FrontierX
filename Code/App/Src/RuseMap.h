@@ -17,7 +17,7 @@
 #define INVALID_SYSTEM_ID 0
 
 #ifndef FILESYS_H
-#include <FileSys.h>
+#include <Filesys.h>
 #endif
 
 #ifndef DSECTOR_H
@@ -186,7 +186,11 @@ public:
 	BOOL32 Save(SYSTEM_DATA *save);
 	BOOL32 Load(SYSTEM_DATA *load);
 	void DoDialog();
+#if defined(_WIN32)
 	static BOOL CALLBACK DlgProc(HWND hwnd, UINT message, UINT wParam, LPARAM lParam);
+#else
+	static BOOL DlgProc(HWND hwnd, UINT message, UINT wParam, LPARAM lParam);
+#endif
 	void SetName(char buffer[256]);
 	char *GetName();
 	void AssignID();

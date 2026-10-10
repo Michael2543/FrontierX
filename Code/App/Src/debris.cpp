@@ -11,17 +11,36 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <ICamera.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <IMeshManager.h>
+#include <IRenderPrimitive.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#include "TObjFrame.h"
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
 #include "ObjList.h"
-#include "filesys.h"
+#include <Filesys.h>
 #include "TObjTrans.h"
 #include "TObjFrame.h"
 #include "TObjPhys.h"
-#include "Material.h"
+#include <material.h>
 #include "MeshRender.h"
 #include "IExplosion.h"
 #include "ArchHolder.h"
@@ -34,10 +53,10 @@
 #include <View2d.h>
 #include <TSmartPointer.h>
 #include <IParticleSystem.h>
-#include <Physics.h>
-#include <3DMath.h>
-#include <Engine.h>
-#include <Renderer.h>
+#include <physics.h>
+#include <3dmath.h>
+#include <ENGINE.H>
+#include <renderer.h>
 
 //--------------------------------------------------------------------------//
 //

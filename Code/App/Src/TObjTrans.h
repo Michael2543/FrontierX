@@ -69,6 +69,8 @@ public:
 #else
 	typedef typename Base::SAVEINFO TRANSSAVEINFO;
 	typedef typename Base::INITINFO TRANSINITINFO;
+	using typename Base::SaveLoadProc;
+	using typename Base::InitProc;
 #endif
 
 #if defined(_WIN32)

@@ -75,6 +75,7 @@ struct TObjRepBufferGrid
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectRepair : public Base, IRepairee, REPAIR_SAVELOAD
 {
+#if defined(_WIN32)
 	struct UpdateNode       updateNode;
 	struct SaveNode			saveNode;
 	struct LoadNode         loadNode;
@@ -84,9 +85,50 @@ struct _NO_VTABLE ObjectRepair : public Base, IRepairee, REPAIR_SAVELOAD
 	struct OnOpCancelNode	onOpCancelNode;
 	struct PreTakeoverNode	preTakeoverNode;
 	struct ReceiveOpDataNode	receiveOpDataNode;
+#else
+	typename Base::UpdateNode updateNode;
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::ResolveNode resolveNode;
+	typename Base::InitNode initNode;
+	typename Base::PreDestructNode destructNode;
+	typename Base::OnOpCancelNode onOpCancelNode;
+	typename Base::PreTakeoverNode preTakeoverNode;
+	typename Base::ReceiveOpDataNode receiveOpDataNode;
+#endif
 		
+#if defined(_WIN32)
 	typename typedef Base::SAVEINFO REPAIRSAVEINFO;
 	typename typedef Base::INITINFO REPAIRINITINFO;
+#else
+	typedef typename Base::SAVEINFO REPAIRSAVEINFO;
+	typedef typename Base::INITINFO REPAIRINITINFO;
+	using typename Base::UpdateProc;
+	using typename Base::SaveLoadProc;
+	using typename Base::ResolveProc;
+	using typename Base::InitProc;
+	using typename Base::PreDestructProc;
+	using typename Base::OnOpCancelProc;
+	using typename Base::PreTakeoverProc;
+	using typename Base::ReceiveOpDataProc;
+	using Base::playerID;
+	using Base::dwMissionID;
+	using Base::moveToPos;
+	using Base::rotateShip;
+	using Base::setAltitude;
+	using Base::resetMoveVars;
+	using Base::disableAutoMovement;
+	using Base::transform;
+	using Base::fixAngle;
+	using Base::setPosition;
+	using Base::getLastGrid;
+	using Base::isMoveActive;
+	using Base::supplies;
+	using Base::supplyPointsMax;
+	using Base::hullPoints;
+	using Base::hullPointsMax;
+	using Base::instanceIndex;
+#endif
 	//----------------------------------
 
 	//the diffent modes involed in a repair operation

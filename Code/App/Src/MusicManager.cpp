@@ -640,7 +640,10 @@ GENRESULT MManager::OnUpdate ()
 					U32 flags = (data[i].looping) ? (STRMFL_PLAY|STRMFL_LOOPING) : STRMFL_PLAY;
 					data[i].handle = STREAMER->Open(data[i].filename, MUSICDIR, flags);
 #if !defined(_WIN32)
-					if (!data[i].handle) NativeMusicFailure("required music stream open failed");
+					if (!data[i].handle) {
+						std::fprintf(stderr, "Native mission music failed to open: %s\n", data[i].filename);
+						NativeMusicFailure("required music stream open failed");
+					}
 #endif
 				}
 				else	// currently has a valid handle, is it playing?

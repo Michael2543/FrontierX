@@ -47,6 +47,8 @@ struct _NO_VTABLE ObjectWarp : public Base, WARP_SAVELOAD
 #define MAX_SHIP_STRETCH	3.0	// multiplier on ship's normal length.
 
 //	struct PreRenderNode	preRenderNode;
+
+#if defined(_WIN32)
 //	struct PostRenderNode   postRenderNode;
 	struct PhysUpdateNode   physUpdateNode;
 	struct UpdateNode		updateNode;
@@ -56,9 +58,50 @@ struct _NO_VTABLE ObjectWarp : public Base, WARP_SAVELOAD
 	struct ResolveNode		resolveNode;
 	struct InitNode			initNode;
 	struct OnOpCancelNode	onOpCancelNode;
+#else
+	typename Base::PhysUpdateNode physUpdateNode;
+	typename Base::UpdateNode updateNode;
+	typename Base::ExplodeNode explodeNode;
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::ResolveNode resolveNode;
+	typename Base::InitNode initNode;
+	typename Base::OnOpCancelNode onOpCancelNode;
+#endif
 
+#if defined(_WIN32)
 	typename typedef Base::SAVEINFO WARPSAVEINFO;
 	typename typedef Base::INITINFO WARPINITINFO;
+#else
+	typedef typename Base::SAVEINFO WARPSAVEINFO;
+	typedef typename Base::INITINFO WARPINITINFO;
+	using Base::bEnablePhysics;
+	using Base::systemID;
+	using Base::transform;
+	using Base::fixAngle;
+	using Base::rotateShip;
+	using Base::instanceIndex;
+	using Base::velocity;
+	using Base::playerID;
+	using Base::SetSystemID;
+	using Base::SetTerrainFootprint;
+	using Base::ang_velocity;
+	using Base::dwMissionID;
+	using Base::partName;
+	using Base::moveToPos;
+	using Base::box;
+	using Base::disableAutoMovement;
+	using Base::DEBUG_resetInputCounter;
+	using Base::SetTransform;
+	using Base::resetMoveVars;
+	using typename Base::PhysUpdateProc;
+	using typename Base::ExplodeProc;
+	using typename Base::SaveLoadProc;
+	using typename Base::ResolveProc;
+	using typename Base::OnOpCancelProc;
+	using typename Base::InitProc;
+	using typename Base::UpdateProc;
+#endif
 
 	OBJPTR<IJumpGate> targetGate;
 	OBJPTR<IJumpGate> inTargetGate;
@@ -667,6 +710,11 @@ void ObjectWarp< Base >::onOpCancelWarp (U32 agentID)
 template <class Base>
 void ObjectWarp< Base >::setModelScale(INSTANCE_INDEX instanceIndex,Vector scale,Vector scale_origin)
 {
+#if !defined(_WIN32)
+	// This dormant CQ2 helper has no IEngine property API in the source contract.
+	// Fail if it is ever reached rather than reporting a scaled instance.
+	abort();
+#else
 	ENGINE->set_instance_property(instanceIndex, "Stretch", &scale);
 	ENGINE->set_instance_property(instanceIndex, "StretchPoint", &scale_origin);
 
@@ -681,6 +729,7 @@ void ObjectWarp< Base >::setModelScale(INSTANCE_INDEX instanceIndex,Vector scale
 		setModelScale(child,scale,scale_origin2);
 		lastChild = child;
 	}
+#endif
 }
 //---------------------------------------------------------------------------
 //---------------------------End TObjWarp.h----------------------------------

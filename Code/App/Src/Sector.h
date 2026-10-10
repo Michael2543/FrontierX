@@ -23,6 +23,7 @@
 #ifndef VFX_H
 #include "VFX.H"
 #endif
+#include "DMissionEnum.h"
 #include <string.h>
 
 #define INVALID_SYSTEM_ID 0
@@ -134,15 +135,15 @@ struct DACOM_NO_VTABLE ISector : public IDAComponent
 	virtual IBaseObject * GetJumpgateDestination (IBaseObject *jump) = 0;
 
 	//playerID == 0 means all gates are visible
-	virtual struct IBaseObject *GetJumpgateTo (U32 startSystemID,U32 destSystemID,const Vector &start_pos,U32 playerID=0);
+	virtual struct IBaseObject *GetJumpgateTo (U32 startSystemID,U32 destSystemID,const Vector &start_pos,U32 playerID=0) = 0;
 
-	virtual struct IBaseObject *GetJumpgateTo (U32 startSystemID,U32 destSystemID,const Vector &start_pos,const Vector &dest_pos,U32 playerID=0);
+	virtual struct IBaseObject *GetJumpgateTo (U32 startSystemID,U32 destSystemID,const Vector &start_pos,const Vector &dest_pos,U32 playerID=0) = 0;
 
 	virtual void RegisterJumpgate (IBaseObject *obj,U32 jgateID) = 0;
 
 	virtual void Update (void) = 0;
 
-	virtual GENRESULT ZoneOn (U8 systemID);
+	virtual GENRESULT ZoneOn (U8 systemID) = 0;
 
 	virtual void HighlightJumpgate (IBaseObject *obj) = 0;
 

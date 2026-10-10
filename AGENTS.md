@@ -28,8 +28,16 @@ Read the smallest relevant authoritative document before changing code:
 ## Current reality
 
 - VS2022 Win32 on Windows 10/11 remains the supported game build and regression baseline.
-- The Linux CMake/Ninja graph is implemented for isolated libraries and checks, platform services,
-  a headless data checker and a native startup/window shell. It does not yet build or run the game.
+- The Linux CMake/Ninja graph builds isolated libraries and checks, platform services,
+  a headless data checker and a native startup/window shell. A bounded native
+  `Sol_Train` single-player slice now runs on lawfully external data under
+  GCC and Clang with visible SDL/Vulkan, normal mouse selection and movement,
+  source simulation objectives and moved-state mission save/reload. See
+  `docs/NATIVE_SINGLEPLAYER_SLICE.md` for evidence and explicit limits. The
+  mission now uses native pipeline clear/begin/end/swap for full-target
+  color/depth frames and runs the source `CQDoModal` event/timing/frame loop
+  for the selected in-game mission. Native menu hot rectangles, framebuffer
+  locking and excluded media/UI remain separate owner boundaries.
 - The native shell now uses the active App `ISystemContainer` owner for its
   EventSystem and SDL-backed WindowManager aggregates through a synthetic
   `[System]` profile or a bounded externally supplied profile. Its GPU build
@@ -49,10 +57,19 @@ Read the smallest relevant authoritative document before changing code:
   check creates and releases a real point-emitter program. The production
   `IChannel2` decoder now loads the external Forger `Sc_build` animation
   through `IAnimation` under both compilers. App global-owner
-  initialization, mission startup and particle initialization remain open.
+  initialization, mission startup and particle initialization execute for
+  the selected training slice.
+  Original UnitComm and StringData now run selection/movement voices through
+  the native sound adapter and IStreamer on the selected mission under both
+  compilers with the optional external shared-LGPL decoder. Unit alert text,
+  subtitles and mission spatial SFX remain explicitly excluded. See
+  `docs/NATIVE_SINGLEPLAYER_SLICE.md` for bounded runtime evidence; the next
+  media/UI gate is original in-window text/teletype presentation.
   Generated PCM playback works; an explicit external shared-LGPL FFmpeg
   configuration also decodes and plays the selected training speech. See `docs/NATIVE_AUDIO_STREAMER.md`.
-  The native shell has not entered the retail game or a mission.
+  The native shell enters the selected retail-data mission with explicit
+  optional media/UI exclusions. Complete game and Windows retail parity
+  remain open.
 - The production `DOCUVIEW` parser core now compiles and parses a generated
   Win32-shaped record in a native check. Its `long` and pointer field sizes
   match four-byte Win32 layout, and production `IDataParser` enumerates its

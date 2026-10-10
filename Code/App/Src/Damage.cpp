@@ -11,11 +11,47 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <3dmath.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <physics.h>
+#include <VFX.H>
+#include <DEffectOpts.h>
+#include <DPlatform.h>
+#include <DPlatSave.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <type_traits>
+#include <cfloat>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#include "ObjList.h"
+#include "Objwatch.h"
+#endif
 
 #include "Damage.h"
-#include "Objlist.h"
+#include "MeshRender.h"
+#include "ObjList.h"
 #include "TObjExtension.h"
 #include "TObjDamage.h"
 #include "TObjExtent.h"
@@ -29,12 +65,15 @@
 #include "TObjMission.h"
 #include "TObjBuild.h"
 #include "Field.h"
+#include <DPlatform.h>
 
 #include <DSpaceship.h>
 #include <DShipSave.h>
 #include <DBaseData.h>
+#if defined(_WIN32)
 #include <DPlatform.h>
 #include <DPlatSave.h>
+#endif
 
 bool SphereTriangle  (Vector v[3],Vector pt,SINGLE rad);
 
@@ -55,6 +94,7 @@ typedef SPACESHIP_INIT<BASE_SPACESHIP_DATA> BASESHIPINIT;
 
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 template ObjectDamage
 			<ObjectBuild
 		        <ObjectExtent
@@ -93,6 +133,7 @@ template ObjectDamage
 			 >
 			>;
 
+#endif
 //---------------------------------------------------------------------------
 //
 template <class Base> 
@@ -2107,5 +2148,32 @@ IRenderChannel * DamageRender::Clone()
 	return new_dr;
 }
 //---------------------------------------------------------------------------
+#if !defined(_WIN32)
+using NativePlatformDamageFrame = ObjectFrame<IBaseObject, BASE_PLATFORM_SAVELOAD,
+    PLATFORM_INIT<BASE_PLATFORM_DATA>>;
+template struct ObjectDamage<ObjectBuild<ObjectExtension<ObjectExtent<ObjectSelection<
+    ObjectMission<ObjectTransform<NativePlatformDamageFrame>>>>>>>;
+template struct ObjectDamage
+	<ObjectBuild
+	 <ObjectExtent
+	  <ObjectWarp
+	   <ObjectMove
+	    <ObjectSelection
+	     <ObjectMission
+	      <ObjectPhysics
+	       <ObjectControl
+	        <ObjectTransform
+	         <ObjectFrame<IBaseObject, SPACESHIP_SAVELOAD, BASESHIPINIT> >
+	        >
+	       >
+	      >
+	     >
+	    >
+	   >
+	  >
+	 >
+	>;
+#endif
+
 //-------------------------End Damage.cpp------------------------------------
 //---------------------------------------------------------------------------

@@ -307,9 +307,10 @@ int main(int argc, char ** argv)
                     fixture->FindNextFile(search, &found) == FALSE &&
                     fixture->GetLastError() == ERROR_NO_MORE_FILES &&
                     fixture->FindClose(search) == TRUE &&
-                    fixture->SetCurrentDirectory("material library") == FALSE &&
+                    fixture->SetCurrentDirectory("material library") == TRUE &&
+                    fixture->SetCurrentDirectory("\\") == TRUE &&
                     fixture->SetCurrentDirectory("Material library") == TRUE,
-                "native UTF directory enumeration and exact-case navigation")) return 1;
+                "native UTF enumeration and Windows-style case-insensitive navigation")) return 1;
     search = fixture->FindFirstFile("*.*", &found);
     if (!Expect(search != INVALID_HANDLE_VALUE &&
                     std::strcmp(found.cFileName, "Loaded") == 0 &&
@@ -377,12 +378,14 @@ int main(int argc, char ** argv)
     DAFILEDESC wrongCase("other");
     DAFILEDESC traversal("../Other");
     IFileSystem * rejected = nullptr;
-    if (!Expect(materialDirectory->CreateInstance(&wrongCase,
-                    reinterpret_cast<void **>(&rejected)) == GR_DATA_NOT_FOUND &&
-                    !rejected && materialDirectory->CreateInstance(&traversal,
+    const bool caseResolved = materialDirectory->CreateInstance(&wrongCase,
+                    reinterpret_cast<void **>(&rejected)) == GR_OK && rejected;
+    if (rejected) rejected->Release();
+    rejected = nullptr;
+    if (!Expect(caseResolved && materialDirectory->CreateInstance(&traversal,
                     reinterpret_cast<void **>(&rejected)) == GR_INVALID_PARMS &&
                     !rejected,
-                "UTF child factory rejects wrong case and traversal")) return 1;
+                "UTF child factory resolves Windows case and rejects traversal")) return 1;
     IFileSystem * typeView = nullptr;
     char implicitType[IM_MAX_TYPE_LEN]{};
     DWORD implicitRead = 0;

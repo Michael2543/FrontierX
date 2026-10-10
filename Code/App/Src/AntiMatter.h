@@ -113,7 +113,11 @@ struct AntiMatterArchetype : FieldArchetype<BT_ANTIMATTER_DATA>
 
 	virtual void RenderEdit();
 
+#if defined(_WIN32)
 	virtual void AntiMatterArchetype::SetUpPosition(S32 * arrX, S32 * arrY, U32 numPoints);
+#else
+	virtual void SetUpPosition(S32 * arrX, S32 * arrY, U32 numPoints);
+#endif
 
 };
 

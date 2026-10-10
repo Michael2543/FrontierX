@@ -5,6 +5,14 @@
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wextra"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#endif
+#include "matrix4.h"
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #endif
 #include "MyVertex.h"
 #if defined(__GNUC__)
@@ -252,11 +260,15 @@ struct NativeOwnerCapture
     std::size_t stateCalls = 0U;
     std::size_t textureStageCalls = 0U;
     std::size_t samplerCalls = 0U;
+    std::size_t projectionCalls = 0U;
+    std::size_t viewportCalls = 0U;
     GENRESULT result = GR_OK;
     PrimitiveTopology topology = PrimitiveTopology::PointList;
     FrontierX::RenderStateSnapshot renderState{};
     FrontierX::TextureStageSnapshot textureStage{};
     FrontierX::SamplerStateSnapshot samplerState{};
+    Matrix4 projection{true};
+    std::array<int, 4> viewport{{0, 0, 0, 0}};
     std::vector<RenderVertexP3DiffuseT2> vertices;
     std::vector<RenderVertexP3DiffuseT4> vertices2;
     std::vector<RenderVertexP3DiffuseSpecularT4> vertices3;
@@ -377,6 +389,24 @@ GENRESULT DACOM_CDECL CaptureNativeSamplerState(
     auto & capture = *static_cast<NativeOwnerCapture *>(context);
     ++capture.samplerCalls;
     if (capture.result == GR_OK) capture.samplerState = state;
+    return capture.result;
+}
+
+GENRESULT DACOM_CDECL CaptureNativeProjection(void * context,
+                                              const Matrix4 & projection)
+{
+    auto & capture = *static_cast<NativeOwnerCapture *>(context);
+    ++capture.projectionCalls;
+    if (capture.result == GR_OK) capture.projection = projection;
+    return capture.result;
+}
+
+GENRESULT DACOM_CDECL CaptureNativeViewport(void * context, int x, int y,
+                                            int width, int height)
+{
+    auto & capture = *static_cast<NativeOwnerCapture *>(context);
+    ++capture.viewportCalls;
+    if (capture.result == GR_OK) capture.viewport = {{x, y, width, height}};
     return capture.result;
 }
 
@@ -826,8 +856,8 @@ int main()
         CaptureNativeSubmission, &ownerCapture, CaptureNativeSubmission2,
         CaptureNativeRenderState,
         LookupNativeVertexBuffer, &ownerCapture, CaptureNativeTextureStage, nullptr,
-        nullptr, nullptr, CaptureNativeSubmission3, CaptureNativeSubmission4,
-        CaptureNativeSamplerState);
+        nullptr, CaptureNativeProjection, CaptureNativeSubmission3, CaptureNativeSubmission4,
+        CaptureNativeSamplerState, CaptureNativeViewport);
     void * rawOwner = nullptr;
     if (!Expect(manager.CreateInstance(&ownerDescriptor, &rawOwner) == GR_OK && rawOwner,
                 "native render-primitive creation"))
@@ -835,6 +865,54 @@ int main()
         return 1;
     }
     auto * nativeOwner = static_cast<IRenderPrimitive *>(rawOwner);
+    int viewportX = 0, viewportY = 0, viewportWidth = 0, viewportHeight = 0;
+    if (!Expect(nativeOwner->set_ortho(0.0F, 640.0F, 480.0F, 0.0F,
+                                      -1.0F, 1.0F) == GR_OK &&
+                    ownerCapture.projectionCalls == 1U &&
+                    ownerCapture.projection.d[0][0] == 2.0F / 640.0F &&
+                    ownerCapture.projection.d[1][1] == -2.0F / 480.0F &&
+                    ownerCapture.projection.d[0][3] == -1.0F &&
+                    ownerCapture.projection.d[1][3] == 1.0F,
+                "native orthographic projection reaches production callback") ||
+        !Expect(nativeOwner->set_ortho(0.0F, 0.0F, 480.0F, 0.0F,
+                                      -1.0F, 1.0F) == GR_INVALID_PARMS &&
+                    ownerCapture.projectionCalls == 1U,
+                "invalid orthographic extent leaves projection unchanged") ||
+        !Expect(nativeOwner->set_ortho(0.0F,
+                                      std::numeric_limits<float>::denorm_min(),
+                                      480.0F, 0.0F, -1.0F, 1.0F) ==
+                    GR_INVALID_PARMS && ownerCapture.projectionCalls == 1U,
+                "overflowing orthographic scale is rejected before callback") ||
+        !Expect(nativeOwner->set_perspective(30.0F, 4.0F / 3.0F,
+                                             100.0F, 1000.0F) == GR_OK &&
+                    ownerCapture.projectionCalls == 2U &&
+                    ownerCapture.projection.d[0][0] > 1.29F &&
+                    ownerCapture.projection.d[0][0] < 1.30F &&
+                    ownerCapture.projection.d[2][2] < -1.11F &&
+                    ownerCapture.projection.d[2][2] > -1.12F &&
+                    ownerCapture.projection.d[2][3] < -111.0F &&
+                    ownerCapture.projection.d[2][3] > -112.0F &&
+                    ownerCapture.projection.d[3][2] == -1.0F,
+                "native game perspective reaches projection callback with camera -Z") ||
+        !Expect(nativeOwner->set_perspective(0.0F, 4.0F / 3.0F,
+                                             100.0F, 1000.0F) == GR_INVALID_PARMS &&
+                    ownerCapture.projectionCalls == 2U,
+                "invalid perspective leaves projection unchanged") ||
+        !Expect(nativeOwner->set_viewport(10, 20, 100, 80) == GR_OK &&
+                    nativeOwner->get_viewport(&viewportX, &viewportY,
+                                              &viewportWidth, &viewportHeight) == GR_OK &&
+                    ownerCapture.viewportCalls == 1U &&
+                    ownerCapture.viewport == std::array<int, 4>{{10, 20, 100, 80}} &&
+                    viewportX == 10 && viewportY == 20 &&
+                    viewportWidth == 100 && viewportHeight == 80,
+                "native viewport reaches production callback and round trips") ||
+        !Expect(nativeOwner->set_viewport(10, 20, 0, 80) == GR_INVALID_PARMS &&
+                    ownerCapture.viewportCalls == 1U,
+                "invalid viewport leaves render state unchanged"))
+    {
+        nativeOwner->Release();
+        return 1;
+    }
     U32 stateValue = 0U;
     if (!Expect(nativeOwner->get_render_state(D3DRS_ZENABLE, &stateValue) == GR_OK &&
                     stateValue == 1U,

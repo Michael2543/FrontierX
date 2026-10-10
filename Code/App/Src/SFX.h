@@ -55,13 +55,22 @@
 */
 
 #ifndef DACOM_H
+#if defined(_WIN32)
 #include <DACOM.h>
+#else
+#include <DACOM.H>
+#endif
 #endif
 
+#if !defined(_WIN32)
+#include "Sfxid.h"
+#include <cstdlib>
+#else
 namespace SFX
 {
 enum ID;
 }
+#endif
 
 
 // typedef struct SoundEffect *HSOUND;
@@ -93,7 +102,11 @@ public:
 
 	const HSOUND & operator = (int i)
 	{
+#if defined(_WIN32)
 		CQASSERT(i==0);		// only allowed to set to NULL
+#else
+		if (i != 0) std::abort();
+#endif
 		free();
 		return *this;
 	}
@@ -111,6 +124,9 @@ public:
 	void free (void);
 
 	friend struct Sfx;
+#if !defined(_WIN32)
+	friend struct NativeSfx;
+#endif
 };
 
 
@@ -128,6 +144,9 @@ struct GT_GLOBAL_SOUNDS;
 
 struct ISFX : IDAComponent
 {
+#if !defined(_WIN32)
+	using IDAComponent::AddRef;
+#endif
 	virtual BOOL32 __stdcall Preload (SFX::ID id) = 0;
 
 	virtual HSOUND __stdcall Open (SFX::ID id) = 0;

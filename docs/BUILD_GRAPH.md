@@ -1,5 +1,315 @@
 # Windows build declarations and next portable slice
 
+Native unit voice graph, 2026-10-10: original UnitComm joins the existing
+native mission-media owner; original StringData now has a native object
+owner linked into the shell and existing data-root probe. Complete SDL-only
+Linux x86_64 Debug GCC 16.2.1 and Clang 22.1.8 builds succeeded with
+`cmake --build /tmp/frontierx-mission-<compiler> -j8`.
+`SDL_VIDEODRIVER=x11 ctest --test-dir <tree> --output-on-failure -j4`
+passed 50/51 per compiler. Both GPU tests failed to observe the requested
+resize under desktop tiling; this is a recorded failure, not a skip or pass.
+All other checks executed and passed. The unchanged renderer was separately
+exercised in visible Wayland/Vulkan external-data mission runs under both
+compilers, with successful unit voices, normal movement and save/reload.
+Separate optional external shared-LGPL FFmpeg trees built shell, data-root,
+window-manager, pipeline and GPU targets and passed all four focused
+`data_root|native_shell|render_pipeline|native_window_manager` CTests per
+compiler. A separate Clang ASan/UBSan data-root check passed with leak
+checking disabled. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-unit-voice-mission-checkpoint-2026-10-10)
+for commands, provenance and unperformed Windows/ABI/full mission checks.
+Older records below are historical.
+
+Native source-modal integration, 2026-10-10: the original `Modal.cpp` is now
+an object in the Linux x86_64 Debug `frontierx_native_shell` graph. Focused
+`portability.render_pipeline`, `portability.render_submission` and
+`portability.native_shell` CTests passed 3/3 per compiler before the final
+shell builds. `cmake --build /tmp/frontierx-mission-{gcc,clang} --target
+frontierx_native_shell -j4` succeeded after integration. With
+`SDL_VIDEODRIVER=x11`, the full GCC CTest run passed 51/51 including GPU;
+the Clang run passed 50/51 because the tiled GPU probe's resize was not
+observed (1854x2085 to 1854x2085). A separate direct visible floating
+Clang/Vulkan GPU probe with `--require-runtime --visible` passed 12 frames,
+resize 639x360 to 800x450, depth recreation and two scene runs. This direct
+pass does not relabel the failed Clang CTest as passing. Separate 15-second
+visible Wayland/Vulkan retail-input mission processes under both compilers
+passed selection, movement, objectives, moved-state save/reload and source
+mission close. Windows Debug/Final, ABI, sanitizer and Windows retail-runtime
+checks were not run. See [the focused modal record](NATIVE_SINGLEPLAYER_SLICE.md#source-modal-mission-integration-2026-10-10).
+Older records below are historical.
+
+Native frame lifecycle validation, 2026-10-10: complete existing Linux x86_64
+Debug Ninja trees `/tmp/frontierx-mission-gcc` (GCC 16.2.1) and
+`/tmp/frontierx-mission-clang` (Clang 22.1.8) rebuilt with
+`cmake --build <tree> -j 12`. Each unmodified-environment full
+`ctest --test-dir <tree> --output-on-failure` run passed 50/51 checks;
+`portability.sdl3_gpu` failed because the Wayland desktop did not honor its
+resize request. Separate floating X11/XWayland Vulkan GPU runs passed all
+probe assertions under both compilers, including the new frame lifecycle,
+clear values, depth, resize and repeated initialization. This is an explicit
+host-dependent runtime result, not a clean default full-suite result or a
+skip counted as execution. The registered `portability.sdl3_gpu` CTest then
+passed 1/1 per compiler when rerun with `SDL_VIDEODRIVER=x11` in a floating
+test window. The separate visible Wayland external mission
+runs preserved the playable checkpoint through the production frame boundary.
+See [the focused evidence](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-frame-lifecycle-checkpoint-2026-10-10).
+Earlier records below are historical.
+
+Current playable native build, 2026-10-10: Linux x86_64 Debug Ninja
+`frontierx_native_shell` rebuilt and linked under GCC 16.2.1 and Clang
+22.1.8. Four focused data-root/render-pipeline/render-submission/native-shell
+CTests passed per compiler on generated/repository inputs; the complete
+native CTest trees then passed 51/51 per compiler, including visible GPU
+tests, after updating a stale exact-case assertion for the already integrated
+Windows-style UTF lookup. Separate visible
+Wayland/Vulkan integrated shell processes on lawful external `Sol_Train`
+data took normal mouse selection and move input, completed objectives 1 and
+2 after 299/298 source updates, and saved/reloaded the moved player Forger
+with exact owner, position and flags; each exited zero. The explicit
+`frontierx_sdl3_gpu_probe --require-runtime --visible` also executed under
+both compilers, rather than skipping. Full presets, sanitizers, native
+Windows Debug/Final, ABI and retail parity remain open. See
+[the focused acceptance record](NATIVE_SINGLEPLAYER_SLICE.md#playable-solarian-training-checkpoint-2026-10-10).
+Entries below are historical snapshots.
+
+Current native mission frame build, 2026-10-10: Linux x86_64 Debug Ninja
+`frontierx_native_shell`, `frontierx_sdl3_gpu_probe` and
+`frontierx_render_submission_probe` built under GCC 16.2.1 and Clang
+22.1.8. Four focused data-root/render-pipeline/render-submission/native-shell
+CTests passed per compiler. Separate explicit visible Vulkan GPU probes
+passed under both compilers, and separate integrated shell executions on
+lawfully external `Sol_Train` data presented 28 production draws after one
+source update. Each 64x64 readback changed 171 pixels. Both compiler
+processes also executed source mission save/reload and preserved the static
+player Forger owner and position in an external native UTF save. This is
+native runtime evidence for a first mission frame and static-state round
+trip, not a playable mission. Full
+presets, sanitizers, native Windows Debug/Final and ABI checks remain open.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#source-perspective-and-multi-draw-mission-frame-2026-10-10).
+Entries below are historical snapshots.
+
+Current native mission build, 2026-10-10: Linux x86_64 Debug Ninja
+`frontierx_native_shell` and `frontierx_data_root_probe` built under GCC
+16.2.1 and Clang 22.1.8 with original `Planetoid.cpp`. Each compiler passed
+the three focused data-root/render-pipeline/shell CTests on generated and
+repository inputs. Separate visible Wayland/Vulkan runs on lawful external
+`Sol_Train` data loaded the mission and executed one source update, then
+failed before a GPU scene because the Forger was excluded by the source
+projected-bound visibility check. Full presets, sanitizers, native Windows
+Debug/Final and ABI checks remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-planet-owner-game-active-update-and-first-object-render-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission link, 2026-10-10: GCC 16.2.1 and Clang 22.1.8 Linux
+x86_64 Debug Ninja integrated `frontierx_native_shell` targets build with
+the original Forger, Jumpgate, Waypoint, Trigger, Gunboat and build-support
+Platform objects. Separate visible external `Sol_Train` runs stop at the
+required planet-placement assertion in the source mission loader (exit 134),
+before simulation or draw. Three focused data-root/render-pipeline/shell
+CTests passed per compiler after the platform link. Full presets, native Windows
+Debug/Final, ABI and sanitizers remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#source-mission-object-chain-through-platform-placement-2026-10-10).
+Entries below are historical snapshots.
+
+Current integrated build, 2026-10-10: Linux x86_64 GCC 16.2.1 and Clang
+22.1.8 Debug Ninja both link the original Forger, spaceship/movement and
+Banker object owners into `frontierx_native_shell`. Both build the updated
+native UTF index and `frontierx_data_root_probe`; three focused
+data-root/render-pipeline/shell CTests pass per compiler. Separate visible
+Wayland/Vulkan processes on lawful external `Sol_Train` data load one Forger,
+then abort at the missing jumpgate part during `CQE_GAME_ACTIVE` (exit 134).
+No simulation tick or playable mission ran. Full presets, Windows
+Debug/Final, module ABI and sanitizers were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-forger-instance-and-next-script-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current Forger owner build, 2026-10-10: Linux x86_64 GCC 16.2.1 and Clang
+22.1.8 Debug Ninja each built `frontierx_app_fabricator_owner` and the
+existing `frontierx_native_shell`. Three focused data-root/render-pipeline/
+shell CTests passed per compiler. A trial integrated factory link failed on
+production ship/movement/service symbols and is not included in the shell.
+No external-data or GPU runtime occurred in this step. Full presets,
+Windows Debug/Final, ABI and sanitizers were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#forger-object-compile-and-first-production-link-inventory-2026-10-10).
+Entries below are historical snapshots.
+
+Current Forger source gate, 2026-10-10: the original `Fabricator.cpp` is in
+the supported Windows `Conquest.vcxproj` but remains outside the Linux link.
+Direct GCC 16.2.1 and Clang 22.1.8 syntax attempts after non-Windows
+template preparation still fail; they are compile failures, not factory
+runtime evidence. Existing Linux x86_64 Debug Ninja `frontierx_native_shell`
+targets built under both compilers, and focused data-root/render-pipeline/
+shell CTests passed 3/3 per compiler. Full presets, native Windows builds,
+ABI and sanitizers were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#forger-factory-source-closure-remains-open-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission-link result, 2026-10-10: GCC 16.2.1 and Clang 22.1.8
+Linux x86_64 Debug Ninja `frontierx_native_shell` targets built with native
+mission media and system-map owners. Focused `portability.data_root`,
+`portability.render_pipeline` and `portability.native_shell` CTests passed
+3/3 under each compiler. Separate visible Wayland/Vulkan processes on lawful
+external training data each reached 100% original mission loading, then the
+shell exited 6 at its missing-Forger postcondition; missing object factories
+remain. Direct original `Fabricator.cpp` GCC/Clang syntax attempts failed
+and it is unlinked. Full presets, Windows Debug/Final, ABI and sanitizers
+were not run. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-sol_train-load-completion-before-playable-objects-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission-link result, 2026-10-10: Linux x86_64 GCC 16.2.1 and
+Clang 22.1.8 Debug Ninja targets both built `frontierx_native_shell` with
+original App vertex-buffer and scripting objects. Focused
+`portability.data_root`, `portability.render_pipeline` and
+`portability.native_shell` CTests passed 3/3 per compiler. Separate visible
+Wayland/Vulkan runs on lawful external training data reached 88% mission load
+and aborted at missing SoundManager/Teletype initialization; they are runtime
+evidence only to that boundary. Full presets, Windows Debug/Final, ABI and
+sanitizers were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#external-sol_train-load-reaches-the-script-boundary-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission-link build, 2026-10-10: Linux x86_64 GCC 16.2.1 and
+Clang 22.1.8 Debug Ninja trees each built `frontierx_native_shell` with
+the original Sector and SpaceEnvironment objects plus the mission-load
+bridge. Focused `portability.data_root` and `portability.native_shell`
+CTest checks passed 2/2 per compiler. Separate visible external-data
+Wayland/Vulkan runs entered Mission::Load but aborted at 25% ObjectList
+loading on the Anim2D texture assertion. Full presets, Windows Debug/Final
+and module ABI checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-sol_train-load-through-objectlist-2026-10-10).
+Entries below are historical snapshots.
+
+Current Sector dependency build, 2026-10-10: Linux x86_64 GCC 16.2.1
+and Clang 22.1.8 Debug Ninja trees each built the new
+`frontierx_app_terrain_map_owner` object and linked it into
+`frontierx_native_shell`. The focused `portability.native_shell` CTest
+passed once per compiler. Separate visible external-data mission-start runs
+still stopped at the missing `Sector` owner; no terrain-map method executed.
+Windows Debug/Final and ABI
+checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-terrainmap-compile-boundary-for-sector-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission Engine binding Debug matrix, 2026-10-03: complete Linux
+x86_64 GCC 16.2.1 and Clang 22.1.8 Debug graphs built after adding the
+GameSystem Engine-component bridge and explicit shell mode. Each full
+CTest run passed 48 executing checks out of 51; the cursor and two GPU
+checks skipped in the command sandbox. Both real shells executed
+`--mission-engine` with a supplied source profile and lawfully external
+training data, bound `IRenderer` and the uninitialized source-profile
+render interfaces, initialized required `IStreamer` and
+closed cleanly before game startup. No mission or GPU frame ran. Windows
+Debug/Final and module ABI checks remain unperformed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-engine-composition-2026-10-03).
+Entries below are historical snapshots.
+
+Current camera-owner Debug matrix, 2026-10-03: complete Linux x86_64
+GCC 16.2.1 and Clang 22.1.8 graphs built with the original App camera
+object and selected mission, simulation, packet and `Sol_T` owners linked
+into the GPU shell. Each full CTest run passed 48 executing checks out of
+51; the cursor and two GPU tests skipped in the command sandbox. The temporary
+combined App/`Sol_T` link including the camera object succeeded under
+both compilers, and both external-data processes executed the existing
+shell and hotkey startup paths. The camera registrar and mission did not
+execute. Windows Debug/Final, module ABI and mission GPU checks remain
+unperformed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-camera-and-hotkey-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current combined App link Debug matrix, 2026-10-03: complete Linux
+x86_64 GCC 16.2.1 and Clang 22.1.8 Debug graphs built. Each full
+CTest run passed 48 executing checks out of 51; one cursor and two
+GPU tests skipped in the command sandbox. Separate visible
+Wayland/Vulkan `portability.game_material_gpu` runs passed under both
+compilers. Temporary combined App/script links succeeded under both
+compilers and ran the existing external-data shell path, but no App
+global startup or mission ran. Native Windows Debug/Final and module
+ABI checks remain unperformed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-2d-and-combined-mission-link-2026-10-03).
+Entries below are historical snapshots.
+
+Current native 2D contract Debug matrix, 2026-10-03: Linux x86_64 GCC
+16.2.1 and Clang 22.1.8 each built the complete
+`/tmp/frontierx-{gcc,clang}-goal` Debug graph after the native
+ortho/viewport callback change. Each full CTest run passed 48 executing
+checks out of 51; one cursor and two GPU tests skipped in the command
+sandbox. The focused GPU probe then ran visibly on Wayland/Vulkan
+under both compilers and verified viewport clipping and restoration.
+The combined mission link remains unresolved on three
+Camera/DrawAgent symbols. Native Windows Debug/Final, module ABI,
+mission GPU and mission runtime were not checked. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-orthographic-and-viewport-contract-2026-10-03).
+Entries below are historical snapshots.
+
+Current mission-owner Debug matrix, 2026-10-03: Linux x86_64 GCC
+16.2.1 and Clang 22.1.8 each built the complete
+`/tmp/frontierx-{gcc,clang}-goal` Debug graph with the original Blast,
+App light, MapGen and MorphMesh objects, native profile parser binding
+and original fleet-pool code. Each full CTest run passed 48 executing
+checks out of 51; the cursor and two GPU tests skipped in the command
+sandbox. Separate FFmpeg-enabled GCC/Clang shell targets and their
+focused CTests passed, and both lawful external-data shell processes
+exercised `ISFX` but still reported `mission not started`. The
+combined App/script link still fails on three 2D/camera symbols.
+Native Windows Debug/Final, module ABI, hardware GPU and mission
+runtime were not checked. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-light-profile-and-fleet-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current native SFX/field Debug matrix, 2026-10-03: Linux x86_64 GCC
+16.2.1 and Clang 22.1.8 each built the complete `/tmp/frontierx-*-goal`
+Debug graph, including native `ISFX`, `MineField` and `AntiMatter` objects.
+Each full CTest run passed 48 executing checks out of 51; the cursor
+and two GPU checks skipped in the command sandbox and provide no GPU
+runtime evidence. The separate FFmpeg-enabled GCC/Clang shell targets
+and focused shell CTests passed, and each lawful external training-data
+shell exercised `BUTTONPRESS1` through `ISFX` on SDL dummy audio.
+No full FFmpeg-enabled CTest matrix, native Windows Debug/Final, module
+ABI, hardware GPU or mission runtime check ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-isfx-and-field-object-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current SFX source Debug matrix, 2026-10-03: Linux x86_64 GCC 16.2.1
+and Clang 22.1.8 each built the complete fresh Debug graph after the
+native App SFX filesystem binding. Each full CTest run passed 48
+executing checks out of 51; the cursor and two GPU checks skipped in
+the command sandbox. Both compiler shells loaded lawfully external
+training data and retained Music/SFX sources with required
+`IStreamer`, but reported `mission not started`. Both compiler
+mission-filesystem probes opened the external source-mapped IAC WAV
+header. Separate FFmpeg-enabled GCC/Clang Debug builds of the native
+window probe and shell passed their focused two-CTest sets; each
+external-input probe decoded and completed the same effect on SDL
+dummy audio with matching PCM fingerprints. No full FFmpeg-enabled
+CTest matrix or integrated `ISFX` playback ran. Native Windows
+Debug/Final, module ABI, retail gameplay
+and hardware GPU checks were not run. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#external-sfx-source-binding-2026-10-03).
+Entries below are historical snapshots.
+
+Current native Debug matrix, 2026-10-03: Linux x86_64 GCC 16.2.1
+and Clang 22.1.8 each built the complete fresh Debug graph after adding
+the production field, App animation, dust and random-generator object
+targets. Each full CTest run passed 48 executing checks out of 51;
+`portability.app_cursor`, `portability.game_material_gpu` and
+`portability.sdl3_gpu` skipped in the command sandbox and provide no
+display/GPU runtime evidence. Both compiler shells initialized required
+`IStreamer` and parsed the lawfully external training mission, then
+reported `mission not started`. Native Windows Debug/Final, module ABI,
+retail gameplay and hardware GPU checks were not run. See
+[the focused mission record](NATIVE_SINGLEPLAYER_SLICE.md#field-and-animation-owner-compile-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current native Debug matrix, 2026-10-03: Linux x86_64 GCC 16.2.1
+and Clang 22.1.8 each built the complete fresh `/tmp/frontierx-*-goal`
+graph after adding the production effect-player compile target and
+native App name conversion. Each full CTest run passed 48 executing
+checks; `portability.app_cursor`, `portability.game_material_gpu` and
+`portability.sdl3_gpu` skipped in the command sandbox. The effect
+player was compiled but not part of an executed mission. Native
+Windows Debug/Final, module ABI, retail runtime and hardware GPU
+checks were not run. See [the focused mission record](NATIVE_SINGLEPLAYER_SLICE.md#production-effect-player-compile-boundary-2026-10-03).
+Entries below are historical snapshots.
+
 Latest UTF-save-format matrix, 2026-09-27: GCC 16.2.1 and Clang
 22.1.8 configured and built the complete Linux Debug presets with
 `NativeUtfWriter.cpp`. Both full CTest presets passed 48 executing

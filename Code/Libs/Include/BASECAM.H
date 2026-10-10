@@ -43,13 +43,13 @@
 #endif
 
 #ifndef ENGINE_H
-#include "Engine.h"
+#include "ENGINE.H"
 #endif
 
-#include "fdump.h"
+#include "FDump.h"
 
 #ifndef FDUMP_H
-#include "FDUMP.h"
+#include "FDump.h"
 #endif
 
 #ifndef PI

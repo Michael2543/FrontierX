@@ -13,29 +13,49 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include "CQTrace.h"
+#include "Include/NativeAppGlobals.h"
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+using std::min;
+using std::max;
+
+[[noreturn]] static void NativeFieldEditorUnavailable()
+{
+	std::fputs("Native field editor requires Win32 dialog and mouse contracts\n", stderr);
+	std::abort();
+}
+#endif
 
 #include <stdio.h>
 
 #include "TDocClient.h"
 #include "Menu.h"
-#include "Resource.h"
+#include "resource.h"
 #include "DBHotkeys.h"
 #include "SysMap.h"
 #include "UserDefaults.h"
 #include "Camera.h"
-#include "ANIM2D.h"
+#include "anim2d.h"
 #include "lightman.h"
 #include "IObject.h"
 #include "TObject.h"
-#include "Objlist.h"
-#include "sector.h"
+#include "ObjList.h"
+#include "Sector.h"
 #include "Startup.h"
-#include "TResclient.h"
+#include "TResClient.h"
 #include "DPlanet.h"
 #include "DNebula.h"
-#include "DMineField.h"
+#include "DMinefield.h"
 #include "DEffectOpts.h"
 //replace when an actual mission object is available
 //#include "MPart.h"
@@ -48,16 +68,16 @@
 #include "MyVertex.h"
 #include "BRadix.h"
 #include "SFX.h"
-#include "Minefield.h"
+#include "MineField.h"
 #include "DrawAgent.h"
 #include "MGlobals.h"
 #include "AntiMatter.h"
 #include "ICamera.h"
-#include "FogofWar.h"
+#include "FogOfWar.h"
 #include "MPart.h"
 #include "GridVector.h"
-#include "INugget.h"
 #include "DNugget.h"
+#include "INugget.h"
 #include "RandomGen.h"
 #include <DQuickSave.h>
 #include "IExplosion.h"
@@ -68,14 +88,14 @@
 
 #include <WindowManager.h>
 #include <renderer.h>
-#include <mesh.h>
-#include <3DMath.h>
+#include <Mesh.h>
+#include <3dmath.h>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <EventSys.h>
-#include <RendPipeline.h>
+#include <rendpipeline.h>
 //#include <RPUL\PrimitiveBuilder.h>
 
 #include <malloc.h>
@@ -156,25 +176,33 @@ struct Cloudzone
 	SINGLE alpha[9];
 };
 
+#if defined(_WIN32)
 template DefaultArchetype<BT_MINEFIELD_DATA>;
+#endif
 
 template <class Type>
 DefaultArchetype<Type>::DefaultArchetype()
 {
 	anchorX = ANCHOR_OFF;
-	
+#if defined(_WIN32)
 	const char *fname = "edit.tga";
 	textureID = TMANAGER->CreateTextureFromFile(fname, TEXTURESDIR, DA::TGA, PF_4CC_DAA4);
+#else
+	textureID = 0;
+#endif
 }
 
 template <class Type>
 DefaultArchetype<Type>::~DefaultArchetype()
 {
+#if defined(_WIN32)
 	TMANAGER->ReleaseTextureRef(textureID);
+#endif
 	textureID = 0;
 }
 
 template <class Type>
+#if defined(_WIN32)
 void DefaultArchetype<Type>::Notify(U32 message, void *param)
 {
 	MSG *msg = (MSG *) param;
@@ -433,6 +461,20 @@ void DefaultArchetype<Type>::RenderEdit()
 	BATCH->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
 }
 
+#else
+void DefaultArchetype<Type>::Notify(U32, void *) { NativeFieldEditorUnavailable(); }
+template <class Type>
+void DefaultArchetype<Type>::OnLButtonDown() { NativeFieldEditorUnavailable(); }
+template <class Type>
+void DefaultArchetype<Type>::OnLButtonUp() { NativeFieldEditorUnavailable(); }
+template <class Type>
+void DefaultArchetype<Type>::EndEdit() { NativeFieldEditorUnavailable(); }
+template <class Type>
+void DefaultArchetype<Type>::Edit() { NativeFieldEditorUnavailable(); }
+template <class Type>
+void DefaultArchetype<Type>::RenderEdit() { NativeFieldEditorUnavailable(); }
+#endif
+
 template <class Type>
 void DefaultArchetype<Type>::SetUpPosition(S32 * arrX, S32 * arrY, U32 numPoints)
 {
@@ -444,6 +486,11 @@ void DefaultArchetype<Type>::SetUpPosition(S32 * arrX, S32 * arrY, U32 numPoints
 		squares[i].y = arrY[i];
 	}
 }
+
+#if !defined(_WIN32)
+// Clang instantiates out-of-line members only after their definitions.
+template struct DefaultArchetype<BT_MINEFIELD_DATA>;
+#endif
 
 struct AsteroidArchetype : DefaultArchetype<BT_ASTEROIDFIELD_DATA>
 {
@@ -1320,7 +1367,11 @@ void AsteroidField::PlaceBaseNuggets()
 			char wbuf[128];
 			sprintf(wbuf, "[AST] WARNING: numNuggets=%u clamped to 0 (nuggPerSq=%u numSq=%u)\n",
 				numNuggets, dArch->pData->nuggetsPerSquare, numSquares);
+#if defined(_WIN32)
 			OutputDebugStringA(wbuf);
+#else
+			std::fputs(wbuf, stderr);
+#endif
 			numNuggets = 0;
 		}
 		U32 nuggetID = 1;
@@ -1510,7 +1561,12 @@ void AsteroidField::ResolveAssociations()
 
 void AsteroidField::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+		DAFILEDESC fdesc =
+#if defined(_WIN32)
+			partName;
+#else
+			partName.string;
+#endif
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_QFIELDLOAD");
@@ -2166,7 +2222,12 @@ struct DACOM_NO_VTABLE Nebula : ObjectMission<
 		CQASSERT(height>=0 && width>=0);
 
 		memset(box, 0, sizeof(box));
-		box[0] = __max(width, height) / 2;
+		box[0] =
+#if defined(_WIN32)
+			__max(width, height) / 2;
+#else
+			std::max(width, height) / 2;
+#endif
 		return true;
 	}
 
@@ -3144,7 +3205,12 @@ void Nebula::ResolveAssociations()
 
 void Nebula::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc =
+#if defined(_WIN32)
+		partName;
+#else
+		partName.string;
+#endif
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_QFIELDLOAD");
@@ -3304,7 +3370,12 @@ SINGLE Nebula::getEdgeScale(const Vector &pos)
 							if (dist < 0.75*HFTS)
 								return 1.0f;
 
-							return max(0.0f,((HFTS-dist)/(0.25*HFTS)));
+							return
+#if defined(_WIN32)
+								max(0.0f,((HFTS-dist)/(0.25*HFTS)));
+#else
+								std::max<double>(0.0,((HFTS-dist)/(0.25*HFTS)));
+#endif
 						}
 					}
 				}
@@ -3356,7 +3427,11 @@ void Nebula::PlaceBaseNuggets()
 			char wbuf[128];
 			sprintf(wbuf, "[NEB] WARNING: numNuggets=%u clamped to 0 (nuggPerSq=%u numSq=%u)\n",
 				numNuggets, nArch->pData->nuggetsPerSquare, numSquares);
+#if defined(_WIN32)
 			OutputDebugStringA(wbuf);
+#else
+			std::fputs(wbuf, stderr);
+#endif
 			numNuggets = 0;
 		}
 		U32 nuggetID = 1;
@@ -3515,8 +3590,10 @@ struct DACOM_NO_VTABLE FieldManager : public IFieldManager, IEventCallback, IObj
 
 	void Init();
 
+#if defined(_WIN32)
 	static BOOL CALLBACK NameDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
 	static BOOL CALLBACK FieldListDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+#endif
 
 	//IFieldManager
 	virtual void DeleteField(IField *field);
@@ -3568,6 +3645,11 @@ struct DACOM_NO_VTABLE FieldManager : public IFieldManager, IEventCallback, IObj
 //
 void FieldManager::loadTextures (bool bLoad)
 {
+#if !defined(_WIN32)
+	(void)bLoad;
+	// The only texture here is the unsupported field editor's "edit.tga".
+	return;
+#else
 	if (bLoad)
 	{
 		CQASSERT(textureID==0);
@@ -3578,6 +3660,7 @@ void FieldManager::loadTextures (bool bLoad)
 		TMANAGER->ReleaseTextureRef(textureID);
 		textureID = 0;
 	}
+#endif
 }
 //--------------------------------------------------------------------------
 // FieldManager methods
@@ -3836,6 +3919,9 @@ void FieldManager::Render()
 	}
 	else if(managing)
 	{
+#if !defined(_WIN32)
+		if (!DEBUGFONT) NativeFieldEditorUnavailable();
+#endif
 		S32 xPos;
 		S32 yPos;
 		Vector vec;
@@ -3855,14 +3941,22 @@ void FieldManager::Render()
 
 void FieldManager::Edit(HANDLE hArchetype)
 {
+#if !defined(_WIN32)
+	(void)hArchetype;
+	NativeFieldEditorUnavailable();
+#else
 	editing = TRUE;
 	fieldArch = (FieldArchetype<void> *)hArchetype;
 	fieldArch->Edit();
+#endif
 
 }
 
 void FieldManager::EndEdit()
 {
+#if !defined(_WIN32)
+	NativeFieldEditorUnavailable();
+#else
 	desiredOwnedFlags = 0;
 	releaseResources();
 	editing = FALSE;
@@ -3903,6 +3997,7 @@ void FieldManager::EndEdit()
 		OBJLIST->AddObject(obj);
 	}
 #endif
+#endif
 }
 
 void FieldManager::Init()
@@ -3922,6 +4017,7 @@ void FieldManager::Init()
 	initializeResources();
 }
 
+#if defined(_WIN32)
 BOOL FieldManager::NameDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 {
 	BOOL result=0;
@@ -4136,6 +4232,7 @@ BOOL FieldManager::FieldListDlgProc (HWND hwnd, UINT message, UINT wParam, LONG 
 	return result;
 }
 
+#endif
 void FieldManager::DeleteField(IField *field)
 {
 	if (managing)
@@ -4215,6 +4312,7 @@ GENRESULT FieldManager::Notify (U32 message, void *param)
 		mouseY = HIWORD(msg->lParam);
 		break;*/
 
+#if defined(_WIN32)
 	case WM_RBUTTONDOWN:
 		if (editing && ownsResources())
 		{
@@ -4234,8 +4332,10 @@ GENRESULT FieldManager::Notify (U32 message, void *param)
 	case WM_CLOSE:
 		loadTextures(false);
 		break;
+#endif
 	
 	case CQE_DEBUG_HOTKEY:
+#if defined(_WIN32)
 		if (CQFLAGS.bGameActive)
 		switch ((U32)param)
 		{
@@ -4251,6 +4351,11 @@ GENRESULT FieldManager::Notify (U32 message, void *param)
 			break;
 	
 		}
+#else
+		if (CQFLAGS.bGameActive &&
+			reinterpret_cast<std::uintptr_t>(param) == IDH_NEBULATE)
+			NativeFieldEditorUnavailable();
+#endif
 		break;
 
 	case CQE_NEW_SELECTION:
@@ -4279,10 +4384,12 @@ GENRESULT FieldManager::Notify (U32 message, void *param)
 		break;
 
 	case CQE_SYSTEM_CHANGED:
+#if defined(_WIN32)
 		if (managing)
 		{
 			SendMessage(dialog,WM_COMMAND,IDOK,0);
 		}
+#endif
 		break;
 
 	}
@@ -4307,7 +4414,9 @@ HANDLE FieldManager::CreateArchetype(const char *szArchname, OBJCLASS objClass, 
 		
 	case OC_NEBULA:
 		{
+#if defined(_WIN32)
 			U32 lastTexMem = TEXMEMORYUSED;
+#endif
 			NebulaArchetype *nArch;
 			nArch = new NebulaArchetype;
 			//nArch->name = szArchname;
@@ -4346,18 +4455,24 @@ HANDLE FieldManager::CreateArchetype(const char *szArchname, OBJCLASS objClass, 
 			if(nArch->pData->nebType == NEB_HYADES)
 			{
 			}
+#if defined(_WIN32)
 			NEBTEXTUREUSED += (TEXMEMORYUSED-lastTexMem);
+#endif
 			break;
 		}
 	case OC_FIELD:
 		{
+#if defined(_WIN32)
 			U32 lastTexMem = TEXMEMORYUSED;
+#endif
 			BASE_FIELD_DATA *objData = (BASE_FIELD_DATA *)data;
 			switch (objData->fieldClass)
 			{
 			case FC_ANTIMATTER:
 				result = (HANDLE)CreateAntiMatterArchetype(ARCHLIST->GetArchetype(szArchname),(BT_ANTIMATTER_DATA *)data);
+#if defined(_WIN32)
 				ANTIMATTERTEXMEMUSED += (TEXMEMORYUSED-lastTexMem);
+#endif
 				break;
 			case FC_ASTEROIDFIELD:
 				{
@@ -4460,7 +4575,9 @@ HANDLE FieldManager::CreateArchetype(const char *szArchname, OBJCLASS objClass, 
 					
 					result = (HANDLE)dArch;
 				}
+#if defined(_WIN32)
 				FIELDTEXTUREUSED += (TEXMEMORYUSED-lastTexMem);
+#endif
 				break;
 				
 			}
@@ -4574,7 +4691,7 @@ struct _cloud : GlobalComponent
 	virtual void Startup (void)
 	{
 		FIELDMGR = fieldMgr = new DAComponent<FieldManager>;
-		AddToGlobalCleanupList(&FIELDMGR);
+		AddToGlobalCleanupList((IDAComponent **) &FIELDMGR);
 	}
 
 	virtual void Initialize (void)

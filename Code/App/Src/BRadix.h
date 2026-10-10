@@ -6,13 +6,27 @@
 #ifndef RADIX_H
 #define RADIX_H
 
+#if !defined(_WIN32)
+#include <cstring>
+#endif
+
 #define FINT_MAGIC ((((65536.0 * 65536.0 * 16) + (65536.0 * 0.5)) * 65536.0))
 
+#if defined(_WIN32)
 inline __int32 fast_f2int(float in)
 {
 	double dtemp = FINT_MAGIC + in;
 	return ((*(__int32 *) &dtemp) - 0x80000000);
 }
+#else
+inline S32 fast_f2int(float in)
+{
+	double dtemp = FINT_MAGIC + in;
+	U32 lowWord;
+	std::memcpy(&lowWord, &dtemp, sizeof(lowWord));
+	return static_cast<S32>(lowWord - 0x80000000U);
+}
+#endif
 
 namespace RadixSort
 {

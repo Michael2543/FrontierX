@@ -9,17 +9,67 @@
     $Header: /Conquest/App/Src/ObjComm.cpp 404   8/23/01 1:53p Tmauer $
 */			   
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <ICamera.h>
+#include "CQTrace.h"
+#include "FrontierX/LegacyInput.h"
+#include <HeapObj.h>
+#include <TSmartPointer.h>
+#include <IConnection.h>
+#include <IMeshManager.h>
+#include <IRenderPrimitive.h>
+#include "MyVertex.h"
+#include <renderer.h>
+#include <ENGINE.H>
+#include <cstring>
+#include <cmath>
+#include <cstdint>
+struct MSG
+{
+	HWND hwnd;
+	UINT message;
+	WPARAM wParam;
+	LPARAM lParam;
+};
+static_assert(sizeof(MSG) == sizeof(FrontierX::LegacyWindowMessage));
+constexpr U32 WM_MOUSEMOVE = FrontierX::LegacyMessage::MouseMove;
+constexpr U32 WM_LBUTTONDOWN = FrontierX::LegacyMessage::LeftButtonDown;
+constexpr U32 WM_LBUTTONUP = FrontierX::LegacyMessage::LeftButtonUp;
+constexpr U32 WM_RBUTTONDOWN = FrontierX::LegacyMessage::RightButtonDown;
+constexpr U32 WM_RBUTTONUP = FrontierX::LegacyMessage::RightButtonUp;
+constexpr U32 WM_KEYDOWN = FrontierX::LegacyMessage::KeyDown;
+constexpr U32 WM_KEYUP = FrontierX::LegacyMessage::KeyUp;
+constexpr WPARAM MK_SHIFT = FrontierX::LegacyMouseMask::Shift;
+constexpr WPARAM MK_CONTROL = FrontierX::LegacyMouseMask::Control;
+constexpr U32 VK_LSHIFT = FrontierX::LegacyVirtualKey::LeftShift;
+constexpr U32 VK_RSHIFT = FrontierX::LegacyVirtualKey::RightShift;
+constexpr U32 VK_LCONTROL = FrontierX::LegacyVirtualKey::LeftControl;
+constexpr U32 VK_RCONTROL = FrontierX::LegacyVirtualKey::RightControl;
+constexpr U32 VK_LMENU = FrontierX::LegacyVirtualKey::LeftMenu;
+constexpr U32 VK_RMENU = FrontierX::LegacyVirtualKey::RightMenu;
+constexpr U32 CQE_SET_RALLY_POINT = 0x1033;
+constexpr U32 CQE_UI_RALLYPOINT = 0x104A;
+constexpr U32 CQE_UI_DEFDELANIM = 0x104B;
+constexpr U32 CQE_SQMOVE_SELECTED_UNITS = 0x105A;
+constexpr U32 CQE_SMOVE_SELECTED_UNITS = 0x105B;
+constexpr U32 CQE_MOVE_SELECTED_UNITS = 0x102C;
+constexpr U32 CQE_QMOVE_SELECTED_UNITS = 0x1036;
+inline U16 LOWORD(LPARAM value) { return static_cast<U16>(value); }
+inline U16 HIWORD(LPARAM value) { return static_cast<U16>(value >> 16); }
+#endif
 
 #include "TResClient.h"
 #include "IObject.h"
 #include "IPlanet.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "ObjClass.h"
 #include "Startup.h"
 #include "Camera.h"
-#include "Resource.h"
+#include "resource.h"
 #include "Hotkeys.h"
 #include "DBHotkeys.h"
 #include "Sector.h"
@@ -35,14 +85,14 @@
 #include "IArtifact.h"
 
 #include <DSounds.h>
-#include "Sfx.h"
+#include "SFX.h"
 #include "MPart.h"
 #include <MGlobals.h>
 #include "CommPacket.h"
 #include "IGroup.h"
 #include "OpAgent.h"
 #include "UnitComm.h"
-#include "FogofWar.h"
+#include "FogOfWar.h"
 #include "ObjSet.h"
 #include "IBuild.h"
 #include "IJumpGate.h"
@@ -57,8 +107,8 @@
 #include "MScript.h"
 #include "DSupplyShipSave.h"
 
-#include <3DMath.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <HeapObj.h>
 #include <TSmartPointer.h>
 #include <EventSys.h>
@@ -205,11 +255,18 @@ struct DACOM_NO_VTABLE ObjectComm : public IEventCallback, ResourceClient<>
 
 	OBJPTR<IGroup> group[MAX_GROUPS];
 
+#if !defined(_WIN32)
+	struct PacketPrefix { DWORD dwSize; };
+#endif
 	union {
+#if defined(_WIN32)
 		struct BASE_PACKET
 		{
 			DWORD dwSize;
 		} lastPacket;		// a copy of the last packet sent to host
+#else
+		PacketPrefix lastPacket;
+#endif
 		char dummyMemory[MAX_UI_PACKET_SIZE];
 	};
 	S32 dupTimer;			// when this is <= 0, allow a duplicate packet
@@ -536,7 +593,11 @@ struct DACOM_NO_VTABLE ObjectComm : public IEventCallback, ResourceClient<>
 		pQueueList = 0;
 	}
 
+#if defined(_WIN32)
 	void localSendPacket (const BASE_PACKET * packet)
+#else
+	void localSendPacket (const ::BASE_PACKET * packet)
+#endif
 	{
 		if (dupTimer>0 && lastPacket.dwSize == packet->dwSize && memcmp(&lastPacket, packet, packet->dwSize)==0)
 		{
@@ -1368,6 +1429,15 @@ void ObjectComm::optionRightClick (U32 message, void *param)
 GENRESULT ObjectComm::Notify (U32 message, void *param)
 {
 	MSG *msg = (MSG *) param;
+#if defined(_WIN32)
+	const U32 eventValue = U32(param);
+#else
+	const std::uintptr_t encodedEvent = reinterpret_cast<std::uintptr_t>(param);
+	if ((message == CQE_UPDATE || message == CQE_DEBUG_HOTKEY ||
+		message == CQE_HOTKEY) && encodedEvent > UINT32_MAX)
+		return GR_INVALID_PARMS;
+	const U32 eventValue = static_cast<U32>(encodedEvent);
+#endif
 
 	switch (message)
 	{
@@ -1450,7 +1520,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 		{
 			if (CQFLAGS.bGameActive)
 			{
-				update(U32(param)>>10);
+				update(eventValue>>10);
 				updateRallyAnimation();
 				if (pQueueList)
 					updateDisplayQueue();
@@ -1519,7 +1589,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 	case CQE_DEBUG_HOTKEY:
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
-			switch((U32)param)
+			switch(eventValue)
 			{
 			case IDH_EXPLODE:
 				if (CQFLAGS.bGamePaused==0 && THEMATRIX->IsMaster())
@@ -1538,7 +1608,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 	case CQE_HOTKEY:
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
-			switch((U32)param)
+			switch(eventValue)
 			{
 			case IDH_USE_ARTIFACT:
 				handleUseArtifact();
@@ -1566,7 +1636,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 //			case IDH_ATTACH_ADMIRAL:
 			case IDH_PATROL:
 			case IDH_TARGET_POSITION:
-				handleGlobalModeSwitch(U32(param));
+				handleGlobalModeSwitch(eventValue);
 				break;
 			
 			case IDH_CANCEL_COMMAND:
@@ -1588,7 +1658,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 			case IDH_GROUP_9_CREATE:
 			case IDH_GROUP_0_CREATE:
 				if (CQFLAGS.bGamePaused==0)
-					handleGroupCreate((U32)param);
+					handleGroupCreate(eventValue);
 				break;
 
 			case IDH_FLEET_GROUP_1:
@@ -1599,7 +1669,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 			case IDH_FLEET_GROUP_6:
 				if (CQFLAGS.bGamePaused == 0)
 				{
-					handleFleetSelect((U32)param);
+					handleFleetSelect(eventValue);
 				}
 				break;
 			case IDH_FLEET_SET_GROUP_1:
@@ -1610,7 +1680,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 			case IDH_FLEET_SET_GROUP_6:
 				if (CQFLAGS.bGamePaused == 0)
 				{
-					handleFleetDefine((U32)param);
+					handleFleetDefine(eventValue);
 				}
 				break;
 
@@ -1625,7 +1695,7 @@ GENRESULT ObjectComm::Notify (U32 message, void *param)
 			case IDH_GROUP_9_SELECT:
 			case IDH_GROUP_0_SELECT:
 				if (CQFLAGS.bGamePaused==0)
-					handleGroupSelect((U32)param);
+					handleGroupSelect(eventValue);
 				break;
 
 			case IDH_STANCE_ATTACK:
@@ -5977,7 +6047,7 @@ void ObjectComm::handleEditorMove (void)
 	// if we are are already over something, than put up the ban
 	COMPTR<ITerrainMap> map;
 	SECTOR->GetTerrainMap(SECTOR->GetCurrentSystem(), map);
-	if (map != NULL)
+	if (map)
 	{
 		GRIDVECTOR grid;
 		grid = pos;

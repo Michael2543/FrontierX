@@ -91,6 +91,8 @@ struct _NO_VTABLE ObjectRender : public Base
 	typename typedef Base::INITINFO RENDERINITINFO;
 #else
 	typedef typename Base::INITINFO RENDERINITINFO;
+	using typename Base::InitProc;
+	using typename Base::RenderProc;
 #endif
 #if defined(_WIN32)
 	struct InitNode			initNode;

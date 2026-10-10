@@ -11,22 +11,40 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include "Include/NativeAppProfileParser.h"
+#include <TComponent.h>
+#include <IProfileParser.h>
+#include <renderer.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <ENGINE.H>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+using std::min;
+using std::max;
+#endif
 
 #include <stdio.h>
 
-#include "TSmartpointer.h"
-#include "CQTrace.h"
+#include <TSmartPointer.h>
+#include "Include/CQTrace.h"
 #include "IBlinkers.h"
 #include "ArchHolder.h"
 #include "IExplosion.h"
 
-#include <FileSys.h>
-#include <Renderer.h>
+#include <Filesys.h>
+#include <renderer.h>
 #include <Mesh.h>
 #include <HeapObj.h>
-#include <IHardpoint.h>
+#include <IHardPoint.h>
 
 
 struct Blinker
@@ -295,7 +313,11 @@ struct Blinkers : IBlinkers
 		::free(ptr);
 	}
 
+#if defined(_WIN32)
 	Blinkers::Blinkers();
+#else
+	Blinkers();
+#endif
 	~Blinkers();
 
 	//returns number of points

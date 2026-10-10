@@ -46,6 +46,9 @@
 
 
 struct GRIDVECTOR;
+struct ITerrainMap;
+bool __stdcall CreateTerrainMap (ITerrainMap ** map);
+bool __stdcall CreateDummyTerrainMap (ITerrainMap ** map);
 //--------------------------------------------------------------------------//
 //
 struct DACOM_NO_VTABLE ITerrainSegCallback		// test line seg

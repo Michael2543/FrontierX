@@ -11,8 +11,33 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+#endif
 
 #include "TObject.h"
 #include "TObjSelect.h"
@@ -37,10 +62,10 @@
 #include <TriggerFlags.h>
 #include "TObjRender.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <ITextureLibrary.h>
@@ -447,7 +472,7 @@ void Trigger::ResolveAssociations()
 //
 void Trigger::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = static_cast<const char *>(partName);
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_TRIGGER_QLOAD");
@@ -668,7 +693,9 @@ BOOL32 TriggerFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -685,7 +712,14 @@ IBaseObject * TriggerFactory::CreateInstance (HANDLE hArchetype)
 void TriggerFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fprintf(stderr, "Native Trigger editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

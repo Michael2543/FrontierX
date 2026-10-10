@@ -11,23 +11,43 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <IRenderPrimitive.h>
+#include "MyVertex.h"
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#include "TObjFrame.h"
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DExplosion.h"
-#include "Objlist.h"
-#include "Anim2D.h"
+#include "ObjList.h"
+#include "anim2d.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "DTrail.h"
 
-#include <FileSys.h>
-#include <Engine.h>
-#include <RendPipeline.h>
+#include <Filesys.h>
+#include <ENGINE.H>
+#include <rendpipeline.h>
 //#include <RPUL\PrimitiveBuilder.h>
 
 struct TrailArchetype

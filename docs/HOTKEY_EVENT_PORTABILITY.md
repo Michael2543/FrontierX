@@ -134,3 +134,17 @@ The following work remains before hotkey processing can be described as game-rea
 
 Until those gates close, this work is evidence for one production service owner and not evidence
 of a native game, retail input parity, or complete DAHOTKEY module support.
+
+## App hotkey binding (2026-10-03)
+
+The native shell now configures an explicitly supplied source hotkey table
+to emit the App's original `CQE_HOTKEY` message and binds its live
+`IHotkeyEvent` to the native App `HOTKEY` global. The binding is cleared
+before the owned service releases. The existing hotkey and native-shell
+CTest checks passed under GCC 16.2.1 and Clang 22.1.8. Both compilers'
+temporary combined App/`Sol_T` diagnostic executables ran with the
+checked-in `Hotkeys.utf` and lawfully external training data; they reported
+the table and event pipeline connected, but did not send a user key to the
+camera or issue a movement command. An actual mission startup must require
+normal hotkeys and supply the debug table only if its behavior is needed.
+Windows Debug/Final, event ordering and retail input parity remain open.

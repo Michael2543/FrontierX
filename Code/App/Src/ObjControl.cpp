@@ -11,8 +11,29 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <3dmath.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#endif
 
 #include "TObjControl.h"
 #include "TObjPhys.h"
@@ -27,6 +48,7 @@
 typedef SPACESHIP_INIT<BASE_SPACESHIP_DATA> BASESHIPINIT;
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 template ObjectControl<ObjectTransform
 					    <ObjectFrame<struct IBaseObject,struct SPACESHIP_SAVELOAD, BASESHIPINIT> >
 					    >;
@@ -34,6 +56,7 @@ template ObjectControl<ObjectTransform
 template ObjectControl<ObjectTransform
 						<ObjectFrame<IBaseObject,FIGHTER_SAVELOAD,BASE_FIGHTER_INIT> >
 						>;
+#endif
 //---------------------------------------------------------------------------
 //
 static bool bUpdateControl = true;
@@ -561,5 +584,10 @@ SINGLE ObjectControl< Base >::calculateCoastingDistance (SINGLE finalVel, SINGLE
 	return distance;
 }
 //----------------------------------------------------------------------------
+#if !defined(_WIN32)
+template struct ObjectControl<ObjectTransform
+	<ObjectFrame<IBaseObject, SPACESHIP_SAVELOAD, BASESHIPINIT> > >;
+#endif
+
 //------------------------End ObjControl.cpp----------------------------------
 //----------------------------------------------------------------------------

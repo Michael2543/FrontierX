@@ -62,7 +62,11 @@ struct _NO_VTABLE IExplosion : IObject
 //
 struct _NO_VTABLE IDebris : IObject
 {
+#if defined(_WIN32)
 	virtual void RegisterChild (INSTANCE_INDEX _child);
+#else
+	virtual void RegisterChild (INSTANCE_INDEX _child) = 0;
+#endif
 };
 //--------------------------------------------------------------------------//
 //

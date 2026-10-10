@@ -10,7 +10,8 @@ namespace FrontierX
 static bool Inspect(std::istream & input, UtfMetadata & result, std::string & error,
                     const std::string * requested, std::vector<unsigned char> * output,
                     const std::string * requestedDirectory = nullptr,
-                    std::vector<UtfDirectoryEntry> * listed = nullptr)
+                    std::vector<UtfDirectoryEntry> * listed = nullptr,
+                    UtfArchiveIndex * index = nullptr)
 {
     input.seekg(0, std::ios::end);
     const auto end = input.tellg();
@@ -89,7 +90,7 @@ static bool Inspect(std::istream & input, UtfMetadata & result, std::string & er
         { error = "invalid or unterminated UTF name"; return false; }
         const auto next = field(offset);
         if (next) pending.push_back({next, item.parent});
-        const bool usePaths = requested || requestedDirectory;
+        const bool usePaths = requested || requestedDirectory || index;
         const std::string nameText = usePaths ?
             std::string(reinterpret_cast<const char *>(nameTable.data() + name)) : "";
         const std::string virtualPath = offset == 0 ? "" : item.parent + nameText;
@@ -97,6 +98,25 @@ static bool Inspect(std::istream & input, UtfMetadata & result, std::string & er
         { error = "UTF virtual path exceeds reader limit"; return false; }
         if (usePaths && offset && (nameText.empty() || nameText.find_first_of("/\\") != std::string::npos))
         { error = "UTF entry name cannot be represented as a virtual path"; return false; }
+        if (index)
+        {
+            if (attributes & 0x10)
+            {
+                if (!index->directories.emplace(virtualPath, std::vector<UtfDirectoryEntry>{}).second)
+                { error = "ambiguous UTF directory path"; return false; }
+            }
+            if (offset)
+            {
+                auto & children = index->directories[item.parent.empty() ? "" :
+                    item.parent.substr(0, item.parent.size() - 1)];
+                if (std::find_if(children.begin(), children.end(), [&](const auto & child) {
+                        return child.name == nameText;
+                    }) != children.end())
+                { error = "ambiguous UTF directory child"; return false; }
+                children.push_back({nameText, (attributes & 0x10) != 0,
+                    (attributes & 0x10) ? 0U : field(offset + 24)});
+            }
+        }
         if (requestedDirectory)
         {
             if (virtualPath == *requestedDirectory && (attributes & 0x10))
@@ -133,6 +153,10 @@ static bool Inspect(std::istream & input, UtfMetadata & result, std::string & er
                 selectedSize = used;
                 unsupported = used != field(offset + 28);
             }
+            if (index && !index->files.emplace(virtualPath, UtfArchiveIndex::File{
+                    data + content, static_cast<std::uint32_t>(used),
+                    used != field(offset + 28)}).second)
+            { error = "ambiguous UTF file path"; return false; }
             ++files;
         }
     }
@@ -170,14 +194,15 @@ static bool Inspect(std::istream & input, UtfMetadata & result, std::string & er
 static bool Inspect(const std::filesystem::path & path, UtfMetadata & result, std::string & error,
                     const std::string * requested, std::vector<unsigned char> * output,
                     const std::string * requestedDirectory = nullptr,
-                    std::vector<UtfDirectoryEntry> * listed = nullptr)
+                    std::vector<UtfDirectoryEntry> * listed = nullptr,
+                    UtfArchiveIndex * index = nullptr)
 {
     std::error_code statusError;
     if (!std::filesystem::is_regular_file(path, statusError) || statusError)
     { error = "UTF metadata is not an accessible regular file"; return false; }
     std::ifstream input(path, std::ios::binary);
     if (!input) { error = "cannot open UTF metadata"; return false; }
-    return Inspect(input, result, error, requested, output, requestedDirectory, listed);
+    return Inspect(input, result, error, requested, output, requestedDirectory, listed, index);
 }
 
 static bool Inspect(const std::vector<unsigned char> & bytes, UtfMetadata & result,
@@ -237,4 +262,93 @@ bool ListUtfDirectory(const std::filesystem::path & path, const std::string & di
 bool ListUtfDirectory(const std::vector<unsigned char> & bytes, const std::string & directory,
                       std::vector<UtfDirectoryEntry> & output, std::string & error)
 { return ListDirectory(bytes, directory, output, error); }
+
+bool BuildUtfArchiveIndex(const std::filesystem::path & path,
+                          UtfArchiveIndex & output, std::string & error)
+{
+    UtfMetadata metadata;
+    UtfArchiveIndex candidate;
+    if (!Inspect(path, metadata, error, nullptr, nullptr, nullptr, nullptr, &candidate))
+        return false;
+    auto fold = [](std::string name) {
+        for (char & ch : name)
+            if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch + ('a' - 'A'));
+        return name;
+    };
+    for (const auto & directory : candidate.directories)
+        if (!candidate.foldedDirectories.emplace(fold(directory.first), directory.first).second)
+        { error = "ambiguous case-insensitive UTF directory"; return false; }
+    for (const auto & file : candidate.files)
+        if (!candidate.foldedFiles.emplace(fold(file.first), file.first).second ||
+            candidate.foldedDirectories.count(fold(file.first)))
+        { error = "ambiguous case-insensitive UTF entry"; return false; }
+    output.directories.swap(candidate.directories);
+    output.files.swap(candidate.files);
+    output.foldedDirectories.swap(candidate.foldedDirectories);
+    output.foldedFiles.swap(candidate.foldedFiles);
+    return true;
+}
+
+static std::string FoldUtfPath(std::string path)
+{
+    for (char & ch : path)
+        if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch + ('a' - 'A'));
+    return path;
+}
+
+bool ResolveIndexedUtfDirectory(const UtfArchiveIndex & index, const std::string & requested,
+                                std::string & exact)
+{
+    const auto found = index.foldedDirectories.find(FoldUtfPath(requested));
+    if (found == index.foldedDirectories.end()) return false;
+    exact = found->second;
+    return true;
+}
+
+bool ResolveIndexedUtfFile(const UtfArchiveIndex & index, const std::string & requested,
+                           std::string & exact)
+{
+    const auto found = index.foldedFiles.find(FoldUtfPath(requested));
+    if (found == index.foldedFiles.end()) return false;
+    exact = found->second;
+    return true;
+}
+
+bool ListIndexedUtfDirectory(const UtfArchiveIndex & index, const std::string & directory,
+                             std::vector<UtfDirectoryEntry> & output, std::string & error)
+{
+    const auto found = index.directories.find(directory);
+    if (found == index.directories.end())
+    { error = "UTF directory not found (exact case required)"; return false; }
+    output = found->second;
+    error.clear();
+    return true;
+}
+
+bool ReadIndexedUtfEntry(const std::filesystem::path & path, const UtfArchiveIndex & index,
+                         const std::string & entry, std::vector<unsigned char> & output,
+                         std::string & error)
+{
+    const auto found = index.files.find(entry);
+    if (found == index.files.end())
+    { error = "UTF entry not found (exact case required)"; return false; }
+    const auto & file = found->second;
+    if (file.compressed)
+    { error = "UTF stored/logical sizes differ; decoding is not implemented"; return false; }
+    if (file.size > 64 * 1024 * 1024)
+    { error = "UTF entry exceeds reader limit (64 MiB)"; return false; }
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() < 0 ||
+        static_cast<std::uint64_t>(input.tellg()) < file.offset ||
+        file.size > static_cast<std::uint64_t>(input.tellg()) - file.offset)
+    { error = "UTF entry range changed since archive indexing"; return false; }
+    input.seekg(static_cast<std::streamoff>(file.offset));
+    std::vector<unsigned char> payload(file.size);
+    if (!input || (!payload.empty() && !input.read(reinterpret_cast<char *>(payload.data()),
+                                                   static_cast<std::streamsize>(payload.size()))))
+    { error = "UTF entry read failed"; return false; }
+    output.swap(payload);
+    error.clear();
+    return true;
+}
 }

@@ -1,3 +1,5 @@
+// The legacy IArchetypeList overloads hide IDAComponent refcount methods.
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
 #include "EventSys.h"
 #include "DACOM.H"
 #include "HeapObj.h"
@@ -30,6 +32,9 @@
 #include "ScrollingText.h"
 #include "resource.h"
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppSfx.h"
+#include "Include/NativeAppProfileParser.h"
+#include "SFX.h"
 #include "Include/NativeAppSchema.h"
 #include "Include/NativeAppTextResources.h"
 #include "Include/NativeMusicManager.h"
@@ -60,11 +65,42 @@
 #include "NativeAnimationValidation.h"
 #include "GlobalFlagTypes.h"
 #include "IRenderPrimitive.h"
+#include "rendpipeline.h"
+#include "renderer.h"
+#include "ICamera.h"
 #include "IVertexBufferManager.h"
+#include "ITextureLibrary.h"
+#include "IMaterialManager.h"
+#include "IMeshManager.h"
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnontrivial-memcall"
+#endif
+#include "IParticleManager.h"
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+#include "IAnim.h"
+#include "IHardPoint.h"
+#include "TManager.h"
+#include "StringTable.h"
+#include "lightman.h"
 #include "RenderBatcherRegistration.h"
+#include "Include/NativeAppMissionMedia.h"
+#include "SoundManager.h"
+#include "StringData.h"
+#include "ITeletype.h"
+#include "UnitComm.h"
+#include "ObjList.h"
+#include "Mission.h"
+#include "IObject.h"
+#include "Sector.h"
+#include "Camera.h"
+#include "MGlobals.h"
 #endif
 
 #include <charconv>
+#include <cstring>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdint>
@@ -90,6 +126,7 @@ bool RegisterNativeLightManager(ICOManager * manager);
 
 namespace
 {
+constexpr U32 NativeFlushMessagesEvent = 0x1044U; // Globals.h CQE_FLUSHMESSAGES
 int DACOM_CDECL ShellRenderDiagnostic(ErrorCode, const C8 * format, ...)
 {
     va_list arguments;
@@ -113,10 +150,99 @@ struct AppDacomGlobal
     ~AppDacomGlobal() { DACOM = nullptr; }
 };
 
+struct AppHotkeyGlobal
+{
+    ~AppHotkeyGlobal() { HOTKEY = nullptr; }
+};
+
+struct AppDefaultsGlobal
+{
+    ~AppDefaultsGlobal() { DEFAULTS = nullptr; }
+};
+
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+struct AppEngineGlobals
+{
+    ~AppEngineGlobals()
+    {
+        ENGINE = nullptr;
+        REND = nullptr;
+        PIPE = nullptr;
+        BATCH = nullptr;
+        SOUNDMANAGER = nullptr;
+        UNITCOMM = nullptr;
+        TELETYPE = nullptr;
+        CQBATCH = nullptr;
+        LIGHT = nullptr;
+        TEXLIB = nullptr;
+        MATMAN = nullptr;
+        MESHMAN = nullptr;
+        TMANAGER = nullptr;
+        VB_MANAGER = nullptr;
+        STRINGTABLE = nullptr;
+        STRINGDATA = nullptr;
+    }
+};
+
+struct MissionGpuUnbind
+{
+    IRenderPrimitive * primitive = nullptr;
+    IRenderPipeline * pipeline = nullptr;
+    bool appBuilderBound = false;
+
+    void Disconnect()
+    {
+        if (appBuilderBound) BindNativeAppPrimitive(nullptr);
+        if (pipeline) FrontierX::UnbindNativeRenderPipeline(pipeline);
+        if (primitive) FrontierX::UnbindNativeRenderPrimitive(primitive);
+        pipeline = nullptr;
+        primitive = nullptr;
+        appBuilderBound = false;
+    }
+    ~MissionGpuUnbind() { Disconnect(); }
+};
+#endif
+
 IEventSystem * shellEventSystem = nullptr;
 bool shellCloseRequested = false;
 
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+struct NativeMissionModalExit final : IEventCallback
+{
+    GENRESULT COMAPI QueryInterface(const C8 *name, void **instance) override
+    {
+        if (!instance) return GR_INVALID_PARMS;
+        *instance = nullptr;
+        if (!name || (std::strcmp(name, "IEventCallback") &&
+                      std::strcmp(name, IID_IEventCallback)))
+            return GR_INTERFACE_UNSUPPORTED;
+        *instance = static_cast<IEventCallback *>(this);
+        AddRef();
+        return GR_OK;
+    }
+    U32 COMAPI AddRef() override { return ++references; }
+    U32 COMAPI Release() override { return references ? --references : 0; }
+
+    U32 references = 0;
+    std::uint32_t started = 0;
+    std::uint32_t duration = 0;
+    unsigned int frames = 0;
+    bool requested = false;
+
+    GENRESULT COMAPI Notify(U32 message, void *) override
+    {
+        if (message != CQE_ENDFRAME) return GR_OK;
+        ++frames;
+        if (!requested && (shellCloseRequested ||
+            (duration && FrontierX::Platform::MonotonicMilliseconds() - started >= duration)))
+        {
+            requested = EVENTSYS->Post(CQE_PLAYER_QUIT) == GR_OK;
+            if (!requested) return GR_GENERIC;
+        }
+        return GR_OK;
+    }
+};
+
 struct GameSceneLoop
 {
     IWindowManager * window;
@@ -149,12 +275,28 @@ LRESULT COMAPI ShellWindowCallback(HWND window, UINT message, WPARAM wparam, LPA
     if (message == FrontierX::LegacyMessage::Close) shellCloseRequested = true;
     if (!shellEventSystem) return 0;
 
+    if (message == FrontierX::LegacyMessage::LeftButtonDown ||
+        message == FrontierX::LegacyMessage::LeftButtonUp ||
+        message == FrontierX::LegacyMessage::RightButtonDown ||
+        message == FrontierX::LegacyMessage::RightButtonUp)
+        std::cout << "Native App SDL mouse button " << message << " at "
+                  << (lparam & 0xffff) << ',' << ((lparam >> 16) & 0xffff)
+                  << '\n' << std::flush;
+
     if (message == FrontierX::LegacyMessage::Character)
         shellEventSystem->Send(FrontierX::LegacyMessage::UnicodeCharacter,
             reinterpret_cast<void *>(wparam & 0xffffU));
     FrontierX::LegacyWindowMessage record{
         static_cast<FrontierX::LegacyWindowToken>(window), message, wparam, lparam};
     shellEventSystem->Send(message, &record);
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    if ((message == FrontierX::LegacyMessage::LeftButtonUp ||
+         message == FrontierX::LegacyMessage::RightButtonUp) && OBJLIST)
+        std::cout << "Native App mouse dispatch highlighted="
+                  << (OBJLIST->GetHighlightedList() ? "yes" : "no")
+                  << " selected=" << (OBJLIST->GetSelectedList() ? "yes" : "no")
+                  << '\n' << std::flush;
+#endif
     return 0;
 }
 
@@ -218,6 +360,7 @@ struct Options
     std::filesystem::path saveRoot;
     std::filesystem::path genDataPath;
     std::filesystem::path gameTypesPath;
+    std::filesystem::path stringPackPath;
     std::filesystem::path preferencesPath;
     std::filesystem::path hotkeysPath;
     std::filesystem::path vertexShaderPath;
@@ -231,10 +374,29 @@ struct Options
     std::string animationScriptName;
     std::string meshObjectName;
     std::string missionSourceName;
+    std::string profileSmokeName;
     std::uint32_t smokeMilliseconds = 0;
     bool hidden = false;
     bool skipMovies = false;
     bool skipNotificationCue = false;
+    bool skipSectorMap = false;
+    bool skipSpaceBackground = false;
+    bool skipUnitLabels = false;
+    bool skipPlanetUi = false;
+    bool skipAnimatedPortraits = false;
+    bool skipSubtitles = false;
+    bool baseTexturesOnly = false;
+    bool skipLegacyLighting = false;
+    bool skipTrainingSpeech = false;
+    bool skipUnitVoice = false;
+    bool skipUnitAlerts = false;
+    bool skipMissionSfx = false;
+    bool skipTeletypeVisuals = false;
+    bool skipMissionMusic = false;
+    bool sfxSmoke = false;
+    bool missionEngine = false;
+    bool missionGpu = false;
+    bool missionStart = false;
 };
 
 std::uint32_t ParseDuration(const char * text)
@@ -257,11 +419,12 @@ Options ParseOptions(int argc, char ** argv)
         if (option == "--help" && argc == 2)
         {
             std::cout << "Usage: frontierx_native_shell [--config FILE] [--system-profile FILE] [--preferences FILE] "
-                         "[--data-root DIRECTORY] [--material-root DIRECTORY] [--save-root DIRECTORY] [--gen-data FILE] [--game-types FILE] [--hotkeys FILE] "
+                         "[--data-root DIRECTORY] [--material-root DIRECTORY] [--save-root DIRECTORY] [--gen-data FILE] [--game-types FILE] [--string-pack FILE] [--hotkeys FILE] "
                          "[--render-smoke VERTEX_SPV FRAGMENT_SPV] "
                          "[--game-scene MATERIAL_SOURCE MESH_UTF VERTEX_SPV "
                          "FRAGMENT_SPV EXTENDED_SPV GAME_SPV] "
-                         "[--capture-ppm FILE] [--skip-movies] [--skip-notification-cue] "
+                         "[--mission-gpu VERTEX_SPV FRAGMENT_SPV EXTENDED_SPV GAME_SPV] "
+                         "[--capture-ppm FILE] [--skip-movies] [--skip-notification-cue] [--skip-sector-map] [--skip-space-background] [--skip-unit-labels] [--skip-planet-ui] [--skip-animated-portraits] [--skip-subtitles] [--base-textures-only] [--skip-legacy-lighting] [--skip-training-speech] [--skip-unit-voice] [--skip-unit-alerts] [--skip-mission-sfx] [--skip-teletype-visuals] [--skip-mission-music] [--sfx-smoke] [--profile-smoke FILE] [--mission-engine] [--mission-start] "
                          "[--animation-object OBJECT_NAME SCRIPT_NAME] "
                          "[--mesh-object OBJECT_NAME] "
                          "[--mission-source MISSION_NAME] "
@@ -282,6 +445,122 @@ Options ParseOptions(int argc, char ** argv)
             if (options.skipNotificationCue)
                 throw std::invalid_argument("duplicate option: --skip-notification-cue");
             options.skipNotificationCue = true;
+            continue;
+        }
+        if (option == "--skip-sector-map")
+        {
+            if (options.skipSectorMap)
+                throw std::invalid_argument("duplicate option: --skip-sector-map");
+            options.skipSectorMap = true;
+            continue;
+        }
+        if (option == "--skip-space-background")
+        {
+            if (options.skipSpaceBackground)
+                throw std::invalid_argument("duplicate option: --skip-space-background");
+            options.skipSpaceBackground = true;
+            continue;
+        }
+        if (option == "--skip-unit-labels")
+        {
+            if (options.skipUnitLabels)
+                throw std::invalid_argument("duplicate option: --skip-unit-labels");
+            options.skipUnitLabels = true;
+            continue;
+        }
+        if (option == "--skip-planet-ui")
+        {
+            if (options.skipPlanetUi)
+                throw std::invalid_argument("duplicate option: --skip-planet-ui");
+            options.skipPlanetUi = true;
+            continue;
+        }
+        if (option == "--skip-animated-portraits")
+        {
+            if (options.skipAnimatedPortraits)
+                throw std::invalid_argument("duplicate option: --skip-animated-portraits");
+            options.skipAnimatedPortraits = true;
+            continue;
+        }
+        if (option == "--skip-subtitles")
+        {
+            if (options.skipSubtitles)
+                throw std::invalid_argument("duplicate option: --skip-subtitles");
+            options.skipSubtitles = true;
+            continue;
+        }
+        if (option == "--base-textures-only")
+        {
+            if (options.baseTexturesOnly)
+                throw std::invalid_argument("duplicate option: --base-textures-only");
+            options.baseTexturesOnly = true;
+            continue;
+        }
+        if (option == "--skip-legacy-lighting")
+        {
+            if (options.skipLegacyLighting)
+                throw std::invalid_argument("duplicate option: --skip-legacy-lighting");
+            options.skipLegacyLighting = true;
+            continue;
+        }
+        if (option == "--skip-training-speech")
+        {
+            if (options.skipTrainingSpeech)
+                throw std::invalid_argument("duplicate option: --skip-training-speech");
+            options.skipTrainingSpeech = true;
+            continue;
+        }
+        if (option == "--skip-mission-sfx")
+        {
+            if (options.skipMissionSfx) throw std::invalid_argument("duplicate option: --skip-mission-sfx");
+            options.skipMissionSfx = true;
+            continue;
+        }
+        if (option == "--skip-unit-alerts")
+        {
+            if (options.skipUnitAlerts) throw std::invalid_argument("duplicate option: --skip-unit-alerts");
+            options.skipUnitAlerts = true;
+            continue;
+        }
+        if (option == "--skip-unit-voice")
+        {
+            if (options.skipUnitVoice)
+                throw std::invalid_argument("duplicate option: --skip-unit-voice");
+            options.skipUnitVoice = true;
+            continue;
+        }
+        if (option == "--skip-teletype-visuals")
+        {
+            if (options.skipTeletypeVisuals)
+                throw std::invalid_argument("duplicate option: --skip-teletype-visuals");
+            options.skipTeletypeVisuals = true;
+            continue;
+        }
+        if (option == "--skip-mission-music")
+        {
+            if (options.skipMissionMusic)
+                throw std::invalid_argument("duplicate option: --skip-mission-music");
+            options.skipMissionMusic = true;
+            continue;
+        }
+        if (option == "--sfx-smoke")
+        {
+            if (options.sfxSmoke) throw std::invalid_argument("duplicate option: --sfx-smoke");
+            options.sfxSmoke = true;
+            continue;
+        }
+        if (option == "--mission-engine")
+        {
+            if (options.missionEngine)
+                throw std::invalid_argument("duplicate option: --mission-engine");
+            options.missionEngine = true;
+            continue;
+        }
+        if (option == "--mission-start")
+        {
+            if (options.missionStart)
+                throw std::invalid_argument("duplicate option: --mission-start");
+            options.missionStart = true;
             continue;
         }
         if (option == "--hidden")
@@ -319,6 +598,21 @@ Options ParseOptions(int argc, char ** argv)
             options.fragmentShaderPath = argv[++index];
             options.gameExtendedShaderPath = argv[++index];
             options.gameVertexShaderPath = argv[++index];
+            continue;
+        }
+        if (option == "--mission-gpu")
+        {
+            if (options.missionGpu || !options.vertexShaderPath.empty() || index + 4 >= argc)
+                throw std::invalid_argument("--mission-gpu requires four SPIR-V files and no other render mode");
+            for (int offset = 1; offset <= 4; ++offset)
+                if (!argv[index + offset][0] ||
+                    std::string(argv[index + offset]).rfind("--", 0) == 0)
+                    throw std::invalid_argument("--mission-gpu requires four SPIR-V files");
+            options.vertexShaderPath = argv[++index];
+            options.fragmentShaderPath = argv[++index];
+            options.gameExtendedShaderPath = argv[++index];
+            options.gameVertexShaderPath = argv[++index];
+            options.missionGpu = true;
             continue;
         }
         if (option == "--animation-object")
@@ -363,14 +657,26 @@ Options ParseOptions(int argc, char ** argv)
             options.missionSourceName = missionName;
             continue;
         }
+        if (option == "--profile-smoke")
+        {
+            if (!options.profileSmokeName.empty() || index + 1 >= argc)
+                throw std::invalid_argument("--profile-smoke requires one profile name");
+            const std::string name(argv[++index]);
+            if (name.empty() || name.rfind("--", 0) == 0 ||
+                name.find_first_of("/\\") != std::string::npos ||
+                name == "." || name == "..")
+                throw std::invalid_argument("--profile-smoke requires one profile name");
+            options.profileSmokeName = name;
+            continue;
+        }
         if ((option != "--config" && option != "--system-profile" &&
              option != "--preferences" && option != "--hotkeys" &&
-             option != "--data-root" && option != "--material-root" && option != "--save-root" && option != "--gen-data" && option != "--game-types" && option != "--smoke-ms" &&
+             option != "--data-root" && option != "--material-root" && option != "--save-root" && option != "--gen-data" && option != "--game-types" && option != "--string-pack" && option != "--smoke-ms" &&
              option != "--capture-ppm") ||
             index + 1 == argc)
             throw std::invalid_argument(
-                "expected --config, --system-profile, --preferences, --data-root, --material-root, --save-root, --gen-data, --game-types, --hotkeys, --smoke-ms, "
-                "--capture-ppm, --animation-object, --mesh-object, --mission-source, --skip-movies, --skip-notification-cue or --hidden");
+                "expected --config, --system-profile, --preferences, --data-root, --material-root, --save-root, --gen-data, --game-types, --string-pack, --hotkeys, --smoke-ms, "
+                "--capture-ppm, --animation-object, --mesh-object, --mission-source, --mission-engine, --mission-gpu, --mission-start, --skip-movies, --skip-notification-cue, --skip-sector-map, --skip-space-background, --skip-unit-labels, --skip-planet-ui, --skip-animated-portraits, --skip-subtitles, --base-textures-only, --skip-legacy-lighting, --skip-training-speech, --skip-unit-voice, --skip-unit-alerts, --skip-mission-sfx, --skip-teletype-visuals, --skip-mission-music, --sfx-smoke or --hidden");
         const char * value = argv[++index];
         if (!value[0] || std::string(value).rfind("--", 0) == 0)
             throw std::invalid_argument("missing option value");
@@ -422,6 +728,11 @@ Options ParseOptions(int argc, char ** argv)
                 throw std::invalid_argument("duplicate option: --gen-data");
             options.genDataPath = value;
         }
+        else if (option == "--string-pack")
+        {
+            if (!options.stringPackPath.empty()) throw std::invalid_argument("duplicate option: --string-pack");
+            options.stringPackPath = value;
+        }
         else if (option == "--game-types")
         {
             if (!options.gameTypesPath.empty())
@@ -453,6 +764,57 @@ Options ParseOptions(int argc, char ** argv)
         throw std::invalid_argument("--game-types requires --mission-source");
     if (options.skipNotificationCue && options.missionSourceName.empty())
         throw std::invalid_argument("--skip-notification-cue requires --mission-source");
+    if (options.skipSectorMap && !options.missionStart)
+        throw std::invalid_argument("--skip-sector-map requires --mission-start");
+    if (options.skipSpaceBackground && !options.missionStart)
+        throw std::invalid_argument("--skip-space-background requires --mission-start");
+    if (options.skipUnitLabels && !options.missionStart)
+        throw std::invalid_argument("--skip-unit-labels requires --mission-start");
+    if (options.skipPlanetUi && !options.missionStart)
+        throw std::invalid_argument("--skip-planet-ui requires --mission-start");
+    if (options.skipAnimatedPortraits && !options.missionStart)
+        throw std::invalid_argument("--skip-animated-portraits requires --mission-start");
+    if (options.skipSubtitles && !options.missionStart)
+        throw std::invalid_argument("--skip-subtitles requires --mission-start");
+    if (options.baseTexturesOnly && !options.missionStart)
+        throw std::invalid_argument("--base-textures-only requires --mission-start");
+    if (options.skipLegacyLighting && !options.missionStart)
+        throw std::invalid_argument("--skip-legacy-lighting requires --mission-start");
+    if (options.skipTrainingSpeech && !options.missionStart)
+        throw std::invalid_argument("--skip-training-speech requires --mission-start");
+    if (options.skipUnitVoice && !options.missionStart)
+        throw std::invalid_argument("--skip-unit-voice requires --mission-start");
+    if (options.skipTeletypeVisuals && !options.missionStart)
+        throw std::invalid_argument("--skip-teletype-visuals requires --mission-start");
+    if (options.skipMissionSfx && !options.missionStart)
+        throw std::invalid_argument("--skip-mission-sfx requires --mission-start");
+    if (options.skipUnitAlerts && !options.missionStart)
+        throw std::invalid_argument("--skip-unit-alerts requires --mission-start");
+    if (!options.stringPackPath.empty() && !options.missionStart)
+        throw std::invalid_argument("--string-pack requires --mission-start");
+    if (options.missionStart && !options.skipUnitVoice &&
+        (options.stringPackPath.empty() || !options.skipUnitAlerts || !options.skipSubtitles))
+        throw std::invalid_argument("native unit voice requires --string-pack, --skip-unit-alerts and --skip-subtitles");
+    if (options.missionStart && !options.skipTeletypeVisuals)
+        throw std::invalid_argument("native mission script requires explicit --skip-teletype-visuals until text rendering is ported");
+    if (options.skipMissionMusic && !options.missionStart)
+        throw std::invalid_argument("--skip-mission-music requires --mission-start");
+    if (options.sfxSmoke && options.missionSourceName.empty())
+        throw std::invalid_argument("--sfx-smoke requires --mission-source");
+    if (options.missionEngine &&
+        (options.missionSourceName.empty() || options.systemProfilePath.empty()))
+        throw std::invalid_argument("--mission-engine requires --mission-source and --system-profile");
+    if (options.missionGpu && (!options.missionEngine || options.hidden))
+        throw std::invalid_argument("--mission-gpu requires --mission-engine and a visible window");
+    if (options.missionGpu && !options.capturePpmPath.empty())
+        throw std::invalid_argument("--capture-ppm is only available for a render fixture");
+    if (options.missionStart &&
+        (!options.missionGpu || options.genDataPath.empty() ||
+         options.gameTypesPath.empty() || options.saveRoot.empty() ||
+         !options.skipSpaceBackground || !options.skipUnitLabels))
+        throw std::invalid_argument("--mission-start requires --mission-gpu, --gen-data, --game-types, --save-root, --skip-space-background and --skip-unit-labels");
+    if (!options.profileSmokeName.empty() && options.missionSourceName.empty())
+        throw std::invalid_argument("--profile-smoke requires --mission-source");
     if (!options.saveRoot.empty() && options.missionSourceName.empty())
         throw std::invalid_argument("--save-root requires --mission-source");
     return options;
@@ -607,6 +969,16 @@ int Run(int argc, char ** argv)
         std::cerr << "Native user-defaults initialization failed\n";
         return 3;
     }
+    AppDefaultsGlobal appDefaultsGlobal;
+    if (options.missionStart)
+    {
+        if (DEFAULTS)
+        {
+            std::cerr << "Native App user-defaults owner already bound\n";
+            return 3;
+        }
+        DEFAULTS = userDefaults.Get();
+    }
     std::cout << "Native user defaults initialized before GameSystem startup\n";
     FrontierX::RegisterNativeWindowManager(manager);
     if (!FrontierX::RegisterNativeStreamer(manager))
@@ -721,6 +1093,23 @@ int Run(int argc, char ** argv)
     nativeManager->SetProfileParser(profile.Get());
     // Use the production MovieScreen guard; never substitute a successful video stub.
     CQFLAGS.bSkipMovies = options.skipMovies ? 1 : 0;
+    CQFLAGS.bNoGDI = options.skipSectorMap ? 1 : 0;
+    CQFLAGS.bNoToolbar = options.skipSectorMap ? 1 : 0;
+    if (options.skipSpaceBackground)
+    {
+        CQEFFECTS.bBackground = GlobalEffectsOptions::off;
+        CQEFFECTS.bExpensiveTerrain = GlobalEffectsOptions::off;
+        std::cout << "Native optional space background explicitly disabled\n";
+    }
+    NATIVE_SKIP_UNIT_LABELS = options.skipUnitLabels;
+    if (options.skipUnitLabels)
+        std::cout << "Native optional unit labels explicitly disabled\n";
+    NATIVE_SKIP_PLANET_UI = options.skipPlanetUi;
+    if (options.skipPlanetUi)
+        std::cout << "Native optional planet resource panel explicitly disabled\n";
+    NATIVE_SKIP_SUBTITLES = options.skipSubtitles;
+    if (options.skipSubtitles)
+        std::cout << "Native optional speech subtitles explicitly disabled\n";
     if (options.skipMovies)
         std::cout << "Native full-screen movies explicitly disabled; audio and animation remain required\n";
     shellCloseRequested = false;
@@ -744,10 +1133,33 @@ int Run(int argc, char ** argv)
 #endif
     // Release aggregate interface references before GameSystem tears down its container.
     FrontierX::NativeAppSystemBinding appSystemBinding;
+    FrontierX::NativeAppParticleBinding appParticleBinding;
     FrontierX::NativeAppTextBinding appTextBinding;
     FrontierX::NativeAppSaveBinding appSaveBinding;
     FrontierX::NativeAppAudioBinding appAudioBinding;
     FrontierX::NativeAppMusicBinding appMusicBinding;
+    FrontierX::NativeAppSfxBinding appSfxBinding;
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    InterfaceOwner<IRenderer> appRenderer;
+    InterfaceOwner<IRenderPipeline> appPipeline;
+    InterfaceOwner<IRenderPrimitive> appPrimitive;
+    InterfaceOwner<IRenderPrimitive> appRenderBatcher;
+    InterfaceOwner<ICQBatch> appPoolBatch;
+    InterfaceOwner<ILightManager> appLight;
+    InterfaceOwner<ITextureLibrary> appTextureLibrary;
+    InterfaceOwner<IMaterialManager> appMaterials;
+    InterfaceOwner<IMeshManager> appMeshes;
+    InterfaceOwner<IAnimation> appAnimation;
+    InterfaceOwner<IHardpoint> appHardpoint;
+    InterfaceOwner<ITManager> appTextureManager;
+    InterfaceOwner<IVertexBufferManager> appVertexBuffers;
+    InterfaceOwner<IStringTable> appStrings;
+    InterfaceOwner<ISoundManager> appSoundManager;
+    InterfaceOwner<IUnitComm> appUnitComm;
+    InterfaceOwner<IStringData> appStringData;
+    InterfaceOwner<ITeletype> appTeletype;
+    AppEngineGlobals appEngineGlobals;
+#endif
     nativeManager->SetProfileParser(nullptr);
     bool systemReady = systemContainer != nullptr;
 #if !defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
@@ -759,6 +1171,85 @@ int Run(int argc, char ** argv)
         return 3;
     }
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    if (options.missionEngine)
+    {
+        if (!FrontierX::NativeGameSystemEngine(gameSystem.get()) || ENGINE || REND)
+        {
+            std::cerr << "Native App mission Engine unavailable or already bound\n";
+            return 6;
+        }
+        nativeManager->SetProfileParser(profile.Get());
+        if (!FrontierX::LoadNativeGameSystemEngineComponents(gameSystem.get(),
+                systemContainer, appRenderer.Receive()))
+        {
+            nativeManager->SetProfileParser(nullptr);
+            std::cerr << "Native App mission Engine components or IRenderer unavailable\n";
+            return 6;
+        }
+        if (systemContainer->QueryInterface(IID_IRenderPipeline,
+                reinterpret_cast<void **>(appPipeline.Receive())) != GR_OK ||
+            !appPipeline.Get() ||
+            systemContainer->QueryInterface(IID_IRenderPrimitive,
+                reinterpret_cast<void **>(appPrimitive.Receive())) != GR_OK ||
+            !appPrimitive.Get())
+        {
+            nativeManager->SetProfileParser(nullptr);
+            std::cerr << "Native App mission render interfaces unavailable\n";
+            return 6;
+        }
+        if (options.missionStart &&
+            (systemContainer->QueryInterface(IID_ILightManager,
+                reinterpret_cast<void **>(appLight.Receive())) != GR_OK || !appLight.Get() ||
+             systemContainer->QueryInterface(IID_ITextureLibrary,
+                reinterpret_cast<void **>(appTextureLibrary.Receive())) != GR_OK || !appTextureLibrary.Get() ||
+             systemContainer->QueryInterface(IID_IMaterialManager,
+                reinterpret_cast<void **>(appMaterials.Receive())) != GR_OK || !appMaterials.Get() ||
+             systemContainer->QueryInterface(IID_IMeshManager,
+                reinterpret_cast<void **>(appMeshes.Receive())) != GR_OK || !appMeshes.Get() ||
+             systemContainer->QueryInterface(IID_ITManager,
+                reinterpret_cast<void **>(appTextureManager.Receive())) != GR_OK || !appTextureManager.Get() ||
+             systemContainer->QueryInterface(IID_IVertexBufferManager,
+                reinterpret_cast<void **>(appVertexBuffers.Receive())) != GR_OK || !appVertexBuffers.Get() ||
+             systemContainer->QueryInterface(IID_IStringTable,
+                reinterpret_cast<void **>(appStrings.Receive())) != GR_OK || !appStrings.Get()))
+        {
+            nativeManager->SetProfileParser(nullptr);
+            std::cerr << "Native App required profile services unavailable\n";
+            return 6;
+        }
+        if (options.missionStart &&
+            (FrontierX::NativeGameSystemEngine(gameSystem.get())->QueryInterface(
+                IID_IAnimation, reinterpret_cast<void **>(appAnimation.Receive())) != GR_OK ||
+             !appAnimation.Get() ||
+             FrontierX::NativeGameSystemEngine(gameSystem.get())->QueryInterface(
+                IID_IHardpoint, reinterpret_cast<void **>(appHardpoint.Receive())) != GR_OK ||
+             !appHardpoint.Get()))
+        {
+            std::cerr << "Native App required animation or hardpoint service unavailable\n";
+            return 6;
+        }
+        if (options.missionStart)
+        {
+            ANIM = appAnimation.Get();
+            HARDPOINT = appHardpoint.Get();
+        }
+        nativeManager->SetProfileParser(nullptr);
+        ENGINE = FrontierX::NativeGameSystemEngine(gameSystem.get());
+        REND = appRenderer.Get();
+        PIPE = appPipeline.Get();
+        BATCH = appPrimitive.Get();
+        if (options.missionStart)
+        {
+            LIGHT = appLight.Get();
+            TEXLIB = appTextureLibrary.Get();
+            MATMAN = appMaterials.Get();
+            MESHMAN = appMeshes.Get();
+            TMANAGER = appTextureManager.Get();
+            VB_MANAGER = appVertexBuffers.Get();
+            STRINGTABLE = appStrings.Get();
+        }
+        std::cout << "Native App mission Engine and render interfaces bound; GPU not initialized\n";
+    }
     std::cout << "Native GameSystem startup completed with "
               << (options.systemProfilePath.empty() ? "synthetic" : "supplied")
               << " profile\n";
@@ -883,12 +1374,14 @@ int Run(int argc, char ** argv)
             viewConstructor.Get()->QueryInterface(IID_IViewConstructor2,
                 reinterpret_cast<void **>(viewConstructor2.Receive())) != GR_OK ||
             !viewConstructor2.Get() ||
-            !FrontierX::ParseNativeAppSchema(viewConstructor2.Get()))
+            (!options.missionStart &&
+             !FrontierX::ParseNativeAppSchema(viewConstructor2.Get())))
         {
             std::cerr << "Native App parser schema initialization failed\n";
             return 6;
         }
-        std::cout << "Native App parser schema loaded from embedded data.i\n";
+        if (!options.missionStart)
+            std::cout << "Native App parser schema loaded from embedded data.i\n";
         if (!options.gameTypesPath.empty())
         {
             std::string error;
@@ -958,6 +1451,7 @@ int Run(int argc, char ** argv)
         InterfaceOwner<IFileSystem> physicalObjects;
         InterfaceOwner<IFileSystem> physicalCampaign;
         InterfaceOwner<IFileSystem> physicalMaterials;
+        InterfaceOwner<IFileSystem> physicalProfiles;
         const auto resolveSource = [&](const char * name,
                                        InterfaceOwner<IFileSystem> & physical) -> IFileSystem * {
             for (const auto & mount : archiveMounts)
@@ -977,10 +1471,32 @@ int Run(int argc, char ** argv)
         IFileSystem * campaign = resolveSource("Maps/Campaign", physicalCampaign);
         IFileSystem * materials = materialSource.Get() ? materialSource.Get() :
             resolveSource("Mat", physicalMaterials);
-        if (!appDataSources.Bind(objects, campaign, materials))
+        IFileSystem * profiles = resolveSource("Profiles", physicalProfiles);
+        if (!appDataSources.Bind(objects, campaign, materials, profiles))
         {
             std::cerr << "Native App mission data sources unavailable\n";
             return 6;
+        }
+        if (!options.profileSmokeName.empty())
+        {
+            InterfaceOwner<IProfileParser2> profileParser;
+            if (CreateProfileParser(options.profileSmokeName.c_str(),
+                    profileParser.Receive(), nullptr) != GR_OK || !profileParser.Get())
+            {
+                std::cerr << "Native App profile parser could not open supplied profile\n";
+                return 6;
+            }
+            const HANDLE section = profileParser.Get()->CreateSection("NativeSmoke");
+            char value[16] = {};
+            if (!section || profileParser.Get()->ReadKeyValue(section, "Value",
+                    value, sizeof(value)) == 0 ||
+                !profileParser.Get()->CloseSection(section) ||
+                std::string(value) != "ready")
+            {
+                std::cerr << "Native App profile parser smoke content invalid\n";
+                return 6;
+            }
+            std::cout << "Native App PROFILEDIR CreateProfileParser checked\n";
         }
         DAFILEDESC missionDescriptor(options.missionSourceName.c_str());
         InterfaceOwner<IFileSystem> mission;
@@ -993,13 +1509,14 @@ int Run(int argc, char ** argv)
         }
         HANDLE missionSymbols = nullptr;
         U32 parseBytes = 0;
-        if (!FrontierX::LoadNativeMissionSchema(mission.Get(),
+        if (!options.missionStart &&
+            !FrontierX::LoadNativeMissionSchema(mission.Get(),
                 viewConstructor2.Get(), missionSymbols, &parseBytes))
         {
             std::cerr << "Native App mission ParseData invalid\n";
             return 6;
         }
-        viewConstructor2.Get()->DestroySymbols(missionSymbols);
+        if (missionSymbols) viewConstructor2.Get()->DestroySymbols(missionSymbols);
         if (!mission.Get()->SetCurrentDirectory("\\MT_GlobalData"))
         {
             std::cerr << "Native App mission global data unavailable\n";
@@ -1019,17 +1536,35 @@ int Run(int argc, char ** argv)
             std::cerr << "Native App mission global record invalid\n";
             return 6;
         }
-        std::cout << "Native App mission source opened through SPMAPDIR; ParseData bytes: "
-                  << parseBytes << "; schema parsed; Globals bytes: " << globalsBytes
-                  << "; mission not started\n";
+        std::cout << "Native App mission source opened through SPMAPDIR; Globals bytes: "
+                  << globalsBytes;
+        if (options.missionStart)
+            std::cout << "; parser ownership reserved for Mission::Startup\n";
+        else
+            std::cout << "; ParseData bytes: " << parseBytes
+                      << "; schema parsed; mission not started\n";
+        if (!appParticleBinding.Bind(GS))
+        {
+            std::cerr << "Native App required particle manager unavailable\n";
+            return 6;
+        }
         InterfaceOwner<IStreamer> streamer;
         InterfaceOwner<IFileSystem> physicalMusic;
+        InterfaceOwner<IFileSystem> physicalEffects;
+        InterfaceOwner<IFileSystem> physicalSpeech;
+        InterfaceOwner<IFileSystem> physicalMissionSpeech;
         IFileSystem *music = resolveSource("Music", physicalMusic);
-        if (!music || GS->QueryInterface(IID_IStreamer,
+        IFileSystem *effects = resolveSource("SFX", physicalEffects);
+        IFileSystem *speech = resolveSource("Speech", physicalSpeech);
+        IFileSystem *missionSpeech = resolveSource("MSpeech", physicalMissionSpeech);
+        if (!music || !effects ||
+            (options.missionStart && (!speech || !missionSpeech)) ||
+            GS->QueryInterface(IID_IStreamer,
                 reinterpret_cast<void **>(streamer.Receive())) != GR_OK ||
-            !streamer.Get() || !appAudioBinding.Bind(streamer.Get(), music))
+            !streamer.Get() || !appAudioBinding.Bind(streamer.Get(), music,
+                effects, speech, missionSpeech))
         {
-            std::cerr << "Native App mission music source or IStreamer unavailable\n";
+            std::cerr << "Native App mission audio source or IStreamer unavailable\n";
             return 6;
         }
     }
@@ -1128,6 +1663,7 @@ int Run(int argc, char ** argv)
     InterfaceOwner<IFileSystem> hotkeyFile;
     InterfaceOwner<IAggregateComponent> hotkeyAggregate;
     InterfaceOwner<IHotkeyEvent> hotkey;
+    AppHotkeyGlobal appHotkeyGlobal;
     InterfaceOwner<IEventCallback> hotkeyInput;
     InterfaceOwner<IDAConnectionPoint> rawEventPoint;
     InterfaceOwner<IDAConnectionPoint> hotkeyEventPoint;
@@ -1144,7 +1680,7 @@ int Run(int argc, char ** argv)
         }
         HKEVENTDESC hotkeyDescriptor;
         hotkeyDescriptor.file = hotkeyFile.Get();
-        hotkeyDescriptor.hotkeyMessage = 0x10000U;
+        hotkeyDescriptor.hotkeyMessage = CQE_HOTKEY;
         if (manager->CreateInstance(&hotkeyDescriptor,
                 reinterpret_cast<void **>(hotkeyAggregate.Receive())) != GR_OK ||
             !hotkeyAggregate.Get() ||
@@ -1163,6 +1699,7 @@ int Run(int argc, char ** argv)
             std::cerr << "Native hotkey service initialization failed\n";
             return 6;
         }
+        HOTKEY = hotkey.Get();
         std::cout << "Native hotkey table loaded and event pipeline connected\n";
     }
 
@@ -1201,7 +1738,7 @@ int Run(int argc, char ** argv)
             std::cerr << "Native App mission IStreamer device initialization failed\n";
             return 6;
         }
-        std::cout << "Native App mission IStreamer initialized with Music source\n";
+        std::cout << "Native App mission IStreamer initialized with Music and SFX sources\n";
         InterfaceOwner<IMusicManager> musicManager;
         *musicManager.Receive() = FrontierX::CreateNativeMusicManager();
         if (!musicManager.Get() || !appMusicBinding.Bind(musicManager.Get()))
@@ -1212,6 +1749,76 @@ int Run(int argc, char ** argv)
             return 6;
         }
         std::cout << "Native App MusicManager initialized\n";
+        InterfaceOwner<ISFX> soundEffects;
+        *soundEffects.Receive() = FrontierX::CreateNativeSfxManager();
+        if (!soundEffects.Get() || !appSfxBinding.Bind(soundEffects.Get()))
+        {
+            windowManager.Get()->SetCallback(nullptr);
+            shellEventSystem = nullptr;
+            std::cerr << "Native App sound-effect manager initialization failed\n";
+            return 6;
+        }
+        std::cout << "Native App ISFX initialized from source ID table\n";
+        if (options.skipMissionSfx)
+        {
+            SFXMANAGER->Enable(FALSE);
+            std::cout << "Native mission SFX explicitly disabled through ISFX::Enable(FALSE)\n";
+        }
+        if (options.sfxSmoke)
+        {
+            if (SFXMANAGER->Preload(SFX::INVALID) ||
+                SFXMANAGER->Open(SFX::INVALID) ||
+                !SFXMANAGER->Preload(SFX::BUTTONPRESS1))
+            {
+                std::cerr << "Native ISFX BUTTONPRESS1 preload failed\n";
+                return 6;
+            }
+            HSOUND sound = SFXMANAGER->Open(SFX::BUTTONPRESS1);
+            if (!sound || SFXMANAGER->DEBUG_GetNumHandles() != 1)
+            {
+                std::cerr << "Native ISFX BUTTONPRESS1 open failed\n";
+                return 6;
+            }
+            HSOUND copy(sound);
+            SINGLE volume = 0;
+            if (!SFXMANAGER->SetVolume(sound, 0.5F) ||
+                !SFXMANAGER->GetVolume(copy, &volume) || volume != 0.5F ||
+                !SFXMANAGER->Play(sound) ||
+                !SFXMANAGER->Play(sound, 0, nullptr, SFXPLAYF_NORESTART) ||
+                !SFXMANAGER->Stop(sound) ||
+                !SFXMANAGER->Play(sound, 0, nullptr, SFXPLAYF_LOOPING) ||
+                !SFXMANAGER->Stop(sound))
+            {
+                std::cerr << "Native ISFX BUTTONPRESS1 playback contract failed\n";
+                return 6;
+            }
+            // Unit voice shares IStreamer with SFX. Disabled effects retain only
+            // their source-style logical handles and never take audio streams.
+            SFXMANAGER->Enable(FALSE);
+            const Vector mutedPosition(0.0F, 0.0F, 0.0F);
+            HSOUND mutedSound = SFXMANAGER->Open(SFX::BUTTONPRESS1);
+            if (!mutedSound || !SFXMANAGER->Play(mutedSound, 1, &mutedPosition) ||
+                SFXMANAGER->Preload(SFX::BUTTONPRESS1))
+            {
+                std::cerr << "Native ISFX disabled spatial/resource contract failed\n";
+                return 6;
+            }
+            mutedSound = 0;
+            SFXMANAGER->Enable(TRUE);
+            sound = 0;
+            if (SFXMANAGER->DEBUG_GetNumHandles() != 1)
+            {
+                std::cerr << "Native ISFX shared handle ownership failed\n";
+                return 6;
+            }
+            copy = 0;
+            if (SFXMANAGER->DEBUG_GetNumHandles() != 0)
+            {
+                std::cerr << "Native ISFX final handle release failed\n";
+                return 6;
+            }
+            std::cout << "Native ISFX BUTTONPRESS1 preload/open/play/stop checked\n";
+        }
     }
     // Wayland compositors own top-level placement, so the portable shell does not
     // make successful startup depend on the legacy centering request.
@@ -1293,9 +1900,464 @@ int Run(int argc, char ** argv)
     }
     FrontierX::SdlGpuRenderer renderer;
     InterfaceOwner<IRenderPrimitive> renderPrimitive;
+    MissionGpuUnbind missionGpuUnbind;
     std::uint32_t presentedFrames = 0U;
     FrontierX::SdlGpuReadback directReadback;
-    if (!options.vertexShaderPath.empty())
+    if (options.missionGpu)
+    {
+        const HWND token = windowManager.Get()->GetWindowHandle();
+        if (!token || token > std::numeric_limits<std::uint32_t>::max())
+        {
+            std::cerr << "Native mission GPU received an invalid SDL window token\n";
+            return 7;
+        }
+        const FrontierX::SdlGpuTextureView initialTexture{
+            FrontierX::RenderSmokeTextureRgba.data(),
+            FrontierX::RenderSmokeTextureWidth,
+            FrontierX::RenderSmokeTextureHeight,
+            FrontierX::RenderSmokeTextureRgba.size()};
+        std::string renderError;
+        if (!renderer.Initialize(static_cast<std::uint32_t>(token),
+                options.vertexShaderPath.string().c_str(),
+                options.fragmentShaderPath.string().c_str(), initialTexture,
+                renderError, options.gameExtendedShaderPath.string().c_str(),
+                options.gameVertexShaderPath.string().c_str()))
+        {
+            std::cerr << "Native mission GPU initialization failed: " << renderError << '\n';
+            return 7;
+        }
+        FrontierX::NativeRenderPrimitiveDesc descriptor(
+            FrontierX::SdlGpuRenderer::SubmissionCallback, &renderer,
+            FrontierX::SdlGpuRenderer::Submission2Callback,
+            FrontierX::SdlGpuRenderer::RenderStateCallback,
+            nullptr, nullptr,
+            FrontierX::SdlGpuRenderer::TextureStageCallback,
+            FrontierX::SdlGpuRenderer::TextureBindCallback,
+            FrontierX::SdlGpuRenderer::ModelviewCallback,
+            FrontierX::SdlGpuRenderer::ProjectionCallback,
+            FrontierX::SdlGpuRenderer::Submission3Callback,
+            FrontierX::SdlGpuRenderer::Submission4Callback,
+            FrontierX::SdlGpuRenderer::SamplerStateCallback,
+            FrontierX::SdlGpuRenderer::ViewportCallback);
+        if (FrontierX::BindNativeRenderPrimitive(appPrimitive.Get(), descriptor) != GR_OK)
+        {
+            std::cerr << "Native mission profile primitive GPU binding failed\n";
+            return 7;
+        }
+        missionGpuUnbind.primitive = appPrimitive.Get();
+        const FrontierX::NativeTextureOperations textures{
+            &renderer, FrontierX::SdlGpuRenderer::TextureLookupCallback,
+            FrontierX::SdlGpuRenderer::TextureCreateCallback,
+            FrontierX::SdlGpuRenderer::TextureUploadCallback,
+            FrontierX::SdlGpuRenderer::TextureDestroyCallback};
+        if (FrontierX::BindNativeRenderPipeline(appPipeline.Get(), appPrimitive.Get(),
+                textures, FrontierX::SdlGpuRenderer::VertexConstantsCallback,
+                &renderer) != GR_OK)
+        {
+            std::cerr << "Native mission profile pipeline GPU binding failed\n";
+            return 7;
+        }
+        missionGpuUnbind.pipeline = appPipeline.Get();
+        if (FrontierX::BindNativeRenderFrames(appPipeline.Get(),
+                {&renderer, FrontierX::SdlGpuRenderer::ClearFrameCallback,
+                 FrontierX::SdlGpuRenderer::PresentFrameCallback}) != GR_OK)
+            return 7;
+        if (PIPE->set_viewport(0, 0, static_cast<int>(SCREENRESX),
+                static_cast<int>(SCREENRESY)) != GR_OK ||
+            PIPE->set_ortho(0.0F, static_cast<float>(SCREENRESX),
+                static_cast<float>(SCREENRESY), 0.0F, -1.0F, 1.0F) != GR_OK)
+        {
+            std::cerr << "Native mission GPU viewport or projection failed\n";
+            return 7;
+        }
+        std::cout << "Native mission profile render interfaces bound to SDL GPU; mission not started\n";
+        if (options.missionStart)
+        {
+            // Sol_T/resource.h: IDS_SOLTRAIN_OBJECTIVE1 and OBJECTIVE2.
+            constexpr U32 kSelectForgerObjective = 46U;
+            constexpr U32 kMoveForgerObjective = 47U;
+            NATIVE_SKIP_LEGACY_LIGHTING = options.skipLegacyLighting;
+            if (options.skipLegacyLighting)
+                std::cout << "Native App legacy lighting explicitly disabled; "
+                             "light objects remain in simulation\n";
+            RegisterTheRenderBatcher(manager);
+            AGGDESC batchDescriptor("IRenderPrimitive");
+            InterfaceOwner<IAggregateComponent> batchAggregate;
+            if (manager->CreateInstance(&batchDescriptor,
+                    reinterpret_cast<void **>(appRenderBatcher.Receive())) != GR_OK ||
+                !appRenderBatcher.Get() ||
+                appRenderBatcher.Get()->QueryInterface(IID_IAggregateComponent,
+                    reinterpret_cast<void **>(batchAggregate.Receive())) != GR_OK ||
+                !batchAggregate.Get() || batchAggregate.Get()->Initialize() != GR_OK ||
+                appRenderBatcher.Get()->QueryInterface(IID_ICQBatch,
+                    reinterpret_cast<void **>(appPoolBatch.Receive())) != GR_OK ||
+                !appPoolBatch.Get())
+            {
+                std::cerr << "Native App production render batcher unavailable\n";
+                return 6;
+            }
+            BATCH = appRenderBatcher.Get();
+            CQBATCH = appPoolBatch.Get();
+            std::cout << "Native App entering production global startup\n" << std::flush;
+            CreateGlobalComponents();
+            if (!MISSION || !OBJLIST || !MAINCAM)
+            {
+                std::cerr << "Native App required mission, object or camera owner unavailable\n";
+                return 6;
+            }
+            *appSoundManager.Receive() = FrontierX::CreateNativeMissionSoundManager(
+                options.skipTrainingSpeech, options.skipAnimatedPortraits);
+            *appTeletype.Receive() = FrontierX::CreateNativeMissionTeletype(
+                options.skipTeletypeVisuals);
+            if (options.skipUnitVoice)
+                *appUnitComm.Receive() = FrontierX::CreateNativeDisabledUnitComm();
+            if (!appSoundManager.Get() || !appTeletype.Get())
+            {
+                std::cerr << "Native App mission sound or teletype owner unavailable\n";
+                return 6;
+            }
+            SOUNDMANAGER = appSoundManager.Get();
+            TELETYPE = appTeletype.Get();
+            if (!options.skipUnitVoice)
+            {
+                InterfaceOwner<IFileSystem> stringPackArchive;
+                std::string stringError;
+                if (!FrontierX::OpenNativeUtfFileSystem(options.stringPackPath,
+                        stringPackArchive.Receive(), stringError))
+                {
+                    std::cerr << "Native StringPack archive invalid: " << stringError << '\n';
+                    return 6;
+                }
+                *appStringData.Receive() = FrontierX::CreateNativeStringData(stringPackArchive.Get());
+                if (!appStringData.Get())
+                {
+                    std::cerr << "Native StringPack records invalid\n";
+                    return 6;
+                }
+                STRINGDATA = appStringData.Get();
+                *appUnitComm.Receive() = FrontierX::CreateNativeUnitComm(options.skipUnitAlerts);
+            }
+            if (!appUnitComm.Get())
+            {
+                std::cerr << "Native UnitComm owner unavailable\n";
+                return 6;
+            }
+            UNITCOMM = appUnitComm.Get();
+            std::cout << "Native App mission sound and teletype contracts bound"
+                      << (options.skipTrainingSpeech ? "; training speech explicitly disabled" : "")
+                      << (options.skipAnimatedPortraits ? "; animated portraits explicitly disabled" : "")
+                      << (options.skipUnitVoice ? "; unit voice explicitly disabled" : "; production UnitComm voice enabled")
+                      << (options.skipUnitAlerts ? "; unit alert text explicitly disabled" : "")
+                      << (options.skipTeletypeVisuals ? "; teletype visuals explicitly disabled with source-timed handles" : "")
+                      << '\n';
+            if (!PARTMAN || !GAMEPOSCALLBACK || !MESHMAN || !TMANAGER ||
+                !MATMAN || !OBJECTDIR || !MATERIALDIR)
+            {
+                std::cerr << "Native App mission initialization dependencies unavailable\n";
+                return 6;
+            }
+            IParticleManager::InitInfo particleInfo{};
+            particleInfo.camera = MAINCAM;
+            particleInfo.posCallback = GAMEPOSCALLBACK;
+            particleInfo.MATMAN = MATMAN;
+            particleInfo.MESHMAN = MESHMAN;
+            PARTMAN->InitParticles(particleInfo);
+            IMeshManager::InitInfo meshInfo{};
+            meshInfo.ENGINE = ENGINE;
+            meshInfo.ANIM = appAnimation.Get();
+            meshInfo.OBJDIR = OBJECTDIR;
+            meshInfo.REND = REND;
+            meshInfo.PIPE = PIPE;
+            meshInfo.CAMERA = MAINCAM;
+            meshInfo.HARDPOINT = appHardpoint.Get();
+            meshInfo.MATMAN = MATMAN;
+            MESHMAN->InitManager(meshInfo);
+            ITManager::InitInfo textureInfo{PIPE};
+            TMANAGER->Initialize(textureInfo);
+            IMaterialManager::InitInfo materialInfo{};
+            materialInfo.PIPE = PIPE;
+            materialInfo.TMANAGER = TMANAGER;
+            materialInfo.MATDIR = MATERIALDIR;
+            if (MATMAN->Initialize(materialInfo) != GR_OK)
+            {
+                std::cerr << "Native App mission material initialization failed\n";
+                return 6;
+            }
+            BindNativeAppPrimitive(BATCH);
+            missionGpuUnbind.appBuilderBound = true;
+            CQFLAGS.b3DEnabled = true;
+            if (!BACKGROUND)
+            {
+                std::cerr << "Native App mission requires the production SpaceEnvironment background owner\n";
+                return 6;
+            }
+            if (options.baseTexturesOnly)
+            {
+                if (!TEXLIB || TEXLIB->set_library_state(
+                        ITL_STATE_TEXTURE_LOD_LOAD, 0U) != GR_OK)
+                {
+                    std::cerr << "Native App base texture selection failed\n";
+                    return 6;
+                }
+                std::cout << "Native App texture mip loading explicitly disabled; "
+                             "SDL GPU samples the base level\n";
+            }
+            std::cout << "Native App entering source in-game mode before mission load\n"
+                      << std::flush;
+            EVENTSYS->Send(CQE_ENTERING_INGAMEMODE);
+            if (options.skipMissionMusic)
+            {
+                MUSICMANAGER->Enable(FALSE);
+                std::cout << "Native App inherited menu music explicitly disabled\n";
+            }
+            if (!LoadNativeSelectedMission(options.missionSourceName.c_str(), SPMAPDIR))
+            {
+                std::cerr << "Native App production mission load failed\n";
+                return 6;
+            }
+            std::cout << "Native App production mission records loaded\n" << std::flush;
+            unsigned int forgers = 0;
+            Vector initialPlayerForgerPosition{};
+            bool initialPlayerForgerFound = false;
+            for (IBaseObject *object = OBJLIST->GetObjectList(); object;
+                 object = object->next)
+            {
+                const char *name = object->pArchetype
+                    ? ARCHLIST->GetArchName(object->pArchetype) : nullptr;
+                if (object->objClass == OC_SPACESHIP && name &&
+                    std::strcmp(name, "FAB!!S_Forger") == 0) ++forgers;
+            }
+            if (forgers == 0)
+            {
+                std::cerr << "Native App mission has no Forger instance; "
+                             "required object factory is absent\n";
+                return 6;
+            }
+            std::cout << "Native App production Forger instances: " << forgers << '\n'
+                      << std::flush;
+            std::cout << "Native App selected system: " << SECTOR->GetCurrentSystem()
+                      << "; player: " << MGlobals::GetThisPlayer() << '\n';
+            const Vector cameraLookAt = CAMERA->GetLookAtPosition();
+            std::cout << "Native App camera look-at: " << cameraLookAt.x << ','
+                      << cameraLookAt.y << ',' << cameraLookAt.z << '\n';
+            for (IBaseObject *object = OBJLIST->GetObjectList(); object;
+                 object = object->next)
+            {
+                const char *name = object->pArchetype
+                    ? ARCHLIST->GetArchName(object->pArchetype) : nullptr;
+                if (name && std::strcmp(name, "FAB!!S_Forger") == 0)
+                {
+                    const Vector position = object->GetPosition();
+                    if (object->GetPlayerID() == MGlobals::GetThisPlayer())
+                    {
+                        initialPlayerForgerPosition = position;
+                        initialPlayerForgerFound = true;
+                    }
+                    std::cout << "Native App Forger system: " << object->GetSystemID()
+                              << "; position: " << position.x << ',' << position.y
+                              << ',' << position.z << "; owner: "
+                              << object->GetPlayerID() << "; visible-to-player: "
+                              << object->IsVisibleToPlayer(MGlobals::GetThisPlayer()) << '\n';
+                }
+            }
+            CQFLAGS.bGameActive = -1;
+            std::cout << "Native App sending source game-active transition\n" << std::flush;
+            EVENTSYS->Send(CQE_GAME_ACTIVE, reinterpret_cast<void *>(1));
+            std::cout << "Native App entering one source-time mission update\n" << std::flush;
+            EVENTSYS->Send(CQE_UPDATE, reinterpret_cast<void *>(34133));
+            std::cout << "Native App system after first update: "
+                      << SECTOR->GetCurrentSystem() << '\n';
+            const Vector cameraPosition = CAMERA->GetPosition();
+            if (!CAMERA->SetPosition(&cameraPosition))
+            {
+                std::cerr << "Native App source camera initialization failed\n";
+                return 7;
+            }
+            for (IBaseObject *object = OBJLIST->GetObjectList(); object;
+                 object = object->next)
+            {
+                const char *name = object->pArchetype
+                    ? ARCHLIST->GetArchName(object->pArchetype) : nullptr;
+                if (name && std::strcmp(name, "FAB!!S_Forger") == 0 &&
+                    object->GetPlayerID() == MGlobals::GetThisPlayer())
+                {
+                    S32 screenX = 0;
+                    S32 screenY = 0;
+                    const auto result = CAMERA->PointToScreen(object->GetPosition(),
+                        &screenX, &screenY, nullptr);
+                    std::cout << "Native App player Forger screen: " << screenX << ','
+                              << screenY << "; projection: " << result << '\n';
+                    break;
+                }
+            }
+            BATCH->set_state(RPR_BATCH, TRUE);
+            std::string missionRenderError;
+            if (PIPE->clear_buffers(RP_CLEAR_COLOR_BIT | RP_CLEAR_DEPTH_BIT, nullptr) != GR_OK ||
+                PIPE->begin_scene() != GR_OK)
+            {
+                std::cerr << "Native App mission frame start failed: "
+                          << renderer.LastError() << '\n';
+                return 7;
+            }
+            std::cout << "Native App entering production object render\n" << std::flush;
+            OBJLIST->Render();
+            for (IBaseObject *object = OBJLIST->GetObjectList(); object;
+                 object = object->next)
+            {
+                const char *name = object->pArchetype
+                    ? ARCHLIST->GetArchName(object->pArchetype) : nullptr;
+                if (name && std::strcmp(name, "FAB!!S_Forger") == 0)
+                    std::cout << "Native App Forger visibility after source render: "
+                              << object->bVisible << '\n';
+            }
+            EVENTSYS->Send(CQE_RENDER_LAST3D, reinterpret_cast<void *>(34133));
+            std::cout << "Native App production draw submissions: "
+                      << renderer.FrameSubmissionCount() << '\n';
+            if (PIPE->end_scene() != GR_OK || PIPE->swap_buffers() != GR_OK)
+            {
+                std::cerr << "Native App mission presentation failed: " << renderer.LastError() << '\n';
+                return 7;
+            }
+            FrontierX::SdlGpuReadback missionReadback;
+            if (!renderer.Readback64(missionReadback, missionRenderError))
+            {
+                std::cerr << "Native App mission readback failed: " << missionRenderError << '\n';
+                return 7;
+            }
+            std::cout << "Native App production object frame presented; changed-pixels: "
+                      << missionReadback.changedPixels << "; checksum: "
+                      << missionReadback.checksum << '\n' << std::flush;
+            InterfaceOwner<IDAConnectionPoint> modalPoint;
+            NativeMissionModalExit modalExit;
+            ConnectionOwner modalExitConnection;
+            if (EVENTSYS->QueryOutgoingInterface("IEventCallback", modalPoint.Receive()) != GR_OK ||
+                !modalExitConnection.Connect(modalPoint.Get(), &modalExit))
+            {
+                std::cerr << "Native App mission modal exit connection failed\n";
+                return 7;
+            }
+            modalExit.started = FrontierX::Platform::MonotonicMilliseconds();
+            modalExit.duration = options.smokeMilliseconds;
+            const U32 modalResult = CQDoModal(nullptr);
+            const unsigned int missionFrames = modalExit.frames;
+            modalExitConnection.Disconnect();
+            if (modalResult != MISSION_END_QUIT && modalResult != MISSION_END_RESIGN &&
+                modalResult != MISSION_END_WON && modalResult != MISSION_END_LOST &&
+                modalResult != MISSION_END_SPLASH)
+            {
+                std::cerr << "Native App source modal returned unexpected result "
+                          << modalResult << '\n';
+                return 7;
+            }
+            std::cout << "Native App source modal returned " << modalResult << '\n';
+            if (shellCloseRequested || modalResult != MISSION_END_QUIT)
+            {
+                CQFLAGS.bGameActive = 0;
+                EVENTSYS->Send(CQE_GAME_ACTIVE, nullptr);
+                MISSION->Close(TRUE);
+                std::cout << "Native App mission closed after modal exit\n";
+                return 0;
+            }
+            std::cout << "Native App source mission loop frames: " << missionFrames
+                      << "; simulation updates: " << MGlobals::GetUpdateCount()
+                      << "; player selection: "
+                      << (OBJLIST->GetSelectedList() ? "present" : "empty") << '\n'
+                      << std::flush;
+            std::cout << "Native App training objectives complete: select="
+                      << MGlobals::IsObjectiveCompleted(kSelectForgerObjective)
+                      << " move=" << MGlobals::IsObjectiveCompleted(kMoveForgerObjective)
+                      << '\n';
+            Vector savedForgerPosition{};
+            U32 savedForgerOwner = 0U;
+            bool foundSavedForger = false;
+            for (IBaseObject *object = OBJLIST->GetObjectList(); object;
+                 object = object->next)
+            {
+                const char *name = object->pArchetype
+                    ? ARCHLIST->GetArchName(object->pArchetype) : nullptr;
+                if (name && std::strcmp(name, "FAB!!S_Forger") == 0 &&
+                    object->GetPlayerID() == MGlobals::GetThisPlayer())
+                {
+                    savedForgerPosition = object->GetPosition();
+                    savedForgerOwner = object->GetPlayerID();
+                    foundSavedForger = true;
+                    break;
+                }
+            }
+            if (!foundSavedForger || !MISSION->Save("native_slice.mission", SAVEDIR))
+            {
+                std::cerr << "Native App source mission save failed\n";
+                return 7;
+            }
+            std::cout << "Native App source mission save completed\n" << std::flush;
+            const bool missionMoved = initialPlayerForgerFound &&
+                (savedForgerPosition.x != initialPlayerForgerPosition.x ||
+                 savedForgerPosition.y != initialPlayerForgerPosition.y);
+            const bool selectedObjective =
+                MGlobals::IsObjectiveCompleted(kSelectForgerObjective);
+            const bool movedObjective =
+                MGlobals::IsObjectiveCompleted(kMoveForgerObjective);
+            std::cout << "Native App player Forger moved in plane: " << missionMoved
+                      << "; from " << initialPlayerForgerPosition.x << ','
+                      << initialPlayerForgerPosition.y << " to "
+                      << savedForgerPosition.x << ',' << savedForgerPosition.y << '\n';
+            if (!MISSION->Load("native_slice.mission", SAVEDIR))
+            {
+                std::cerr << "Native App source mission reload failed\n";
+                return 7;
+            }
+            bool restoredForger = false;
+            for (IBaseObject *object = OBJLIST->GetObjectList(); object;
+                 object = object->next)
+            {
+                const char *name = object->pArchetype
+                    ? ARCHLIST->GetArchName(object->pArchetype) : nullptr;
+                if (name && std::strcmp(name, "FAB!!S_Forger") == 0 &&
+                    object->GetPlayerID() == savedForgerOwner)
+                {
+                    const Vector position = object->GetPosition();
+                    restoredForger = position.x == savedForgerPosition.x &&
+                        position.y == savedForgerPosition.y &&
+                        position.z == savedForgerPosition.z;
+                    break;
+                }
+            }
+            if (!restoredForger)
+            {
+                std::cerr << "Native App mission reload changed the player Forger state\n";
+                return 7;
+            }
+            std::cout << "Native App source mission reload preserved player Forger owner "
+                      << savedForgerOwner << " and position "
+                      << savedForgerPosition.x << ',' << savedForgerPosition.y << ','
+                      << savedForgerPosition.z << '\n' << std::flush;
+            if (!missionMoved || !selectedObjective || !movedObjective ||
+                !MGlobals::IsObjectiveCompleted(kSelectForgerObjective) ||
+                !MGlobals::IsObjectiveCompleted(kMoveForgerObjective))
+            {
+                std::cerr << "Native App selected training checkpoint was not preserved\n";
+                return 6;
+            }
+            std::cout << "Native App selected training checkpoint preserved after source reload\n";
+            FrontierX::NativeMissionAudioStats audioStats;
+            if (!FrontierX::GetNativeMissionAudioStats(appSoundManager.Get(), audioStats)) return 7;
+            std::cout << "Native App unit voice streams: started=" << audioStats.unitStarted
+                      << " completed=" << audioStats.unitCompleted << " stopped=" << audioStats.unitStopped
+                      << " active=" << audioStats.activeStreams << '\n';
+            if (!options.skipUnitVoice && (audioStats.unitStarted < 2 ||
+                    audioStats.unitCompleted + audioStats.unitStopped < 2))
+            {
+                std::cerr << "Native App unit voice selection/move acceptance failed\n";
+                return 7;
+            }
+            CQFLAGS.bGameActive = 0;
+            EVENTSYS->Send(CQE_GAME_ACTIVE, nullptr);
+            MISSION->Close(TRUE);
+            std::cout << "Native App source mission closed after checkpoint\n";
+            return 0;
+        }
+    }
+    if (!options.vertexShaderPath.empty() && !options.missionGpu)
     {
         const HWND token = windowManager.Get()->GetWindowHandle();
         if (!token || token > std::numeric_limits<std::uint32_t>::max())
@@ -1327,7 +2389,8 @@ int Run(int argc, char ** argv)
             FrontierX::SdlGpuRenderer::TextureBindCallback,
             FrontierX::SdlGpuRenderer::ModelviewCallback,
             FrontierX::SdlGpuRenderer::ProjectionCallback,
-            nullptr, nullptr, FrontierX::SdlGpuRenderer::SamplerStateCallback);
+            nullptr, nullptr, FrontierX::SdlGpuRenderer::SamplerStateCallback,
+            FrontierX::SdlGpuRenderer::ViewportCallback);
         if (manager->CreateInstance(&renderDescriptor,
                 reinterpret_cast<void **>(renderPrimitive.Receive())) != GR_OK ||
             !renderPrimitive.Get())
@@ -1475,7 +2538,23 @@ int Run(int argc, char ** argv)
     windowManager.Get()->SetCallback(nullptr);
     shellEventSystem = nullptr;
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
-    if (!options.vertexShaderPath.empty())
+    if (options.missionGpu)
+    {
+        FrontierX::SdlGpuReadback readback;
+        std::string renderError;
+        if (!presentedFrames || !renderer.Readback64(readback, renderError) ||
+            !readback.structureValid)
+        {
+            std::cerr << "Native mission GPU readback failed: " << renderError << '\n';
+            return 7;
+        }
+        std::cout << "Native mission GPU presented blank context; frames: "
+                  << presentedFrames << "; changed-pixels: "
+                  << readback.changedPixels << "; mission not started\n";
+        missionGpuUnbind.Disconnect();
+        renderer.Shutdown();
+    }
+    else if (!options.vertexShaderPath.empty())
     {
         FrontierX::SdlGpuReadback readback;
         std::string renderError;
@@ -1526,7 +2605,9 @@ int Run(int argc, char ** argv)
         std::cerr << "Native preference save failed\n";
         return 5;
     }
-    if (options.vertexShaderPath.empty())
+    if (options.missionGpu)
+        std::cout << "Native shell closed cleanly; mission GPU context ran, game startup not attempted\n";
+    else if (options.vertexShaderPath.empty())
         std::cout << "Native shell closed cleanly; retail game startup and rendering were not attempted\n";
     else
         std::cout << "Native shell closed cleanly; repository render fixture completed; "

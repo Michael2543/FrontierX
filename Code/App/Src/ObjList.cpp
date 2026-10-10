@@ -1743,6 +1743,13 @@ void ObjectList::Render (void)
 //
 void ObjectList::DEBUG_print (void)
 {
+#if !defined(_WIN32)
+	if (!DEBUGFONT)
+	{
+		std::fputs("Native debug font owner is unavailable\n", stderr);
+		std::abort();
+	}
+#endif
 	debug_print(DEBUGFONT, (CQFLAGS.debugPrint==DBG_ALL));
 }
 //--------------------------------------------------------------------------//
@@ -2336,9 +2343,11 @@ BOOL32 ObjectList::AddPartID (IBaseObject *obj, U32 dwMissionID)
 		node->actor = obj;
 		node->dwMissionID = dwMissionID;
 
+		#if defined(_WIN32)
 		IBaseObject::MDATA mdata;
 		if (obj->GetMissionData(mdata))
 			MENU->AddToPartMenu(mdata.pSaveData->partName, dwMissionID);
+		#endif
 	}
 
 	return 1;
@@ -2408,7 +2417,9 @@ BOOL32 ObjectList::RemovePartID (IBaseObject *obj, U32 dwMissionID)
 			actorList.removeNode(node);
 			delete node;
 
+			#if defined(_WIN32)
 			MENU->RemoveFromPartMenu(dwMissionID);
+			#endif
 		}
 	}
 
@@ -3597,14 +3608,29 @@ BOOL32 ObjectList::Save (struct IFileSystem * outFile)
 
 
 	fdesc.lpImplementation = "DOS";
+#if !defined(_WIN32)
+	// Native writable archives require an explicit create/write child contract.
+	fdesc.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	fdesc.dwCreationDistribution = CREATE_ALWAYS;
+#endif
 	outFile->CreateDirectory("\\ObjectList");
 
 	if (outFile->SetCurrentDirectory("\\ObjectList") == 0)
+	{
+		#if !defined(_WIN32)
+		std::fputs("Native object-list save cannot enter ObjectList directory\n", stderr);
+		#endif
 		goto Done;
+	}
 
 	outFile->CreateDirectory("Instances");
 	if (outFile->SetCurrentDirectory("Instances") == 0)
+	{
+		#if !defined(_WIN32)
+		std::fputs("Native object-list save cannot enter Instances directory\n", stderr);
+		#endif
 		goto Done;
+	}
 
 	RecursiveDelete(outFile);
 
@@ -3615,7 +3641,8 @@ BOOL32 ObjectList::Save (struct IFileSystem * outFile)
 		// 
 		if (obj->QueryInterface(ISaveLoadID, pSaveLoad) != 0)
 		{
-			outFile->CreateDirectory(obj->pArchetype->archDataType->name);
+			const BOOL32 archDirectoryCreated =
+				outFile->CreateDirectory(obj->pArchetype->archDataType->name);
 #if defined(_WIN32)
 			wsprintf(buffer, "%s\\%u", obj->pArchetype->archDataType->name, saveCounter++);
 #else
@@ -3624,10 +3651,17 @@ BOOL32 ObjectList::Save (struct IFileSystem * outFile)
 				static_cast<int>(sizeof(buffer))) goto Done;
 #endif
 
-			outFile->CreateDirectory(buffer);
+			const BOOL32 instanceDirectoryCreated = outFile->CreateDirectory(buffer);
 
-			if (outFile->CreateInstance(&fdesc, file) != GR_OK)
+			const GENRESULT createResult = outFile->CreateInstance(&fdesc, file);
+			if (createResult != GR_OK)
+			{
+				#if !defined(_WIN32)
+				std::fprintf(stderr, "Native object-list save cannot create %s: arch-dir=%d instance-dir=%d result=%d\n",
+					buffer, archDirectoryCreated, instanceDirectoryCreated, createResult);
+				#endif
 				goto Done;
+			}
 
 			BOOL32 saveOk = pSaveLoad->Save(file);
 
@@ -3647,7 +3681,12 @@ BOOL32 ObjectList::Save (struct IFileSystem * outFile)
 	if (saveCounter)
 	{
 		if (outFile->SetCurrentDirectory("\\ObjectList") == 0)
+		{
+			#if !defined(_WIN32)
+			std::fputs("Native object-list save cannot return to ObjectList directory\n", stderr);
+			#endif
 			goto Done;
+		}
 		fdesc.lpFileName = "Count";
 		fdesc.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
 		fdesc.dwShareMode = 0;
@@ -3769,7 +3808,9 @@ BOOL32 ObjectList::Close (void)
 	numProjectiles = 0;
 	bInLocalUpdate = false;		// prevent false secondary asserts
 	bInsideClose = true;
+	#if defined(_WIN32)
 	MENU->RemoveAllFromPartMenu();
+	#endif
 	UNBORNMANAGER->Unload();
 	NUGGETMANAGER->Close();
 	if(SCHEDULER)
@@ -4347,7 +4388,7 @@ void ObjectList::DrawHighlightedList (void)
 		obj = obj->nextTarget;
 	}
 
-	if (DBHOTKEY->GetHotkeyState(IDH_HIGHLIGHT_ALL))
+	if (DBHOTKEY && DBHOTKEY->GetHotkeyState(IDH_HIGHLIGHT_ALL))
 	{
 		// highlight all visible objects
 		IBaseObject * obj = objectList;
@@ -5133,6 +5174,11 @@ IBaseObject * ObjectList::FindClosestAdmiral (IBaseObject * from)
 //
 GENRESULT ObjectList::GetUnitFont (struct IFontDrawAgent ** ppAgent)
 {
+	if (!ppAgent || !unitFont)
+	{
+		if (ppAgent) *ppAgent = 0;
+		return GR_GENERIC;
+	}
 	*ppAgent = unitFont;
 	unitFont->AddRef();
 	return GR_OK;
@@ -5275,6 +5321,10 @@ void ObjectList::notifyHostMigration (void)
 //
 void ObjectList::createUnitFont (void)
 {
+#if !defined(_WIN32)
+	if (NATIVE_SKIP_UNIT_LABELS)
+		return;
+#endif
 	PGENTYPE pFontType;
 	if ((pFontType = GENDATA->LoadArchetype("Font!!ObjectType")) != 0)
 	{

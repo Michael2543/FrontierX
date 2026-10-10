@@ -1360,10 +1360,15 @@ HRESULT TextureLibrary::choose_texture_format( ITL_TEXTUREIMAGEDATA *data, Pixel
 	if( data->format.ddpf.dwRGBBitCount == 16 &&
 		data->format.ddpf.dwRBitMask == 0xf800 &&
 		data->format.ddpf.dwGBitMask == 0x07e0 &&
-		data->format.ddpf.dwBBitMask == 0x001f && !data->alphas ) {
+		data->format.ddpf.dwBBitMask == 0x001f ) {
 		out_pf->init( PF_RGBA8 );
 		return S_OK;
 	}
+	TL_LOGF("native unsupported image format: bits=%u masks=%08x/%08x/%08x/%08x alpha-plane=%d\n",
+		data->format.ddpf.dwRGBBitCount,
+		data->format.ddpf.dwRBitMask, data->format.ddpf.dwGBitMask,
+		data->format.ddpf.dwBBitMask, data->format.ddpf.dwRGBAlphaBitMask,
+		data->alphas != NULL);
 	return E_FAIL;
 #else
 #if 1

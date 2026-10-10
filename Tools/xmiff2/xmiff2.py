@@ -17,7 +17,7 @@ Usage:
   python xmiff2.py   (uses paths relative to script for the Conquest build)
 """
 
-import struct, re, sys, os
+import struct, re, sys, os, json
 
 # ---------------------------------------------------------------------------
 # Paths (defaults relative to Code/App/Src where these files live)
@@ -110,7 +110,36 @@ def write_dat(records, id_map, out_path):
             f.write(struct.pack('<f', cutoff))
     print(f'Wrote {out_path}  ({last_val} IDs, {len(records)} records)')
 
+def write_native_include(records, id_map, out_path):
+    def cpp_float(value):
+        literal = format(value, '.9g')
+        if '.' not in literal and 'e' not in literal:
+            literal += '.0'
+        return literal + 'F'
+
+    last_val = id_map['LAST']
+    if len(records) != last_val - 1:
+        raise ValueError('Native SFX table must cover every nonzero ID')
+    seen = set()
+    with open(out_path, 'w') as output:
+        output.write('// Generated from sfxdata.xmf and Sfxid.h; do not edit.\n')
+        output.write(f'constexpr U32 nativeSfxLast = {last_val};\n')
+        output.write('constexpr NativeSfxEntry nativeSfxEntries[] = {\n')
+        for id_name, volume, filename, cutoff in records:
+            sound_id = id_map.get(id_name)
+            if sound_id is None or sound_id == 0 or sound_id in seen or \
+                    len(filename.encode('ascii')) >= 32:
+                raise ValueError(f'Invalid native SFX entry: {id_name}')
+            seen.add(sound_id)
+            output.write(f'    {{{sound_id}, {cpp_float(volume)}, '
+                         f'{json.dumps(filename)}, {cpp_float(cutoff)}}},\n')
+        output.write('};\n')
+    print(f'Wrote {out_path} ({last_val} IDs, {len(records)} records)')
+
 # ---------------------------------------------------------------------------
 id_map  = parse_sfxid(SFXID_PATH)
 records = parse_xmf(XMF_PATH)
-write_dat(records, id_map, OUT_PATH)
+if OUT_PATH.endswith('.inc'):
+    write_native_include(records, id_map, OUT_PATH)
+else:
+    write_dat(records, id_map, OUT_PATH)

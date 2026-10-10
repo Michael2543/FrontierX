@@ -53,7 +53,11 @@ struct DACOM_NO_VTABLE IFogOfWar : IDAComponent
 
 	virtual SINGLE GetPercentageFogCleared(U32 playerID,U32 systemID) = 0;
 
+#if defined(_WIN32)
 	virtual BOOL32 New();
+#else
+	virtual BOOL32 New() = 0;
+#endif
 
 	virtual	BOOL32 __stdcall Save (struct IFileSystem * outFile) = 0;
 

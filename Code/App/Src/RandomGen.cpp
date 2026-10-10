@@ -12,7 +12,12 @@
 */			    
 //---------------------------------------------------------------------------
 
+#if defined(_WIN32)
 #include <pch.h>
+#else
+#include <TYPEDEFS.H>
+#include <cstdlib>
+#endif
 #include "RandomGen.h"
 
 RandomGen::RandomGen(U16 seed)

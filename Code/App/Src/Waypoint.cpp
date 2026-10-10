@@ -11,8 +11,33 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+#endif
 
 #include "TObject.h"
 #include "TObjSelect.h"
@@ -32,11 +57,11 @@
 #include "DQuickSave.h"
 
 #include <EventSys.h>
-#include <Engine.h>
+#include <ENGINE.H>
 #include <ITextureLibrary.h>
 #include <TSmartPointer.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 
@@ -274,7 +299,7 @@ void Waypoint::ResolveAssociations()
 //
 void Waypoint::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = static_cast<const char *>(partName);
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_WAYPOINT_QLOAD");
@@ -485,7 +510,9 @@ BOOL32 WaypointFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -502,12 +529,20 @@ IBaseObject * WaypointFactory::CreateInstance (HANDLE hArchetype)
 void WaypointFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fprintf(stderr, "Native Waypoint editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //
 GENRESULT WaypointFactory::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
 
 	switch (message)
@@ -521,6 +556,10 @@ GENRESULT WaypointFactory::Notify (U32 message, void *param)
 		}
 		break;
 	}
+#else
+	(void)message;
+	(void)param;
+#endif
 
 	return GR_OK;
 }
@@ -528,6 +567,10 @@ GENRESULT WaypointFactory::Notify (U32 message, void *param)
 //
 void WaypointFactory::doHackThing (void)
 {
+#if !defined(_WIN32)
+	std::fprintf(stderr, "Native Waypoint editor mesh insertion is unavailable\n");
+	std::abort();
+#else
 	char buffer[MAX_PATH+4];
 
 	if (DEFAULTS->GetInputFilename(buffer, IDS_OPEN3DB_FILTER))
@@ -553,6 +596,7 @@ void WaypointFactory::doHackThing (void)
 			}
 		}
 	}
+#endif
 }
 
 //---------------------------------------------------------------------------

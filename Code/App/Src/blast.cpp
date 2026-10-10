@@ -11,29 +11,42 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <IRenderPrimitive.h>
+struct IMeshArchetype;
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cstdlib>
+using std::max;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DExplosion.h"
-#include "Objlist.h"
-#include "Anim2D.h"
-#include "CQlight.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "anim2d.h"
+#include "CQLight.h"
+#include "SFX.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "IBlast.h"
 #include "ICamera.h"
 #include "UserDefaults.h"
 #include <MGlobals.h>
-#include "Fogofwar.h"
+#include "FogOfWar.h"
 
-#include <View2D.h>
-#include <FileSys.h>
-#include <Engine.h>
+#include <View2d.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <IRenderPrimitive.h>
 
 
@@ -851,9 +864,15 @@ IBaseObject * BlastManager::CreateInstance(HANDLE hArchetype)
 //
 void BlastManager::EditorCreateInstance(HANDLE hArchetype, const MISSION_INFO & info)
 {
+#if defined(_WIN32)
 	// not supported
 	BlastArchetype * objtype = (BlastArchetype *)hArchetype;
 	EditorStartObjectInsertion(objtype->pArch, info);
+#else
+	(void)hArchetype;
+	(void)info;
+	std::abort();
+#endif
 }
 //----------------------------------------------------------------------------------------------
 //

@@ -1,5 +1,58 @@
 # FrontierX Project Charter
 
+Current unit voice checkpoint, 2026-10-10: original UnitComm and StringData
+now connect normal selection/movement in the selected external `Sol_Train`
+mission to native ISoundManager and production IStreamer. Separate visible
+Wayland/Vulkan GCC/Clang optional-FFmpeg Debug runs started two unit voices,
+completed one, stopped one and retained no active stream; both preserved
+movement, objectives and source mission save/reload and exited zero.
+This requires the reviewed external shared-LGPL IAC decoder and explicit
+unit-alert/subtitle and mission-SFX exclusions. Next: restore in-window
+text/teletype through the original owners. Windows/ABI, full mission
+sanitizers, audible comparison and retail parity remain unverified. See
+[the focused voice record](NATIVE_SINGLEPLAYER_SLICE.md#original-unit-voice-mission-checkpoint-2026-10-10).
+Older entries below are historical.
+
+Current native modal mission checkpoint, 2026-10-10: the selected external
+`Sol_Train` mission now enters source `CQDoModal` after startup. Its source
+event, frame-time, render, simulation and GameSystem update order runs through
+the existing `IRenderPipeline`/SDL GPU backend. A source `CQE_PLAYER_QUIT`
+event returns modal result 4; the shell then saves/reloads the moved Forger
+and objectives and closes the mission. Separate 15-second visible
+Wayland/Vulkan GCC and Clang runs passed with normal mouse selection and
+movement. A no-duration run also exited cleanly after a normal window close.
+Native menu hot rectangles, CPU framebuffer locking and the explicitly
+excluded media/UI paths remain open; Windows, ABI and retail parity are
+unverified. See [the focused modal record](NATIVE_SINGLEPLAYER_SLICE.md#source-modal-mission-integration-2026-10-10).
+Older status entries below are historical.
+
+Current native frame-boundary checkpoint, 2026-10-10: the selected mission
+now uses production `IRenderPipeline` clear/begin/end/swap backed by SDL GPU.
+GCC and Clang CPU checks and separate visible X11/Vulkan synthetic GPU
+runs passed; visible Wayland mission runs completed selection, movement,
+training objectives and moved-state save/reload. Full-target color/depth
+clear is supported; partial/stencil operations remain explicit failures.
+The default desktop GPU CTest resize failed under Wayland tiling; separate
+floating X11 runs passed. Next: link the source `CQDoModal` event/timing/UI
+closure, then restore excluded in-game media. Windows and retail parity
+remain unverified. See [the focused frame record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-frame-lifecycle-checkpoint-2026-10-10).
+Earlier status entries below are historical.
+
+Current native playable-slice status (2026-10-10): GCC and Clang Linux
+x86_64 Debug builds load lawful external `Sol_Train` data, present the
+player-owned Forger through the production Engine/SDL/Vulkan path, accept
+normal left-click selection and right-click movement through original
+offline operation owners, advance source simulation to training objectives
+1 and 2, and round-trip the moved unit and objectives through source
+mission save/reload. Both visible integrated runs exited zero; full native
+CTest trees passed. Required `IStreamer` remains active. Full-screen
+`IVideoSystem` and other incomplete optional media/UI paths were excluded
+only by explicit flags. This bounded checkpoint is not complete gameplay
+or Windows retail parity; Windows Debug/Final, ABI and unit-bearing Windows
+mission comparison remain open. See
+[the focused acceptance record](NATIVE_SINGLEPLAYER_SLICE.md#playable-solarian-training-checkpoint-2026-10-10).
+The status snapshots below are historical.
+
 Native mission-map status (2026-09-27): the selected external
 `Sol_Train.dmission` has no saved system-map child. A bounded native
 `ISystemMap` owner now executes that fresh-load branch and is linked

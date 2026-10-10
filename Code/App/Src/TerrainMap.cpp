@@ -9,8 +9,24 @@
     $Header: /Conquest/App/Src/TerrainMap.cpp 112   10/17/00 9:48a Jasony $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <rendpipeline.h>
+#include <da_d3dtypes.h>
+#include <RPUL/PrimitiveBuilder.h>
+#include "MyVertex.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+using std::min;
+using std::max;
+#endif
 
 #include "SuperTrans.h"
 #include "TerrainMap.h"
@@ -18,7 +34,7 @@
 #include "TObject.h"
 #include "GridVector.h"
 
-#include <Physics.h>
+#include <physics.h>
 #include <HeapObj.h>
 #include <TComponent.h>
 #include <stdlib.h>
@@ -43,7 +59,8 @@ struct CellRef;
 struct TerrainMap;
 
 #define NUM_STEPS 162
-static const POINT g_steps[NUM_STEPS] = 
+struct TerrainStep { S32 x, y; };
+static const TerrainStep g_steps[NUM_STEPS] =
 { 
 	{ 0, 0}, { 0, 1}, { 1, 0}, { 0,-1}, {-1, 0}, { 1, 1}, { 1,-1}, {-1,-1}, {-1, 1} ,	// 0 - 8
 	{ 0, 2}, { 2, 0}, { 0,-2}, {-2, 0}, { 1, 2}, { 2,-1}, {-1,-2}, {-2, 1}, { 2, 1}	,	// 9 - 17
@@ -425,7 +442,7 @@ struct InfoList
 
 	void reset (void)
 	{
-		BlockAllocator<Type>::SUBNODE * node = pList;
+		typename BlockAllocator<Type>::SUBNODE * node = pList;
 		while (node)
 		{
 			pList = node->pNext;
@@ -437,7 +454,7 @@ struct InfoList
 
 	void add (const Type & data)
 	{
-		BlockAllocator<Type>::SUBNODE * node = blockAlloc.alloc();
+		typename BlockAllocator<Type>::SUBNODE * node = blockAlloc.alloc();
 
 		*(static_cast<Type *>(node)) = data;
 		

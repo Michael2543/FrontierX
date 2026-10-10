@@ -32,6 +32,8 @@ using NativeModelviewCallback =
     GENRESULT (DACOM_CDECL *)(void * context, const Transform & modelview);
 using NativeProjectionCallback =
     GENRESULT (DACOM_CDECL *)(void * context, const Matrix4 & projection);
+using NativeViewportCallback =
+    GENRESULT (DACOM_CDECL *)(void * context, int x, int y, int width, int height);
 
 struct NativeRenderPrimitiveDesc : public DACOMDESC
 {
@@ -48,13 +50,14 @@ struct NativeRenderPrimitiveDesc : public DACOMDESC
         NativeProjectionCallback projectionCallback = nullptr,
         NativeRenderSubmission3Callback submit3Callback = nullptr,
         NativeRenderSubmission4Callback submit4Callback = nullptr,
-        NativeSamplerStateCallback samplerCallback = nullptr) :
+        NativeSamplerStateCallback samplerCallback = nullptr,
+        NativeViewportCallback viewportCallback = nullptr) :
         callback(submitCallback), callback2(submit2Callback), state(stateCallback),
         context(submitContext), lookup(vertexBufferLookup),
         lookupContext(vertexBufferContext), textureStage(textureStageCallback),
         textureBind(textureBindCallback), modelview(modelviewCallback),
         projection(projectionCallback), callback3(submit3Callback),
-        callback4(submit4Callback), sampler(samplerCallback)
+        callback4(submit4Callback), sampler(samplerCallback), viewport(viewportCallback)
     {
         interface_name = "IRenderPrimitive";
         size = sizeof(*this);
@@ -73,6 +76,7 @@ struct NativeRenderPrimitiveDesc : public DACOMDESC
     NativeRenderSubmission3Callback callback3;
     NativeRenderSubmission4Callback callback4;
     NativeSamplerStateCallback sampler;
+    NativeViewportCallback viewport;
 };
 
 void RegisterNativeRenderPrimitive(ICOManager * manager);

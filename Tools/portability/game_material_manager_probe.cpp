@@ -15,6 +15,7 @@
 #include "FrontierX/UtfMetadata.h"
 #include "Include/NativeAppGlobals.h"
 #include "MeshRender.h"
+#include "MyVertex.h"
 #include "IVertexBuffer.h"
 #include "3dmath.h"
 #include "FDump.h"
@@ -82,7 +83,39 @@ struct AppStateCapture
     U32 texture = 0U;
     unsigned stageCalls = 0U;
     unsigned samplerCalls = 0U;
+    unsigned rectangleDraws = 0U;
+    std::size_t rectangleVertices = 0U;
+    Matrix4 projection{true};
+    std::array<int, 4> viewport{{0, 0, 0, 0}};
 };
+
+GENRESULT DACOM_CDECL CaptureApp2DDraw(
+    void * context, const FrontierX::RenderSubmissionView & view)
+{
+    auto & capture = *static_cast<AppStateCapture *>(context);
+    if (!view.IsValid()) return GR_INVALID_PARMS;
+    ++capture.rectangleDraws;
+    capture.rectangleVertices = view.vertexCount;
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL CaptureApp2DModelview(void *, const Transform &)
+{
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL CaptureApp2DProjection(void * context, const Matrix4 & value)
+{
+    static_cast<AppStateCapture *>(context)->projection = value;
+    return GR_OK;
+}
+
+GENRESULT DACOM_CDECL CaptureApp2DViewport(
+    void * context, int x, int y, int width, int height)
+{
+    static_cast<AppStateCapture *>(context)->viewport = {{x, y, width, height}};
+    return GR_OK;
+}
 
 GENRESULT DACOM_CDECL CaptureAppRenderState(
     void * context, const FrontierX::RenderStateSnapshot & value)
@@ -1675,9 +1708,10 @@ int main(int argc, char **argv)
     appPipeline->Release();
     AppStateCapture appState;
     FrontierX::NativeRenderPrimitiveDesc appStateDescriptor(
-        RejectGameDraw, &appState, nullptr, CaptureAppRenderState,
+        CaptureApp2DDraw, &appState, nullptr, CaptureAppRenderState,
         nullptr, nullptr, CaptureAppTextureStage, CaptureAppTextureBind,
-        nullptr, nullptr, nullptr, nullptr, CaptureAppSamplerState);
+        CaptureApp2DModelview, CaptureApp2DProjection, nullptr, nullptr,
+        CaptureAppSamplerState, CaptureApp2DViewport);
     IRenderPrimitive *appPrimitive = nullptr;
     if (!Expect(components->CreateInstance(&appStateDescriptor,
                     reinterpret_cast<void **>(&appPrimitive)) == GR_OK && appPrimitive,
@@ -1700,6 +1734,32 @@ int main(int argc, char **argv)
     SetupDiffuseBlend(64U, false);
     const bool wrappedDiffuseState = appState.sampler.addressU == D3DTADDRESS_WRAP &&
         appState.sampler.addressV == D3DTADDRESS_WRAP && appState.samplerCalls == 10U;
+    DisableTextures();
+    const bool untexturedAppState = appState.texture == 0U &&
+        appState.stage.colorOperation == D3DTOP_SELECTARG1 &&
+        appState.stage.colorArgument1 == D3DTA_DIFFUSE &&
+        appState.stage.alphaOperation == D3DTOP_SELECTARG1 &&
+        appState.stage.alphaArgument1 == D3DTA_DIFFUSE;
+    bool app2dSubmitted = false;
+    {
+        FrontierX::NativeRenderPipeline app2dPipeline(appPrimitive);
+        PIPE = &app2dPipeline;
+        PB.SetIRenderPrimitive(appPrimitive);
+        SCREENRESX = 64U;
+        SCREENRESY = 64U;
+        DA::RectangleFill(nullptr, 3, 4, 12, 13, RGB(16, 32, 48));
+        DA::RectangleHash(nullptr, 5, 6, 14, 15, RGB(64, 80, 96));
+        app2dSubmitted = appState.rectangleDraws == 2U &&
+            appState.rectangleVertices == 6U &&
+            appState.viewport == std::array<int, 4>{{0, 0, 64, 64}} &&
+            appState.projection.d[0][0] == 2.0F / 64.0F &&
+            appState.projection.d[1][1] == -2.0F / 64.0F &&
+            appState.texture == 0U;
+        PB.SetIRenderPrimitive(nullptr);
+        SCREENRESX = 0U;
+        SCREENRESY = 0U;
+        PIPE = nullptr;
+    }
     BATCH = nullptr;
     appPrimitive->Release();
     ENGINE = nullptr;
@@ -1710,7 +1770,8 @@ int main(int argc, char **argv)
     vb_mgr = nullptr;
     if (!Expect(appMeshInitialized && appDrawSubmitted && appMaterialSubmitted &&
                 appEffectSubmitted &&
-                clampedDiffuseState && wrappedDiffuseState &&
+                clampedDiffuseState && wrappedDiffuseState && untexturedAppState &&
+                app2dSubmitted &&
                 appBuffers.adds == 3U &&
                 appBuffers.deletes == 3U && appBuffers.owner == nullptr &&
                 engine->get_instance_archetype(engineInstance) == engineArchetype,

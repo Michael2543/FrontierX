@@ -65,7 +65,7 @@
 #endif
 
 #ifndef DBHOTKEYS_H
-#include "dbhotkeys.h"
+#include "DBHotkeys.h"
 #endif
 
 #ifndef TSMARTPOINTER_H
@@ -77,7 +77,7 @@
 #endif
 
 #ifndef VIEW2D_H
-#include <View2D.h>
+#include <View2d.h>
 #endif
 
 #ifndef ICAMERA_H
@@ -105,9 +105,31 @@
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectSelection : public Base
 {
+#if defined(_WIN32)
 	typename typedef Base::INITINFO SELECTINITINFO;
-
 	struct InitNode initNode;
+#else
+	typedef typename Base::INITINFO SELECTINITINFO;
+	typename Base::InitNode initNode;
+	using typename Base::InitProc;
+	using Base::bHighlight;
+	using Base::bVisible;
+	using Base::instanceIndex;
+	using Base::bSpecialRender;
+	using Base::transform;
+	using Base::objClass;
+	using Base::playerID;
+	using Base::fieldFlags;
+	using Base::nextHighlighted;
+	using Base::bShowPartName;
+	using Base::partName;
+	using Base::pInitData;
+	using Base::bMimic;
+	using Base::hullPointsMax;
+	using Base::GetDisplayHullPoints;
+	using Base::supplyPointsMax;
+	using Base::GetDisplaySupplies;
+#endif
 	//
 	// corner data
 	//

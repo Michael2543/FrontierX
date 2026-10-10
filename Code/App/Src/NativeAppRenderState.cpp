@@ -65,4 +65,27 @@ void __stdcall SetupDiffuseBlend(U32 textureID, bool clamp)
                      "later-stage texture clear");
     }
 }
+
+void __stdcall DisableTextures()
+{
+    if (!BATCH)
+    {
+        ICQImage::Bomb("native DisableTextures has no render primitive");
+        std::abort();
+    }
+    RequireState(BATCH->set_texture_stage_texture(0U, 0U), "stage-zero texture clear");
+    RequireState(BATCH->set_texture_stage_state(0U, D3DTSS_COLOROP, D3DTOP_SELECTARG1),
+                 "color operation");
+    RequireState(BATCH->set_texture_stage_state(0U, D3DTSS_COLORARG1, D3DTA_DIFFUSE),
+                 "color argument one");
+    RequireState(BATCH->set_texture_stage_state(0U, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1),
+                 "alpha operation");
+    RequireState(BATCH->set_texture_stage_state(0U, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE),
+                 "alpha argument one");
+    RequireState(BATCH->set_texture_stage_texture(1U, 0U), "stage-one texture clear");
+    RequireState(BATCH->set_texture_stage_state(1U, D3DTSS_COLOROP, D3DTOP_DISABLE),
+                 "stage-one color disable");
+    RequireState(BATCH->set_texture_stage_state(1U, D3DTSS_ALPHAOP, D3DTOP_DISABLE),
+                 "stage-one alpha disable");
+}
 #endif

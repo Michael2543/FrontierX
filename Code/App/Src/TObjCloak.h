@@ -41,6 +41,10 @@
 #include "IAttack.h"
 #endif
 
+#if !defined(_WIN32)
+#include "IBlast.h"
+#endif
+
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 #define CLOAK_TIME 1.0
@@ -49,9 +53,25 @@
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectCloak : public Base, ICloak, CLOAK_SAVELOAD_BASE
 {
+#if defined(_WIN32)
 	typename typedef Base::SAVEINFO CLOAKSAVEINFO;
 	typename typedef Base::INITINFO CLOAKINITINFO;
+#else
+	typedef typename Base::SAVEINFO CLOAKSAVEINFO;
+	typedef typename Base::INITINFO CLOAKINITINFO;
+	using Base::bCloaked;
+	using Base::bSpecialRender;
+	using Base::transform;
+	using Base::dwMissionID;
+	using Base::building;
+	using typename Base::RenderProc;
+	using typename Base::InitProc;
+	using typename Base::PhysUpdateProc;
+	using typename Base::SaveLoadProc;
+	using typename Base::PreTakeoverProc;
+#endif
 
+#if defined(_WIN32)
 	struct PreRenderNode  preRenderNode;
 //	struct PostRenderNode postRenderNode;
 	struct InitNode       initNode;
@@ -59,6 +79,14 @@ struct _NO_VTABLE ObjectCloak : public Base, ICloak, CLOAK_SAVELOAD_BASE
 	struct SaveNode			saveNode;
 	struct LoadNode         loadNode;
 	struct PreTakeoverNode	preTakeoverNode;
+#else
+	typename Base::PreRenderNode preRenderNode;
+	typename Base::InitNode initNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::PreTakeoverNode preTakeoverNode;
+#endif
 	
 //	Mesh *cmesh;
 

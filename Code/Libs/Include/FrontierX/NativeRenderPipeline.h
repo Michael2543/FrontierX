@@ -38,6 +38,14 @@ using NativeTextureDestroy = GENRESULT (*)(void * context, U32 handle);
 using NativeVertexConstants = GENRESULT (*)(void * context, UINT firstRegister,
                                            const FLOAT * values, UINT registerCount);
 
+// Native-only frame callbacks; no persistent or legacy interface layout changes.
+struct NativeFrameOperations
+{
+    void * context = nullptr;
+    GENRESULT (*clear)(void *, U32 color, U32 depth) = nullptr;
+    GENRESULT (*present)(void *) = nullptr;
+};
+
 struct NativeTextureOperations
 {
     void * context = nullptr;
@@ -72,6 +80,9 @@ public:
                         NativeVertexConstants vertexConstants,
                         void * vertexConstantsContext) noexcept;
     GENRESULT UnbindScene() noexcept;
+    GENRESULT BindFrames(NativeFrameOperations frames) noexcept;
+    GENRESULT COMAPI clear_buffers(U32 flags, RECT * rectangle) override;
+    GENRESULT COMAPI swap_buffers() override;
 
     GENRESULT COMAPI QueryInterface(const C8 * interfaceName, void ** instance) override;
     U32 COMAPI AddRef() override;
@@ -193,6 +204,11 @@ private:
                      int indexCount,
                      U32 flags);
 
+    NativeFrameOperations frames_{};
+    enum class FramePhase { Idle, Cleared, Drawing, Ended };
+    FramePhase framePhase_ = FramePhase::Idle;
+    U32 clearColor_ = 0U;
+    U32 clearDepth_ = 0xffffffffU;
     NativeVertexBufferLookup lookup_ = nullptr;
     void * lookupContext_ = nullptr;
     IRenderPrimitive * drawTarget_ = nullptr;
@@ -208,6 +224,8 @@ private:
     std::vector<RenderVertexP3DiffuseT2> converted_;
     std::vector<RenderVertexP3DiffuseT4> converted2_;
 };
+
+GENRESULT BindNativeRenderFrames(IRenderPipeline * pipeline, NativeFrameOperations frames);
 
 void RegisterNativeRenderPipeline(ICOManager * manager);
 GENRESULT BindNativeRenderPipeline(IRenderPipeline * pipeline,

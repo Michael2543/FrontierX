@@ -165,7 +165,7 @@ bool SameForegroundMask(const FrontierX::SdlGpuReadback & left,
     return true;
 }
 
-bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer,
+bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * window,
                              const std::filesystem::path & utfFixturePath,
                              std::uint64_t & extendedChecksumA,
                              std::uint64_t & extendedChecksumB,
@@ -210,7 +210,8 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer,
         FrontierX::SdlGpuRenderer::ModelviewCallback,
         FrontierX::SdlGpuRenderer::ProjectionCallback,
         FrontierX::SdlGpuRenderer::Submission3Callback,
-        nullptr, FrontierX::SdlGpuRenderer::SamplerStateCallback);
+        nullptr, FrontierX::SdlGpuRenderer::SamplerStateCallback,
+        FrontierX::SdlGpuRenderer::ViewportCallback);
     void * rawPrimitive = nullptr;
     if (manager.CreateInstance(&descriptor, &rawPrimitive) != GR_OK || !rawPrimitive)
     {
@@ -489,6 +490,16 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer,
         renderer.Readback64(transformRestored, error) &&
         transformRestored.structureValid &&
         transformRestored.checksum == modulated.checksum;
+    FrontierX::SdlGpuReadback clippedReadback;
+    FrontierX::SdlGpuReadback viewportRestored;
+    const bool viewportValid = transformValid &&
+        pipeline.set_viewport(0, 0, 16, 16) == GR_OK &&
+        renderer.Readback64(clippedReadback, error) && clippedReadback.rgbValid &&
+        clippedReadback.changedPixels > 0U &&
+        clippedReadback.changedPixels < modulated.changedPixels &&
+        pipeline.set_viewport(0, 0, 64, 64) == GR_OK &&
+        renderer.Readback64(viewportRestored, error) &&
+        viewportRestored.checksum == modulated.checksum;
     const PixelFormat rgbaFormat(PF_RGBA8);
     U32 alternateHandle = 0U;
     U32 copiedHandle = 0U;
@@ -597,6 +608,80 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer,
         (!loadedFrame.rp_texture_id ||
          pipeline.is_texture(loadedFrame.rp_texture_id) != GR_OK);
     if (utfFixture) utfFixture->Release();
+    FrontierX::SdlGpuReadback firstFrameDraw;
+    FrontierX::SdlGpuReadback twoFrameDraws;
+    Transform left(false);
+    for (unsigned row = 0U; row < 3U; ++row)
+        for (unsigned column = 0U; column < 3U; ++column)
+            left.d[row][column] = row == column ? 1.0F : 0.0F;
+    left.translation.x = -0.35F;
+    left.translation.y = 0.0F;
+    left.translation.z = 0.0F;
+    Transform right = left;
+    right.translation.x = 0.35F;
+    const bool frameDrawsValid = loadedReleased &&
+        FrontierX::ConfigureRenderSmokeState(&pipeline) == GR_OK &&
+        pipeline.set_texture_stage_texture(0U,
+            renderer.FixtureTextureHandle()) == GR_OK &&
+        pipeline.set_projection(Matrix4(true)) == GR_OK &&
+        pipeline.set_viewport(0, 0, 64, 64) == GR_OK &&
+        renderer.BeginFrame(error) &&
+        pipeline.set_modelview(left) == GR_OK &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        renderer.FrameSubmissionCount() == 1U &&
+        renderer.Readback64(firstFrameDraw, error) &&
+        pipeline.set_modelview(right) == GR_OK &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        renderer.FrameSubmissionCount() == 2U &&
+        renderer.Readback64(twoFrameDraws, error) &&
+        twoFrameDraws.changedPixels > firstFrameDraw.changedPixels &&
+        twoFrameDraws.checksum != firstFrameDraw.checksum;
+    int outputWidth = 0;
+    int outputHeight = 0;
+    const bool windowViewportRestored =
+        SDL_GetWindowSizeInPixels(window, &outputWidth, &outputHeight) &&
+        outputWidth > 0 && outputHeight > 0 &&
+        pipeline.set_viewport(0, 0, outputWidth, outputHeight) == GR_OK;
+    // Exercise the production modal frame contract, including clear-only frames
+    // and recovery from unsupported partial clears, in this existing GPU probe.
+    FrontierX::SdlGpuReadback emptyBlack, emptyRed, clearedDepth, lifecycleDraw;
+    const U32 clearBoth = RP_CLEAR_COLOR_BIT | RP_CLEAR_DEPTH_BIT;
+    const bool lifecycleValid = windowViewportRestored &&
+        pipeline.BindFrames({&renderer, FrontierX::SdlGpuRenderer::ClearFrameCallback,
+                             FrontierX::SdlGpuRenderer::PresentFrameCallback}) == GR_OK &&
+        pipeline.clear_buffers(clearBoth, nullptr) == GR_OK &&
+        pipeline.begin_scene() == GR_OK && pipeline.end_scene() == GR_OK &&
+        renderer.Readback64(emptyBlack, error) && pipeline.swap_buffers() == GR_OK &&
+        pipeline.set_pipeline_state(RP_CLEAR_COLOR, 0xffff0000U) == GR_OK &&
+        pipeline.clear_buffers(clearBoth, nullptr) == GR_OK &&
+        pipeline.begin_scene() == GR_OK && pipeline.end_scene() == GR_OK &&
+        renderer.Readback64(emptyRed, error) && pipeline.swap_buffers() == GR_OK &&
+        emptyBlack.checksum != emptyRed.checksum &&
+        emptyBlack.rgbValid && emptyRed.rgbValid &&
+        emptyBlack.rgb8[0] == 0U && emptyBlack.rgb8[1] == 0U && emptyBlack.rgb8[2] == 0U &&
+        emptyRed.rgb8[0] == 255U && emptyRed.rgb8[1] == 0U && emptyRed.rgb8[2] == 0U &&
+        pipeline.set_pipeline_state(RP_CLEAR_DEPTH, 0U) == GR_OK &&
+        pipeline.clear_buffers(clearBoth, nullptr) == GR_OK &&
+        pipeline.begin_scene() == GR_OK &&
+        pipeline.set_viewport(0, 0, 64, 64) == GR_OK &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        pipeline.end_scene() == GR_OK && renderer.Readback64(clearedDepth, error) &&
+        clearedDepth.checksum == emptyRed.checksum && pipeline.swap_buffers() == GR_OK &&
+        pipeline.set_viewport(0, 0, outputWidth, outputHeight) == GR_OK &&
+        pipeline.set_pipeline_state(RP_CLEAR_DEPTH, 0xffffffffU) == GR_OK &&
+        pipeline.clear_buffers(RP_CLEAR_DEPTH_BIT, nullptr) == GR_NOT_IMPLEMENTED &&
+        pipeline.set_pipeline_state(RP_CLEAR_COLOR, 0xff060911U) == GR_OK &&
+        pipeline.clear_buffers(clearBoth, nullptr) == GR_OK &&
+        pipeline.begin_scene() == GR_OK &&
+        pipeline.set_viewport(0, 0, 64, 64) == GR_OK &&
+        pipeline.set_modelview(left) == GR_OK &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        pipeline.set_modelview(right) == GR_OK &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        renderer.FrameSubmissionCount() == 2U &&
+        pipeline.end_scene() == GR_OK &&
+        renderer.Readback64(lifecycleDraw, error) && lifecycleDraw.changedPixels > 0 &&
+        pipeline.swap_buffers() == GR_OK;
     materialStates->Release();
     material->Release();
     vertexPipeline.destroy_vertex_buffer(materialBuffer);
@@ -609,7 +694,10 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer,
     primitive->Release();
     const GENRESULT shutdownResult = manager.ShutDown();
     if (!stateValid || !indexedValid || !secondUvObserved || !directValid ||
-        !textureStageValid || !samplerValid || !transformValid || !textureBindingValid ||
+        !textureStageValid || !samplerValid || !transformValid || !viewportValid ||
+        !windowViewportRestored || !lifecycleValid ||
+        !frameDrawsValid ||
+        !textureBindingValid ||
         !productionTextureValid || !loadedReleased ||
         shutdownResult != GR_OK)
     {
@@ -638,7 +726,9 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer,
                     std::to_string(directValid) + " texture_stage=" +
                     std::to_string(textureStageValid) + " sampler=" +
                     std::to_string(samplerValid) + " transform=" +
-                    std::to_string(transformValid) + " shifted=" +
+                    std::to_string(transformValid) + " viewport=" +
+                    std::to_string(viewportValid) + " clipped_pixels=" +
+                    std::to_string(clippedReadback.changedPixels) + " shifted=" +
                     std::to_string(shiftedValid) + " displaced=" +
                     std::to_string(displacementObserved) + " projected=" +
                     std::to_string(projectionObserved) + " reset_modelview=" +
@@ -737,7 +827,7 @@ int main(int argc, char ** argv)
     std::uint64_t alternateChecksum = 0U;
     std::uint64_t copiedChecksum = 0U;
     std::uint64_t loadedChecksum = 0U;
-    if (!SubmitProductionFixture(renderer, utfFixturePath,
+    if (!SubmitProductionFixture(renderer, windowRuntime.window, utfFixturePath,
                                  extendedChecksumA, extendedChecksumB,
                                  materialChecksum, alternateChecksum,
                                  copiedChecksum, loadedChecksum, error))
@@ -794,7 +884,12 @@ int main(int argc, char ** argv)
         return RuntimeUnavailable(requireRuntime, "swapchain image acquisition", SDL_GetError());
     if (renderer.DepthWidth() == initialWidth && renderer.DepthHeight() == initialHeight)
     {
-        std::cerr << "GPU resize was not observed by the swapchain\n";
+        int w = 0, h = 0;
+        SDL_GetWindowSizeInPixels(windowRuntime.window, &w, &h);
+        std::cerr << "window pixels: " << w << 'x' << h << '\n';
+        std::cerr << "GPU resize was not observed by the swapchain: "
+                  << initialWidth << 'x' << initialHeight << " -> "
+                  << renderer.DepthWidth() << 'x' << renderer.DepthHeight() << '\n';
         return 1;
     }
 
@@ -822,7 +917,7 @@ int main(int argc, char ** argv)
     std::uint64_t repeatedAlternateChecksum = 0U;
     std::uint64_t repeatedCopiedChecksum = 0U;
     std::uint64_t repeatedLoadedChecksum = 0U;
-    if (!SubmitProductionFixture(renderer, utfFixturePath,
+    if (!SubmitProductionFixture(renderer, windowRuntime.window, utfFixturePath,
                                  repeatedExtendedA, repeatedExtendedB,
                                  repeatedMaterialChecksum, repeatedAlternateChecksum,
                                  repeatedCopiedChecksum, repeatedLoadedChecksum, error) ||

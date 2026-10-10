@@ -11,9 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <3dmath.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <renderer.h>
+#include <DEffectOpts.h>
+#include <VFX.H>
+#include <ENGINE.H>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+#endif
 
+#if !defined(_WIN32)
+#include "TObjFrame.h"
+#include "ObjList.h"
+#endif
 #include "TObjMove.h"
 #include "TObjControl.h"
 #include "TObjPhys.h"
@@ -37,6 +67,7 @@ typedef SPACESHIP_INIT<BASE_SPACESHIP_DATA> BASESHIPINIT;
 
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 template ObjectMove<ObjectSelection
 					<ObjectMission
 					 <ObjectPhysics
@@ -48,6 +79,7 @@ template ObjectMove<ObjectSelection
 					 >
 					> 
 				   >;
+#endif
 
 //----------------------------------------------------------------------------
 //
@@ -1548,5 +1580,19 @@ void ObjectMove< Base >::scriptingUpdate( FootprintHistory& _oldFootprint, Footp
 }
 
 //----------------------------------------------------------------------------
+#if !defined(_WIN32)
+template struct ObjectMove<ObjectSelection
+	<ObjectMission
+	 <ObjectPhysics
+	  <ObjectControl
+	   <ObjectTransform
+	     <ObjectFrame<IBaseObject, SPACESHIP_SAVELOAD, BASESHIPINIT> >
+	   >
+	  >
+	 >
+	>
+>;
+#endif
+
 //------------------------End ObjMove.cpp-------------------------------------
 //----------------------------------------------------------------------------

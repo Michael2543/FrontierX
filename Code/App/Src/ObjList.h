@@ -126,7 +126,11 @@ virtual	IBaseObject * __stdcall FindObject (U32 dwMissionID, bool bAlwaysIfTaken
 
 virtual	BOOL32 __stdcall IsInList (const IBaseObject * obj) = 0;
 
+#if defined(_WIN32)
 virtual void __stdcall DrawHighlightedList (void);	// called during 2D render section
+#else
+virtual void __stdcall DrawHighlightedList (void) = 0;
+#endif
 
 virtual IBaseObject * __stdcall FindGroupObject (const U32 *pObjIDs, U32 numObjects) = 0;
 
@@ -171,9 +175,15 @@ virtual bool __stdcall CreateProjectile() = 0;
 
 virtual void __stdcall ReleaseProjectile() = 0;
 
+#if defined(_WIN32)
 virtual void __stdcall DEBUG_IncLightCount (void);
 
 virtual void __stdcall DEBUG_DecLightCount (void);
+#else
+virtual void __stdcall DEBUG_IncLightCount (void) = 0;
+
+virtual void __stdcall DEBUG_DecLightCount (void) = 0;
+#endif
 
 };
 

@@ -1,5 +1,201 @@
 # Game Mesh and Material Ownership for Milestone 5
 
+Current playable mission render, 2026-10-10: the production Engine,
+RenderMgr, texture/material/mesh owners and original `ObjectList::Render`
+presented a visible external `Sol_Train` frame under GCC and Clang on
+Wayland/Vulkan. The first frame submitted 28 source draws and changed 171
+pixels in the bounded 64-by-64 readback. Repeated frames retained separate
+captured draws and rendered source selection line lists; a player-owned
+Forger could be selected by a normal click and received a move through the
+original operation path. Both compiler runs completed the training
+checkpoint and save/reload. Base textures, some legacy lighting and
+optional UI visuals remained explicitly excluded; this is a playable
+slice rather than full material parity. See
+[the focused acceptance record](NATIVE_SINGLEPLAYER_SLICE.md#playable-solarian-training-checkpoint-2026-10-10).
+Entries below are historical snapshots.
+
+Current external mission draw, 2026-10-10: the active GameSystem/Engine and
+original `ObjectList::Render` on lawfully external `Sol_Train` data submitted
+28 production draws. The native primitive now honors source camera
+`set_perspective`; explicit SDL frame capture preserves each submitted
+buffer, texture/material state and transform until presentation. GCC and
+Clang visible Wayland/Vulkan runs each produced 171 changed pixels in a
+64x64 readback and a live capture showed mission geometry and small ships.
+The Forger is player-owned and source-visible, but individual GPU pixels
+have not been attributed to it. The existing SDL GPU probe's two-draw
+regression ran visibly under both compilers. Normal input, repeated scene
+frames and gameplay acceptance remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#source-perspective-and-multi-draw-mission-frame-2026-10-10).
+Entries below are historical snapshots.
+
+Current external mission render gate, 2026-10-10: the original planet factory
+now loads its nested mesh through the production `MeshManager` and a bounded
+native UTF child-path contract. GCC/Clang visible external `Sol_Train` runs
+complete mission load and one source update with a real Forger. The first
+`ObjectList::Render` pass submits no draw: source projected-bound selection
+sets the Forger invisible after camera framing. No mission material or mesh
+GPU submission is claimed. An initial decorative dust point-list draw was
+unsupported; explicit `--skip-space-background` now suppresses that optional
+visual layer on native builds. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-planet-owner-game-active-update-and-first-object-render-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current platform material boundary, 2026-10-10: the original
+build-support Platform factory and mesh owner are linked into GCC/Clang
+native shells. Its source archetype initialization had left `archIndex` at
+`-1`; it now stores the validated engine mesh index. This is a CQ2/retail
+restoration correction shared with Windows, where rebuild and runtime checks
+remain open. Visible external `Sol_Train` runs stop at missing planet
+placement before mission-owned GPU rendering. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#source-mission-object-chain-through-platform-placement-2026-10-10).
+Entries below are historical snapshots.
+
+Current Forger material result, 2026-10-10: the original Forger factory and
+ship closure now instantiate one production `FAB!!S_Forger` in the external
+`Sol_Train` object list under both GCC and Clang. Native UTF archive lookup
+now resolves the case difference between the GameTypes `SSforger.cmp` name
+and the retail `ssforger.cmp` entry; before this, `MeshManager` returned no
+mesh and Forger extent initialization crashed. The source game-active
+transition then stops at a missing jumpgate script part. The Forger mesh has
+not been submitted to the GPU, so visible mission rendering remains open.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-forger-instance-and-next-script-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current Forger render gate, 2026-10-10: original `Fabricator.cpp` compiles
+as a native object but cannot yet link with its `SpaceShip`/movement owners.
+No mission-owned mesh or material draw ran in this step; the last visible
+retail-data runs ended at the missing Forger postcondition. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#forger-object-compile-and-first-production-link-inventory-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission material result, 2026-10-10: visible GCC and Clang
+Wayland/Vulkan runs passed the external training mission's texture-loading
+boundary and completed the original `Mission::Load`. They did not submit a
+mission-owned Forger mesh: `ObjectList` found no `FAB!!S_Forger` provider.
+The existing explicit base-texture and legacy-lighting limits remain. The
+next render gate is a real Forger instance through the original factory,
+mesh/material owner and native GPU presentation. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-sol_train-load-completion-before-playable-objects-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission texture result, 2026-10-10: external
+`astnugget.16.tga0` decoded as RGB565 plus a separate alpha plane; the
+production TextureLibrary/native pipeline now converts and uploads that
+combination as RGBA8. A four-texel regression in the existing pipeline CTest
+passed under GCC and Clang. The native SDL GPU owner currently exposes one
+texture level, so explicit `--base-textures-only` loads the highest-resolution
+source level; nine-level creation still fails without it. Visible external
+mission runs passed this texture and reached 88% load, then stopped at
+SoundManager/Teletype prerequisites before a mission draw. No Forger geometry
+was presented. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#external-sol_train-load-reaches-the-script-boundary-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission material blocker, 2026-10-10: production mission load
+reached ObjectList under GCC and Clang on lawfully external `Sol_Train`
+data, but the active TextureLibrary could not load
+`astnugget.16.tga0` for Anim2D. The resulting zero render texture caused
+an assertion at 25% load progress. This is not evidence of a rendered
+mission unit. Its data/format/backend cause still needs identification;
+see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-sol_train-load-through-objectlist-2026-10-10).
+Entries below are historical snapshots.
+
+Current Sector compile gate, 2026-10-10: source-level native preparation
+of the original `Sector.cpp` still fails at its Win32 sector-map UI and
+event boundary. No mission-owned mesh or material draw ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#sector-source-closure-inventory-2026-10-10).
+Entries below are historical snapshots.
+
+Current Sector terrain prerequisite, 2026-10-10: production
+`TerrainMap.cpp` compiles and links into the GPU shell under both native
+compilers, but its methods have not executed. `Sector.cpp`
+and its sector-map UI/render contracts remain outside the executable
+mission link. No mission-owned Forger mesh or material draw ran in this
+step. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-terrainmap-compile-boundary-for-sector-2026-10-10).
+Entries below are historical snapshots.
+
+Current mission render/start boundary, 2026-10-10: the source-profile
+render interfaces now bind to SDL GPU in explicit `--mission-start` mode, and
+GCC/Clang visible Vulkan processes entered production App global startup on
+external `Sol_Train` data. App light initialization stopped at the missing
+production `Sector` owner before mission reload or any Forger draw. No
+mission material, selection or movement result exists yet. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-app-startup-attempt-and-sector-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current App 2D caller boundary, 2026-10-03: the native App fill/hash
+functions now submit six-vertex rectangles through the production
+PrimitiveBuilder to the existing CPU render receiver under GCC and
+Clang; orthographic and viewport values were checked. The existing
+visible material GPU probe also passed under both compilers, but it
+did not draw those rectangles or a mission-owned unit. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-app-2d-and-combined-mission-link-2026-10-03).
+Entries below are historical snapshots.
+
+Current native 2D backend boundary, 2026-10-03: native
+`IRenderPrimitive::set_ortho/set_viewport` now forward real projection
+and viewport state; SDL GPU applies viewport and scissor to a bounded
+target. GCC/Clang CPU contract checks passed. GPU checks skipped in
+the command sandbox but ran visibly on Wayland/Vulkan under both
+compilers with clipped readback and restoration. `DrawAgent` rectangles, `OrthoView`, mission
+geometry and App light draws remain unexecuted. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-orthographic-and-viewport-contract-2026-10-03).
+Entries below are historical snapshots.
+
+Current App light and 2D rendering boundary, 2026-10-03: the original
+`light.cpp`, `blast.cpp` and `MorphMesh.cpp` compile under GCC and
+Clang, including the source Catmull-Rom basis used by anti-matter.
+The native render adapter still rejects dynamic/ambient App light
+states and its 2D ortho/viewport calls; the production `DrawAgent`
+rectangle owner also depends on legacy VFX. No light, rectangle,
+camera or mission-owned unit draw ran. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-light-profile-and-fleet-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current mission field object boundary, 2026-10-03: the original
+`MineField.cpp` and `AntiMatter.cpp` compile under GCC and Clang. Their
+production render paths have not executed through the native backend;
+the combined mission link and startup remain open. The native D3D9
+compatibility declarations now include the source anti-matter stage
+values; unsupported backend states still need runtime verification.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-isfx-and-field-object-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current field-render boundary, 2026-10-03: the original field and App
+2D animation owners compile under GCC and Clang, while unsupported
+stage-one smooth blending fails explicitly on Linux. Neither a field
+draw nor a mission-owned Forger has reached the native renderer; the
+combined mission link still lacks the SFX owner and other dependencies.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#field-and-animation-owner-compile-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current mission-object closure, 2026-10-03: `UnbornMeshList` and the
+ObjectList compile natively, with Win32 part-debug-menu calls excluded
+from Linux. The App shell now binds the production particle aggregate
+but has not initialized App particles or rendered a mission-owned
+Forger. The combined mission link still lacks field/effect owners.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-command-tracker-and-app-particle-binding-2026-10-03).
+Entries below are historical snapshots.
+
+Current App render-owner closure, 2026-10-03: native
+`DisableTextures` now applies the production diffuse-only state
+through the registered primitive and passes the existing GCC/Clang
+CPU material check. Production `UnbornMeshList.cpp` compiles under
+both compilers, but its construction-preview and queued-mesh callers
+have not run. The combined mission link still fails before a Forger
+unit reaches the material path. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-mission-ai-and-app-render-owner-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current mission-render boundary, 2026-10-03: the existing writable
+UTF save owner now passes its create/flush/reopen check under GCC and
+Clang after a temporary-path fix. The selected training mission still
+has not entered `Mission::Reload`; the combined diagnostic App/script
+link remains unresolved. Consequently its Forger has not been
+created, drawn, selected or moved by the native game. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#writable-save-flush-and-current-mission-link-check-2026-10-03).
+Entries below are historical snapshots.
+
 Latest save-format gate, 2026-09-27: the generated UTF writer bytes
 round-trip through the native production reader, but no writable
 mission `IFileSystem` or `SAVEDIR` is bound. The combined link still

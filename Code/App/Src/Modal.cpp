@@ -10,30 +10,42 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "MyVertex.h"
+#include <RPUL/PrimitiveBuilder.h>
+struct BaseHotRect;
+#endif
 #include <stdio.h>
+#include <cstdint>
 
 #include "ObjList.h"
 #include "NetBuffer.h"
 #include "DrawAgent.h"
 #include "CQTrace.h"
+#if defined(_WIN32)
 #include "VideoSurface.h"
+#endif
 #include "Startup.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "DEffectOpts.h"
 #include "Hotkeys.h"
 #include "SoundManager.h"
 #include "IBackground.h"
-#include "Netpacket.h"
+#include "NetPacket.h"
 #include "Sector.h"
 
 #include <HeapObj.h>
-#include <System.h>
+#include <SYSTEM.H>
 #include <EventSys.h>
 #include <HKEvent.h>
 #include <WindowManager.h>
-#include <RendPipeline.h>
+#include <rendpipeline.h>
 #include <IRenderPrimitive.h>
 #include <IConnection.h>
 #include <TComponent.h>
@@ -41,10 +53,21 @@
 #include <FrontierX/PlatformTime.h>
 
 
+#if defined(_WIN32)
 #include <mmsystem.h>
+#endif
 
+#if defined(_WIN32)
 typedef IHeap * (__stdcall * GETBATCHHEAP) (void);
 static GETBATCHHEAP GetBatchHeap;
+#else
+using LARGE_INTEGER = S64;
+static bool QueryPerformanceCounter(LARGE_INTEGER *tick)
+{
+	*tick = static_cast<S64>(FrontierX::Platform::MonotonicMicroseconds());
+	return true;
+}
+#endif
 //__declspec(dllimport) IHeap * __stdcall GetBatchHeap (void);
 //--------------------------------------------------------------------------
 //
@@ -68,18 +91,26 @@ static S32 get_frame_time (void)
 }
 
 static RPDEVICESTATS stats;
+#if defined(_WIN32)
 static FILE *g_em_f = NULL;
 #define EM_LOG(s) do { if(!g_em_f) g_em_f=fopen("debug/em_diag.txt","w"); if(g_em_f){fputs((s),g_em_f);fflush(g_em_f);} } while(0)
+#else
+#define EM_LOG(s) ((void)0)
+#endif
 
 //--------------------------------------------------------------------------
 //
+#if defined(_WIN32)
 static FILE *g_slam_f = NULL;
 #define SLAM_LOG(s) do { if(!g_slam_f) g_slam_f=fopen("debug/slam_diag.txt","w"); if(g_slam_f){fputs((s),g_slam_f);fflush(g_slam_f);} } while(0)
+#else
+#define SLAM_LOG(s) ((void)0)
+#endif
 
 static void slam2Dcomponents (S32 frame_time, bool bUseLocking)
 {
 	S32 fps;
-#ifndef FINAL_RELEASE
+#if !defined(FINAL_RELEASE) && defined(_WIN32)
 	C8  buffer[256];
 #endif
 
@@ -93,10 +124,15 @@ static void slam2Dcomponents (S32 frame_time, bool bUseLocking)
 	SLAM_LOG("slam2D: entered\n");
 	if (bUseLocking)
 	{
+#if defined(_WIN32)
 		SLAM_LOG("slam2D: before SURFACE->Lock\n");
 		if (SURFACE->Lock() == false)
 			return;
 		SLAM_LOG("slam2D: after SURFACE->Lock\n");
+#else
+		CQASSERT(!bUseLocking); // Native presentation has no CPU framebuffer lock.
+		return;
+#endif
 	}
 
 	SLAM_LOG("slam2D: before DrawHighlightedList\n");
@@ -112,7 +148,7 @@ static void slam2Dcomponents (S32 frame_time, bool bUseLocking)
 	EVENTSYS->Send(CQE_ENDFRAME);
 	SLAM_LOG("slam2D: after EVENTSYS->Send\n");
 	
-#ifndef FINAL_RELEASE	
+#if !defined(FINAL_RELEASE) && defined(_WIN32)
 	if (CheckHotkeyPressed (IDH_DEBUG_PRINT))
 	{
 		CQFLAGS.debugPrint++;
@@ -153,7 +189,11 @@ static void slam2Dcomponents (S32 frame_time, bool bUseLocking)
 #endif  // end !FINAL_RELEASE
 
 	if (bUseLocking)
+#if defined(_WIN32)
 		SURFACE->Unlock();
+#else
+		CQASSERT(!bUseLocking);
+#endif
 }
 //--------------------------------------------------------------------------
 //
@@ -199,6 +239,7 @@ struct DACOM_NO_VTABLE ModalEventCallback : public IEventCallback
 		eventHandle = 0;
 		parentConnection = 0;
 		bResultSet = false;
+		dwResult = 0;
 		next = root;
 		root = this;
 	}
@@ -217,7 +258,7 @@ struct DACOM_NO_VTABLE ModalEventCallback : public IEventCallback
 			if (root == this)
 			{
 				bResultSet = true;
-				dwResult = U32(param);
+				dwResult = static_cast<U32>(reinterpret_cast<std::uintptr_t>(param));
 				return GR_GENERIC;
 			}
 		}
@@ -249,8 +290,15 @@ bool bInScene=0;
 BOOL32 EndModal(SINGLE dt)
 {
 	bool bNoSwap = false;		// true if viewing a full-screen movie
-	__int64 time1,time2;
+	S64 time1,time2;
 	bool bUseLocking = (CQFLAGS.bFrameLockEnabled!=0);
+#if !defined(_WIN32)
+	if (bUseLocking)
+	{
+		std::fputs("Native CQDoModal CPU framebuffer locking is unsupported\n", stderr);
+		return FALSE;
+	}
+#endif
 	QueryPerformanceCounter((LARGE_INTEGER *)&time1);
 
 	EM_LOG("EndModal entered\n");
@@ -284,7 +332,12 @@ BOOL32 EndModal(SINGLE dt)
 				//	BATCH->flush(RPR_TRANSLUCENT_DEPTH_SORTED_ONLY);
 				//	BATCH->flush(RPR_TRANSLUCENT_UNSORTED_ONLY);
 				if (PIPE->end_scene() != GR_OK)
+				{
 					CQTRACE10("Error in end_scene - probably lost surfaces");
+#if !defined(_WIN32)
+					return FALSE;
+#endif
+				}
 			}
 			bInScene = 0;
 		}
@@ -338,7 +391,12 @@ BOOL32 EndModal(SINGLE dt)
 					BATCH->flush(RPR_TRANSLUCENT_DEPTH_SORTED_ONLY);
 					BATCH->flush(RPR_TRANSLUCENT_UNSORTED_ONLY);
 					if (PIPE->end_scene() != GR_OK)
+					{
 						CQTRACE10("Error in end_scene - probably lost surfaces");
+#if !defined(_WIN32)
+						return FALSE;
+#endif
+					}
 					EM_LOG("after end_scene\n");
 				}
 				bInScene = 0;
@@ -358,9 +416,19 @@ BOOL32 EndModal(SINGLE dt)
 	{
 		//PIPE->clear_buffers(RP_CLEAR_COLOR_BIT|RP_CLEAR_DEPTH_BIT, NULL);
 		EM_LOG("before swap_buffers\n");
+#if defined(_WIN32)
 		PIPE->swap_buffers();
+#else
+		const GENRESULT swapResult = PIPE->swap_buffers();
+#endif
 		EM_LOG("after swap_buffers\n");
+#if defined(_WIN32)
 		PIPE->clear_buffers(RP_CLEAR_COLOR_BIT|RP_CLEAR_DEPTH_BIT, NULL);
+#else
+		// The next mission frame clears before begin_scene. Leave the native
+		// pipeline idle when this modal returns.
+		if (swapResult != GR_OK) return FALSE;
+#endif
 	}
 	
 	QueryPerformanceCounter((LARGE_INTEGER *)&time2);
@@ -384,10 +452,11 @@ BOOL32 EndModal(SINGLE dt)
 U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 {
 	CQASSERT(bInScene == 0);
-	__int64 time1,time2;
+	S64 time1,time2;
 
 	DAComponent<ModalEventCallback> modalEvent;
 
+#if defined(_WIN32)
 	if (pDialog)
 	{
 		CQASSERT(pDialog->parentEventConnection!=0);
@@ -397,6 +466,29 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 	{
 		modalEvent.init(FULLSCREEN->parentEventConnection);
 	}
+#else
+	// The native selected mission has no menu hot rectangle. Subscribe to the
+	// same EventSystem connection used by the source mission exit events.
+	if (pDialog)
+	{
+		std::fputs("Native CQDoModal requires the mission event connection\n", stderr);
+		return 0;
+	}
+	IDAConnectionPoint *modalPoint = nullptr;
+	if (EVENTSYS->QueryOutgoingInterface("IEventCallback", &modalPoint) != GR_OK ||
+		!modalPoint)
+	{
+		std::fputs("Native CQDoModal event connection unavailable\n", stderr);
+		return 0;
+	}
+	modalEvent.init(modalPoint);
+	if (!modalEvent.eventHandle)
+	{
+		modalPoint->Release();
+		std::fputs("Native CQDoModal event subscription failed\n", stderr);
+		return 0;
+	}
+#endif
 
 	while (modalEvent.bResultSet==false)
 	{
@@ -406,7 +498,7 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 
 		SECTOR->PrepareTexture();
 
-		EVENTSYS->Send(CQE_UPDATE,(void *)dt);	// update components
+		EVENTSYS->Send(CQE_UPDATE,reinterpret_cast<void *>(static_cast<std::intptr_t>(dt)));	// update components
 		if (modalEvent.bResultSet)
 			break;		// break early ( for end of game, don't update objlist last time )
 		QueryPerformanceCounter((LARGE_INTEGER *)&time2);
@@ -418,7 +510,12 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 		if (CQFLAGS.bGameActive)
 		{
 			QueryPerformanceCounter((LARGE_INTEGER *)&time1);
+#if defined(_WIN32)
 			PIPE->clear_buffers(RP_CLEAR_COLOR_BIT|RP_CLEAR_DEPTH_BIT,0);
+#else
+			if (PIPE->clear_buffers(RP_CLEAR_COLOR_BIT|RP_CLEAR_DEPTH_BIT,0) != GR_OK)
+				break;
+#endif
 			QueryPerformanceCounter((LARGE_INTEGER *)&time2);
 			OBJLIST->AddTimerTicks(TIMING_CLEARBUFFERS,time2-time1);
 		}
@@ -429,6 +526,9 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 			bInScene = 0;
 			if(PIPE->begin_scene() == GR_OK)
 				bInScene = 1;
+#if !defined(_WIN32)
+			else break;
+#endif
 		}
 		
 		if (bInScene)
@@ -449,20 +549,24 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 #endif
 			
 			QueryPerformanceCounter((LARGE_INTEGER *)&time1);
-			EVENTSYS->Send(CQE_RENDER_LAST3D,(void *)dt);
+			EVENTSYS->Send(CQE_RENDER_LAST3D,reinterpret_cast<void *>(static_cast<std::intptr_t>(dt)));
 			QueryPerformanceCounter((LARGE_INTEGER *)&time2);
 			OBJLIST->AddTimerTicks(TIMING_RENDER2D, time2-time1);
 		}
-		EndModal(currentFrameTime);
+		if (!EndModal(currentFrameTime)) break;
 
 		QueryPerformanceCounter((LARGE_INTEGER *)&time1);
-		EVENTSYS->Send(CQE_FLUSHMESSAGES,(void *)dt);
+		EVENTSYS->Send(CQE_FLUSHMESSAGES,reinterpret_cast<void *>(static_cast<std::intptr_t>(dt)));
 		QueryPerformanceCounter((LARGE_INTEGER *)&time2);
 		OBJLIST->AddTimerTicks(TIMING_UPDATE2D, time2-time1);
 	}
 
 	bResultWasReturned = true;
 
+#if !defined(_WIN32)
+	modalEvent.unhook();
+	modalPoint->Release();
+#endif
 	return modalEvent.dwResult;
 }
 //--------------------------------------------------------------------------
@@ -473,6 +577,7 @@ U32 __stdcall CQNonRenderingModal (BaseHotRect * pDialog)
 
 	DAComponent<ModalEventCallback> modalEvent;
 
+#if defined(_WIN32)
 	if (pDialog)
 	{
 		CQASSERT(pDialog->parentEventConnection!=0);
@@ -482,20 +587,45 @@ U32 __stdcall CQNonRenderingModal (BaseHotRect * pDialog)
 	{
 		modalEvent.init(FULLSCREEN->parentEventConnection);
 	}
+#else
+	if (pDialog)
+	{
+		std::fputs("Native CQNonRenderingModal requires the mission event connection\n", stderr);
+		return 0;
+	}
+	IDAConnectionPoint *modalPoint = nullptr;
+	if (EVENTSYS->QueryOutgoingInterface("IEventCallback", &modalPoint) != GR_OK ||
+		!modalPoint)
+	{
+		std::fputs("Native CQNonRenderingModal event connection unavailable\n", stderr);
+		return 0;
+	}
+	modalEvent.init(modalPoint);
+	if (!modalEvent.eventHandle)
+	{
+		modalPoint->Release();
+		std::fputs("Native CQNonRenderingModal event subscription failed\n", stderr);
+		return 0;
+	}
+#endif
 
 	while (modalEvent.bResultSet==false)
 	{
 		S32 dt = get_frame_time();
 
-		EVENTSYS->Send(CQE_UPDATE,(void *)dt);	// update components
+		EVENTSYS->Send(CQE_UPDATE,reinterpret_cast<void *>(static_cast<std::intptr_t>(dt)));	// update components
 		if (modalEvent.bResultSet)
 			break;		// break early ( for end of game, don't update objlist last time )
 		((ISystemContainer *)GS)->Update();			// service windows message queue, etc.
-		EVENTSYS->Send(CQE_FLUSHMESSAGES,(void *)dt);
+		EVENTSYS->Send(CQE_FLUSHMESSAGES,reinterpret_cast<void *>(static_cast<std::intptr_t>(dt)));
 	}
 
 	bResultWasReturned = true;
 
+#if !defined(_WIN32)
+	modalEvent.unhook();
+	modalPoint->Release();
+#endif
 	return modalEvent.dwResult;
 }
 //-----------------------------------------------------------------------------------------//
@@ -504,10 +634,12 @@ struct _modalfactory : GlobalComponent
 {
 	virtual void Startup (void)
 	{
+#if defined(_WIN32)
 		HINSTANCE hInstance = GetModuleHandle("ZBatcher.dll");
 		
 		if (hInstance)
 			GetBatchHeap = (GETBATCHHEAP) GetProcAddress(hInstance, "_GetBatchHeap@0");
+#endif
 	}
 	virtual void Initialize (void) {}
 

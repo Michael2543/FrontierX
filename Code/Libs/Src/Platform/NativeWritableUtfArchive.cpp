@@ -17,6 +17,7 @@
 #include <mutex>
 #include <new>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace FrontierX
@@ -129,6 +130,12 @@ public:
         : path_(std::move(path)), state_(std::move(state)), filePath_(std::move(filePath)),
           fileView_(true) {}
 
+    WritableArchive(std::filesystem::path path, std::shared_ptr<ArchiveState> state,
+                    std::string directory, IFileSystem * parent)
+        : path_(std::move(path)), state_(std::move(state)),
+          directory_(std::move(directory)), directoryView_(true), parent_(parent)
+    { if (parent_) parent_->AddRef(); }
+
     WritableArchive(std::filesystem::path path, IFileSystem * parent)
         : path_(std::move(path)), state_(std::make_shared<ArchiveState>()),
           parent_(parent)
@@ -143,8 +150,9 @@ public:
             std::strcmp(name, IID_IComponentFactory) == 0 ||
             std::strcmp(name, IID_IDAComponent) == 0)
             *instance = static_cast<IFileSystem *>(this);
-        else if (!fileView_ && !saveDirectory_ &&
-                 std::strcmp(name, IID_IUTFWriter) == 0)
+        else if (!fileView_ && !saveDirectory_ && !directoryView_ &&
+                 (std::strcmp(name, IID_IUTFWriter) == 0 ||
+                  std::strcmp(name, "IUTFWriter") == 0))
             *instance = static_cast<IUTFWriter *>(this);
         if (!*instance) return GR_INTERFACE_UNSUPPORTED;
         AddRef();
@@ -200,9 +208,13 @@ public:
             }
             return GR_NOT_IMPLEMENTED;
         }
-        if (!file->lpImplementation || std::strcmp(file->lpImplementation, "DOS") != 0 ||
-            file->dwDesiredAccess != (GENERIC_READ | GENERIC_WRITE) ||
-            file->dwCreationDistribution != CREATE_ALWAYS)
+        const bool create = file->dwDesiredAccess == (GENERIC_READ | GENERIC_WRITE) &&
+            file->dwCreationDistribution == CREATE_ALWAYS;
+        const bool read = file->dwDesiredAccess == GENERIC_READ &&
+            file->dwCreationDistribution == OPEN_EXISTING;
+        if ((file->lpImplementation &&
+             std::strcmp(file->lpImplementation, "DOS") != 0) ||
+            (!create && !read))
             return GR_NOT_IMPLEMENTED;
         std::string resolved;
         if (!ResolvePath(directory_, file->lpFileName, false, resolved))
@@ -210,10 +222,22 @@ public:
         try
         {
             std::lock_guard<std::mutex> lock(state_->mutex);
-            if (!HasParentDirectory(resolved)) return GR_DATA_NOT_FOUND;
             auto found = state_->entries.find(resolved);
+            if (read && found == state_->entries.end()) return GR_DATA_NOT_FOUND;
+            if (create && !HasParentDirectory(resolved)) return GR_DATA_NOT_FOUND;
             if (found != state_->entries.end() && found->second.directory)
-                return GR_INVALID_PARMS;
+            {
+                *instance = static_cast<IFileSystem *>(
+                    new WritableArchive(path_, state_, resolved,
+                                        static_cast<IFileSystem *>(this)));
+                return GR_OK;
+            }
+            if (read)
+            {
+                *instance = static_cast<IFileSystem *>(
+                    new WritableArchive(path_, state_, resolved));
+                return GR_OK;
+            }
             state_->entries[resolved] = {false, {}};
             state_->dirty = true;
             state_->flushed = false;
@@ -547,7 +571,8 @@ public:
 
     void Flush() override
     {
-        if (fileView_ || saveDirectory_) Fail("non-archive cannot flush UTF archive");
+        if (fileView_ || saveDirectory_ || directoryView_)
+            Fail("non-archive cannot flush UTF archive");
         std::vector<UtfArchiveItem> items;
         {
             std::lock_guard<std::mutex> lock(state_->mutex);
@@ -561,8 +586,10 @@ public:
         auto temporary = path_;
         temporary += ".frontierx-tmp";
         std::error_code status;
-        if (std::filesystem::is_symlink(temporary, status) || status ||
-            std::filesystem::exists(temporary, status) || status)
+        const auto temporaryStatus = std::filesystem::symlink_status(temporary, status);
+        if (status == std::errc::no_such_file_or_directory)
+            status.clear();
+        if (status || temporaryStatus.type() != std::filesystem::file_type::not_found)
             Fail("UTF save temporary path already exists or cannot be checked");
         {
             std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
@@ -660,6 +687,7 @@ private:
     std::string directory_;
     std::string filePath_;
     bool fileView_ = false;
+    bool directoryView_ = false;
     bool saveDirectory_ = false;
     IFileSystem * parent_ = nullptr;
     OpenFile implicitFile_;

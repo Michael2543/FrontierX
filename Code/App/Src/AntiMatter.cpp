@@ -13,8 +13,23 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <IRenderPrimitive.h>
+#include <da_d3dtypes.h>
+struct IMeshArchetype;
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 #include "AntiMatter.h"
 #include "Field.h"
@@ -26,13 +41,15 @@
 #include "FogOfWar.h"
 #include "MGlobals.h"
 #include "MPart.h"
-#include "sysmap.h"
+#include "SysMap.h"
 #include "CQBatch.h"
 #include "DEffectOpts.h"
 
-#include <FileSys.h>
+#include <Filesys.h>
+#if defined(_WIN32)
 #include <IDDBackDoor.h>
 #include <D3D.h>
+#endif
 
 //
 // Catmull-Rom basis.
@@ -146,6 +163,7 @@ void ComputeCoeff(Vector2 & a, Vector2 & b, Vector2 & c, Vector2 & d, Vector2 p[
 
 void AntiMatterArchetype::Notify(U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *)param;
 	
 	switch (message)
@@ -219,6 +237,12 @@ void AntiMatterArchetype::Notify(U32 message, void *param)
 		mouseY = HIWORD(msg->lParam);
 		break;
 	}
+#else
+	(void)message;
+	(void)param;
+	std::fputs("Native anti-matter editor input is unavailable\n", stderr);
+	std::abort();
+#endif
 }
 
 void AntiMatterArchetype::EndEdit()
@@ -237,7 +261,12 @@ void AntiMatterArchetype::EndEdit()
 		return;
 
 	MPartNC(obj)->dwMissionID = MGlobals::CreateNewPartID(0);
+#if defined(_WIN32)
 	_ltoa(MPartNC(obj)->dwMissionID,MPartNC(obj)->partName,16);
+#else
+	std::snprintf(MPartNC(obj)->partName, sizeof(MPartNC(obj)->partName), "%x",
+	              MPartNC(obj)->dwMissionID);
+#endif
 	OBJLIST->AddPartID(obj,obj->GetPartID());
 
 	obj->Setup();
@@ -766,7 +795,11 @@ void AntiMatter::QuickSave (struct IFileSystem * file)
 {
 	CQASSERT(numSegPts > 1);
 
+#if defined(_WIN32)
 	DAFILEDESC fdesc = partName;
+#else
+	DAFILEDESC fdesc = partName.string;
+#endif
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_QANTIMATTERLOAD");
@@ -1457,18 +1490,31 @@ void AntiMatter::TestVisible (const USER_DEFAULTS & defaults, const U32 currentS
 		tr = inverseWorldROT->rotate_translate(tr);
 		br = inverseWorldROT->rotate_translate(br);
 		bl = inverseWorldROT->rotate_translate(bl);
+#if defined(_WIN32)
 		vx_min = min(tl.x,min(bl.x,min(tr.x,br.x)))-4000;
 		vx_max = max(tl.x,max(bl.x,max(tr.x,br.x)))+4000;
 		vy_min = min(tl.y,min(bl.y,min(tr.y,br.y)))-4000;
 		vy_max = max(tl.y,max(bl.y,max(tr.y,br.y)))+4000;
+#else
+		vx_min = std::min(tl.x,std::min(bl.x,std::min(tr.x,br.x)))-4000;
+		vx_max = std::max(tl.x,std::max(bl.x,std::max(tr.x,br.x)))+4000;
+		vy_min = std::min(tl.y,std::min(bl.y,std::min(tr.y,br.y)))-4000;
+		vy_max = std::max(tl.y,std::max(bl.y,std::max(tr.y,br.y)))+4000;
+#endif
 		for (int i=0;i<numSegPts-1;i++)
 		{
 			Vector vec0 = seg[i].gv;
 			Vector vec1 = seg[i+1].gv;
 
+			#if defined(_WIN32)
 			if (__max(vec1.x,vec0.x) > vx_min && __min(vec1.x,vec0.x) < vx_max)
 			{
 				if (__max(vec1.y,vec0.y) > vy_min && __min(vec1.y,vec0.y) < vy_max)
+			#else
+			if (std::max(vec1.x,vec0.x) > vx_min && std::min(vec1.x,vec0.x) < vx_max)
+			{
+				if (std::max(vec1.y,vec0.y) > vy_min && std::min(vec1.y,vec0.y) < vy_max)
+			#endif
 				{
 					bVisible = TRUE;
 				}
@@ -1669,7 +1715,11 @@ void AntiMatter::makePts()
 		if (i>0)
 		{
 			Vector2 diff = pts[i+1]-pts[i];
+#if defined(_WIN32)
 			lengths[i-1] = __max(diff.magnitude(),arch->pData->spacing);  //humor bad data
+#else
+			lengths[i-1] = std::max(diff.magnitude(),static_cast<SINGLE>(arch->pData->spacing));
+#endif
 			newPtCnt[i-1] = S32(ceil(lengths[i-1]/arch->pData->spacing));
 			totalPtCnt += newPtCnt[i-1];
 		}

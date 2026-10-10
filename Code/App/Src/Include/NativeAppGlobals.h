@@ -10,6 +10,7 @@
 #include "AppObjectContracts.h"
 
 struct GENNODE;
+struct BaseHotRect;
 typedef GENNODE *PGENTYPE;
 
 // Native declarations of the App globals needed by the active mesh caller.
@@ -17,11 +18,21 @@ typedef GENNODE *PGENTYPE;
 extern SINGLE LODPERCENT;
 extern SINGLE ELAPSED_TIME;
 extern SINGLE REALTIME_FRAMERATE;
+extern U32 TEXMEMORYUSED;
+extern bool NATIVE_SKIP_UNIT_LABELS;
+extern bool NATIVE_SKIP_PLANET_UI;
+extern bool NATIVE_SKIP_SUBTITLES;
 #define DEF_ELAPSED_TIME (8.0F / 30.0F)
 #define DEF_REALTIME_FRAMERATE (30.0F / 8)
 #define RENDER_PERIOD (1.0F / 30.0F)
 #define RENDER_FRAMERATE 30.0F
+#define BASE_MAX_CREW 250
+#define BASE_MAX_METAL 220
+#define BASE_MAX_GAS 180
 #define MAX_SYSTEMS 16
+#define MAX_NUGGETS 3
+#define LOWER_EXP_BOUND 5
+#define UPPER_EXP_BOUND 10
 #define NUM_CIRCLE_SEGS 80
 #define REAL2IDEALX(x) ((((x) * SCREEN_WIDTH) / (S32)SCREENRESX))
 #define REAL2IDEALY(y) ((((y) * SCREEN_HEIGHT) / (S32)SCREENRESY))
@@ -42,6 +53,7 @@ extern SINGLE REALTIME_FRAMERATE;
 #define CQE_GOTO_PART 0x1030
 #define CQE_SELECTION_EVENT 0x1031
 #define CQE_NETPACKET 0x100E
+#define CQE_LOAD_INTERFACE 0x101D
 #define CQE_ENDFRAME 0x1001
 #define CQE_NETSTARTUP 0x1009
 #define CQE_NETSHUTDOWN 0x100A
@@ -53,15 +65,20 @@ extern SINGLE REALTIME_FRAMERATE;
 #define CQE_PAUSE_WARNING 0x103C
 #define CQE_NETDELETEPLAYER 0x1042
 #define CQE_START3DMODE 0x105F
+#define CQE_END3DMODE 0x1060
+#define CQE_UNIT_UNDER_ATTACK 0x1049
 #define CQE_DELETEPLAYER 0x100D
 #define CQE_UPDATE 0x1010
+#define CQE_RENDER_LAST3D 0x1043
 #define CQE_CAMERA_MOVED 0x100F
 #define CQE_SYSTEM_CHANGED 0x1018
 #define CQE_DLG_RESULT 0x1020
+#define CQE_FLUSHMESSAGES 0x1044
 #define CQE_MISSION_ENDING 0x1025
 #define CQE_GAME_ACTIVE 0x102B
 #define CQE_MOVIE_MODE 0x1052
 #define CQE_MISSION_PROG_ENDING 0x1050
+#define CQE_FABRICATOR_FINISHED 0x1051
 #define CQE_PLAYER_RESIGN 0x1056
 #define CQE_PLAYER_QUIT 0x1059
 #define CQE_MISSION_ENDING_SPLASH 0x105D
@@ -80,7 +97,9 @@ extern SINGLE REALTIME_FRAMERATE;
 #define MISSION_END_QUIT 4
 #define MISSION_END_SPLASH 5
 extern S32 camMoved;
+extern S32 EXPCOUNT;
 extern CQGlobalFlags CQFLAGS;
+extern bool NATIVE_SKIP_LEGACY_LIGHTING;
 extern GlobalRenderFlags CQRENDERFLAGS;
 extern struct ICOManager *DACOM;
 extern struct IRenderPipeline *PIPE;
@@ -90,6 +109,8 @@ extern struct IRenderer *REND;
 extern struct IEngine *ENGINE;
 extern struct ILightManager *LIGHT;
 extern struct ILights *LIGHTS;
+extern struct CQLight *MAINLIGHT;
+extern struct CQLight *CAMERALIGHT;
 extern struct IDAComponent *GS;
 extern struct IBaseCamera *CAMERA;
 extern struct ICamera *MAINCAM;
@@ -99,11 +120,14 @@ extern struct IGeneralData *GENDATA;
 extern struct IMusicManager *MUSICMANAGER;
 extern struct IStreamer *STREAMER;
 extern struct IFileSystem *MUSICDIR;
+extern struct IFileSystem *SFXDIR;
 extern struct IComponentFactory *PARSER;
+extern struct IHotkeyEvent *HOTKEY;
 extern struct IMapGen *MAPGEN;
 extern struct ISFX *SFXMANAGER;
 extern struct INuggetManager *NUGGETMANAGER;
 extern struct IAnim2D *ANIM2D;
+extern struct IAnimation *ANIM;
 extern struct IMovieCameraManager *CAMERAMANAGER;
 extern struct ISoundManager *SOUNDMANAGER;
 extern struct ITeletype *TELETYPE;
@@ -113,26 +137,47 @@ extern struct IInterfaceManager *INTERMAN;
 extern struct IBriefing *BRIEFING;
 extern struct IGameProgress *GAMEPROGRESS;
 extern struct IStringTable *STRINGTABLE;
+extern struct IStringData *STRINGDATA;
 extern struct IScripting *SCRIPTING;
 extern struct ICQImage *CQIMAGE;
 extern struct IFileSystem *SCRIPTSDIR;
 extern struct IFileSystem *MSPEECHDIR;
+extern struct IFileSystem *SPEECHDIR;
 extern struct IMouseScroll *MSCROLL;
 extern struct IUnitComm *UNITCOMM;
 extern struct IEventScheduler *SCHEDULER;
 extern struct IMeshManager *MESHMAN;
+extern struct IHardpoint *HARDPOINT;
+extern struct IVertexBufferManager *VB_MANAGER;
 extern struct IParticleManager *PARTMAN;
 extern struct IFogOfWar *FOGOFWAR;
 extern struct IDust *DUSTMANAGER;
 extern struct IFieldManager *FIELDMGR;
+struct IBaseObject * __stdcall CreateBlast(PARCHETYPE pArchetype,
+    const class TRANSFORM &orientation, U32 systemID, SINGLE animScale=1.0F);
+struct IBaseObject * __stdcall CreateTrail(PARCHETYPE pArchetype,
+    struct IBaseObject *jumper, Vector target, U32 systemID);
+struct IBaseObject * __stdcall CreateDebris(SINGLE lifeTime, BOOL32 explode,
+    S32 instance, PARCHETYPE blastType, U32 systemID, struct PHYS_CHUNK *chunk);
+struct IBaseObject * __stdcall CreateDebris(SINGLE lifeTime, BOOL32 explode,
+    struct MeshChain *mesh, PARCHETYPE blastType, U32 systemID,
+    struct PHYS_CHUNK *chunk);
+void __stdcall EnumerateHardpoints(S32 parent, const char *pathName,
+    struct IHPEnumerator *callback);
+BOOL32 __stdcall FindHardpoint(const char *pathname, S32 &index,
+    struct HardpointInfo &info, S32 parent);
 extern struct IEffectPlayer *EFFECTPLAYER;
+extern struct IGamePositionCallback *GAMEPOSCALLBACK;
 extern struct IUnbornMeshList *UNBORNMANAGER;
+extern U32 BUILDARCHEID;
 extern struct ISystemMap *SYSMAP;
 extern struct IDebugFontDrawAgent *DEBUGFONT;
 extern struct IHotkeyEvent *DBHOTKEY;
 extern "C" COLORREF COLORTABLE[9];
 extern "C" const COLORREF DEFCOLORTABLE[9];
+extern "C" COLORREF SECTORCOLORTABLE[16];
 extern struct IObjMap *OBJMAP;
+extern struct IBackground *BACKGROUND;
 extern struct PrimitiveBuilder2 PB;
 void __stdcall DisableTextures();
 S32 __fastcall ConvertFloatToDSound(SINGLE volume);
@@ -140,12 +185,19 @@ BOOL32 __stdcall RecursiveDelete(struct IFileSystem *file);
 void AddToGlobalCleanupList(struct IDAComponent **component);
 void CleanupGlobals(void);
 void __stdcall CreateGlobalComponents(void);
+U32 __stdcall CQDoModal(BaseHotRect *dialog);
+void BindNativeAppPrimitive(struct IRenderPrimitive *primitive);
+BOOL32 LoadNativeSelectedMission(const C8 *name, struct IComponentFactory *source);
 void __stdcall CreateInProgressAnim(struct IPANIM **animation);
 void __fastcall UnregisterWatchersForObject(struct IBaseObject *object);
+void __fastcall UnregisterSystemVolatileWatchersForObject(struct IBaseObject *object);
 void __fastcall UnregisterWatchersForObjectForPlayerMask(struct IBaseObject *object, U32 playerMask);
 BOOL32 __stdcall RectIntersects(const RECT &left, const RECT &right);
+BOOL32 __stdcall RectIntersects(const RECT &rect, struct ViewPoint *points, S32 numPoints);
 struct _pane;
 namespace DA {
+void LineDraw(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1,
+              COLORREF color, BOOL32 bSmooth = 0);
 void RectangleHash(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1, COLORREF color);
 void RectangleFill(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1, COLORREF color);
 }
@@ -159,6 +211,7 @@ extern struct IMission *MISSION;
 extern struct IFileSystem *SAVEDIR;
 extern struct IFileSystem *NETOUTPUT;
 extern struct IOpAgent *THEMATRIX;
+extern struct IBanker *BANKER;
 extern struct IUserDefaults *DEFAULTS;
 extern struct IFileTransfer *FILETRANSFER;
 extern struct INetPacket *NETPACKET;
@@ -177,6 +230,7 @@ extern struct IFileSystem *TEXTURESDIR;
 extern struct IFileSystem *OBJECTDIR;
 extern struct IFileSystem *SPMAPDIR;
 extern struct IFileSystem *MATERIALDIR;
+extern struct IFileSystem *PROFILEDIR;
 extern struct IFileSystem *GAMETYPESDIR;
 extern struct IStatusBarResource *STATUS;
 extern struct IHintResource *HINTBOX;
@@ -219,6 +273,18 @@ private:
     IGeneralData *data_ = nullptr;
 };
 
+class NativeAppParticleBinding
+{
+public:
+    NativeAppParticleBinding() = default;
+    ~NativeAppParticleBinding();
+    NativeAppParticleBinding(const NativeAppParticleBinding &) = delete;
+    NativeAppParticleBinding & operator=(const NativeAppParticleBinding &) = delete;
+    bool Bind(IDAComponent * system);
+private:
+    IParticleManager *manager_ = nullptr;
+};
+
 class NativeAppDataSources
 {
 public:
@@ -228,12 +294,13 @@ public:
     NativeAppDataSources & operator=(const NativeAppDataSources &) = delete;
 
     bool Bind(IFileSystem * objects, IFileSystem * campaign,
-              IFileSystem * materials);
+              IFileSystem * materials, IFileSystem * profiles);
 
 private:
     IFileSystem *objects_ = nullptr;
     IFileSystem *campaign_ = nullptr;
     IFileSystem *materials_ = nullptr;
+    IFileSystem *profiles_ = nullptr;
 };
 
 class NativeAppSaveBinding
@@ -255,10 +322,14 @@ public:
     ~NativeAppAudioBinding();
     NativeAppAudioBinding(const NativeAppAudioBinding &) = delete;
     NativeAppAudioBinding & operator=(const NativeAppAudioBinding &) = delete;
-    bool Bind(IStreamer *streamer, IFileSystem *music);
+    bool Bind(IStreamer *streamer, IFileSystem *music, IFileSystem *effects,
+              IFileSystem *speech, IFileSystem *missionSpeech);
 private:
     IStreamer *streamer_ = nullptr;
     IFileSystem *music_ = nullptr;
+    IFileSystem *effects_ = nullptr;
+    IFileSystem *speech_ = nullptr;
+    IFileSystem *missionSpeech_ = nullptr;
 };
 
 class NativeAppMusicBinding
@@ -271,6 +342,18 @@ public:
     bool Bind(IMusicManager *manager);
 private:
     IMusicManager *manager_ = nullptr;
+};
+
+class NativeAppSfxBinding
+{
+public:
+    NativeAppSfxBinding() = default;
+    ~NativeAppSfxBinding();
+    NativeAppSfxBinding(const NativeAppSfxBinding &) = delete;
+    NativeAppSfxBinding & operator=(const NativeAppSfxBinding &) = delete;
+    bool Bind(ISFX *manager);
+private:
+    ISFX *manager_ = nullptr;
 };
 
 class NativeAppGameTypesBinding

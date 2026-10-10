@@ -18,7 +18,7 @@
 #endif
 
 #ifndef RENDERER_H
-#include "Renderer.h"
+#include "renderer.h"
 #endif
 
 //#ifndef MATERIAL_H
@@ -38,7 +38,7 @@
 #endif
 
 #ifndef FILESYS_H
-#include <FileSys.h>
+#include <Filesys.h>
 #endif
 
 #ifndef IBUILDSHIP_H
@@ -86,7 +86,7 @@
 #endif
 
 #ifndef IJUMPPLAT_H
-#include "IJumpplat.h"
+#include "IJumpPlat.h"
 #endif
 
 #ifndef UNITCOMM_H
@@ -110,6 +110,7 @@
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectBuild : public Base, IBuild, BUILD_SAVELOAD
 {
+#if defined(_WIN32)
 	struct PreRenderNode	preRenderNode;
 	struct PostRenderNode   postRenderNode;
 	struct UpdateNode       updateNode;
@@ -120,9 +121,51 @@ struct _NO_VTABLE ObjectBuild : public Base, IBuild, BUILD_SAVELOAD
 	struct ResolveNode		resolveNode;
 	struct InitNode			initNode;
 	struct PreDestructNode	destructNode;
+#else
+	typename Base::PreRenderNode preRenderNode;
+	typename Base::PostRenderNode postRenderNode;
+	typename Base::UpdateNode updateNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::ExplodeNode explodeNode;
+	typename Base::ResolveNode resolveNode;
+	typename Base::InitNode initNode;
+	typename Base::PreDestructNode destructNode;
+#endif
 		
+#if defined(_WIN32)
 	typename typedef Base::SAVEINFO BUILDSAVEINFO;
 	typename typedef Base::INITINFO BUILDINITINFO;
+#else
+	typedef typename Base::SAVEINFO BUILDSAVEINFO;
+	typedef typename Base::INITINFO BUILDINITINFO;
+	using typename Base::RenderProc;
+	using typename Base::UpdateProc;
+	using typename Base::PhysUpdateProc;
+	using typename Base::SaveLoadProc;
+	using typename Base::ExplodeProc;
+	using typename Base::ResolveProc;
+	using typename Base::InitProc;
+	using typename Base::PreDestructProc;
+	using Base::objClass;
+	using Base::dwMissionID;
+	using Base::pInitData;
+	using Base::SetReady;
+	using Base::SetVisibilityFlags;
+	using Base::SetColors;
+	using Base::hullPointsMax;
+	using Base::hullPoints;
+	using Base::playerID;
+	using Base::mObjClass;
+	using Base::supplies;
+	using Base::supplyPointsMax;
+	using Base::GetPartID;
+	using Base::bSelected;
+	using Base::bReady;
+	using Base::bExploding;
+	using Base::systemID;
+#endif
 	//----------------------------------	
 	OBJPTR<IBuildEffect> buildEffectObj;
 	

@@ -13,8 +13,15 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "CQTrace.h"
+#include "Include/NativeAppGlobals.h"
+#include <ICamera.h>
+struct IMeshArchetype;
+#endif
 
 #include "IUnbornMeshList.h"
 #include "Startup.h"
@@ -27,7 +34,7 @@
 #include "Objwatch.h"
 #include "TerrainMap.h"
 #include "CQLight.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "ObjSet.h"
 #include "WindowManager.h"
 #include "Camera.h"
@@ -39,7 +46,26 @@
 
 #define MAX_MATS 30
 
+#if defined(_WIN32)
 void GetAllChildren (INSTANCE_INDEX instanceIndex,INSTANCE_INDEX *array,S32 &last,S32 arraySize);
+#else
+// The Windows helper lives in Blinkers.cpp, which is outside the native closure.
+static void GetUnbornChildren(INSTANCE_INDEX instanceIndex, INSTANCE_INDEX *array,
+                              S32 &last, S32 arraySize)
+{
+	if (last >= arraySize) return;
+	array[last++] = instanceIndex;
+	INSTANCE_INDEX lastChild = INVALID_INSTANCE_INDEX;
+	INSTANCE_INDEX child;
+	while ((child = ENGINE->get_instance_child_next(instanceIndex, EN_DONT_RECURSE,
+	                                                lastChild)) != INVALID_INSTANCE_INDEX)
+	{
+		ENGINE->get_position(child);
+		GetUnbornChildren(child, array, last, arraySize);
+		lastChild = child;
+	}
+}
+#endif
 
 struct MeshEntry
 {
@@ -334,7 +360,11 @@ void UnbornMeshList::setMeshColor(MeshEntry * meshE,U32 playerID,U8 red,U8 green
 
 	memset(mat, 0, sizeof(mat));
 
+	#if defined(_WIN32)
 	GetAllChildren(meshE->instanceIndex,children,num_children,30);
+	#else
+	GetUnbornChildren(meshE->instanceIndex,children,num_children,30);
+	#endif
 	COLORREF color = COLORTABLE[MGlobals::GetColorID(playerID)];
 
 	for (int c=0;c<num_children;c++)
@@ -351,9 +381,15 @@ void UnbornMeshList::setMeshColor(MeshEntry * meshE,U32 playerID,U8 red,U8 green
 				{
 					color = COLORTABLE[MGlobals::GetColorID(playerID)];
 
+					#ifdef _WIN32
 					tmat->diffuse.r = GetRValue(color);
 					tmat->diffuse.g = GetGValue(color);
 					tmat->diffuse.b = GetBValue(color);
+					#else
+					tmat->diffuse.r = color & 0xffU;
+					tmat->diffuse.g = (color >> 8) & 0xffU;
+					tmat->diffuse.b = (color >> 16) & 0xffU;
+					#endif
 
 					tmat->emission.r = 0.3*tmat->diffuse.r;
 					tmat->emission.g = 0.3*tmat->diffuse.g;
@@ -810,7 +846,11 @@ struct _unbornMang : GlobalComponent
 	virtual void Startup (void)
 	{
 		UNBORNMANAGER = unbornMeshList = new DAComponent<UnbornMeshList>;
+		#if !defined(_WIN32)
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&unbornMeshList));
+		#else
 		AddToGlobalCleanupList(&unbornMeshList);
+		#endif
 	}
 
 	virtual void Initialize (void)
@@ -827,5 +867,3 @@ static _unbornMang globalUnbornList;
 //---------------------------------------------------------------------------
 //------------------------End UnbornMeshList.cpp----------------------------------------
 //---------------------------------------------------------------------------
-
-

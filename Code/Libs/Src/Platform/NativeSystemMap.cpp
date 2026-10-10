@@ -2,6 +2,7 @@
 #include "FrontierX/NativeSystemMap.h"
 #include <3dmath.h>
 #include "SysMap.h"
+#include "Sector.h"
 #include "Startup.h"
 
 #include <Filesys.h>
@@ -30,8 +31,33 @@ struct NativeSystemMap : ISystemMap
     DACOM_INTERFACE_ENTRY(ISystemMap)
     END_DACOM_MAP()
 
-    GENRESULT SetRect(tagRECT *) override { Unsupported("SetRect"); }
-    void GetSysMapRect(int, tagRECT *) override { Unsupported("GetSysMapRect"); }
+    GENRESULT SetRect(tagRECT *rect) override
+    {
+        if (!rect || rect->right <= rect->left || rect->top <= rect->bottom)
+            return GR_INVALID_PARMS;
+        const S32 padding = static_cast<S32>(TEX_PAD_RATIO *
+            static_cast<SINGLE>(rect->right - rect->left));
+        systemRect_ = *rect;
+        sysMapRect_.left = rect->left - padding;
+        sysMapRect_.right = rect->right + padding;
+        sysMapRect_.top = rect->top + padding;
+        sysMapRect_.bottom = rect->bottom - padding;
+        hasRect_ = true;
+        return GR_OK;
+    }
+    void GetSysMapRect(int system, tagRECT *rect) override
+    {
+        tagRECT systemRect{};
+        if (!rect || system <= 0 || !SECTOR ||
+            !SECTOR->GetSystemRect(static_cast<U32>(system), &systemRect, false))
+            Unsupported("GetSysMapRect invalid system");
+        const S32 padding = static_cast<S32>(TEX_PAD_RATIO *
+            static_cast<SINGLE>(systemRect.right - systemRect.left));
+        rect->left = systemRect.left - padding;
+        rect->right = systemRect.right + padding;
+        rect->top = systemRect.top + padding;
+        rect->bottom = systemRect.bottom - padding;
+    }
     GENRESULT ScrollUp(BOOL32) override { Unsupported("ScrollUp"); }
     GENRESULT ScrollDown(BOOL32) override { Unsupported("ScrollDown"); }
     GENRESULT ScrollLeft(BOOL32) override { Unsupported("ScrollLeft"); }
@@ -45,7 +71,12 @@ struct NativeSystemMap : ISystemMap
     SINGLE GetScrollRate() override { Unsupported("GetScrollRate"); }
     void BeginFullScreen() override { Unsupported("BeginFullScreen"); }
     GENRESULT Notify(U32, void *) override { Unsupported("Notify"); }
-    void InvalidateMap(U32) override { Unsupported("InvalidateMap"); }
+    void InvalidateMap(U32 systemID) override
+    {
+        if (!systemID || systemID > MAX_SYSTEMS)
+            Unsupported("InvalidateMap invalid system");
+        invalidatedSystems_ |= 1U << (systemID - 1U);
+    }
     void DrawCircle(Vector, SINGLE, COLORREF) override { Unsupported("DrawCircle"); }
     void DrawRing(Vector, SINGLE, U32, COLORREF) override { Unsupported("DrawRing"); }
     void DrawSquare(Vector, SINGLE, COLORREF) override { Unsupported("DrawSquare"); }
@@ -55,8 +86,20 @@ struct NativeSystemMap : ISystemMap
     void DrawMissionAnim(Vector, U32) override { Unsupported("DrawMissionAnim"); }
     void DrawIcon(Vector, SINGLE, U32) override { Unsupported("DrawIcon"); }
     void DrawPlayerIcon(Vector, SINGLE, U32, U32) override { Unsupported("DrawPlayerIcon"); }
-    U32 RegisterIcon(char *) override { Unsupported("RegisterIcon"); }
-    U32 RegisterPlayerIcon(char *) override { Unsupported("RegisterPlayerIcon"); }
+    U32 RegisterIcon(char *filename) override
+    {
+        if (!CQFLAGS.bNoGDI || !filename || !filename[0])
+            Unsupported("RegisterIcon");
+        // The original owner returns this failure value when its map-only BMP
+        // cannot be loaded. The explicit no-GDI slice has no map icon target.
+        return static_cast<U32>(-1);
+    }
+    U32 RegisterPlayerIcon(char *filename) override
+    {
+        if (!CQFLAGS.bNoGDI || !filename || !filename[0])
+            Unsupported("RegisterPlayerIcon");
+        return static_cast<U32>(-1);
+    }
     U32 GetPadding(U32) override { Unsupported("GetPadding"); }
     void PingSystem(U32, Vector, U32) override { Unsupported("PingSystem"); }
     U32 CreateMissionAnim(U32, GRIDVECTOR) override { Unsupported("CreateMissionAnim"); }
@@ -82,6 +125,11 @@ struct NativeSystemMap : ISystemMap
         saved->Release();
         Unsupported("Load saved mission animations");
     }
+
+    tagRECT systemRect_{};
+    tagRECT sysMapRect_{};
+    bool hasRect_ = false;
+    U32 invalidatedSystems_ = 0U;
 };
 
 struct SystemMapStartup : GlobalComponent

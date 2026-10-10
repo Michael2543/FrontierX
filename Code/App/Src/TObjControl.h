@@ -47,11 +47,27 @@
 template <class Base> 
 struct _NO_VTABLE ObjectControl : public Base, DYNAMICS_DATA
 {
+#if defined(_WIN32)
 	struct UpdateNode       updateNode;
 	struct InitNode			initNode;
 	struct PhysUpdateNode	physUpdateNode;
 
 	typename typedef Base::INITINFO CONTROLINITINFO;
+#else
+	typename Base::UpdateNode updateNode;
+	typename Base::InitNode initNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typedef typename Base::INITINFO CONTROLINITINFO;
+	using typename Base::UpdateProc;
+	using typename Base::InitProc;
+	using typename Base::PhysUpdateProc;
+	using Base::transform;
+	using Base::ang_velocity;
+	using Base::velocity;
+	using Base::bExploding;
+	using Base::GetPartID;
+	using Base::bVisible;
+#endif
 
 	//----------------------------------
 	

@@ -45,6 +45,10 @@
 #include "MPart.h"
 #endif
 
+#if !defined(_WIN32)
+#include <algorithm>
+#endif
+
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 #define ObjectMission _Com
@@ -52,6 +56,7 @@
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 {
+#if defined(_WIN32)
 	typename typedef Base::SAVEINFO MISSIONSAVEINFO;
 	typename typedef Base::INITINFO MISSIONINITINFO;
 
@@ -59,6 +64,18 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 	struct LoadNode  loadNode;
 	struct InitNode  initNode;
 	struct RenderNode renderNode;
+#else
+	typedef typename Base::SAVEINFO MISSIONSAVEINFO;
+	typedef typename Base::INITINFO MISSIONINITINFO;
+	using typename Base::SaveLoadProc;
+	using typename Base::InitProc;
+	using typename Base::RenderProc;
+
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::InitNode initNode;
+	typename Base::RenderNode renderNode;
+#endif
 	
 	//
 	// mission data
@@ -72,30 +89,30 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 					renderNode(this, RenderProc(&ObjectMission::renderMission))
 	{
 #ifndef FINAL_RELEASE
-		SetDebugName(partName);
+		this->SetDebugName(this->partName);
 #endif  // end !FINAL_RELEASE
 	}
 	
 	virtual ~ObjectMission (void)
 	{
-		OBJLIST->RemovePartID(this, dwMissionID);
+		OBJLIST->RemovePartID(this, this->dwMissionID);
 	}
 
 	/* IBaseObject methods */
 
 	virtual U32 GetSystemID (void) const
 	{
-		return systemID;
+		return this->systemID;
 	}
 
 	virtual U32 GetPartID (void) const
 	{
-		return dwMissionID;
+		return this->dwMissionID;
 	}
 
 	virtual U32 GetPlayerID (void) const
 	{
-		return dwMissionID & PLAYERID_MASK;
+		return this->dwMissionID & PLAYERID_MASK;
 	}
 
 	virtual bool GetMissionData (IBaseObject::MDATA & mdata) const	// return true if message was handled
@@ -109,7 +126,7 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 
 	virtual void SetSystemID (U32 newSystemID)
 	{
-		systemID = newSystemID;
+		this->systemID = newSystemID;
 		/*
 		if(!(systemID & HYPER_SYSTEM_MASK))
 		{
@@ -141,33 +158,33 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 	// methods for accessing the "displayed" hullPoints/supplies
 	virtual U32 GetDisplayHullPoints (void) const
 	{
-		return hullPoints;
+		return this->hullPoints;
 	}
 	virtual U32 GetDisplaySupplies (void) const
 	{
-		return supplies;
+		return this->supplies;
 	}
 
 	void SetMissionData (const MISSION_SAVELOAD * pMissionData)
 	{
-		OBJLIST->RemovePartID(this, dwMissionID);
+		OBJLIST->RemovePartID(this, this->dwMissionID);
 
 		CQASSERT(pInitData->mObjClass == pMissionData->mObjClass);
 
 		memcpy(static_cast<MISSION_SAVELOAD *>(this), pMissionData, sizeof(MISSION_SAVELOAD));
 
-		OBJLIST->AddPartID(this, dwMissionID);
+		OBJLIST->AddPartID(this, this->dwMissionID);
 	}
 
 	virtual void PreSelfDestruct (void)
 	{
-		FRAME_preDestruct();
+		this->FRAME_preDestruct();
 	}
 
 	virtual void SelfDestruct (bool bExplode)
 	{
 		UnregisterWatchersForObject(this);
-		FRAME_explode(bExplode);
+		this->FRAME_explode(bExplode);
 		//
 		// if for some reason we are still in the object list, delete self
 		//
@@ -179,22 +196,22 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 
 	virtual U32 GetPrioritySyncData (void * buffer)
 	{
-		return FRAME_getPrioritySyncData(buffer);
+		return this->FRAME_getPrioritySyncData(buffer);
 	}
 
 	virtual U32 GetGeneralSyncData (void * buffer)
 	{
-		return FRAME_getGeneralSyncData(buffer);
+		return this->FRAME_getGeneralSyncData(buffer);
 	}
 
 	virtual void PutPrioritySyncData (void * buffer, U32 bufferSize, bool bLateDelivery)
 	{
-		FRAME_putPrioritySyncData(buffer, bufferSize, bLateDelivery);
+		this->FRAME_putPrioritySyncData(buffer, bufferSize, bLateDelivery);
 	}
 
 	virtual void PutGeneralSyncData (void * buffer, U32 bufferSize, bool bLateDelivery)
 	{
-		FRAME_putGeneralSyncData(buffer, bufferSize, bLateDelivery);
+		this->FRAME_putGeneralSyncData(buffer, bufferSize, bLateDelivery);
 	}
 
 	virtual void OnOperationCreation (U32 agentID, void *buffer, U32 bufferSize)
@@ -203,12 +220,12 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 
 	virtual void ReceiveOperationData (U32 agentID, void *buffer, U32 bufferSize)
 	{
-		FRAME_receiveOpData(agentID,buffer,bufferSize);
+		this->FRAME_receiveOpData(agentID,buffer,bufferSize);
 	}
 
 	virtual void OnOperationCancel (U32 agentID)
 	{
-		FRAME_onOpCancel(agentID);
+		this->FRAME_onOpCancel(agentID);
 	}
 
 	virtual void OnStopRequest (U32 agentID)
@@ -217,7 +234,7 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 
 	virtual void PrepareTakeover (U32 newMissionID, U32 troopID)
 	{
-		FRAME_preTakeover(newMissionID, troopID);
+		this->FRAME_preTakeover(newMissionID, troopID);
 	}
 
 	virtual void TakeoverSwitchID (U32 newMissionID)
@@ -257,41 +274,46 @@ struct _NO_VTABLE ObjectMission : public Base, IMissionActor, MISSION_SAVELOAD
 
 	void renderMission()
 	{
-		if(DEFAULTS->GetDefaults()->bInfoHighlights && bHighlight)
+		if(DEFAULTS->GetDefaults()->bInfoHighlights && this->bHighlight)
 		{
-			if(sensorRadius)
+			if(this->sensorRadius)
 			{
 				SINGLE admiralSensorMod = 1.0;
-				if(fleetID && supplies)
+				if(this->fleetID && this->supplies)
 				{
 					VOLPTR(IAdmiral) flagship;
-					OBJLIST->FindObject(fleetID,TOTALLYVOLATILEPTR,flagship,IAdmiralID);
+					OBJLIST->FindObject(this->fleetID,TOTALLYVOLATILEPTR,flagship,IAdmiralID);
 					if(flagship.Ptr())
 					{
 						MPart part(this);
-						admiralSensorMod = 1+flagship->GetSensorBonus(mObjClass,part.pInit->armorData.myArmor);
+						admiralSensorMod = 1+flagship->GetSensorBonus(this->mObjClass,part.pInit->armorData.myArmor);
 					}				
 				}
-				SINGLE bonus = fieldFlags.getSensorDampingMod()*effectFlags.getSensorDampingMod()*admiralSensorMod*SECTOR->GetSectorEffects(playerID,systemID)->getSensorMod();
-				drawRangeCircle(__max(0.75,pInitData->sensorRadius*bonus ),RGB(0,128,0));
-				drawRangeCircle(__max(0.75,sensorRadius*bonus),RGB(0,255,0));
+				SINGLE bonus = this->fieldFlags.getSensorDampingMod()*this->effectFlags.getSensorDampingMod()*admiralSensorMod*SECTOR->GetSectorEffects(this->playerID,this->systemID)->getSensorMod();
+#if defined(_WIN32)
+				this->drawRangeCircle(__max(0.75,pInitData->sensorRadius*bonus ),RGB(0,128,0));
+				this->drawRangeCircle(__max(0.75,this->sensorRadius*bonus),RGB(0,255,0));
+#else
+				this->drawRangeCircle(std::max<SINGLE>(0.75F,pInitData->sensorRadius*bonus),RGB(0,128,0));
+				this->drawRangeCircle(std::max<SINGLE>(0.75F,this->sensorRadius*bonus),RGB(0,255,0));
+#endif
 			}
-			if(cloakedSensorRadius)
+			if(this->cloakedSensorRadius)
 			{
 				SINGLE admiralSensorMod = 1.0;
-				if(fleetID && supplies)
+				if(this->fleetID && this->supplies)
 				{
 					VOLPTR(IAdmiral) flagship;
-					OBJLIST->FindObject(fleetID,TOTALLYVOLATILEPTR,flagship,IAdmiralID);
+					OBJLIST->FindObject(this->fleetID,TOTALLYVOLATILEPTR,flagship,IAdmiralID);
 					if(flagship.Ptr())
 					{
 						MPart part(this);
-						admiralSensorMod = 1+flagship->GetSensorBonus(mObjClass,part.pInit->armorData.myArmor);
+						admiralSensorMod = 1+flagship->GetSensorBonus(this->mObjClass,part.pInit->armorData.myArmor);
 					}				
 				}
-				SINGLE bonus = fieldFlags.getSensorDampingMod()*effectFlags.getSensorDampingMod()*admiralSensorMod*SECTOR->GetSectorEffects(playerID,systemID)->getSensorMod();
-				drawRangeCircle(pInitData->cloakedSensorRadius*bonus,RGB(128,128,128));
-				drawRangeCircle(cloakedSensorRadius*bonus,RGB(255,255,255));
+				SINGLE bonus = this->fieldFlags.getSensorDampingMod()*this->effectFlags.getSensorDampingMod()*admiralSensorMod*SECTOR->GetSectorEffects(this->playerID,this->systemID)->getSensorMod();
+				this->drawRangeCircle(pInitData->cloakedSensorRadius*bonus,RGB(128,128,128));
+				this->drawRangeCircle(this->cloakedSensorRadius*bonus,RGB(255,255,255));
 			}
 
 		}

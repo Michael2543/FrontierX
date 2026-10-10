@@ -35,13 +35,35 @@
 #include "TObjRepair.h"
 #include "TObjEffectTarget.h"
 #include "SFX.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "GenData.h"
 #include "IBlinkers.h"
 #include "TManager.h"
-#include "Sysmap.h"
+#include "SysMap.h"
 
-#include <DSpaceShip.h>
+#if !defined(_WIN32)
+namespace FrontierX
+{
+inline char AsciiLower(char value)
+{
+	return value >= 'A' && value <= 'Z' ? char(value - 'A' + 'a') : value;
+}
+
+inline void AsciiLowerInPlace(char *text)
+{
+	for (; *text; ++text) *text = AsciiLower(*text);
+}
+
+inline bool AsciiCaseEqual(const char *left, const char *right)
+{
+	while (*left && *right)
+		if (AsciiLower(*left++) != AsciiLower(*right++)) return false;
+	return *left == *right;
+}
+}
+#endif
+
+#include <DSpaceship.h>
 
 #ifndef __IANIM_H
 #include <IAnim.h>
@@ -451,7 +473,11 @@ bool SPACESHIP_INIT<BT_TYPE>::loadSpaceshipArchetype (BT_TYPE * _pData, PARCHETY
 	{
 		char outName[64];
 		strcpy(outName,pData->fileName);
+#if defined(_WIN32)
 		strlwr(outName);
+#else
+		FrontierX::AsciiLowerInPlace(outName);
+#endif
 		char * extenpos = strstr(outName,".3db");
 		if (extenpos == 0)
 			extenpos = strstr(outName,".cmp");
@@ -500,7 +526,12 @@ bool SPACESHIP_INIT<BT_TYPE>::loadSpaceshipArchetype (BT_TYPE * _pData, PARCHETY
 	if (pData->blinkers.light_script[0])
 	{
 		const char *blink_ext = strrchr(pData->blinkers.light_script, '.');
+#if defined(_WIN32)
 		if (blink_ext && (_stricmp(blink_ext, ".ini") == 0 || _stricmp(blink_ext, ".lsc") == 0))
+#else
+		if (blink_ext && (FrontierX::AsciiCaseEqual(blink_ext, ".ini") ||
+		                  FrontierX::AsciiCaseEqual(blink_ext, ".lsc")))
+#endif
 			blink_arch = CreateBlinkersArchetype(pData->blinkers.light_script, archIndex);
 		fname = pData->blinkers.textureName;
 		if (fname && fname[0])

@@ -1,7 +1,7 @@
 #ifndef SIMPLEMESH_H
 #define SIMPLEMESH_H
 
-#include "Vector.h"
+#include "vector.h"
 
 struct SVertex
 {

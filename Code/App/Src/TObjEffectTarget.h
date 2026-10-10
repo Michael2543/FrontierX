@@ -29,9 +29,25 @@ struct EffectListenerNode
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectEffectTarget : public Base, IEffectTarget
 {
+#if defined(_WIN32)
 	typename typedef Base::INITINFO EFFTARGINITINFO;
-
-	struct InitNode       initNode;
+	struct InitNode initNode;
+#else
+	typedef typename Base::INITINFO EFFTARGINITINFO;
+	typename Base::InitNode initNode;
+	using typename Base::InitProc;
+	using Base::instanceMesh;
+	using Base::hullPoints;
+	using Base::hullPointsMax;
+	using Base::supplies;
+	using Base::supplyPointsMax;
+	using Base::systemID;
+	using Base::playerID;
+	using Base::bSelected;
+	using Base::bHighlight;
+	using Base::techLevel;
+	using Base::bSpecialRender;
+#endif
 //	struct PhysUpdateNode	physUpdateNode;
 
 	EffectListenerNode * listenerList;

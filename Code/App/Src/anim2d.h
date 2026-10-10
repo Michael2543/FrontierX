@@ -25,7 +25,7 @@
 #include "SuperTrans.h"
 
 #ifndef HEAPOBJ_H
-#include <heapobj.h>
+#include <HeapObj.h>
 #endif
 
 

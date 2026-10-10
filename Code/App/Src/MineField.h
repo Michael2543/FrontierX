@@ -19,7 +19,7 @@
 #endif
 
 #ifndef DMINEFIELD_H
-#include "DMineField.h"
+#include "DMinefield.h"
 #endif
 
 #ifndef TOBJMISSION_H
@@ -43,7 +43,7 @@
 #endif
 
 #ifndef IMINEFIELD_H
-#include "IMinefield.h"
+#include "IMineField.h"
 #endif
 
 #ifndef IWEAPON_H

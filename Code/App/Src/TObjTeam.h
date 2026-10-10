@@ -52,12 +52,29 @@
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectTeam : public Base
 {
+#if defined(_WIN32)
 	struct PreRenderNode preRenderNode;
 	struct PostRenderNode postRenderNode;
 	struct PhysUpdateNode physUpdateNode;
 	struct InitNode      initNode;
 
 	typename typedef Base::INITINFO TEAMINITINFO;
+#else
+	typename Base::PreRenderNode preRenderNode;
+	typename Base::PostRenderNode postRenderNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typename Base::InitNode initNode;
+	typedef typename Base::INITINFO TEAMINITINFO;
+	using typename Base::RenderProc;
+	using typename Base::PhysUpdateProc;
+	using typename Base::InitProc;
+	using Base::bExploding;
+	using Base::instanceMesh;
+	using Base::playerID;
+	using Base::instanceIndex;
+	using Base::bReady;
+	using Base::bSpecialRender;
+#endif
 
 	COLORREF currentColor;
 

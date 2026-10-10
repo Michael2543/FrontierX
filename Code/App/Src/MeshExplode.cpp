@@ -1,15 +1,34 @@
 // $Header: /Conquest/App/Src/MeshExplode.cpp 32    10/26/00 3:36p Jasony $
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <Globals.h>
+#else
+#include <ICamera.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <IMeshManager.h>
+#include <IRenderPrimitive.h>
+#include <TSmartPointer.h>
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#define __min(a, b) std::min((a), (b))
+#define __max(a, b) std::max((a), (b))
+#endif
 
 #include "CQTrace.h"
-#include "fdump.h"
+#include <FDump.h>
 #include "TSmartPointer.h"
 
-#include <Engine.h>
-#include <Engine.h>
-#include <Renderer.h>
+#include <ENGINE.H>
+#include <ENGINE.H>
+#include <renderer.h>
 #include <IRigidBody.h>
 #include <IRigidBodyState.h>
 #include <IExtentContainer.h>

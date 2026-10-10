@@ -26,7 +26,7 @@
 #endif
 
 #ifndef PHYSICS_H
-#include <Physics.h>
+#include <physics.h>
 #endif
 
 #ifndef _3DMATH_H
@@ -89,14 +89,44 @@ struct _NO_VTABLE ObjectExtension : public Base, IUpgrade, EXTENSION_SAVELOAD
 {
 	ExtensionInfo extension[MAX_EXTENSIONS];
 
+#if !defined(_WIN32)
+    using EXTENDSAVEINFO = typename Base::SAVEINFO;
+    using EXTENDINITINFO = typename Base::INITINFO;
+    using typename Base::SaveNode;
+    using typename Base::LoadNode;
+    using typename Base::PostRenderNode;
+    using typename Base::PhysUpdateNode;
+    using typename Base::SaveLoadProc;
+    using typename Base::PhysUpdateProc;
+    using typename Base::RenderProc;
+    using Base::instanceIndex;
+    using Base::bVisible;
+    using Base::systemID;
+    using Base::playerID;
+    using Base::pArchetype;
+    using Base::pInitData;
+    using Base::supplies;
+    using Base::supplyPointsMax;
+    using Base::mObjClass;
+    using Base::SetColors;
+    using Base::transform;
+#else
 	typename typedef Base::SAVEINFO EXTENDSAVEINFO;
 	typename typedef Base::INITINFO EXTENDINITINFO;
+#endif
 
 //	struct InitNode			initNode;
+#if defined(_WIN32)
 	struct SaveNode			saveNode;
 	struct LoadNode         loadNode;
 	struct PostRenderNode   postRenderNode;
 	struct PhysUpdateNode   physUpdateNode;
+#else
+	SaveNode			saveNode;
+	LoadNode         loadNode;
+	PostRenderNode   postRenderNode;
+	PhysUpdateNode   physUpdateNode;
+#endif
 
 	PARCHETYPE buildEffectArch;
 
@@ -155,11 +185,11 @@ ObjectExtension< Base >::~ObjectExtension (void)
 	{
 		if(extension[workingExtLevel].addEffect)
 		{
-			delete extension[workingExtLevel].addEffect;
+			delete extension[workingExtLevel].addEffect.Ptr();
 		}
 		if(extension[workingExtLevel].removeEffect)
 		{
-			delete extension[workingExtLevel].removeEffect;
+			delete extension[workingExtLevel].removeEffect.Ptr();
 		}
 		if(extension[workingExtLevel].removeIndex != -1)
 		{
@@ -457,7 +487,7 @@ void ObjectExtension< Base >::SetUpgrade(U32 level)
 		if(extension[extensionLevel].addIndex != INVALID_INSTANCE_INDEX)
 		{	
 			if(extension[extensionLevel].addEffect)
-				delete extension[extensionLevel].addEffect;
+				delete extension[extensionLevel].addEffect.Ptr();
 			ENGINE->create_joint(instanceIndex,extension[extensionLevel].addIndex,&(extension[extensionLevel].addJointInfo));
 			ENGINE->update_instance(instanceIndex,0,0);
 //			mesh_info->AttachChild(instanceIndex,extension[extensionLevel].add_mesh_info);
@@ -466,7 +496,7 @@ void ObjectExtension< Base >::SetUpgrade(U32 level)
 		if(extension[extensionLevel].removeIndex != INVALID_INSTANCE_INDEX)
 		{
 			if(extension[extensionLevel].removeEffect)
-				delete extension[extensionLevel].removeEffect;
+				delete extension[extensionLevel].removeEffect.Ptr();
 			else //must still be connected
 			{
 				ENGINE->destroy_joint(instanceIndex,extension[extensionLevel].removeIndex);
@@ -495,7 +525,7 @@ void ObjectExtension< Base >::SetUpgrade(U32 level)
 				mObjClass = (M_OBJCLASS)pInitData->mObjClass;
 
 				EXTENDINITINFO * iInfo = static_cast<EXTENDINITINFO *>(ARCHLIST->GetArchetypeHandle(pArchetype));
-				FRAME_upgrade(*iInfo);
+				this->FRAME_upgrade(*iInfo);
 			}
 		}
 		SetColors();
@@ -631,14 +661,14 @@ void ObjectExtension< Base >::CancelUpgrade()
 		if(extension[workingExtLevel].addIndex != INVALID_INSTANCE_INDEX)
 		{
 			if(extension[workingExtLevel].addEffect)
-				delete extension[workingExtLevel].addEffect;
+				delete extension[workingExtLevel].addEffect.Ptr();
 		}
 		if(extension[workingExtLevel].removeIndex != INVALID_INSTANCE_INDEX)
 		{
 			if(extension[workingExtLevel].removeEffect)
 			{
 				extension[workingExtLevel].removeEffect->Done();
-				delete extension[workingExtLevel].removeEffect;
+				delete extension[workingExtLevel].removeEffect.Ptr();
 			}
 			ENGINE->create_joint(instanceIndex,extension[workingExtLevel].removeIndex,&(extension[workingExtLevel].removeJointInfo));
 			ENGINE->update_instance(instanceIndex,0,0);

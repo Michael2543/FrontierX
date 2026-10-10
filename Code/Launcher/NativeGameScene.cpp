@@ -385,6 +385,13 @@ GENRESULT DACOM_CDECL SetSceneProjection(void * context,
     return static_cast<SceneGpuContext *>(context)->gpu->SetProjection(projection);
 }
 
+GENRESULT DACOM_CDECL SetSceneViewport(void * context, int x, int y,
+                                       int width, int height)
+{
+    return static_cast<SceneGpuContext *>(context)->gpu->SetViewport(
+        x, y, width, height);
+}
+
 GENRESULT DACOM_CDECL SetSceneSampler(void * context,
                                       const SamplerStateSnapshot & state)
 {
@@ -515,7 +522,8 @@ bool RenderNativeGameScene(ICOManager * components, NativeGameSystem * gameSyste
     NativeRenderPrimitiveDesc primitiveDescriptor(
         SubmitScene, &gpuContext, nullptr, SetSceneState, nullptr, nullptr,
         SetSceneStage, BindSceneTexture, SetSceneModelview,
-        SetSceneProjection, SubmitSceneMesh, SubmitSceneApp, SetSceneSampler);
+        SetSceneProjection, SubmitSceneMesh, SubmitSceneApp, SetSceneSampler,
+        SetSceneViewport);
     ISystemContainer * system = NativeGameSystemContainer(gameSystem);
     Owner<IRenderPrimitive> primitive;
     bool profilePrimitive = system &&

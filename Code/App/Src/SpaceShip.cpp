@@ -11,13 +11,44 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <3dmath.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <renderer.h>
+#include <DEffectOpts.h>
+#include <ENGINE.H>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#endif
 
+#if !defined(_WIN32)
+#include "TObjFrame.h"
+#include "ObjList.h"
+#endif
 #include "MGlobals.h"
 #include "TComponent.h"
 #include "Sector.h"
-#include "TSpaceship.h"
+#include "TSpaceShip.h"
 #include "ObjList.h"
 #include "Camera.h"
 #include "SuperTrans.h"
@@ -46,14 +77,14 @@
 #include <DTroopship.h>
 #include <DQuickSave.h>
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <HKEvent.h>
-#include <3DMath.h>
-#include <Physics.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <physics.h>
+#include <Filesys.h>
 #include <WindowManager.h>
-#include <Renderer.h>
+#include <renderer.h>
 #include <IConnection.h>
 #include <IRenderPrimitive.h>
 
@@ -64,6 +95,7 @@
 
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 template SpaceShip<struct SUPPLYSHIP_SAVELOAD, SUPPLYSHIP_INIT>;
 template SpaceShip<struct FABRICATOR_SAVELOAD, FABRICATOR_INIT>;
 template SpaceShip<struct GUNBOAT_SAVELOAD, GUNBOAT_INIT>;
@@ -73,6 +105,7 @@ template SpaceShip<struct FLAGSHIP_SAVELOAD, FLAGSHIP_INIT>;
 template SpaceShip<struct TROOPSHIP_SAVELOAD, TROOPSHIP_INIT>;
 // these should not be spaceships:
 template SpaceShip<struct RECONPROBE_SAVELOAD, RECONPROBE_INIT>;
+#endif
 //template SpaceShip<struct TORPEDO_SAVELOAD, TORPEDO_INIT>;
 
 //global ship texture ID one for all kinds of ships
@@ -637,9 +670,9 @@ void SpaceShip<SaveStruct,InitStruct>::MapRender (bool bPing)
 void FreakTexture (U32 texID,S16 gamma,SINGLE contrast)
 {
 	RPLOCKDATA data;
-	unsigned long level=0;
+	U32 level=0;
 
-	unsigned long width,height,num_levels;
+	U32 width,height,num_levels;
 	PIPE->get_texture_dim(texID,&width,&height,&num_levels);
 	while (level < num_levels)
 	{
@@ -657,9 +690,9 @@ void FreakTexture (U32 texID,S16 gamma,SINGLE contrast)
 					r = (*pixel >> data.pf.rl) << data.pf.rr;
 					g = (*pixel >> data.pf.gl) << data.pf.gr;
 					b = (*pixel >> data.pf.bl) << data.pf.br;
-					r = min(gamma+r*contrast,255);
-					g = min(gamma+g*contrast,255);
-					b = min(gamma+b*contrast,255);
+					r = std::min<SINGLE>(gamma+r*contrast,255.0F);
+					g = std::min<SINGLE>(gamma+g*contrast,255.0F);
+					b = std::min<SINGLE>(gamma+b*contrast,255.0F);
 					*pixel = (r >> data.pf.rr) << data.pf.rl;
 					*pixel |= (g >> data.pf.gr) << data.pf.gl;
 					*pixel |= (b >> data.pf.br) << data.pf.bl;
@@ -676,9 +709,9 @@ void FreakTexture (U32 texID,S16 gamma,SINGLE contrast)
 				g = colors[i].g*contrast+gamma;
 				b = colors[i].b*contrast+gamma;
 				
-				colors[i].r = max(0,min(r,255));
-				colors[i].g = max(0,min(g,255));
-				colors[i].b = max(0,min(b,255));
+				colors[i].r = std::max<int>(0,std::min<int>(r,255));
+				colors[i].g = std::max<int>(0,std::min<int>(g,255));
+				colors[i].b = std::max<int>(0,std::min<int>(b,255));
 			}
 			PIPE->set_texture_palette(texID,0,256,colors);
 		}
@@ -987,7 +1020,11 @@ void SpaceShip<SaveStruct,InitStruct>::ResolveAssociations (void)
 template <class SaveStruct, class InitStruct>
 void SpaceShip<SaveStruct,InitStruct>::QuickSave (struct IFileSystem * file)
 {
+#if defined(_WIN32)
 	DAFILEDESC fdesc = partName;
+#else
+	DAFILEDESC fdesc = partName.string;
+#endif
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_QSHIPLOAD");
@@ -1512,5 +1549,10 @@ bool arch_callback( ARCHETYPE_INDEX parent_arch_index, ARCHETYPE_INDEX child_arc
 }
 
 //---------------------------------------------------------------------------
+#if !defined(_WIN32)
+template struct SpaceShip<FABRICATOR_SAVELOAD, FABRICATOR_INIT>;
+template struct SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>;
+#endif
+
 //------------------------End SpaceShip.cpp----------------------------------
 //---------------------------------------------------------------------------

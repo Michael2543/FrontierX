@@ -278,6 +278,10 @@ GENRESULT NativeRenderPipeline::UnbindScene() noexcept
     nextHandle_ = 1U;
     converted_.clear();
     converted2_.clear();
+    frames_ = {};
+    framePhase_ = FramePhase::Idle;
+    clearColor_ = 0U;
+    clearDepth_ = 0xffffffffU;
     textureEnabled_ = 1U;
     lookup_ = nullptr;
     lookupContext_ = nullptr;
@@ -398,6 +402,8 @@ GENRESULT NativeRenderPipeline::set_vs_constants(UINT firstRegister,
 
 GENRESULT NativeRenderPipeline::set_pipeline_state(RPPIPELINESTATE state, U32 value)
 {
+    if (state == RP_CLEAR_COLOR) { clearColor_ = value; return GR_OK; }
+    if (state == RP_CLEAR_DEPTH) { clearDepth_ = value; return GR_OK; }
     if (state != RP_TEXTURE) return GR_NOT_IMPLEMENTED;
     if (value > 1U) return GR_INVALID_PARMS;
     textureEnabled_ = value;
@@ -407,6 +413,8 @@ GENRESULT NativeRenderPipeline::set_pipeline_state(RPPIPELINESTATE state, U32 va
 GENRESULT NativeRenderPipeline::get_pipeline_state(RPPIPELINESTATE state, U32 * value)
 {
     if (!value) return GR_INVALID_PARMS;
+    if (state == RP_CLEAR_COLOR) { *value = clearColor_; return GR_OK; }
+    if (state == RP_CLEAR_DEPTH) { *value = clearDepth_; return GR_OK; }
     if (state != RP_TEXTURE) return GR_NOT_IMPLEMENTED;
     *value = textureEnabled_;
     return GR_OK;
@@ -479,14 +487,55 @@ GENRESULT NativeRenderPipeline::get_material(D3DMATERIAL9 * material)
     return drawTarget_ ? drawTarget_->get_material(material) : GR_GENERIC;
 }
 
+GENRESULT NativeRenderPipeline::BindFrames(NativeFrameOperations frames) noexcept
+{
+    if (!frames.clear || !frames.present) return GR_INVALID_PARMS;
+    if (framePhase_ != FramePhase::Idle) return GR_GENERIC;
+    frames_ = frames;
+    return GR_OK;
+}
+
+GENRESULT BindNativeRenderFrames(IRenderPipeline * pipeline, NativeFrameOperations frames)
+{
+    auto * native = dynamic_cast<NativeRenderPipeline *>(pipeline);
+    return native ? native->BindFrames(frames) : GR_INVALID_PARMS;
+}
+
+GENRESULT NativeRenderPipeline::clear_buffers(U32 flags, RECT * rectangle)
+{
+    if (!frames_.clear) return GR_NOT_IMPLEMENTED;
+    if (rectangle || flags != (RP_CLEAR_COLOR_BIT | RP_CLEAR_DEPTH_BIT))
+        return GR_NOT_IMPLEMENTED;
+    if (framePhase_ == FramePhase::Drawing || framePhase_ == FramePhase::Ended)
+        return GR_GENERIC;
+    const auto result = frames_.clear(frames_.context, clearColor_, clearDepth_);
+    if (result == GR_OK) framePhase_ = FramePhase::Cleared;
+    return result;
+}
+
+GENRESULT NativeRenderPipeline::swap_buffers()
+{
+    if (!frames_.present) return GR_NOT_IMPLEMENTED;
+    if (framePhase_ != FramePhase::Ended) return GR_GENERIC;
+    const auto result = frames_.present(frames_.context);
+    if (result == GR_OK) framePhase_ = FramePhase::Idle;
+    return result;
+}
+
 GENRESULT NativeRenderPipeline::begin_scene()
 {
-    return drawTarget_ ? drawTarget_->begin_scene() : GR_GENERIC;
+    if (!frames_.clear) return drawTarget_ ? drawTarget_->begin_scene() : GR_GENERIC;
+    if (framePhase_ != FramePhase::Cleared) return GR_GENERIC;
+    framePhase_ = FramePhase::Drawing;
+    return GR_OK;
 }
 
 GENRESULT NativeRenderPipeline::end_scene()
 {
-    return drawTarget_ ? drawTarget_->end_scene() : GR_GENERIC;
+    if (!frames_.clear) return drawTarget_ ? drawTarget_->end_scene() : GR_GENERIC;
+    if (framePhase_ != FramePhase::Drawing) return GR_GENERIC;
+    framePhase_ = FramePhase::Ended;
+    return GR_OK;
 }
 
 GENRESULT NativeRenderPipeline::set_render_state(D3DRENDERSTATETYPE state, U32 value)
@@ -645,7 +694,7 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
     const bool rgb565 = format.ddpf.dwRGBBitCount == 16 &&
         format.ddpf.dwRBitMask == 0xf800U &&
         format.ddpf.dwGBitMask == 0x07e0U &&
-        format.ddpf.dwBBitMask == 0x001fU && !alpha;
+        format.ddpf.dwBBitMask == 0x001fU;
     if ((!rgba8 && !rgb565) || (palette && !rgb565) ||
         stride < width * (rgba8 ? 4 : 2))
         return GR_NOT_IMPLEMENTED;

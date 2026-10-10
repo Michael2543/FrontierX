@@ -1,5 +1,1186 @@
 # First native single-player acceptance path
 
+## Original unit voice mission checkpoint (2026-10-10)
+
+**Blocker and hypothesis.** Normal selection and movement already reached
+original `ObjComm`, but `UNITCOMM` was an explicitly disabled owner. Source
+review of `UnitComm.cpp::getFilename`, the selection/movement callers and
+`StringData.cpp` identified an existing integration path: original UnitComm
+queues and filename selection, original StringData lookup, native
+`ISoundManager` and production `IStreamer`. The falsifiable gate was two
+voice requests from normal mouse input, with completed/interrupted stream
+cleanup and the existing moved-state mission save/reload still passing.
+No separate voice scheduler or game loop was needed.
+
+**Integration.** The native shell now accepts external `--string-pack FILE`
+and creates the original StringData and UnitComm owners before mission load.
+StringData copies bounded opaque UTF records into owned native storage,
+preserving traversal and bare-name lookup while excluding `Parsed Files`.
+The real archive also contains editor source; treating every payload as a
+speech-slot array was disproved by that input. UnitComm checks only the
+speech schemas and fixed 32-byte strings it actually consumes, before its
+unchanged random selection. Disk schemas and public interfaces are unchanged;
+runtime pointers are constructed locally, never read from serialized data.
+The existing EventSystem drives the original queue/priority updates.
+
+The native mission sound adapter now tracks source object IDs rather than
+borrowed object pointers, closes completed streams on source update, clears
+speaker highlight on completion/stop, and flushes on mission close. This is
+original UnitComm integration with a native sound adapter, not a port of the
+entire Windows SoundManager. The selected input used no highlighted speaker;
+highlighted alert runtime remains unverified.
+
+`--skip-unit-alerts --skip-subtitles` are required for the enabled voice
+path until the source font/subtitle owners work. The visible run also used
+`--skip-mission-sfx`: disabled ISFX now keeps logical effect handles without
+eager decoder streams, reports preload unavailable, and returns before
+unsupported spatial playback, matching the source disabled-Play ordering.
+Previously eager disabled SFX held the shared stream capacity and blocked a
+unit voice open. The existing shell SFX smoke now exercises disabled spatial
+Play and preload/resource behavior. Spatial effects remain unsupported.
+`--skip-training-speech` excludes only MSpeech, leaving unit Speech enabled.
+The old explicit `--skip-unit-voice` path remains available.
+
+**Build and automated execution.** Linux x86_64 Debug Ninja GCC 16.2.1 and
+Clang 22.1.8 built complete default SDL-only trees with
+`cmake --build /tmp/frontierx-mission-{gcc,clang} -j8`. Separate optional
+FFmpeg trees were configured with each Linux Debug preset, `-B
+/tmp/frontierx-voice-{gcc,clang}`, `-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON` and
+`-DCMAKE_PREFIX_PATH=/tmp/frontierx-voice-lgpl`. Targets
+`frontierx_native_shell`, `frontierx_native_window_manager_probe`,
+`frontierx_data_root_probe`, `frontierx_render_pipeline_probe` and
+`frontierx_sdl3_gpu_probe` built in both optional trees. The official,
+SHA-256-verified FFmpeg 9.0.1 source was rebuilt unmodified outside the
+repository with the already reviewed restricted shared LGPL configuration
+in [the audio document](NATIVE_AUDIO_STREAMER.md); system GPL FFmpeg was
+not used. CMake's license checks passed.
+
+`ctest --test-dir /tmp/frontierx-voice-<compiler> --output-on-failure -R
+'portability\.(data_root|native_shell|render_pipeline|native_window_manager)$'`
+passed all four focused checks per compiler. Existing data-root generated
+UTF cases check nested lookup, ignored editor data, arbitrary opaque bytes,
+source-release ownership, duplicate basename rejection and empty meaningful
+archives. This extends the existing archive check because original UnitComm
+requires an owned StringData view after the input filesystem is released;
+passing permits its production mission composition. No new probe was added.
+A separate Clang Debug tree used `-fsanitize=address,undefined
+-fno-omit-frame-pointer` and matching executable linker flags; building
+`frontierx_data_root_probe` and running its CTest with
+`ASAN_OPTIONS=detect_leaks=0` passed without a reported finding.
+LeakSanitizer and the full mission sanitizer closure were not run.
+Full default graph results, including the observed GPU resize failure, are
+recorded only in [BUILD_GRAPH](BUILD_GRAPH.md).
+
+**External-data runtime.** Separate visible Wayland/Vulkan optional-FFmpeg
+shells used the lawfully external Steam `Sol_Train.dmission`, `gendata.db`,
+`gametypes.db`, `stringpack.db` and Speech archive. No retail payload was
+copied into the repository. Each ran `--smoke-ms 15000`, isolated save and
+settings directories, the existing repository profile/hotkeys/material
+root and generated mission shaders. Normal `/dev/uinput` mouse events at
+window-local `(303,425)` left and `(624,480)` right triggered selection and
+movement through the original game callers. SDL's default host audio path
+was used; no dummy audio override was set. Human audibility was not assessed.
+
+Both runs opened and started two unit voices through IStreamer, interrupted
+one through original UnitComm and completed the other: `started=2
+completed=1 stopped=1 active=0`. GCC selected `SFO3054.wav` then `SFO3058.wav`;
+Clang selected `SFO3054.wav` then `SFO3056.wav`. GCC ran 447 modal frames and
+Clang 381; both observed 449 source simulation updates, objectives 1 and 2
+complete, modal result 4, source save/reload acceptance, mission close and
+exit zero. The player Forger moved from `(39936,68608)` to
+`(49778.3,66640.9)` under GCC and `(49799.4,66636.7)` under Clang; each
+reload preserved its respective owner, position and objective flags.
+Wall-clock input and audio RNG outcomes do not establish cross-compiler
+determinism.
+
+The executed mission command had the following arguments (external paths
+and compiler-specific temporary roots are represented by variables):
+
+```sh
+XDG_CONFIG_HOME="$settings" "$build/frontierx_native_shell" \
+  --data-root "$install/DATA" --material-root "$repo/Data/mat" \
+  --system-profile "$repo/Code/App/Src/Conquest.ini" \
+  --skip-movies --skip-notification-cue --skip-sector-map \
+  --skip-space-background --skip-unit-labels --skip-planet-ui \
+  --skip-animated-portraits --skip-training-speech --skip-unit-alerts \
+  --skip-mission-sfx --skip-teletype-visuals --skip-subtitles \
+  --base-textures-only --skip-legacy-lighting --skip-mission-music \
+  --mission-source Sol_Train.dmission --mission-engine --mission-start \
+  --mission-gpu "$build/generated/shaders/sdl3_gpu_probe.vert.spv" \
+    "$build/generated/shaders/sdl3_gpu_probe.frag.spv" \
+    "$build/generated/shaders/sdl3_gpu_probe_mt.vert.spv" \
+    "$build/generated/shaders/sdl3_gpu_probe_t4.vert.spv" \
+  --string-pack "$install/stringpack.db" --gen-data "$install/gendata.db" \
+  --game-types "$install/gametypes.db" \
+  --hotkeys "$repo/Code/App/Src/Hotkeys.utf" \
+  --save-root "$save" --smoke-ms 15000
+```
+
+The default SDL-only decoder still rejects IAC; this checkpoint requires
+the explicit external LGPL configuration. The execution was bounded by
+`timeout -k 5s 120s`; both shells exited normally before that timeout.
+
+**Next gate and limits.** Restore in-window mission text/teletype at the
+original font and presentation owners. Unit alerts, subtitles, training
+speech/portraits, mission music, spatial SFX and the other named UI/render
+exclusions remain open. Native Windows Debug/Final, cross-module ABI,
+Windows audio comparison, full game/retail parity and determinism comparison
+were not performed. No release, commit or publication was made.
+
+## Source modal mission integration (2026-10-10)
+
+**Blocker and hypothesis.** The prior checkpoint already implemented the
+production pipeline's full-target color/depth clear, begin/end and swap.
+`Modal.cpp::CQDoModal` remained outside the native link. Source review of its
+real `Conquest.cpp` game callers and the bounded shell loop showed that a
+mission frame clears before `begin_scene`, issues multiple object/UI draws,
+ends and presents through `IRenderPipeline`, then advances source object and
+GameSystem updates. The falsifiable hypothesis was that this existing
+pipeline/SDL GPU contract could run the source loop with a native event
+connection and an original mission quit event; a separate game loop or
+renderer boundary was unnecessary. The existing CPU pipeline and GPU probes
+cover lifecycle order, multiple draws, presentation and resource rebinding.
+
+**Integration.** `Modal.cpp` now compiles in the native shell while preserving
+its Windows branches. Native `CQDoModal(nullptr)` subscribes to the active
+EventSystem outgoing connection, where the source mission sends dialog
+results. The shell retains one startup diagnostic frame, then calls the
+source modal loop for all repeated frames. A native shell event callback
+posts `CQE_PLAYER_QUIT` after the selected duration or a window-close event;
+the original `Mission::Notify` sends `CQE_DLG_RESULT` and modal returns
+`MISSION_END_QUIT` (4). A zero duration allows normal continued play until
+window close. Source frame-time conversion, event ordering, object rendering,
+EndModal flush/present, `OBJLIST->Update`, `GS->Update` and frame timing now
+own the repeated path. The native modal leaves the pipeline idle after swap;
+the next game frame performs its own clear. Native clear/begin/end/swap
+failures abort this modal result instead of claiming a completed frame.
+After the accepted save/reload, the shell sends the game-inactive transition
+and calls `Mission::Close`; normal window close also follows that shutdown
+path. Other original mission end results are recognized and close the mission;
+those outcomes were not exercised in this checkpoint. No public interface or
+persistent format changed.
+
+**Validation.** Linux x86_64 Debug Ninja GCC 16.2.1 and Clang 22.1.8 built
+`frontierx_native_shell` in `/tmp/frontierx-mission-gcc` and
+`/tmp/frontierx-mission-clang` with `cmake --build <tree> --target
+frontierx_native_shell -j4`. The existing render-pipeline,
+render-submission and native-shell CTests passed 3/3 per compiler before the
+final builds. `SDL_VIDEODRIVER=x11 ctest --test-dir
+/tmp/frontierx-mission-gcc --output-on-failure -j4` passed 51/51 including
+GPU. The same Clang CTest command passed 50/51: its GPU test failed a desktop
+tiling resize observation at 1854x2085. A separate floating X11 direct
+`frontierx_sdl3_gpu_probe ... --require-runtime --visible` under Clang passed
+12 Vulkan frames, 639x360 to 800x450 resize, depth recreation and repeated
+scene initialization. A GPU skip is not counted as execution.
+
+Separate visible Wayland/Vulkan processes ran the mission with lawful
+external `Sol_Train.dmission` and the same named optional exclusions listed
+in the playable checkpoint below. Each used `--smoke-ms 15000`, an isolated
+save directory and normal `/dev/uinput` mouse events at window-local
+`(303,425)` left and `(624,480)` right. The first source diagnostic frame
+submitted 28 draws and changed 171 pixels in the bounded readback. GCC ran
+407 modal frames and reached 450 source simulation updates; Clang ran 413
+modal frames and reached 450 updates. Both selected the player Forger,
+completed source training objectives 1 and 2, returned modal result 4,
+saved/reloaded owner 1 and the exact respective moved position and flags,
+called source mission close and exited zero. GCC moved from `(39936,68608)`
+to `(50175.8,66560)`; Clang to `(50174.9,66560.2)`. The event timing is
+wall-clock dependent; these values do not establish cross-compiler
+determinism. A separate GCC run with no duration was closed through the
+normal window close request, returned modal result 4, closed the mission
+and exited zero without requiring training acceptance.
+
+The executed focused/runtime command forms were:
+
+```sh
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^(portability.render_pipeline|portability.render_submission|portability.native_shell)$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^(portability.render_pipeline|portability.render_submission|portability.native_shell)$' --output-on-failure
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell -j4
+SDL_VIDEODRIVER=x11 ctest --test-dir /tmp/frontierx-mission-gcc --output-on-failure -j4
+SDL_VIDEODRIVER=x11 ctest --test-dir /tmp/frontierx-mission-clang --output-on-failure -j4
+bash /tmp/frontierx-alpha-runtime/run-modal-gcc-long.sh
+bash /tmp/frontierx-alpha-runtime/run-modal-clang-long.sh
+bash /tmp/frontierx-alpha-runtime/run-modal-gcc-close.sh
+```
+
+The three temporary runtime scripts contain the external-data, shader,
+exclusion and save-root arguments; compositor cursor positioning and uinput
+clicks were issued while each process was active. Logs, saves and retail
+inputs remain outside the repository. Native menu hot rectangles and CPU
+framebuffer locking are unsupported in this selected mission composition.
+Unit voice/text, teletype visuals and the other named media/UI exclusions
+remain open. Native Windows Debug/Final, module ABI, sanitizers, full game
+progression and a unit-bearing Windows retail comparison were not run.
+
+## Native mission frame lifecycle checkpoint (2026-10-10)
+
+The native mission now clears, begins, ends and presents frames through its
+production `IRenderPipeline` owner instead of calling SDL frame methods from
+`NativeShell`. `NativeRenderPipeline` binds native-only frame callbacks to
+`SdlGpuRenderer`; the legacy public vtable and all disk/save layouts are
+unchanged. `RP_CLEAR_COLOR` retains packed ARGB and `RP_CLEAR_DEPTH` retains
+its unsigned normalization by `0xffffffff`. The supported operation is a
+full-target color-and-depth clear, followed by begin/end and swap. Partial
+viewports, subrectangles, separate buffer clears and stencil clears return
+`GR_NOT_IMPLEMENTED`. Invalid lifecycle ordering fails, and failed callbacks
+do not advance the lifecycle. Unbinding clears borrowed callbacks and state.
+Empty frames clear and present correctly. SDL command buffers with an acquired
+swapchain image are submitted on draw failure rather than illegally cancelled.
+
+**Blocker and test decision:** source `Modal.cpp::CQDoModal` and
+`Mission.cpp` use these existing slots. Their absence prevented the active
+mission composition from exercising the source frame contract. The existing
+CPU render-pipeline probe now checks clear values, ordering, callback failure,
+retry and unbinding. The existing GPU probe checks black/red empty-frame
+readback, depth-zero rejection of geometry, restored depth and two captured
+draws, presentation, resize and repeated renderer initialization. No parallel
+render loop or new probe was added. Passing this gate permits work on linking
+`Modal.cpp` and its remaining event/timing/UI services; it does not mean that
+`CQDoModal` itself is linked or executed.
+
+**Automated execution and synthetic GPU runtime:** Linux x86_64 Debug Ninja
+trees `/tmp/frontierx-mission-gcc` (GCC 16.2.1) and
+`/tmp/frontierx-mission-clang` (Clang 22.1.8) were rebuilt with
+`cmake --build <tree> -j 12`. The existing render-pipeline and native-shell
+CTest checks pass under both compilers. Full `ctest --test-dir <tree>
+--output-on-failure` runs are recorded in [BUILD_GRAPH.md](BUILD_GRAPH.md).
+The desktop's default Wayland/tiled GPU run failed its resize assertion;
+this is not counted as a passing runtime. Separate floating X11/XWayland
+Vulkan runs with `SDL_VIDEODRIVER=x11` and `--require-runtime --visible`
+passed under both compilers: twelve presentation frames, resize to 800 by
+450, two scene initializations and matching final readback checksum
+`9787875930373773388` with 3072 changed pixels. Inputs were generated UTF and
+repository-owned smoke geometry/textures. The GPU argument order is vertex,
+fragment, **t4 extended vertex**, generated UTF path, **mt game vertex**.
+The registered `portability.sdl3_gpu` CTest was also rerun with
+`SDL_VIDEODRIVER=x11 ctest --test-dir <tree> -R '^portability.sdl3_gpu$'
+--output-on-failure` in floating test windows and passed under both compilers.
+The test's resize failure now reports observed window and target dimensions.
+
+**Retail-input native runtime:** separate visible Wayland/Vulkan mission
+runs used the same lawful external `Sol_Train` inputs, launch flags and
+optional presentation exclusions as the prior checkpoint below. Both ran
+299 source updates with normal mouse selection and movement, completed
+objectives 1 and 2, and preserved the moved owner-1 Forger and objective flags
+through original mission save/reload. GCC moved from `(39936,68608)` to
+`(45117.5,67571.8)`; Clang to `(45120.1,67571.3)`. The initial frame still
+contained 28 source draw submissions and 171 changed readback pixels.
+A floating 800-by-600 window received a left click at `(303,425)` and a
+right click at `(624,480)` through the external temporary uinput device.
+Logs, saves and all external media remain outside the repository.
+
+**Limits:** this completes the bounded native frame-boundary checkpoint,
+not the entire modal loop, all clear semantics or retail parity. Source
+modal event/timing/UI integration remains the next owner, followed by unit
+voice/text and teletype presentation. The optional media/UI exclusions
+remain necessary. Windows Debug/Final, cross-module ABI, sanitizers and a
+unit-bearing Windows retail comparison were not executed in this step.
+
+## Playable Solarian training checkpoint (2026-10-10)
+
+**Retail-input native runtime:** the first bounded single-player slice now
+executes with a lawful external Steam installation, outside the repository.
+The selected `Sol_Train.dmission` acceptance is: load the original mission,
+show the player-owned `FAB!!S_Forger`, select it with a left mouse click,
+issue a right-click move, advance the original offline operation and object
+simulation until Solarian training objectives 1 and 2 are complete, then
+save and reload the moved Forger and those objective flags. The shell returns
+zero only after all these postconditions hold; an absent click or objective
+returns a distinct failure. A ten-second bounded run is used for validation.
+
+The active native composition uses the unchanged source system profile and
+required SDL `IStreamer`, original `Mission::Load`, `ObjectList`, `ObjComm`,
+offline `NetPacket` and `OpAgent`, `MScript`/`SolTrain`, source camera,
+Engine/RenderMgr/material/mesh callers and visible SDL/Vulkan presentation.
+SDL mouse events enter the normal source selection and operation path.
+Source `Mission::Save`/`Load` writes and reads a native UTF save under `/tmp`;
+the archive contains script parse/global/program records. Native script
+save aborts on a failed required directory or write instead of reporting a
+successful save. A captured mission frame contained 28 source draw
+submissions and 171 changed pixels in the bounded 64-by-64 GPU readback;
+the live scene showed ships and a planet, and the visible Forger selection
+completed the script's selection objective. Repeated render frames also
+exercise the native line-list pipeline used by source selection graphics.
+
+The validation window was 800 by 600 at desktop origin `(880,433)`.
+After the source mission frame appeared, a left click at window-local
+`(303,425)` selected the Forger; a right click at `(500,480)` issued the
+move. The source simulation advanced 299 GCC and 298 Clang updates in the
+final rebuilt runs. GCC 16.2.1 observed initial planar position `(39936,68608)`, moved
+position `(45836.1,66641.3)`, objective flags `select=1 move=1`, and an
+exact owner-1/position/flags round trip after reload. Clang 22.1.8 observed
+the same initial position, `(45808.5,66650.5)` after movement, both flags,
+and the exact corresponding reload. The position difference comes from
+wall-clock input timing; the acceptance checkpoint is the same source
+objective state and preserved moved position, not byte-identical movement
+timing. Both separate Wayland/Vulkan processes exited zero. The mouse
+events came from a temporary `/dev/uinput` device outside the repository,
+not from direct calls into game logic.
+
+For reproduction, build `frontierx_native_shell` with the GCC or Clang
+Linux Debug CMake tree and invoke it with `--data-root` pointing to the
+lawfully installed `DATA` directory, `--gen-data` and `--game-types`
+pointing to the corresponding external databases, `--system-profile`
+pointing to `Code/App/Src/Conquest.ini`, `--material-root` to `Data/mat`,
+`--hotkeys` to `Code/App/Src/Hotkeys.utf`, `--save-root` to a writable
+directory outside the repository, and `--mission-source Sol_Train.dmission
+--mission-engine --mission-start --smoke-ms 10000`. Supply the four shaders
+from the same build tree to `--mission-gpu` in this order:
+`sdl3_gpu_probe.vert.spv`, `sdl3_gpu_probe.frag.spv`,
+`sdl3_gpu_probe_mt.vert.spv`, `sdl3_gpu_probe_t4.vert.spv`. The validated
+bounded presentation exclusions were `--skip-movies`,
+`--skip-notification-cue`, `--skip-sector-map`,
+`--skip-space-background`, `--skip-unit-labels`, `--skip-planet-ui`,
+`--skip-animated-portraits`, `--skip-subtitles`,
+`--base-textures-only`, `--skip-legacy-lighting`,
+`--skip-training-speech`, `--skip-unit-voice`,
+`--skip-teletype-visuals` and `--skip-mission-music`.
+
+The final validation used preconfigured Debug Ninja trees and these exact
+build/test commands (GCC tree first, Clang tree second):
+
+```sh
+cmake --build /tmp/frontierx-mission-gcc -j 12
+ctest --test-dir /tmp/frontierx-mission-gcc --output-on-failure
+cmake --build /tmp/frontierx-mission-clang -j 12
+ctest --test-dir /tmp/frontierx-mission-clang --output-on-failure
+```
+
+The existing `portability.data_root`, `portability.render_pipeline`,
+`portability.render_submission`, `portability.native_shell` and
+`portability.state_material` checks executed on generated/repository
+inputs under both compilers. The complete CTest result is recorded in
+[the build graph](BUILD_GRAPH.md). Separate `frontierx_sdl3_gpu_probe` processes received
+the build-tree vertex, fragment, extended vertex and game vertex SPIR-V
+files plus a generated UTF fixture and `--require-runtime --visible`;
+each used Vulkan and presented twelve frames. The integrated shell used
+lawful external mission/data inputs and an external save directory. Its
+GCC and Clang processes both exited zero after the normal mouse input,
+source objectives and moved-state reload checks. The external mission
+data, saves, screenshots and logs remained outside the repository.
+
+`IStreamer` is a required source-profile service for Music, SFX, Speech
+and MSpeech and remained initialized. The default SDL-only build cannot
+decode this IAC training speech; its playback was explicitly excluded for
+this visual/gameplay checkpoint. `IVideoSystem` serves full-screen movies;
+the mission's gameplay path does not require a movie, and only explicit
+`--skip-movies` omits that service. Unit voice, teletype text visuals,
+sector-map GDI, decorative background, animated portrait/subtitles, font
+labels, planet resource panel, inherited menu music and some texture/light
+effects were separately excluded with named flags because their native
+presentation paths are incomplete. Script teletype handles still advance
+through source-time events and preserve their save IDs. These exclusions
+limit audiovisual fidelity; they do not replace the source mission,
+selection, operation, simulation or persistence owners.
+
+This is a first playable slice, not a complete game or verified Windows
+retail-parity result. The original CQ2 snapshot still reports some missing
+effect archetypes on this retail input; their classification against a
+working Windows retail baseline remains open. The documented Windows
+mission without units is not a valid gameplay reference. Native Windows
+Debug/Final rebuilds, cross-module ABI, sanitizers, complete UI/media,
+longer mission outcomes and retail gameplay comparison have not run.
+The next concrete blocker for a broader playable mission is the production
+`CQDoModal` render contract: native `IRenderPipeline::clear_buffers` and
+begin/end scene must execute so the bounded shell loop can give way to the
+source modal game loop. The omitted in-game unit voice/text and mission
+teletype visuals then require native owners, followed by a Windows
+unit-bearing comparison for CQ2 restoration issues. The historical
+diagnostics below are superseded by this checkpoint.
+
+## Source perspective and multi-draw mission frame (2026-10-10)
+
+The selected acceptance remains the external `Sol_Train.dmission`: a
+player-owned Forger must be visible and selectable, receive a move command
+through normal mouse input, reach a repeatable mission state through source
+simulation, and retain that state after save/reload. The present shell reaches
+the first source update, frame and static-state save/reload. Its post-load list contains one
+`FAB!!S_Forger` owned by player 1 in system 2; source render visibility is
+`-1`. The current screenshot shows mission geometry and ships, but a pixel
+has not yet been attributed specifically to the Forger. The screenshot and
+readback are runtime diagnostics, not acceptance of selection or movement.
+
+The source camera must run `SetPosition` before its first render to establish
+its near/far distances. The native `IRenderPrimitive::set_perspective` was
+still returning `GR_NOT_IMPLEMENTED`, and the caller did not check that
+result; therefore all game draws used identity projection and clipped away.
+The native owner now builds the source half-angle perspective with the
+camera's negative-Z convention, matching the Windows D3D owner's Z flip.
+The existing render-submission check protects the matrix and invalid-input
+contract. The SDL GPU backend also discarded every submission except the
+last one. Explicit `BeginFrame` now captures each draw's buffers, texture,
+sampler, pipeline, transform and render state, then presents them in order.
+The existing SDL GPU probe now checks a two-draw frame with different
+transforms; explicit visible Vulkan runs passed under both compilers.
+Frame capture is currently used by the mission shell's first frame only;
+the regular game loop is not connected. Frame resource mutation while a
+captured texture is referenced fails explicitly.
+
+The same process now calls source `Mission::Save` into the isolated native
+save directory, reopens the written UTF archive through source
+`Mission::Load`, and verifies that the player Forger still has owner 1 and
+position `(39936, 68608, 0)`. The first save attempt did not publish a file
+because the source queried the unversioned `IUTFWriter` name. The native
+writer now accepts that exact existing caller alias. The next attempt
+exposed the source's Debug-only `SaveParseData` call; native builds now
+write that required schema or fail the save. `ObjectList::Save` expected
+`IFileSystem::CreateInstance` on an existing directory to return a writable
+directory view, then its object savers used default `DAFILEDESC` child
+creation. The native UTF owner now fulfills both contracts. The existing
+data-root check covers alias lookup and nested directory-view child write.
+The native mission save also checks `ObjectList::Save` rather than reporting
+success on its failure. During reload, native no-GDI `ISystemMap` now tracks
+bounded map invalidations. `MeshManager::FindMeshArch` skips an engine
+archetype whose name is absent after reload, avoiding a null `strcmp`; this
+source-level guard also affects Windows and needs native Windows validation.
+The saved state has not yet included a user-commanded move.
+
+On Linux x86_64 Debug Ninja, GCC 16.2.1 and Clang 22.1.8 each built the
+integrated shell, SDL GPU probe and render-submission probe. The existing
+data-root, render-pipeline, render-submission and native-shell CTests passed
+4/4 per compiler on generated/repository data. Separate visible
+Wayland/Vulkan `--require-runtime --visible` SDL GPU probes passed, rather
+than skipped. Separate visible integrated shell processes used lawfully
+external Steam `DATA`, `gendata.db`, `gametypes.db` and `Sol_Train.dmission`.
+Both loaded the mission, executed `CQE_GAME_ACTIVE` and one `CQE_UPDATE`,
+captured 28 production draw submissions and presented a frame. Each 64x64
+readback found 171 changed pixels with checksum `13653293730956160287`.
+A save archive derived from the lawful external mission was written under
+`/tmp`; both compiler processes reloaded it and preserved the Forger owner
+and exact position above.
+A live desktop capture showed a planet and several small ships in the
+800x600 mission window. Both shells then exited 6 at the explicit missing
+input/loop gate. The same bounded optional media and presentation exclusions
+listed below were active; required `IStreamer` stayed initialized and
+full-screen `IVideoSystem` was excluded solely by `--skip-movies`.
+
+Normal input selection and move dispatch, repeated source updates, and a
+defined post-move mission checkpoint remain unexecuted. The next
+production blocker is the original `ObjectComm` input owner: the SDL window
+already forwards mouse events through `ShellWindowCallback` and the source
+`ObjectList` consumes them, but `ObjComm.cpp` is not in the native link.
+`IRenderPipeline::clear_buffers` and begin/end scene remain unsupported,
+so the diagnostic frame uses the backend's explicit frame clear/present and
+is not the complete `CQDoModal` contract. Full presets, sanitizers, native
+Windows Debug/Final, module ABI and retail gameplay comparison remain open.
+External data, screenshots and logs stayed outside the repository.
+
+The next section is a historical snapshot superseded by this frame result.
+
+## Original planet owner, game-active update and first object-render blocker (2026-10-10)
+
+The original `Planetoid.cpp` factory now compiles and links into the Linux
+shell under GCC 16.2.1 and Clang 22.1.8. `IFileSystem::CreateInstance` now
+accepts bounded relative archive child paths with Windows separators, such
+as the retail planet mesh `Planets\\gas2_LG.cmp`, while rejecting absolute
+paths and traversal. The existing data-root check covers a generated nested
+path and traversal rejection. This removed the planet placement assertion.
+The original `Sol_Train.dmission` completes `Mission::Load`, counts one
+`FAB!!S_Forger`, sends `CQE_GAME_ACTIVE`, and executes one `CQE_UPDATE` in
+separate visible Wayland/Vulkan processes under both compilers. The required
+source-profile `IStreamer` was initialized. Full-screen `IVideoSystem` was
+omitted only by `--skip-movies`.
+
+This diagnostic run explicitly omitted the unsupported planet resource
+panel (`--skip-planet-ui`), animated talking-head portrait
+(`--skip-animated-portraits`), subtitle UI (`--skip-subtitles`) and IAC
+training speech (`--skip-training-speech`). The portrait option still routes
+the speech file to the real `IStreamer` when speech is enabled; the default
+SDL-only build correctly rejects this external IAC WAV, so this run disabled
+speech to reach the gameplay owner. The original music fade request now
+calls `IMusicManager::SetVolume(0)` through the native sound owner. Inherited
+menu music was separately disabled by `--skip-mission-music`; the script's
+`solarian_game14.wav` request was still issued. These exclusions concern
+presentation and audio. They are not evidence of retail audiovisual parity.
+
+One `CQE_UPDATE` completed, but a production `ObjectList::Render` pass
+submitted no GPU scene, and the shell reported a presentation failure rather
+than a frame. The Forger belongs to player 1 in active system 2 and is
+visible to that player by ownership. Source `ObjectSelection::TestHighlight`
+nevertheless sets its frame visibility to zero after projected-bound checks.
+GDB measured the original Forger projection near screen `(-0.18, -99.62)`
+with radius `17.48` in an 800-by-600 pane, even after the source camera's
+`SetLookAtPosition` reported the Forger position. The camera's near distance
+was about 160464 world units. The projection/camera initialization and the
+CQ2/retail mission camera restoration need investigation before calling this
+a Linux renderer defect. The documented Windows mission without units is
+not a gameplay reference. The production object pass first also encountered
+an unsupported decorative dust point draw; explicit `--skip-space-background`
+now suppresses native dust rendering with the rest of that optional visual
+layer. Unsupported `IRenderPipeline::clear_buffers` and scene begin/end
+still reject calls, so the diagnostic pass uses the backend's implicit
+color/depth clear on `Present`; it is not the complete `CQDoModal` contract.
+
+The integrated GCC/Clang Debug Ninja shell and data-root targets built.
+Separate lawfully external visible GPU processes each reached the source
+game-active update and then failed before presentation; neither produced a
+mission GPU frame. The focused `portability.data_root`,
+`portability.render_pipeline` and `portability.native_shell` CTests passed
+3/3 per compiler on generated/repository inputs. Direct GDB source stacks
+identified the earlier planet-mesh path, the `Sol_T` speech and subtitle
+calls, and the current Forger projection. No normal input movement,
+deterministic mission checkpoint or save/reload ran. Full presets,
+sanitizers, native Windows Debug/Final, module ABI and retail gameplay
+comparison remain unperformed. The next blocker is the production camera
+projection and visibility path for the loaded Forger, followed by native
+input and a bounded mission render loop. External media and logs stayed
+outside the repository.
+
+## Source mission object chain through platform placement (2026-10-10)
+
+The selected `Sol_Train.dmission` acceptance remains the visible, selectable
+Solarion Forger, a normal-input move, a deterministic simulation checkpoint,
+and save/reload of the same relevant state. This step did not reach any of
+those gameplay gates. The original Jumpgate, Waypoint, Trigger, Gunboat and
+build-support Platform factories now compile and link into the native shell
+under GCC and Clang. During `CQE_GAME_ACTIVE`, the external training script
+progressed from missing wormhole to missing `TriggerPoint`, then `Taos1`,
+then `Acropolis` as those production providers were linked. The original
+Windows `_localLoadString(0)` returns an empty buffer; the native string
+service now matches that documented optional display-name behavior for
+invisible mission triggers while still rejecting missing nonzero IDs.
+
+`PLATFORM_INIT::loadPlatformArchetype` created a mesh owner but left its
+`archIndex` at the constructor's `-1`, then supplied that invalid index to
+blinkers and later instance code. The owner now checks that the mesh and
+engine archetype exist and stores the actual engine index. This source fix
+also affects the Windows path and is classified as CQ2/retail restoration,
+separate from Linux UTF case and include repairs. Native Windows Debug/Final,
+module ABI and Windows mission behavior remain unverified. The exact platform
+factory class and data layouts were not changed.
+
+Visible Wayland/Vulkan GCC 16.2.1 and Clang 22.1.8 Debug processes with
+lawfully external `DATA`, `gendata.db`, `gametypes.db` and `Sol_Train`
+now stop during original `Mission::Load` at `TPlatform.h:872`: the `Cocoonr`
+platform has no loaded planet on which it can park. Earlier `ObjectList`
+records showed absent `Planet Gas`, `Planet Earth` and `Planet Moon`
+providers. The next concrete owner is the original `Planetoid.cpp` factory,
+followed by another complete mission load and source game-active/update
+attempt. The fact that previous combinations reached 100% does not mean
+the present combination did. A Forger instance was counted in the preceding
+factory combination, but the current platform-enabled load aborts before
+the post-load count. Required `IStreamer` remains active; only full-screen
+`IVideoSystem` and inherited menu music use explicit exclusions.
+
+Validation for this source chain: both Linux x86_64 Debug Ninja integrated
+shell targets built under GCC 16.2.1 and Clang 22.1.8. Direct original
+Jumpgate/Waypoint/Trigger/Gunboat/BuildSupPlat compilation also succeeded
+under both compilers after native include/template fixes. Separate visible
+GPU external-data processes under each compiler aborted at the same required
+planet-placement assertion (exit 134). The focused
+`portability.data_root`, `portability.render_pipeline` and
+`portability.native_shell` checks passed 3/3 per compiler on synthetic and
+repository data after the platform link. No simulation tick, mission-owned GPU draw, selection/movement,
+checkpoint or save/reload executed. Full presets, sanitizers, native Windows,
+ABI and retail gameplay comparison were not run. External data and logs
+remained outside the repository.
+
+The sections below are historical snapshots. Their named jumpgate and
+Forger blockers have been superseded by the current planet-placement result.
+
+## Original Forger instance and next script blocker (2026-10-10)
+
+The bounded `Sol_Train.dmission` acceptance remains: one player-owned Solarion
+Forger must be visible and selectable, accept a move through normal input,
+reach a repeatable mission checkpoint under the original simulation, and
+preserve that state through save and reload. This step reached the first real
+Forger instance but did not reach gameplay.
+
+The original `Fabricator.cpp` registrar now links into `frontierx_native_shell`
+with the original `SpaceShip`, `ObjMove`, `ObjControl`, `Damage`, extent, mesh,
+blinkers, trail, explosion and debris owners. The native App also binds the
+production `ANIM` and `HARDPOINT` services, implements the source hardpoint
+enumeration/lookup contract, supplies axis-aligned 2D line drawing and links
+the original Banker resource ledger. Unsupported native resource-menu display
+and diagonal/smoothed 2D lines fail explicitly. Windows source branches and
+serialized structures were not changed by these additions.
+
+The first external run with the factory exposed an expensive native UTF path:
+each nested texture lookup fully rescanned the 127 MB `objects` archive. A
+validated, immutable disk-archive index now supports the production
+`IFileSystem`'s directory and payload lookups. Its archive path resolution
+also matches Windows ASCII case-insensitive behavior, rejecting ambiguous
+case-folded entries. The standalone UTF metadata reader retains exact-case
+behavior. Source `SSforger.cmp` differed in case from the external archive's
+`ssforger.cmp`; before the fix `MeshManager::CreateMeshArch` returned null and
+the original Forger extent initializer dereferenced a null mesh. The indexed
+case-compatible path removed that failure and shortened the same mission run
+to about two seconds. This is a Linux filesystem compatibility defect, not
+evidence that the documented Windows no-units mission is valid.
+
+Visible Wayland/Vulkan GCC 16.2.1 and Clang 22.1.8 Debug processes using
+lawfully external `DATA`, `gendata.db`, `gametypes.db` and
+`Sol_Train.dmission` then completed original `Mission::Load` at 100% and
+counted **one** `FAB!!S_Forger` in the production `ObjectList`. Required
+source-profile `IStreamer` initialized; only full-screen `IVideoSystem` was
+omitted with explicit `--skip-movies`, and inherited menu music with separate
+`--skip-mission-music`. The native shell's next source `CQE_GAME_ACTIVE`
+transition aborts when `MScript::GetPartByName` requests
+`Wormhole to Kasse (Solar)`. `ObjectList` has already logged no provider for
+`JGATE!!Jumpgate`; linking and executing the original jumpgate owner is the
+next concrete integration blocker. Other missing factories remain. The
+one-update call placed after that transition has **not** executed, nor have
+mission-owned GPU draw, normal selection/move input, deterministic checkpoint
+or save/reload. The shell still returns failure at this unfinished boundary.
+The existing Windows mission without units remains a separate CQ2/retail
+restoration issue, not a gameplay reference.
+
+Validation: both Linux x86_64 Debug Ninja `frontierx_native_shell` and
+`frontierx_data_root_probe` targets built under GCC 16.2.1 and Clang 22.1.8.
+The focused `portability.data_root`, `portability.render_pipeline` and
+`portability.native_shell` checks passed 3/3 per compiler on synthetic and
+repository inputs. The data-root check now reads a mixed-case generated UTF
+path through the indexed production `IFileSystem`. Separate visible GPU
+processes under both compilers reached the external-data Forger count; the
+following game-active attempt aborted at the named required jumpgate with
+exit 134. Earlier unindexed GCC runs were interrupted or timed out during
+Forger texture loading and are not gameplay evidence. Native Windows
+Debug/Final, cross-module ABI, full presets, sanitizers, retail gameplay
+comparison and save/reload checks were not run. External media and diagnostic
+logs remained outside the repository.
+
+```text
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell frontierx_data_root_probe -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell frontierx_data_root_probe -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+```
+
+The following sections are earlier snapshots; their factory-link and
+missing-Forger statements are superseded by the evidence above.
+
+## Forger object compile and first production link inventory (2026-10-10)
+
+The original `Fabricator.cpp` now compiles as a Linux C++17 object under
+GCC 16.2.1 and Clang 22.1.8. Non-Windows inherited-member qualifications
+and exact interface includes close its immediate template compilation path.
+The dormant CQ2 `ObjectWarp::setModelScale` helper references an absent
+`IEngine::set_instance_property` API and undeclared `MODEL` owner; its Linux
+body now aborts explicitly if invoked. Source search found no caller. The
+Windows body remains unchanged. No persistent format or module ABI changed.
+
+The `frontierx_app_fabricator_owner` object is in the native CMake graph.
+A trial link into `frontierx_native_shell` failed: its first missing owners
+include `SpaceShip<FABRICATOR_SAVELOAD, FABRICATOR_INIT>` explicit template
+methods, `ObjectMove` methods, `BANKER`, `ANIM`, blinkers, `RayEllipse` and
+`SMesh::load`. The real source owners `SpaceShip.cpp` and `ObjMove.cpp` both
+stop at the Windows-only `pch.h` (`windows.h`) on a direct native compile.
+The factory object was therefore kept outside the shell link. This is a
+Linux source/link-closure blocker, separate from the CQ2/retail restoration
+question of why the documented Windows mission has no units. The next step
+is to bring `SpaceShip.cpp` and `ObjMove.cpp` through their native source
+closure and link the required App services before repeating the actual
+Forger postcondition.
+
+Validation on Linux x86_64: strict direct GCC/Clang C++17 syntax and object
+compilation of `Fabricator.cpp` succeeded. Both Debug Ninja trees built
+`frontierx_app_fabricator_owner` and `frontierx_native_shell`; focused
+`portability.data_root`, `portability.render_pipeline` and
+`portability.native_shell` CTests passed 3/3 per compiler on
+synthetic/repository inputs. The trial integrated shell link failed under
+GCC at unresolved production symbols; Clang initially failed to instantiate
+the old templates without target-local delayed parsing, then built the
+separate owner with that option. No external-data mission or GPU runtime was
+run in this step. No factory, unit, move, simulation checkpoint or save/load
+executed. Full presets, native Windows Debug/Final, ABI and sanitizers were
+not run.
+
+```text
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_app_fabricator_owner frontierx_native_shell -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_app_fabricator_owner frontierx_native_shell -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+```
+
+The section below records the preceding source-closure snapshot.
+
+## Forger factory source closure remains open (2026-10-10)
+
+The current production `Sol_Train` acceptance and missing-Forger runtime
+result remain as recorded below. Source review confirmed that the supported
+Windows `Conquest.vcxproj` includes original `Fabricator.cpp`; its static
+`_fabricatorship` registers `FabricatorFactory` with the production
+`ObjectList` during global startup. The native shell does not link that
+owner. This missing native registration is distinct from the separate
+CQ2/retail restoration problem represented by the Windows mission with no
+units; that Windows observation is not a correct gameplay baseline.
+
+This step prepared the original Forger source's native include order and
+case-sensitive names, qualified several inherited template node types and
+members only on the non-Windows branch, and kept editor insertion explicitly
+unavailable. The direct GCC 16.2.1 `Fabricator.cpp` syntax attempt progressed
+from incomplete `SaveNode`/`LoadNode` types to instantiated selection code;
+it still fails in dependent-base lookups. Direct Clang 22.1.8 with delayed
+template parsing similarly fails in the selection template. These attempts
+used `-fpermissive` for GCC and `-fdelayed-template-parsing -fms-extensions`
+for Clang to inventory the inherited source closure. Neither is an accepted
+production compile, and `Fabricator.cpp` remains unlinked. The next concrete
+step is to complete standards-conforming template qualification without
+changing node layout, then build/link the factory and repeat the external
+Forger postcondition. Further object factories and gameplay still follow.
+
+Both existing Linux x86_64 Debug Ninja `frontierx_native_shell` targets
+rebuilt under GCC and Clang after the source preparation. The focused
+`portability.data_root`, `portability.render_pipeline` and
+`portability.native_shell` CTests passed 3/3 per compiler with
+synthetic/repository inputs; `git diff --check` passed. There was no new
+external-data mission execution in this source-closure step. The preceding
+visible retail-data runs remain valid only through mission loading and the
+missing-Forger rejection. No factory instance, mission draw, move command,
+simulation checkpoint or save/reload ran. Native Windows Debug/Final,
+module ABI, full presets and sanitizers were not run.
+
+```text
+g++ -std=c++20 -fpermissive -fmax-errors=6 -w -I Code/App/Src -I Code/App/Src/Include -I Code/App/DInclude -I Code/Libs/Include -I Code/Libs/Src/Include -fsyntax-only Code/App/Src/Fabricator.cpp
+clang++ -std=c++17 -fdelayed-template-parsing -fms-extensions -ferror-limit=4 -w -I Code/App/Src -I Code/App/Src/Include -I Code/App/DInclude -I Code/Libs/Include -I Code/Libs/Src/Include -fsyntax-only Code/App/Src/Fabricator.cpp
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+```
+
+The section below is the preceding mission-load runtime snapshot.
+
+## Production Sol_Train load completion, before playable objects (2026-10-10)
+
+The bounded acceptance remains the selected Solarion Forger's visible
+selection and move through normal input, a repeatable simulation checkpoint,
+and save/reload of its position and mission state. The native shell now mounts
+the lawful external `Speech` and `MSpeech` archives alongside Music and SFX,
+requires the source-profile `IStreamer`, and binds native App owners of the
+existing `ISoundManager` and `ITeletype` interfaces. The sound owner sends
+ordinary speech to `IStreamer`; unsupported actor highlighting, video and
+volume mutation fail explicitly. Display teletype remains unsupported, while
+its saved last-ID contract is available to `MScript::Load`. No actual speech
+or teletype presentation occurred in this run. The source `IVideoSystem` was
+omitted only by `--skip-movies`. Optional inherited menu music was disabled
+separately by `--skip-mission-music`; its `single_player_menu.wav` streamer
+open failed without that explicit option, and the file/codec cause is not yet
+established. Normal movement and simulation audio still need validation.
+
+The native `ISystemMap::GetSysMapRect` now derives its bounds from the source
+Sector rectangle with the source map padding formula. A visible GCC run then
+hit a divide-by-zero in `FogOfWar::UpdateFog`: the native shell had omitted
+the source `CQE_ENTERING_INGAMEMODE` transition that initializes the fog
+texture dimensions. Sending that event before `IMission::Load` removed the
+failure. These are Linux composition repairs; they do not restore missing
+CQ2/retail object behavior.
+
+Visible Wayland/Vulkan GCC 16.2.1 and Clang 22.1.8 Debug processes with
+lawful external `DATA`, `gendata.db`, `gametypes.db` and
+`Sol_Train.dmission` each reported 100% from the original `Mission::Load`.
+The shell then inspected the production `ObjectList` and rejected the mission
+with exit 6 because it contained no `FAB!!S_Forger` instance. An earlier
+count found zero spaceship instances of any type. `ObjectList`
+logged absent providers
+for `FAB!!S_Forger`, `GBOAT!!S_Taos`, planet, jumpgate, platform, waypoint
+and nugget archetypes. In particular no Forger was instantiated, so the
+100% loader result cannot satisfy the visible-unit gate. The nugget owner
+also reported missing `ionNugget.anm` and `cygnusNugget.anm`; determine
+whether those are archive lookup/restoration defects separately from Linux
+factory registration. The documented Windows mission without units is not a
+valid gameplay reference. The next concrete blocker is compiling and linking
+the original Forger/other required object factories, then rejecting a mission
+load that lacks the mandatory own unit before attempting input/render/save.
+An initial direct GCC/Clang syntax attempt on original `Fabricator.cpp`
+reached its inherited template stack and failed at dependent nested types
+(`SaveNode`, `LoadNode`, etc.) and further source declarations. It is not in
+the native link. Case-corrected includes made this failure observable; no
+factory capability is claimed from that source preparation.
+
+Both Debug Ninja `frontierx_native_shell` targets built. Focused
+`portability.data_root`, `portability.render_pipeline` and
+`portability.native_shell` CTests passed 3/3 under each compiler; these checks
+use synthetic/repository inputs, not mission gameplay. The separate external
+GPU runs are retail-data runtime evidence for startup and load only, and
+exited 6 at the explicit missing-Forger postcondition. No mission-owned GPU draw, selected unit, movement,
+simulation checkpoint or save/reload was executed. Full CTest presets,
+sanitizers, native Windows Debug/Final, cross-module ABI and Windows retail
+gameplay comparison were not run. The external data and runtime logs stayed
+outside the repository. This section supersedes the historical 88% snapshot
+below.
+
+Focused build/check commands were:
+
+```text
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+git diff --check
+```
+
+The visible GPU runs used each tree's `frontierx_native_shell`, matching
+generated shaders, the source `Conquest.ini`, repository material and
+hotkey inputs, and lawful external `DATA`, `gendata.db`, `gametypes.db` and
+`Sol_Train.dmission`. Both selected `--mission-engine --mission-start
+--mission-gpu`, isolated `/tmp` save/settings roots and explicit
+`--skip-movies --skip-notification-cue --skip-sector-map
+--skip-space-background --skip-unit-labels --base-textures-only
+--skip-legacy-lighting --skip-mission-music`. Both processes ran with a
+visible Wayland window and dummy SDL audio device, and exited 6 at the
+Forger check. `--skip-training-speech` was available but not selected;
+the source training script did not request playback before this boundary.
+
+## External Sol_Train load reaches the script boundary (2026-10-10)
+
+The chosen acceptance is still the Forger movement and save/reload checkpoint
+below. A real texture blocker was resolved: the external Anim2D texture uses
+RGB565 with a separate 8-bit alpha plane. The native `TextureLibrary` now
+selects RGBA8 for that source, and the production pipeline preserves the
+alpha bytes. The existing render-pipeline CTest checks four exact RGBA texels
+and native release. The texture's nine source mip levels exceed the current
+single-level SDL GPU texture contract. Explicit `--base-textures-only` sets
+the production library's `ITL_STATE_TEXTURE_LOD_LOAD` to zero before mission
+load; it retains the highest-resolution source image and documents the visual
+quality limit. Without this option the nine-level create still fails.
+
+With that option, the original `ObjectList` progressed through its data and
+instances. The explicit `--skip-sector-map` path now returns the original
+failure sentinel for map-only BMP icon registrations; all map draw calls
+remain unsupported. The original `VertexBuffer.cpp` owner is linked, so
+`MeshRender` registrations have their production list. Native device-loss
+restoration aborts until a GPU restoration contract exists. The App's 3D flag
+is enabled after global startup for mesh instance initialization. Explicit
+`--skip-legacy-lighting` leaves light objects in simulation while omitting
+legacy ambient/dynamic GPU light states unsupported by the current shader;
+without it those calls abort. These reductions affect presentation and must
+not be confused with retail visual parity.
+
+Visible Wayland/Vulkan GCC 16.2.1 and Clang 22.1.8 Debug processes with
+lawful external Steam `DATA`, `gendata.db`, `gametypes.db` and the selected
+`Sol_Train.dmission` both reached 88% of `Mission::Load`. Both aborted at
+the source `MScript::Load` prerequisites for `Sol_T.dll`. Its source
+`SolTrain_Start` program and parser are registered, but `SOUNDMANAGER` and
+`TELETYPE` were null at that call. The original `scripting.cpp` owner now
+compiles, links and initializes under both compilers; `SCRIPTING` was non-null
+in the final repeat runs. Direct source review and a
+GCC syntax attempt found that the original `SoundManager.cpp` remains outside
+the native closure at Win32 UI/timing/event and source-header boundaries;
+`Teletype.cpp` also owns Windows UI and has not been compiled natively.
+The earliest next gate is to initialize the sound and teletype owners and run
+the real training script. ObjectList also logged missing production factories
+for several mission archetypes, including `FAB!!S_Forger`, plus absent
+`ionNugget.anm` and `cygnusNugget.anm`; those are independent mandatory
+gameplay/data-restoration gates before claiming a unit. Their cause needs
+separate Linux registration versus CQ2/retail-data analysis. The Windows
+mission without units is not a correct reference result.
+
+Both `frontierx_native_shell` Linux Debug targets built. Existing focused
+`portability.data_root`, `portability.render_pipeline` and
+`portability.native_shell` CTests passed 3/3 per compiler; the first two use
+synthetic/repository inputs and the last tests shell contracts. The separate
+external-data GPU runs failed with exit 134 at 88%; their executed load path
+is retail-data runtime evidence only up to that boundary. No mission frame,
+visible Forger, input movement, simulation checkpoint or save/reload occurred.
+Full presets, sanitizers, native Windows Debug/Final, module ABI and retail
+gameplay comparison were not run. The runtime scripts and logs remained in
+`/tmp`, and no retail input was added to the repository.
+
+```text
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell frontierx_render_pipeline_probe -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell frontierx_render_pipeline_probe -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.render_pipeline$|^portability.native_shell$|^portability.data_root$' --output-on-failure
+```
+
+The section immediately below is the preceding 25% status snapshot.
+
+## Production Sol_Train load through ObjectList (2026-10-10)
+
+The selected acceptance remains the bounded Solarion Forger movement and
+save/reload checkpoint below. The native shell now links the original
+`Sector.cpp` and `SpaceEnv.cpp` registrars, completes
+`CreateGlobalComponents`, initializes the source particle, mesh, texture and
+material owners in the Windows startup order, and calls the production
+`IMission::Load("Sol_Train.dmission", SPMAPDIR)`. The `Mission.cpp` bridge only
+forwards to that vtable; it does not implement a second loader. The original
+Sector terrain, system and save/load methods remain in the linked owner.
+The `ISector` methods implemented only by Sector are now pure virtual without
+reordering slots; native Windows Debug/Final and module ABI checks are still
+required for that shared header.
+
+`--skip-sector-map`, `--skip-space-background` and `--skip-unit-labels` are
+explicit limits of this one-system slice. The first omits the Windows GDI
+sector-map view and toolbar; an attempted native GDI draw/input call aborts.
+The second uses the production `SpaceEnvironment` owner's existing effect
+settings to omit decorative background rendering; missing vertex-buffer
+ownership fails if background effects are enabled. The third omits GDI unit
+labels; `GetUnitFont` returns failure when no provider is present, and the
+debug nugget caller now checks that result. The Forger's game geometry and
+normal main-view input remain required. Required source `IStreamer` remains
+active with Music and SFX; only full-screen `IVideoSystem` is omitted by
+`--skip-movies`, and the notification cue by its separate explicit option.
+
+The production `RenderBatcher` supplies `BATCH` and `CQBATCH` to
+`ObjectList::Load`; the source-profile primitive remains the SDL GPU
+receiver. The App `PrimitiveBuilder2` binding is removed before its owner
+teardown. A core backtrace found an earlier exit crash in the global
+DOCUVIEW `SymbolTable` destructor freeing through the native heap after its
+static teardown; the process heap now outlives static DOCUVIEW users. A
+separate backtrace located a dangling App PrimitiveBuilder binding at exit.
+Both lifecycle failures stopped after those ownership changes. The native
+`ISystemMap::SetRect` now stores the current and padded system bounds using
+the original source formula; other unsupported map methods still fail
+explicitly. These are Linux integration repairs, not evidence of CQ2/retail
+gameplay parity.
+
+Visible Wayland/Vulkan processes in the GCC 16.2.1 and Clang 22.1.8 Debug
+trees used lawful external Steam `DATA`, `gendata.db`, `gametypes.db`, the
+repository material directory and source profile, and isolated `/tmp` save
+and settings roots. Both initialized required `IStreamer`, parsed the App
+and mission schemas, entered `Mission::Load`, executed `Sector::Load` and
+`ISystemMap::SetRect`, and reached the production ObjectList load at 25%
+progress. Both then exited 134 at a required Anim2D texture assertion:
+`astnugget.16.tga0` failed to load, leaving a zero render texture. Before
+that failure both logged missing object factories for `MISSION!!WAYPOINT`,
+`PLATJUMP!!M_JumpPlat`, and `Planet Gas!!Gas 2`. The archive contents were
+not copied into the repository. Whether the texture is absent, encoded in an
+unsupported format or affected by CQ2 data restoration remains unverified;
+the three factories are a native link/registration gap until their original
+owners are checked. The next concrete work is to identify the texture-load
+failure in the active `TextureLibrary`/pipeline, then link those object
+factories and retry the same mission. No Forger was instantiated or drawn,
+normal movement, simulation checkpoint, save/reload or mission GPU frame
+was observed. The Windows training mission with no units is not accepted as
+the gameplay reference.
+
+Both `frontierx_native_shell` Debug targets built and the focused
+`portability.data_root` and `portability.native_shell` CTests passed 2/2 per
+compiler. The direct original Sector and SpaceEnvironment syntax checks
+passed under both compilers after the native include work. The separate
+visible external-data mission runs are failures at 25% and count only as
+runtime evidence up to that point. Full CTest presets, native Windows
+Debug/Final, module ABI, sanitizers, retail gameplay and cross-platform
+determinism checks were not run for this step.
+
+Focused commands executed (the visible shell command used the same flags
+for both compiler trees and compiler-specific shader paths):
+
+```text
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell frontierx_data_root_probe -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell frontierx_data_root_probe -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.native_shell$|^portability.data_root$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.native_shell$|^portability.data_root$' --output-on-failure
+```
+
+## Sector source closure inventory (2026-10-10)
+
+The current blocker is still the production `Sector` registrar, reached by
+`CreateGlobalComponents` before mission reload. Source review found a missing
+direct `M_OBJCLASS` definition in `Sector.h` and a missing public declaration
+for `CreateTerrainMap`, which `Sector::Load` and `Sector::New` call. Those
+declarations now come from the existing mission enum and terrain header;
+their numeric IDs and data layouts did not change. The original `Sector.cpp`
+now has a native include path with exact on-disk spelling and no unused
+`BaseHotRect`/`DSounds` include on Linux. Its Win32 source path remains in
+place. This prepares the original owner; it is **not** linked into the native
+shell yet.
+
+The falsifiable check was direct syntax compilation of `Sector.cpp` with the
+native App and Libs include directories. GCC 16.2.1 progressed into the
+`Sector` class and reported 181 errors, dominated by the Windows sector-map
+UI (`HPEN`, `HBRUSH`, `MSG`, `TOOLBAR`, menu/Win32 messages) and several
+pointer-to-32-bit event conversions. Clang 22.1.8 stopped after its default
+20-error limit at the same UI boundary. Both commands failed; neither is a
+passing Sector compile. The original `Sector::Load`, `Save`, supply and
+system state methods have not executed. The next change must isolate or
+implement the sector-map display and resource/input contract without making
+required mission methods return fake success. Then link the registrar and
+repeat the visible external-data startup.
+
+The affected Debug `frontierx_native_shell` target rebuilt under GCC 16.2.1
+and Clang 22.1.8 in `/tmp/frontierx-mission-{gcc,clang}`, and the existing
+`portability.native_shell` CTest passed 1/1 for each. Those checks execute the
+shell but do not compile or run `Sector.cpp`, a mission, movement or save/load.
+No new probe was added. Native Windows Debug/Final, module ABI and retail
+gameplay checks were not performed.
+
+```text
+g++ -std=c++17 -fsyntax-only -ICode/App/Src -ICode/App/Src/Include -ICode/App/DInclude -ICode/Libs/Include -ICode/Libs/Src/Include Code/App/Src/Sector.cpp
+clang++ -std=c++17 -fsyntax-only -ICode/App/Src -ICode/App/Src/Include -ICode/App/DInclude -ICode/Libs/Include -ICode/Libs/Src/Include Code/App/Src/Sector.cpp
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.native_shell$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.native_shell$' --output-on-failure
+```
+
+## Production TerrainMap compile boundary for Sector (2026-10-10)
+
+`Sector::Load` and `Sector::New` call the original `CreateTerrainMap`;
+`Sector` and the selected Forger's normal movement therefore need this
+owner. A temporary GCC syntax check of `Sector.cpp` first confirmed that
+the source still depends on the Windows PCH, case-insensitive includes,
+GDI drawing, `BaseHotRect`, menu/toolbar/viewer services, and terrain-map
+factories. This is a Linux closure problem, not evidence that the retail
+training mission has no units. No temporary compile source was added to
+the repository.
+
+The original `TerrainMap.cpp` now has a separate native object target linked
+into the GPU shell. Its
+Linux include path supplies the existing render types, and its local search
+step uses fixed-width `S32` coordinates in place of Win32 `POINT`. Dependent
+template types have the required `typename`; the public header gains a
+forward declaration and a factory declaration. No saved map layout, movement order or Windows path
+was changed. The target uses `-ffp-contract=off` under GCC/Clang.
+
+On Linux x86_64, GCC 16.2.1 and Clang 22.1.8 each configured and built
+`frontierx_app_terrain_map_owner` in the Debug SDL3 GPU trees
+`/tmp/frontierx-mission-{gcc,clang}`. Both rebuilt
+`frontierx_native_shell`, and the existing `portability.native_shell`
+CTest passed once per compiler. Separate visible Wayland/Vulkan runs on the
+same lawful external training data entered App startup and again stopped at
+the explicit missing-`Sector` abort (exit 134) under both compilers. The
+terrain object is linked but neither `CreateTerrainMap` nor pathfinding
+executed. The next gate is porting and linking the production
+`Sector.cpp` registrar and its required terrain, resource and input owners,
+then rerunning the lawful external training mission. Native Windows
+Debug/Final, cross-module ABI, retail gameplay, mission-owned GPU rendering and
+save/reload checks were not performed for this step.
+
+Focused commands executed (the external-data process used the same options
+documented in the preceding startup record, with compiler-specific shader
+paths):
+
+```text
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_app_terrain_map_owner -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_app_terrain_map_owner -j4
+cmake --build /tmp/frontierx-mission-gcc --target frontierx_native_shell -j4
+cmake --build /tmp/frontierx-mission-clang --target frontierx_native_shell -j4
+ctest --test-dir /tmp/frontierx-mission-gcc -R '^portability.native_shell$' --output-on-failure
+ctest --test-dir /tmp/frontierx-mission-clang -R '^portability.native_shell$' --output-on-failure
+```
+
+## Production App startup attempt and Sector blocker (2026-10-10)
+
+The selected acceptance remains the `Sol_Train.dmission` Forger movement
+checkpoint below. The explicit `--mission-start` mode requires the supplied
+profile, visible `--mission-gpu`, external GenData/GameTypes and a writable
+save root. It binds the production GameSystem's light, texture, material,
+mesh, vertex-buffer and string-table aggregates plus user defaults to the
+App globals, then calls the original `CreateGlobalComponents`. This is an
+attempt to execute the real registrar; it does not claim a loaded mission.
+
+The diagnostic mission-schema preflight cannot run before this registrar on
+the same `IViewConstructor`: `ParseNewMemory` clears its active symbol manager,
+and a subsequent `Mission::Startup` `ParseMemory` then reported undefined
+fundamental types. The start mode leaves primary schema parsing to
+`Mission::Startup`; the existing data-diagnostic mode retains its parser
+checks. No persistent schema or module ABI type changed.
+
+GCC 16.2.1 and Clang 22.1.8 Debug `frontierx_native_shell` targets built in
+fresh `/tmp/frontierx-mission-{gcc,clang}` Ninja trees with SDL3 GPU enabled
+and FFmpeg audio disabled. The existing `portability.native_shell` CTest
+passed under both compilers, including rejection of incomplete
+`--mission-start` arguments. Separate visible Wayland/Vulkan processes used
+the lawful external Steam `DATA`, `gendata.db` and `gametypes.db`, repository
+`Data/mat`, the source `Conquest.ini` and hotkeys, isolated `/tmp` save and
+settings paths, and explicit `--skip-movies` and
+`--skip-notification-cue`. Both initialized required `IStreamer`, opened
+`Sol_Train.dmission`, bound the profile renderer to SDL GPU, entered
+`CreateGlobalComponents`, and parsed the App `Data.i` primary schema. Both
+then aborted with `Native light startup requires the production Sector owner`
+(exit 134). A GCC gdb backtrace located the previous null dereference in
+`Lights::OnUpdate` at `SECTOR->GetCurrentSystem`; the native light owner now
+reports the missing mandatory dependency explicitly. The command sandbox
+could not start the GPU, so these were separate visible runs.
+
+The next concrete integration blocker is the original `Sector.cpp` registrar
+and its startup dependencies. Source review shows it still includes the
+Windows PCH and uses `MENU`, `TOOLBAR`, viewer and terrain-map services. Port
+that owner behind its existing App contracts, then retry the same startup
+before attempting `IParticleManager::InitParticles`, `IMeshManager::InitManager`
+and `Mission::ReloadMission`. No mission object, visible Forger, selection,
+movement, simulation checkpoint or mission save/reload executed. Native
+Windows Debug/Final rebuilds, cross-module ABI checks and retail gameplay
+comparison were not performed.
+
+`IStreamer` is required by the App's Music/SFX startup and remains active.
+`IVideoSystem` is omitted only with the explicit `--skip-movies` flag for the
+selected checkpoint, which has no full-screen cinematic call; movie mode,
+animated messages and audio remain required. The source-reviewed movie policy
+is recorded below.
+
+Current combined-link closure, 2026-10-03: a native App 2D owner now
+implements the three Camera/DrawAgent calls missing from the selected
+mission link through the production PrimitiveBuilder and render vtables.
+The existing App material check executed full-screen fill/hash callbacks
+under GCC and Clang; both combined App/script diagnostic links now
+succeed. Both diagnostic executables still report `mission not started`
+with lawful external training data. See
+[the focused record below](#native-app-2d-and-combined-mission-link-2026-10-03).
+Entries below are historical snapshots.
+
+Current 2D render-boundary step, 2026-10-03: the native primitive now
+forwards orthographic projection and a bounded viewport through the
+existing projection/viewport callbacks; SDL GPU applies the viewport
+and scissor during presentation. GCC and Clang executed the extended
+CPU contract check and full Debug graphs, but the command sandbox
+skipped GPU tests; separate visible Vulkan runs exercised the viewport
+under both compilers. This does not provide `OrthoView` or the original
+`DrawAgent` rectangles to the mission link, and no gameplay acceptance
+gate passed. See [the focused record below](#native-orthographic-and-viewport-contract-2026-10-03).
+Entries below are historical snapshots.
+
+Current production owner closure, 2026-10-03: Blast, App light,
+MapGen, MorphMesh, the original fleet pool and native App profile
+loading now compile under GCC and Clang. The profile wrapper ran in
+both existing synthetic shell checks; lawful external training-data
+shells still stopped before mission startup. The combined diagnostic
+link now lacks exactly three production 2D/camera symbols. No
+gameplay acceptance gate passed. See
+[the focused record below](#production-light-profile-and-fleet-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current native SFX and field link gate, 2026-10-03: the native App
+`ISFX` now executes source-mapped `BUTTONPRESS1` with the required
+`IStreamer` and lawfully external `Sol_Train` effect under GCC and Clang.
+The original `MineField` and `AntiMatter` objects compile under both.
+The temporary combined mission link still has 22 unresolved references
+across 12 symbols. The shell has not called `Mission::Reload`; no visible
+unit, movement, simulation checkpoint or mission save/reload ran. See
+[the focused record below](#native-isfx-and-field-object-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current App command/particle binding gate, 2026-10-03: production
+`CommTrack.cpp` now compiles under GCC and Clang with its Win32
+settings dialog excluded from native builds. The ObjectList's Win32
+part-debug-menu registration is also excluded. The native shell binds
+the active system container's required `IParticleManager` to the App
+global after validating the selected mission source; GCC/Clang shell
+process tests and lawful external training-data startup ran. The
+temporary combined mission link still fails on 32 references across
+20 symbols, led by `FIELDMGR` and `EFFECTPLAYER`. The actual mission
+and all five gameplay acceptance gates remain open. See
+[the focused record below](#production-command-tracker-and-app-particle-binding-2026-10-03).
+Entries below are historical snapshots.
+
+Current selected-mission owner boundary, 2026-10-03: the lawful external
+`Sol_Train.dmission` has zero `PLAYERAI/Player02..Player08` saved
+directories. The existing mission-filesystem check now rejects an
+unexpected saved AI owner for this bounded path. Native AI factory
+calls abort explicitly if encountered; the full production AI is still
+unported. The App `DisableTextures` render state executes in the
+existing CPU material check under GCC and Clang, and production
+`UnbornMeshList.cpp` compiles under both. A temporary combined
+mission link still fails on 46 references across 23 symbols, led by
+`COMMTRACK` and `MENU`. No mission startup or gameplay acceptance
+condition passed. See [the focused record below](#selected-mission-ai-and-app-render-owner-boundary-2026-10-03).
+Entries below are historical snapshots.
+
+Current save-writer and mission-link check, 2026-10-03: the checked-in
+native writable UTF archive, `IUTFWriter::Flush`, `SAVEDIR` binding and
+explicit `--save-root` option supersede the older save-encoder-only
+entries below. A fresh GCC build exposed a failed first flush; the
+temporary-path check now accepts a missing path while rejecting an
+existing file or symlink. The existing data-root round trip executes
+under GCC and Clang. The native shell still only parses the selected
+mission. A diagnostic link with the compiled App/script objects and
+native `PrimitiveBuilder2` remains unresolved, and no gameplay
+acceptance gate has passed. See [the focused record below](#writable-save-flush-and-current-mission-link-check-2026-10-03).
+Entries below are historical snapshots.
+
 Latest UTF-save-format gate, 2026-09-27: the native platform now
 encodes a bounded deterministic UTF 1.01 tree. GCC/Clang executed the
 existing data-root check, reopened generated bytes through the
@@ -4341,3 +5522,773 @@ then bind `SAVEDIR` outside the retail-data root. No mission load,
 unit display, movement, simulation checkpoint or save/reload occurred.
 Native Windows Debug/Final, cross-module ABI, hardware GPU and retail
 gameplay validation remain unperformed.
+
+## Writable save flush and current mission link check (2026-10-03)
+
+**Blocker and hypothesis.** The current code already implements the
+`Mission::SaveAs` writable parent/archive contract in
+`NativeWritableUtfArchive.cpp` and binds `SAVEDIR` through the native
+shell's explicit `--save-root` outside the retail data root. The
+existing `portability.data_root` check is the closest executable
+caller: it creates a UTF child through the save parent, writes a
+record, calls the production `IUTFWriter::Flush`, reopens it through
+the production reader and compares the record. A fresh build failed
+that check at the first flush, disproving the older claim that the
+remaining obstacle was implementing the writer. The check of the
+temporary output path treated an absent path as a filesystem error on
+this host.
+
+**Change and execution.** The writer now calls `symlink_status`,
+accepts only `no_such_file_or_directory` as an absent temporary path,
+and still rejects an existing file, symlink or other status error.
+The writer remains in the native platform layer; UTF disk widths and
+Windows writer code are unchanged. Fresh `linux-gcc-debug` and
+`linux-clang-debug` configurations with optional FFmpeg audio disabled
+built `frontierx_data_root_probe` and `frontierx_native_shell` on
+Linux x86_64 with GCC 16.2.1 and Clang 22.1.8. Before the change,
+`ctest --test-dir /tmp/frontierx-gcc-goal -R '^portability.data_root$'
+--output-on-failure` aborted with `Native UTF save failed: UTF save
+temporary path already exists or cannot be checked`. After the
+change, that exact CTest check passed under both compilers. Its inputs
+were generated save-shaped UTF data; this is automated execution of
+the save archive contract, not `Mission::Save` or retail gameplay.
+The pre-existing GCC preset cache pointed at a missing external FFmpeg
+library, so these fresh configurations did not test IAC playback.
+
+**Next production blocker.** A temporary GCC link based on the shell's
+actual Ninja command, with 19 additional compiled App/script objects
+and the existing native `PrimitiveBuilder2` owner, still failed with
+61 unresolved references across 27 distinct symbols. The largest
+sets are `UNBORNMANAGER` (6), `DisableTextures` (6), `COMMTRACK` (5),
+`MENU` (5), and `PARTMAN`, `FIELDMGR` and `EFFECTPLAYER` (4 each).
+`Mission.cpp` itself also requires both overloads of
+`ISPlayerAI::CreateInstance`; direct compilation of its production
+`SPlayerAI.cpp` with the mission target's GCC flags stops at the
+Windows-only `pch.h`/`windows.h` include. A temporary source-only
+preflight replacing that include and correcting case-sensitive header
+names exposed further dependencies on `FULLSCREEN` event callbacks,
+banking and mission types, plus pointer-to-`U32` casts. No exploratory
+AI source edits were retained. The next step is to make that
+production AI owner compile without narrowing runtime pointers and
+close its real UI/event dependencies,
+then continue the combined link and call `Mission::Reload`. The
+temporary link produced no executable and was not run. No external
+mission, unit, normal input, simulation checkpoint or mission
+save/reload executed in this check. Native Windows Debug/Final,
+cross-module ABI, retail-runtime and visible mission GPU checks remain
+unperformed.
+
+## Selected mission AI and App render owner boundary (2026-10-03)
+
+**Production callers and integration decision.** `Mission::loadPlayerAI`
+checks `PLAYERAI/Player02..Player08` in a mission-defined game and
+creates an `ISPlayerAI` only if a saved player directory contains an AI
+entry. The selected `Sol_T.cpp` source does not request
+`EnableEnemyAI` for the bounded Forger movement checkpoint. The
+full `SPlayerAI.cpp` owner still depends on Windows precompiled headers,
+`FULLSCREEN` event callbacks and runtime pointer casts. The existing
+mission-filesystem check was extended to count those selected external
+directories; an unexpected saved AI directory now fails that check
+and would require porting the real AI owner before mission startup.
+This is a source-reviewed branch plus read-only external-data execution,
+not proof that `Mission::Reload` ran.
+
+**Selected branch and render state.** A native-only
+`ISPlayerAI::CreateInstance` boundary aborts with a diagnostic on
+either overload. It cannot silently claim to have created AI and is
+not a substitute for the production AI in other missions. The native
+GCC object was also called by a temporary standalone harness with a
+named AI type; it printed the unsupported-owner diagnostic and exited
+with SIGABRT (status 134), with core-file creation disabled. The native
+App render-state owner now implements `DisableTextures` with the same
+stage-zero diffuse selection and stage-one disable sequence as
+`System.cpp`; each backend rejection aborts. The existing game-material
+manager check exercises the state through the native primitive and
+observes a cleared texture and diffuse-only color/alpha arguments.
+The original `UnbornMeshList.cpp` now compiles as a native object,
+retaining its production registrar, construction preview and queued
+mesh logic. Its native child enumeration follows the same bounded
+depth-first order as the source `Blinkers.cpp` helper; runtime execution
+of that owner remains open. The Windows branches and persistent
+records were not changed.
+
+**Validation and next blocker.** On Linux x86_64, GCC 16.2.1 and
+Clang 22.1.8 built `frontierx_native_player_ai_boundary`,
+`frontierx_app_unborn_mesh_owner`, `frontierx_data_root_probe` and
+`frontierx_game_material_manager_probe` with optional FFmpeg audio
+disabled. Both `portability.data_root` and
+`portability.game_material_manager` CTests passed. Both compiler
+mission-filesystem runs opened the lawful external Steam training
+mission and reported zero saved player-AI directories, four QuickSave
+objects, 160633 ParseData bytes and 3236 Globals bytes. A temporary
+GCC link based on the shell's Ninja command with 21 additional
+App/script objects still failed on 46 references across 23 symbols;
+`COMMTRACK` (5), `MENU` (5), `PARTMAN` (4), `FIELDMGR` (4) and
+`EFFECTPLAYER` (4) lead the list. The link was not executable and no
+mission simulation, normal input, visible unit, save/reload or GPU
+mission frame ran. The next production owner is `CommTrack.cpp`, whose
+normal command tracker also needs a native non-dialog event path.
+Native Windows Debug/Final, cross-module ABI and retail-runtime checks
+remain unperformed.
+
+## Production command tracker and App particle binding (2026-10-03)
+
+**Production owner and caller.** The combined `Mission`/`ObjectList`
+link lacked `COMMTRACK`; the original `CommTrack.cpp` owns command
+history and receives `CQE_UPDATE` from the ObjectList event stream.
+Its Win32 dialog is a debugging settings interface, separate from
+normal unit command delivery. The source `Conquest.cpp` queries
+`IParticleManager` from `GAME.GS` before initializing App particles,
+and `ObjectList::Update` invokes `PARTMAN->Update`. The native
+GameSystem already creates the production particle aggregate from
+the source profile, but the App global had no binding. These are
+runtime owners and event values, not saved or module ABI fields.
+
+**Change.** The native `CommTrack.cpp` build uses the portable App
+declarations, retains its original registrar, command history and
+default-setting behavior, and bounds the pointer-sized encoded
+`CQE_UPDATE` value before converting it to `U32` milliseconds. Its
+Win32 settings dialog remains on Windows. The native-only ObjectList
+omits calls that populate the Win32 part-debug menu; its object
+registration, selection and simulation paths remain in place. A
+reference-counted `NativeAppParticleBinding` now queries
+`IID_IParticleManager` from the live system container and releases
+the App global before GameSystem teardown. A missing required particle
+aggregate fails the mission-source shell explicitly. This binding
+does not call App `InitParticles`, which still needs the real camera,
+material and mesh-manager initialization order.
+
+**Validation and next blocker.** GCC 16.2.1 and Clang 22.1.8 built
+`frontierx_app_comm_track_owner`, `frontierx_app_object_list_owner`
+and `frontierx_native_shell` on Linux x86_64 with optional FFmpeg
+audio disabled. The existing `portability.native_shell` process check
+first exposed the synthetic mission profile's absent particle entry;
+that profile now includes the production `IParticleManager` owner.
+The check subsequently passed under both compilers. Both
+`portability.app_global_startup` checks passed after building their
+targets. Both compiler shells also exited zero against the lawful
+external Steam `DATA`, `gendata.db`, `gametypes.db`, the source
+`Conquest.ini`, repository `Data/mat`, and `Sol_Train.dmission`, using
+SDL dummy video/audio, an isolated save/settings directory, explicit
+`--skip-movies` and `--skip-notification-cue`. Each opened 160633
+ParseData bytes and 3236 Globals bytes, bound the particle aggregate,
+initialized the required `IStreamer` and `MusicManager`, and still
+reported `mission not started`. This is external-data startup and
+App owner binding, not a mission tick, visible unit or GPU frame.
+A temporary GCC link based on the shell's Ninja command with 22
+additional compiled App/script objects failed on 32 references across
+20 symbols. `FIELDMGR` and `EFFECTPLAYER` each account for four;
+their source registrars in `cloud.cpp` and `EffectPlayer.cpp` are the
+next production global-owner closure. A temporary direct GCC source
+preflight of `cloud.cpp` with native App declarations and corrected
+top-level include case reached the nested `anim2d.h` include of
+`heapobj.h`; the production field manager was not compiled or linked.
+Windows Debug/Final, module
+ABI, retail gameplay, movement and full mission save/reload checks
+remain unperformed.
+
+## Native mission name conversion and field-owner preflight (2026-10-03)
+
+**Production owner and caller.** The combined App/mission link lacked
+`_localAnsiToWide` and `_localWideToAnsi`. The supported Windows
+definitions in `DataView.cpp` convert through the active Windows ANSI
+code page; `MGlobals.cpp` uses the first function for player names and
+the mission/App UI path also calls both. The selected `Sol_T` checkpoint
+uses ASCII archive and mission names. These routines do not change a
+saved structure or module ABI. `cloud.cpp` owns the still-unresolved
+`FIELDMGR` registrar; `Conquest.cpp` invokes global registration before
+App particle, mesh and texture initialization.
+
+**Change and limit.** The native App globals now provide bounded ASCII
+conversion in both directions. A zero return and empty output reject
+non-ASCII input or insufficient byte capacity; the conversion does not
+claim to emulate an unspecified Windows `CP_ACP` for other languages.
+The Windows definitions are unchanged. The existing data-root check
+exercises a `Sol_T` round trip and both rejection cases. A temporary
+out-of-tree GCC preflight of `cloud.cpp`, with corrected source include
+case and a case-alias include overlay, reached extensive Win32 event,
+field-template and object dependency errors. No field-manager source
+change was made; a global pointer alone cannot satisfy that owner.
+
+**Validation and next blocker.** Linux x86_64 GCC 16.2.1 and Clang
+22.1.8 built `frontierx_data_root_probe`,
+`frontierx_app_global_startup_probe` and `frontierx_native_shell` in
+`/tmp/frontierx-gcc-goal` and `/tmp/frontierx-clang-goal`, with optional
+FFmpeg audio disabled. `portability.data_root` and
+`portability.app_global_startup` passed under both compilers. The
+conversion check uses synthetic names and byte limits; the earlier
+external Steam training-data shell runs did not execute the new
+conversion. The latest combined mission link predates this change and
+had 32 unresolved references across 20 symbols, including both
+conversion functions, `FIELDMGR` and `EFFECTPLAYER`. The next blocker is
+the real field/effect global-owner closure and then executing
+`Mission::Reload`. No mission tick, normal movement input, visible
+Forger, full mission save/reload or GPU mission frame ran. Native
+Windows Debug/Final, cross-module ABI and retail runtime checks remain
+unperformed.
+
+## Production effect-player compile boundary (2026-10-03)
+
+**Production owner and caller.** The combined mission/ObjectList link
+needs the original `EffectPlayer.cpp` registrar and `EFFECTPLAYER`
+global: `ObjectList::Render` and `ObjectList::engine_update` use it.
+The source `Conquest.cpp` passes the registered `GAMEPOSCALLBACK` to
+App particle initialization. These are runtime interfaces; no saved
+record or cross-module type was changed.
+
+**Change.** The production effect player now has a native include
+boundary with exact filename case and camera declarations before the
+legacy engine headers. Its two angular-step minimum calls retain the
+Windows expressions and use an equivalent native scalar comparison.
+The native App globals define `EFFECTPLAYER` and `GAMEPOSCALLBACK`.
+The registrar and effect implementation are compiled as a dedicated
+object target. They are not linked into the shell while the full
+mission owner closure remains unresolved.
+
+**Validation and next blocker.** GCC 16.2.1 and Clang 22.1.8 built
+`frontierx_app_effect_player_owner` and `frontierx_native_shell` on
+Linux x86_64 in the fresh Debug build trees with optional FFmpeg
+audio disabled. The existing `portability.data_root`,
+`portability.app_global_startup` and `portability.native_shell` checks
+all executed and passed under both compilers, using synthetic inputs.
+The effect player itself was compile-only; neither its registrar nor
+its update method ran in those checks. The last combined mission link
+was measured before this target joined it; no revised unresolved-count
+claim is made. The production `FIELDMGR` owner and remaining globals,
+then the actual App `CreateGlobalComponents` and `Mission::Reload`
+sequence, are the next integration gates. No visible mission unit,
+normal movement, simulation checkpoint or full mission save/reload
+executed. Native Windows Debug/Final, module ABI, retail runtime and
+mission GPU checks remain unperformed.
+
+Both complete Debug builds and CTest runs also passed after this
+change; the full-preset counts and three command-sandbox skips are
+recorded in `BUILD_GRAPH.md`. These skips are not GPU runtime evidence.
+Both updated compiler shells separately ran on the lawfully external
+Steam `DATA`, `gendata.db` and `gametypes.db`, the source `Conquest.ini`
+and `Sol_Train.dmission`, using SDL dummy devices, isolated save and
+settings directories, explicit `--skip-movies` and
+`--skip-notification-cue`, and `--smoke-ms 1 --hidden`. Each exited zero,
+mounted ten archives, read 160633 mission ParseData bytes and 3236
+Globals bytes, bound the production particle owner, initialized the
+required `IStreamer` and printed `mission not started`. These are
+external-data startup executions, not effect-player or mission runtime.
+
+## Field and animation owner compile boundary (2026-10-03)
+
+**Blocker, owner and caller.** The combined native App/script link needs
+the original `FieldManager` registrar in `cloud.cpp`. `Conquest.cpp`
+creates global App components before `Mission::Reload`; ObjectList and
+mission field loading then use that owner. The diagnostic link also
+needs its minefield, antimatter, blast, audio and rendering dependencies.
+The selected `Sol_T` checkpoint still requires the source Forger, normal
+movement input, real update ticks and full mission save/reload. Its
+acceptance criteria above remain unchanged.
+
+**Changes.** The production field manager, App 2D animation, dust and
+deterministic random-generator sources now compile as separate native
+objects. Native-only include, dependent-template and scalar conversion
+corrections also allow the actual field/object template instantiations;
+Windows expressions and data layouts remain unchanged. Editor-only
+field methods abort with a diagnostic on Linux. The App 2D animation
+owner aborts on a missing required texture and on its unsupported
+smooth-render stage-one blend. Native-only pure-virtual declarations
+match the existing concrete implementations of three ObjectList debug
+methods, two field methods and `IFogOfWar::New`, removing unresolved
+interface vtables without supplying false success. The original App
+`RandomGen::rand` ran in the existing math-core check with seed 42 and
+the fixed six-result sequence 667, 288, 870, 165, 162, 556. These
+source and interface changes still require native Windows module/ABI
+validation; no disk schema was changed.
+
+**Validation and next blocker.** Linux x86_64 GCC 16.2.1 and Clang
+22.1.8 built the complete fresh Debug graphs in
+`/tmp/frontierx-gcc-goal` and `/tmp/frontierx-clang-goal` with optional
+FFmpeg audio disabled. The existing `portability.math_core` and
+`portability.native_shell` checks executed and passed under both
+compilers; the other new App owners were compile-only. Each updated
+shell separately loaded the lawfully external Steam `DATA`,
+`gendata.db`, `gametypes.db`, source `Conquest.ini` and
+`Sol_Train.dmission` with SDL dummy devices, isolated save/settings
+roots, explicit movie/notification-cue skips and a one-millisecond
+hidden smoke. Both initialized the required `IStreamer`, mounted ten
+archives, read 160633 mission ParseData bytes and 3236 Globals bytes,
+and reported `mission not started`. A temporary GCC combined diagnostic
+link including the new owner objects failed on 41 undefined-reference
+lines across 16 distinct symbols, led by 20 `SFXMANAGER` references;
+the next production closure is sound effects and the remaining
+minefield/antimatter/blast, light, UI and drawing owners. The DirectSound
+based `SFX.cpp` requires an actual native contract, not a dummy owner.
+The field, animation and dust owners have not executed in a mission;
+point-list dust presentation also remains unverified. No mission tick,
+visible Forger, input movement, mission save/reload or hardware GPU
+mission frame ran. Native Windows Debug/Final, cross-module ABI and
+retail gameplay checks remain unperformed. `IStreamer` stays required;
+only full-screen `IVideoSystem` and the notification cue were explicitly
+omitted for the bounded pre-combat smoke.
+
+## External SFX source binding (2026-10-03)
+
+**Blocker, owner and caller.** The source `Menu` owner binds a dedicated
+`SFXDIR` to the sound-effect manager. `Sfx::loadData` maps `SFX::ID`
+values to WAV names through `sfxdata.xmf`/the generated resource, and
+field/object callers open or preload those IDs. The native shell had
+bound the external Music source and required `IStreamer`, but not the
+external SFX source. A real native `ISFX` owner will need both the ID
+mapping and readable effect files before its calls can execute. No
+persistent format or module type changed in this step.
+
+**Change and falsifiable check.** The native App audio binding now
+retains the source `SFX` filesystem alongside Music and `IStreamer`
+for the same lifetime, and the mission-source shell rejects a missing
+SFX source. The existing shell process check covers that rejection.
+The existing external mission-filesystem check now opens the source
+`SFX::BUTTONPRESS1` file (`interface1.wav`) through the UTF-backed
+`IFileSystem`, accepting its unique case-insensitive archive name and
+requiring a readable `RIFF`/IAC WAVE header. This checks the needed production
+data path, not audio decoding or playback.
+
+**Validation and next blocker.** Linux x86_64 GCC 16.2.1 and Clang
+22.1.8 each built the complete fresh Debug graph with optional FFmpeg
+audio disabled. `portability.native_shell` passed under both compilers
+with a synthetic directory fixture, including rejection of absent
+`SFX`. Both compiler runs of `frontierx_data_root_probe
+--mission-filesystem` passed against the lawfully external Steam
+`Sol_Train.dmission` and SFX archive, opening the source-mapped WAV
+header with source WAVE tag `0x0402`. Both updated shells then loaded the same external mission
+source, initialized required `IStreamer` with Music and SFX sources,
+and still printed `mission not started`; SDL dummy devices, isolated
+save/settings directories and explicit `--skip-movies` and
+`--skip-notification-cue` were used. The default window probes rejected
+this IAC effect because their optional FFmpeg adapter was disabled.
+The next integration blocker is a
+real native `ISFX` implementation with source ID mapping, decoding,
+handle ownership, playback and mission-facing spatial/loop behavior;
+the DirectSound-only `SFX.cpp` cannot be linked as-is. The combined
+mission link last failed on 41 undefined-reference lines across 16
+symbols, led by `SFXMANAGER`; this count was not rerun after the source
+binding. No `ISFX` playback, mission tick, visible unit, input movement,
+mission save/reload or hardware GPU mission frame ran. Native Windows
+Debug/Final, module ABI and retail gameplay checks remain unperformed.
+
+**External IAC playback follow-up.** The pinned official FFmpeg 9.0.1
+source was fetched again outside the repository, matched the recorded
+SHA-256 in `DEPENDENCIES.md`, and built unmodified into replaceable
+shared LGPL libraries using the documented restricted configuration.
+Both new GCC and Clang Debug CMake configurations passed the library
+license check and built `frontierx_native_window_manager_probe` and
+`frontierx_native_shell`. Both compilers passed the focused
+`portability.native_window_manager` and `portability.native_shell`
+checks. With SDL dummy audio, the existing external-input window probe
+decoded the lawful `interface1.wav` to 30720 bytes of 22050-Hz mono
+float PCM with identical FNV1a64 `16092735175899199743`; GCC and Clang
+completed playback after 404 and 408 ms respectively. Their external
+mission shell runs still reported `mission not started`. This is real
+IAC decode and dummy-device `IStreamer` playback of one source effect,
+not `ISFX` manager execution or audible hardware evidence. The
+FFmpeg-enabled configurations built only these affected targets and
+ran only these focused CTests; no full FFmpeg-enabled CTest matrix,
+Windows/ABI check or mission GPU run was performed.
+
+## Native ISFX and field object closure (2026-10-03)
+
+**Blocker, production owners and callers.** `SFX::BUTTONPRESS1` and
+other App effects use the original `ISFX` interface, but the source
+`SFX.cpp` owns DirectSound and cannot link in the native graph.
+`FieldManager::CreateArchetype` also calls the original `Minefield`
+and `AntiMatter` factories. The prior combined link had no
+`SFXMANAGER`; it could not progress to `Mission::Reload`. The selected
+acceptance input remains the lawfully external Steam `Sol_Train.dmission`:
+start it, show and select the player Forger, issue one normal movement
+command, reach a scripted training state, then save and reload that
+state. This entry advances owner closure only. No persistent field,
+mission schema or cross-module interface was widened.
+
+**Change and check.** The native-only `ISFX` owner compiles the original
+`sfxdata.xmf` ID/name/volume table into the build directory, requires
+all 146 nonzero IDs, and opens the already-bound external SFX filesystem
+through the required `IStreamer`. It owns preloaded streams and
+reference-counted sound handles, applies volume, restart, no-restart
+and loop flags, and closes them on teardown. The original Windows
+resource generation and DirectSound owner are unchanged. Spatial
+playback currently fails explicitly: camera/fog attenuation and source
+priority have not been ported. The existing native shell process check
+generates a tiny synthetic PCM `interface1.wav` and exercises invalid
+ID rejection, preload, open, handle sharing, volume, play, stop, loop
+and release through `SFX::BUTTONPRESS1`. It represents the production
+`ISFX` caller contract; it is not a gameplay test. The original
+`MineField.cpp` and `AntiMatter.cpp` now build as native object targets
+with case-correct includes, native part-name conversion and a
+Windows-only editor-input branch. The native D3D9 compatibility header
+defines the two stage values referenced by anti-matter; its draw path
+has not been exercised. No native editor feature is claimed.
+
+**Executed validation.** On Linux x86_64, GCC 16.2.1 and Clang 22.1.8
+each built the complete Debug graph in `/tmp/frontierx-{gcc,clang}-goal`
+and passed the full CTest graph: 48 executing checks out of 51, with
+`portability.app_cursor`, `portability.game_material_gpu` and
+`portability.sdl3_gpu` skipped by the command sandbox. The focused
+`portability.native_shell` check passed under both compilers in the
+separate FFmpeg-enabled Debug configurations. Each FFmpeg-enabled
+shell then loaded the lawful external `Sol_Train.dmission`, source
+`Conquest.ini`, SFX archive and `BUTTONPRESS1` IAC effect with SDL
+dummy audio, isolated settings/save roots, explicit `--skip-movies`,
+`--skip-notification-cue` and `--sfx-smoke`. Both printed
+`Native ISFX BUTTONPRESS1 preload/open/play/stop checked`, then
+`mission not started`. This is external-data native `ISFX` runtime,
+not audible hardware playback or a mission tick.
+The explicit rerun used `cmake --build /tmp/frontierx-{gcc,clang}-goal`
+and `ctest --test-dir /tmp/frontierx-{gcc,clang}-goal --output-on-failure
+-j4` for the default Debug matrices. For each FFmpeg-enabled compiler
+shell, an existing empty external save directory was supplied with
+`--data-root "$FRONTIERX_RETAIL_ROOT/DATA" --material-root Data/mat
+--system-profile Code/App/Src/Conquest.ini --gen-data
+"$FRONTIERX_RETAIL_ROOT/gendata.db" --game-types
+"$FRONTIERX_RETAIL_ROOT/gametypes.db" --save-root "$SAVE_ROOT"
+--mission-source Sol_Train.dmission --skip-movies
+--skip-notification-cue --sfx-smoke --smoke-ms 1 --hidden`, with
+`SDL_VIDEODRIVER=dummy` and `SDL_AUDIODRIVER=dummy`. Two initial manual
+invocations used the installation root instead of its `DATA` child,
+then an absent save directory; they exited 2 and 6 respectively.
+Corrected invocations exited zero under both compilers.
+
+**Next concrete blocker.** A temporary diagnostic GCC link of the
+shell with compiled App and `Sol_T` objects, including both new field
+objects and existing source resources, fails on 22 references to 12
+distinct symbols. The unresolved owners include `CQLight`,
+`CreateBlast`, `MAPGEN`, `DBHOTKEY`, `DEBUGFONT`, `OrthoView`,
+`DA::RectangleHash/Fill`, `Bcr` from `MorphMesh`, and fleet-list
+cleanup from `FlagShip`. First connect the concrete production light
+and blast owners required by `FieldManager`; then continue link closure
+and invoke `Mission::Reload` with the selected external data. The
+diagnostic executable did not link or execute. No native Windows
+Debug/Final, module ABI, retail gameplay, hardware GPU mission frame,
+visible unit, input movement, simulation checkpoint or full mission
+save/reload check was performed.
+
+## Production light, profile and fleet closure (2026-10-03)
+
+**Blocker and falsifiable path.** The selected `Sol_Train.dmission`
+needs the original App mission and ObjectList owners linked before
+`Mission::Reload` can be called. The previous combined link lacked
+`CreateBlast`, `CQLight`, `MAPGEN`, the anti-matter Catmull-Rom basis,
+fleet cleanup and a profile loader. `FieldManager::CreateFieldBlast`
+and Nebula construction are real Blast/light callers; anti-matter uses
+`Bcr`; `ObjectList::Close` calls both fleet-pool cleanup functions.
+The cheapest check was native object compilation followed by the same
+combined App/script link, without claiming that a compiled object had
+executed. No disk, wire or module structure was widened.
+
+**Changes.** Original `blast.cpp`, `light.cpp`, `MapGen.cpp` and
+`MorphMesh.cpp` now build as GCC/Clang object targets. Native-only
+include spelling, missing template declarations and checked numeric
+conversions preserve the Windows source path. Win32 light editor
+windows are excluded from the native owner; requesting unsupported
+D3D9 dynamic or ambient App light state aborts explicitly. The existing
+native App data-source owner now retains the external Profiles UTF as
+`PROFILEDIR`. Its native `CreateProfileParser` reads a bounded file
+through `IFileSystem`, creates the production `IProfileParser2` and
+returns an initialized, reference-counted parser. The original
+`FlagShip.cpp` fleet-pool definitions were moved verbatim into
+`FleetGroupPool.inc`; Windows still compiles them from `FlagShip.cpp`,
+while a native object compiles the same definitions for ObjectList
+cleanup. Native debug font calls abort when their optional owner is
+absent, and the debug-only highlight hotkey defaults to unpressed if
+its table has not been created. These debug branches do not supply
+normal game hotkeys. `MAPGEN` is the original owner, not an empty
+multiplayer stub.
+
+**Executed validation.** Linux x86_64 GCC 16.2.1 and Clang 22.1.8
+built the complete Debug graphs using `cmake --build
+/tmp/frontierx-{gcc,clang}-goal -j4`. Both full `ctest --test-dir
+/tmp/frontierx-{gcc,clang}-goal --output-on-failure -j4` runs passed
+48 executing checks out of 51; the cursor and two GPU tests skipped
+in the command sandbox. The existing `portability.native_shell` check
+was extended with a generated `Profiles/native-smoke.ini`. Under both
+compilers it opened the file through App `PROFILEDIR`, read the
+`NativeSmoke/Value = ready` key through production `IProfileParser2`,
+and released the parser. The separate FFmpeg-enabled GCC/Clang shell
+targets and focused shell CTests passed. Both shells also loaded the
+lawfully external Steam `Sol_Train.dmission` with source `Conquest.ini`,
+external GenData/GameTypes, required `IStreamer`, SDL dummy audio,
+external SFX, isolated settings/save roots and explicit `--skip-movies`
+and `--skip-notification-cue`; `--sfx-smoke` completed. They printed
+`mission not started`. No external profile was parsed by the new
+wrapper, and no original Blast/light/MapGen/MorphMesh/fleet path ran
+in those shell processes.
+
+**Current link and renderer boundary.** The temporary GCC diagnostic
+link includes the compiled App/script owners and source resources,
+plus original fleet cleanup. It now fails on only three distinct
+symbols: `DA::RectangleFill`, `DA::RectangleHash` and `OrthoView`.
+The original `DrawAgent.cpp` owns the rectangles, and `Camera.cpp`
+owns `OrthoView`; both complete sources were preflighted and remain
+outside the native build. DrawAgent needs legacy VFX, image-reader and
+surface contracts. Camera needs Win32/editor input and the normal
+hotkey/window route. The current native primitive returns
+`GR_NOT_IMPLEMENTED` for ortho and viewport, and App light rendering
+is likewise unsupported. The next integration step is a genuine
+2D/camera rendering and input path through those owners and the
+existing native renderer, followed by the first `Mission::Reload`
+execution. The diagnostic link did not produce an executable. No
+mission tick, visible Forger, normal move order, `SelectAll` checkpoint,
+mission save/reload, native Windows Debug/Final, cross-module ABI,
+retail gameplay or hardware GPU mission frame ran.
+
+## Native orthographic and viewport contract (2026-10-03)
+
+**Blocker and hypothesis.** The combined production App/script link
+still lacks `OrthoView` and `DA::RectangleFill/Hash`. Their real callers
+use pane-relative orthographic output. The native `IRenderPrimitive`
+previously returned `GR_NOT_IMPLEMENTED` for both ortho and viewport;
+therefore linking those App owners alone could not make their draw
+contract work. The cheapest falsifiable check was to extend the
+existing render-submission probe with the source-style 640-by-480
+orthographic call, viewport round trip and invalid-input rejection.
+The added callback descriptor is native-only and neither serialized
+nor part of the Windows game/module ABI.
+
+**Change and validation.** The native primitive constructs a checked
+orthographic `Matrix4`, rejects nonfinite output, and forwards it through the already used
+projection callback. A native-only viewport callback stores accepted
+coordinates; SDL GPU applies both viewport and scissor to each
+presentation/readback pass, rejecting a pane outside the target
+instead of reporting a successful draw. The shell and synthetic game
+scene bind their respective GPU contexts to this callback. Linux
+x86_64 GCC 16.2.1 and Clang 22.1.8 built their complete Debug graphs
+with `cmake --build /tmp/frontierx-{gcc,clang}-goal -j4` and executed
+`ctest --test-dir /tmp/frontierx-{gcc,clang}-goal --output-on-failure -j4`:
+each ran 48 passing checks out of 51. The existing
+`portability.render_submission` check observed the expected X/Y scale
+and offsets, the accepted viewport and unchanged state after invalid
+extents. The cursor and two GPU checks skipped in the command sandbox.
+Separately, `ctest --test-dir /tmp/frontierx-{gcc,clang}-goal -R
+portability.sdl3_gpu --output-on-failure -V` ran on the visible
+Wayland/Vulkan host under each compiler. The extended existing probe
+read back a 16-by-16 clipped viewport with fewer changed pixels than
+the full 64-by-64 target, then restored the original checksum
+`7951318278861886233` after resetting the viewport; both runs also
+presented 12 frames. For the reduced 64-pixel diagnostic target, a
+full-window viewport at origin maps to the whole offscreen target;
+production presentation retains the actual window viewport. Inputs
+were repository-generated fixtures; no retail or external data ran in
+the modified path. A fresh temporary combined GCC App/script link
+still reports exactly the three symbols above. No mission executable,
+`Mission::Reload`, visible Forger, input order, simulation checkpoint,
+mission save/reload, native Windows Debug/Final, cross-module ABI or
+hardware GPU mission frame ran. The next concrete blocker is to bring
+the original `Camera`/`DrawAgent` 2D owners and their real callers into
+the native closure, then execute `Mission::Reload` with the selected
+external data.
+
+## Native App 2D and combined mission link (2026-10-03)
+
+**Named blocker and owner.** The selected production `Nugget::DrawHighlighted`
+caller references `DA::RectangleHash/Fill`, and `ObjectList::Render` calls
+`OrthoView`. The complete original `DrawAgent.cpp` currently needs VFX
+framebuffer/image/surface contracts; direct native preflight reported 146
+compile errors after case-only includes were supplied. The complete
+`Camera.cpp` needs Win32 editor/menu/input code; excluding its
+`BaseHotRect` include in an out-of-tree preflight still left 41 errors.
+The already integrated `IRenderPrimitive` ortho/viewport backend made a
+native App 2D path falsifiable. The smallest check that could disprove it
+was to execute the source-style rectangle calls with the existing App
+PrimitiveBuilder and render callback, then retry the combined link.
+No serialized type or Windows module interface was changed.
+
+**Change.** `NativeApp2DDraw.cpp` supplies the three missing native App
+symbols. It applies the same half-pixel modelview, full-screen/pane
+orthographic bounds and viewport, cull disable, toolbar guard, fill/hash
+colors, hash alpha blend and six-vertex quad submission used by the
+original non-frame-lock source path. It checks return values from the
+render boundary and aborts on unavailable framebuffer locking instead
+of claiming support. The existing native App PrimitiveBuilder object is
+linked into the shell. On Linux only, `cloud.cpp` explicitly instantiates
+`DefaultArchetype<BT_MINEFIELD_DATA>` after the method definitions;
+Clang had otherwise left its constructor unresolved in the combined
+link. The supported Windows DrawAgent/Camera functions and template
+placement remain intact.
+
+**Executed checks.** On Linux x86_64, GCC 16.2.1 and Clang 22.1.8 built
+`frontierx_native_app_2d_owner`, `frontierx_native_shell`,
+`frontierx_game_material_manager_probe` and the complete Debug graphs
+in `/tmp/frontierx-{gcc,clang}-goal`. The existing
+`portability.game_material_manager` check executed both native App
+rectangle calls: each submitted six vertices, applied the expected
+64-by-64 viewport and X/Y orthographic coefficients, and left stage-zero
+texture unbound. No new standalone probe was added. Each full CTest
+matrix passed 48 executing checks out of 51; cursor and two GPU tests
+skipped in the command sandbox. Separate visible Wayland/Vulkan
+`portability.game_material_gpu` runs under both compilers passed and
+reported the existing synthetic CQ2 App draw checksum
+`17301943790166719418`; those GPU draws were not the new rectangles
+or a mission unit. The temporary out-of-tree
+`/tmp/frontierx-mission-link-diagnostic.py` linked the selected App
+objects, original `Sol_T` script and native resources without unresolved
+symbols under both compilers. The resulting diagnostic executables
+then ran the existing shell path with the lawful external training
+installation, supplied `Conquest.ini`, GenData, GameTypes, an isolated
+save directory and preferences file, SDL dummy video/audio, explicit
+`--skip-movies` and `--skip-notification-cue`, and
+`--mission-source Sol_Train.dmission`. Both exited zero, initialized
+required `IStreamer`, parsed 160633 bytes of mission schema and the
+3236-byte Globals record, and printed `mission not started`. Initial
+GCC diagnostic invocations exited 5 due to an unwritable default
+preferences location and then a missing explicit preferences file;
+the corrected isolated preferences file completed cleanly.
+
+**Next blocker.** The successful combined link is a diagnostic binary,
+not an integrated game executable. It still does not call the App
+`CreateGlobalComponents` sequence or `Mission::ReloadMission`. The
+source camera registrar in `Camera.cpp` is absent from the native
+closure; its ordinary event/hotkey path and other App service globals
+must be bound before mission startup. Then enter the production mission
+load, classify any missing unit against the Windows CQ2/retail
+restoration baseline, and continue to input, simulation and save/reload.
+No native Windows Debug/Final, module ABI, visible mission GPU frame,
+mission tick, player Forger, normal movement order, script checkpoint or
+mission persistence check ran.
+
+## Production camera and hotkey boundary (2026-10-03)
+
+**Blocker and hypothesis.** The selected mission's App global startup
+creates `MAINCAM` through the original `Camera.cpp` registrar. The earlier
+combined link omitted that owner. A direct native compile exposed Windows
+menu/debug-viewer dependencies, `FULLSCREEN` event subscription, mismatched
+include case and pointer-width event casts. The cheapest falsifiable check
+was a GCC/Clang camera object build followed by a combined App/`Sol_T` link
+including that object. The camera state is a runtime owner; this change
+does not alter its saved `CAMERA_DATA` record or a Windows module vtable.
+
+**Change.** `Camera.cpp` uses exact-case includes and native App globals on
+Linux. It retains camera transforms, frustum, zoom and source event logic;
+the Windows-only menu, GDI data viewer and Win32 message cases stay on
+Windows. The native callback subscribes to the existing EventSystem,
+checks that U32-encoded hotkey/update payloads fit 32 bits, rejects active
+updates without the required normal hotkey service, and treats absent
+debug hotkeys as unpressed. The editor-only viewer remains optional. The
+existing native 2D owner supplies `OrthoView`; the original Windows
+definition is unchanged. `IBaseCamera::SphereInFrustrum` is pure on Linux
+because its interface declaration has no base implementation; the
+production `Camera` override is present, and the Windows declaration is
+unchanged. `BASECAM.H` includes the exact on-disk header names. A new
+object target compiles the original camera source. The GPU shell now links
+the selected mission, operation, object, packet and `Sol_T` owners along
+with the camera without yet invoking their registrars.
+
+The native shell's explicitly supplied source hotkey table now emits
+`CQE_HOTKEY`, matching the App's Windows `HKManager` event, and binds its
+live service to the native App `HOTKEY` global. It clears that pointer
+before releasing the service. This exposes the real hotkey contract for
+camera and later gameplay callbacks; it does not yet drive them.
+
+**Validation.** On Linux x86_64, GCC 16.2.1 and Clang 22.1.8 built
+`frontierx_app_camera_owner`, `frontierx_native_shell` and their complete
+Debug graphs in `/tmp/frontierx-{gcc,clang}-goal`. Each full CTest run
+passed 48 executing checks out of 51; the cursor and two GPU checks
+skipped in the command sandbox. The focused hotkey, native-shell and
+App-startup checks passed under both compilers. The temporary
+`/tmp/frontierx-mission-camera-link.py` combined all selected App objects,
+the original `Sol_T` script and the new camera object with zero unresolved
+references under both compilers. Both resulting executables then ran the
+existing shell path with lawfully external Steam training data, supplied
+`Conquest.ini`, source `Hotkeys.utf`, explicit `--skip-movies` and
+`--skip-notification-cue`, isolated save/preferences paths, and SDL dummy
+video/audio. Each exited zero, initialized required `IStreamer`, reported
+160633 mission ParseData bytes and 3236 Globals bytes, then reported
+`mission not started`. An initial invocation pointed `--data-root` at the
+installation parent and exited 2 for missing required sources; the
+corrected `DATA` root passed. The rebuilt real GPU shell, now linked with
+the camera and selected mission/script owner closure, repeated that
+external-data startup and clean exit
+under both compilers. No retail payload was copied into the repo.
+
+**Remaining gate.** This is compilation and shell execution, not camera
+execution or gameplay. The shell still does not call
+`CreateGlobalComponents` or `Mission::ReloadMission`. The normal shell
+path has an active GameSystem Engine but no mission GPU pipeline,
+primitive, renderer, texture/material bindings or original camera lifetime;
+the temporary GPU composition in `NativeGameScene.cpp` serves only its
+synthetic fixture. These App globals must be composed before entering
+the source registrar, with normal hotkeys required for mission startup.
+The original source `FULLSCREEN` callback priority
+has no matching priority API in the native EventSystem. No camera frame,
+visible Forger, movement input, simulation checkpoint or mission
+save/reload was observed. Native Windows Debug/Final, module ABI, GPU
+mission and retail-runtime checks remain unperformed. The Windows mission
+that starts without units is still not an acceptable gameplay oracle.
+
+## Native mission Engine composition (2026-10-03)
+
+**Blocker and hypothesis.** The GPU shell owned a started `GameSystem` and
+`IEngine`, but its mission-source path did not call
+`IEngine::load_engine_components` or expose an `IRenderer` and source-profile
+render interfaces to App code.
+The original `Conquest.ini` declares `IRenderer`, `IAnimation` and
+`IHardpoint` in `[Engine]`. A bounded run with that supplied profile
+could disprove whether the production Engine aggregates load before
+mission startup. This change concerns runtime interface ownership; it
+does not alter serialized records or Windows module interfaces.
+
+**Change.** The native GameSystem bridge now loads the active Engine's
+profile components and queries `IRenderer`. The shell exposes this as
+explicit `--mission-engine`, requiring both `--mission-source` and
+`--system-profile`. It temporarily supplies the already parsed source
+profile to DACOM for the Engine load, then clears the parser binding.
+On success it binds `ENGINE`, `REND`, `PIPE` and `BATCH` for the shell
+lifetime and clears them before the GameSystem and interface references
+are released. `PIPE` and `BATCH` are queried from the source-profile
+SystemContainer and are explicitly reported as not GPU-initialized.
+Missing Engine components, renderer or render interfaces fail. The ordinary
+`--mission-source` data diagnostic does not claim to compose an Engine.
+
+**Validation.** GCC 16.2.1 and Clang 22.1.8 on Linux x86_64 rebuilt
+`frontierx_native_shell` and the complete Debug graphs in
+`/tmp/frontierx-{gcc,clang}-goal`. Each full CTest run passed 48
+executing checks out of 51; the cursor and two GPU checks skipped in
+the command sandbox. The existing native-shell check now runs the
+new option against a synthetic `[Engine]` section without `IRenderer`
+and observes exit 6 with the explicit missing-Engine/renderer error.
+Both real compiler shells ran with lawfully external Steam training
+data, supplied `Conquest.ini`, source `Hotkeys.utf`, isolated
+save/preferences paths, SDL dummy video/audio, and explicit
+`--skip-movies` and `--skip-notification-cue`. Each reported
+`Native App mission Engine and render interfaces bound; GPU not initialized`, the
+required `IStreamer` initialized with Music/SFX, 160633 mission
+ParseData bytes, 3236 Globals bytes, and `mission not started`; both
+exited zero. The first focused CTest runs failed because they used a
+reduced synthetic profile with no renderer. Making Engine composition
+an explicit option preserved that data-diagnostic contract, and the
+final focused and full checks passed. Retail files remained outside
+the repository.
+
+Commands executed (external installation locations are represented
+by shell variables here):
+
+```text
+cmake --build /tmp/frontierx-gcc-goal --target frontierx_native_shell -j4
+ctest --test-dir /tmp/frontierx-gcc-goal -R '^portability.native_shell$' --output-on-failure
+cmake --build /tmp/frontierx-clang-goal --target frontierx_native_shell -j4
+ctest --test-dir /tmp/frontierx-clang-goal -R '^portability.native_shell$' --output-on-failure
+cmake --build /tmp/frontierx-gcc-goal -j4
+ctest --test-dir /tmp/frontierx-gcc-goal --output-on-failure -j4
+cmake --build /tmp/frontierx-clang-goal -j4
+ctest --test-dir /tmp/frontierx-clang-goal --output-on-failure -j4
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy XDG_CONFIG_HOME=/tmp/frontierx-goal-diagnostic-config timeout -k 5s 90s /tmp/frontierx-gcc-goal/frontierx_native_shell --data-root "$LAWFUL_DATA_ROOT" --material-root Data/mat --system-profile Code/App/Src/Conquest.ini --skip-movies --skip-notification-cue --mission-source Sol_Train.dmission --mission-engine --gen-data "$LAWFUL_INSTALL_ROOT/gendata.db" --game-types "$LAWFUL_INSTALL_ROOT/gametypes.db" --hotkeys Code/App/Src/Hotkeys.utf --save-root /tmp/frontierx-goal-diagnostic-save --preferences /tmp/frontierx-goal-diagnostic-preferences.bin --smoke-ms 1 --hidden
+```
+
+The Clang external-data invocation substituted
+`/tmp/frontierx-clang-goal/frontierx_native_shell` for the GCC binary
+with the same options and external inputs. Logs remained under `/tmp`.
+
+**Next gate.** The Engine, renderer and profile render interfaces now
+exist in the real mission shell, but `PIPE` and `BATCH` have no GPU
+backend, and texture/material managers and the source camera are not
+assembled into a persistent mission context.
+`NativeGameScene.cpp` assembles these only for its synthetic fixture.
+Connect the existing SDL renderer and source-profile aggregates to
+the mission shell, then call `CreateGlobalComponents` and the real
+mission load. No mission camera callback, visible Forger, normal move
+input, simulation checkpoint, or save/reload executed. Native Windows
+Debug/Final, module ABI, retail gameplay and GPU mission runtime checks
+remain unperformed.

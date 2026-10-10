@@ -46,7 +46,7 @@ struct PHYS_CHUNK
 	SINGLE mass;
 };
 
-#include "Engine.h"
+#include <ENGINE.H>
 #ifndef MESHRENDER_H
 #include "MeshRender.h"
 #endif

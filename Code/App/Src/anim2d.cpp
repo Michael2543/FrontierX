@@ -1,22 +1,31 @@
 //$Header: /Conquest/App/Src/anim2d.cpp 35    7/28/00 11:42p Rmarr $
 //Copyright (c) 1997 Digital Anvil, Inc.
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <ICamera.h>
+#include <ENGINE.H>
+#include "Include/NativeAppGlobals.h"
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 #include "anim2d.h"
-#include "camera.h"
+#include "Camera.h"
 #include "Startup.h"
 #include "CQTrace.h"
 #include "MyVertex.h"
-#include "CQBATCH.h"
+#include "CQBatch.h"
 
 #include <ITextureLibrary.h>
 #include <ICamera.h>
-#include <FileSys.h>
-#include <Engine.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
+#include <TComponent.h>
 
 AnimArchetype::AnimArchetype (void) : frames (NULL)
 {
@@ -140,17 +149,33 @@ void AnimArchetype::load (IFileSystem* fs)
 	{
 		if (TEXLIB->has_texture_id(name_ptrs[i]) != GR_OK)		// name is not present yet
 		{
+#if defined(_WIN32)
 			__try {
 				TEXLIB->load_library(fs, 0);
 			} __except(EXCEPTION_EXECUTE_HANDLER) {
 			}
+#else
+			if (TEXLIB->load_library(fs, 0) != GR_OK)
+			{
+				std::fputs("Native Anim2D texture library load failed\n", stderr);
+				std::abort();
+			}
+#endif
 		}
 		tex[i]=0;
+#if defined(_WIN32)
 		__try {
 			TEXLIB->get_texture_id(name_ptrs[i], tex+i);
 		} __except(EXCEPTION_EXECUTE_HANDLER) {
 			tex[i] = 0;
 		}
+#else
+		if (TEXLIB->get_texture_id(name_ptrs[i], tex+i) != GR_OK || !tex[i])
+		{
+			std::fputs("Native Anim2D texture ID resolution failed\n", stderr);
+			std::abort();
+		}
+#endif
 		//	TEXLIB->add_ref_texture_id(tex[i], NULL);
 
 	}
@@ -1028,6 +1053,12 @@ void Anim2D::render_instance (ICamera * camera,AnimInstance *inst,const Transfor
 
 void Anim2D::render_smooth (AnimInstance *inst,const Transform * const _trans)
 {
+#if !defined(_WIN32)
+	(void)inst;
+	(void)_trans;
+	std::fputs("Native Anim2D smooth draw requires unsupported stage-one blend\n", stderr);
+	std::abort();
+#else
 	if (inst != NULL)
 	{
 		if (inst->x_meters > 0.0 && inst->y_meters > 0.0f)
@@ -1189,6 +1220,7 @@ void Anim2D::render_smooth (AnimInstance *inst,const Transform * const _trans)
 			}
 		}
 	}
+#endif
 }
 
 void Anim2D::render(AnimInstance *inst, const Transform * const _trans)
@@ -1238,4 +1270,3 @@ struct _anim : GlobalComponent
 };
 
 static _anim anim;
-

@@ -2,6 +2,7 @@
 #define FRONTIERX_UTF_METADATA_H
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,28 @@ struct UtfDirectoryEntry
     bool directory = false;
     std::uint32_t size = 0;
 };
+// Runtime-only lookup table for an already validated disk archive.
+struct UtfArchiveIndex
+{
+    struct File { std::uint64_t offset; std::uint32_t size; bool compressed; };
+    std::map<std::string, std::vector<UtfDirectoryEntry>> directories;
+    std::map<std::string, File> files;
+    std::map<std::string, std::string> foldedDirectories;
+    std::map<std::string, std::string> foldedFiles;
+};
+bool BuildUtfArchiveIndex(const std::filesystem::path & path,
+                          UtfArchiveIndex & output, std::string & error);
+bool ListIndexedUtfDirectory(const UtfArchiveIndex & index, const std::string & directory,
+                             std::vector<UtfDirectoryEntry> & output, std::string & error);
+bool ReadIndexedUtfEntry(const std::filesystem::path & path, const UtfArchiveIndex & index,
+                         const std::string & entry, std::vector<unsigned char> & output,
+                         std::string & error);
+// Native IFileSystem emulates the Windows archive's case-insensitive lookup.
+// Standalone metadata readers above retain exact-case semantics.
+bool ResolveIndexedUtfDirectory(const UtfArchiveIndex & index, const std::string & requested,
+                                std::string & exact);
+bool ResolveIndexedUtfFile(const UtfArchiveIndex & index, const std::string & requested,
+                           std::string & exact);
 // Runtime input for a newly written UTF 1.01 container. Paths use exact-case
 // '/'-separated components; directory items permit empty saved directories.
 struct UtfArchiveItem

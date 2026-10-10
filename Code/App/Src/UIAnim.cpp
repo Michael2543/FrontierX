@@ -11,29 +11,47 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <HeapObj.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <cmath>
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+using std::max;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DExplosion.h"
-#include "Objlist.h"
-#include "Anim2D.h"
-#include "CQlight.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "anim2d.h"
+#include "CQLight.h"
+#include "SFX.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "IBlast.h"
 #include "ICamera.h"
 #include "UserDefaults.h"
 #include <MGlobals.h>
-#include "Fogofwar.h"
+#include "FogOfWar.h"
 
-#include <View2D.h>
-#include <FileSys.h>
-#include <Engine.h>
+#include <View2d.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <IRenderPrimitive.h>
 
 
@@ -160,7 +178,11 @@ struct _NO_VTABLE UIAnim : public ObjectTransform<ObjectFrame<IBaseObject,struct
 
 	virtual void SetRelativeTransform (const class TRANSFORM &_trans);
 
+#if defined(_WIN32)
 	bool UIAnim::get_projected_bounding_sphere(	float & cx,
+#else
+	bool get_projected_bounding_sphere(	float & cx,
+#endif
 										  float & cy,
 										  float & radius,
 										  float & depth);
@@ -571,9 +593,16 @@ IBaseObject * UIAnimManager::CreateInstance(HANDLE hArchetype)
 //
 void UIAnimManager::EditorCreateInstance(HANDLE hArchetype, const MISSION_INFO & info)
 {
+	#if defined(_WIN32)
 	// not supported
 	UIAnimArchetype * objtype = (UIAnimArchetype *)hArchetype;
 	EditorStartObjectInsertion(objtype->pArch, info);
+	#else
+	(void)hArchetype;
+	(void)info;
+	std::fprintf(stderr, "Native UIAnim editor insertion is unavailable\n");
+	std::abort();
+	#endif
 }
 //----------------------------------------------------------------------------------------------
 //

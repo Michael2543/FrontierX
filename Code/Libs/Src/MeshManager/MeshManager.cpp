@@ -239,7 +239,8 @@ IMeshArchetype * MeshManager::FindMeshArch(const char * filename)
 	{
 		if((!(search->bDynamic)) && (!(search->bRef)))
 		{
-			if(strcmp(filename,ENGINE->get_archetype_name(search->GetArchIndex())) == 0)
+			const char *existingName = ENGINE->get_archetype_name(search->GetArchIndex());
+			if(existingName && strcmp(filename,existingName) == 0)
 				return search;
 		}
 		search = search->next;

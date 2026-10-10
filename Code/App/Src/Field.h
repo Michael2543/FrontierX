@@ -171,13 +171,21 @@ struct DACOM_NO_VTABLE IFieldManager: IDAComponent
 
 	virtual IField *GetFields () = 0;
 
+#if defined(_WIN32)
 	virtual IField *GetFieldContaining (IBaseObject *obj);
+#else
+	virtual IField *GetFieldContaining (IBaseObject *obj) = 0;
+#endif
 
 	virtual void RenderBackground () = 0;
 
 //	virtual void SetShipBits () = 0;
 
+#if defined(_WIN32)
 	virtual void FieldHighlighted (struct IField * field);
+#else
+	virtual void FieldHighlighted (struct IField * field) = 0;
+#endif
 
 	virtual void CreateField(char * fieldArchtype,S32 * xPos,S32 * yPos, U32 numberInList, U32 systemID) = 0;
 

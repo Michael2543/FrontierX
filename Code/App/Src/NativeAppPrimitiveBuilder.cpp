@@ -9,6 +9,11 @@
 
 PrimitiveBuilder2 PB;
 
+void BindNativeAppPrimitive(IRenderPrimitive *primitive)
+{
+	PB.SetIRenderPrimitive(primitive);
+}
+
 PrimitiveBuilder2::~PrimitiveBuilder2()
 {
 	SetPipeline(NULL);

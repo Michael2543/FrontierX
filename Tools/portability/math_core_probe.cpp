@@ -4,6 +4,7 @@
 #include "Include/NativeAppGlobals.h"
 #include "vector.h"
 #include "GridVector.h"
+#include "RandomGen.h"
 
 #include <cmath>
 #include <cstring>
@@ -27,6 +28,10 @@ bool vector_is(const frontierx::Vec3 &value, float x, float y, float z)
 
 int main()
 {
+	RandomGen fieldRandom(42);
+	const U32 fieldValues[] = {667, 288, 870, 165, 162, 556};
+	for (U32 expected : fieldValues)
+		if (fieldRandom.rand(1000) != expected) return 24;
 	using namespace frontierx;
 	const Matrix3 matrix{{{1.0F, 2.0F, 3.0F}, {0.0F, 1.0F, 4.0F}, {5.0F, 6.0F, 0.0F}}};
 	if (!close(determinant(matrix), 1.0F)) return 1;

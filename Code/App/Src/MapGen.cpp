@@ -11,17 +11,35 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <da_d3dtypes.h>
+#include <DACOM.H>
+#include <TComponent.h>
+#include "DMissionEnum.h"
+struct IMeshArchetype;
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#define __max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
 #include <stdio.h>
 
 #include "MapGen.h"
 #include "CQGame.h"
 #include "ObjList.h"
-#include "sector.h"
+#include "Sector.h"
 #include "RuseMap.h"
 #include "MGlobals.h"
-#include "startup.h"
+#include "Startup.h"
 #include "IObject.h"
 #include "DMapGen.h"
 #include "MPart.h"
@@ -3256,7 +3274,11 @@ struct _mapGen : GlobalComponent
 	virtual void Startup (void)
 	{
 		MAPGEN = mapGen = new DAComponent<MapGen>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&mapGen);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&mapGen));
+#endif
 	}
 
 	virtual void Initialize (void)

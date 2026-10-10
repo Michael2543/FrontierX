@@ -328,8 +328,10 @@ private:
 
 NativeHeap & HeapOwner()
 {
-    static NativeHeap heap;
-    return heap;
+    // DOCUVIEW's global SymbolTable releases heap allocations during static
+    // teardown. The process heap must remain alive after that destructor.
+    static NativeHeap * heap = new NativeHeap;
+    return *heap;
 }
 }
 

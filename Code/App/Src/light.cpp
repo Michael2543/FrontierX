@@ -12,23 +12,45 @@
     $Header: /Conquest/App/Src/light.cpp 70    10/23/00 11:05p Jasony $
 */			    
 //--------------------------------------------------------------------------//
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <IRenderPrimitive.h>
+struct IMeshArchetype;
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cmath>
+#include <cfloat>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <FrontierX/PlatformTime.h>
+using std::min;
+using std::max;
+#define __min(a,b) (((a) < (b)) ? (a) : (b))
+#define __max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
 
 #include "TDocClient.h"
 #include "Menu.h"
-#include "Resource.h"
+#include "resource.h"
 #include "DBHotkeys.h"
 //#include "SysMap.h"
 #include "UserDefaults.h"
 #include "Camera.h"
-#include "Lightman.h"
+#include "lightman.h"
 #include "Startup.h"
 #include "DLight.h"
 #include "Sector.h"		// for cqlight
 #include "CQTrace.h"
 #include "CQLight.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "DLight.h"
 #include "TObject.h"
 #include "Mission.h"
@@ -47,18 +69,18 @@
 //
 
 #include <Mesh.h>
-#include <Renderer.h>
-#include <Engine.h>
-#include <3DMath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <3dmath.h>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <Viewer.h>
 #include <EventSys.h>
-#include <Quat.h>
+#include <quat.h>
 #include <ITextureLibrary.h>
-#include <View2D.h>
+#include <View2d.h>
 #include <map>
 #pragma warning (disable : 4514 4201 4100 4512 4245 4127 4355 4244 4710 4702 4786)
 
@@ -111,7 +133,11 @@ GENRESULT CQLight::Notify(U32 message, void *param)
 	{
 		if (bAmbient)
 		{
+			#if defined(_WIN32)
 			if (systemID == (U32)param)
+			#else
+			if (systemID == static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
+			#endif
 			{
 				//LIGHT->set_ambient_light(color.r,color.g,color.b);  //only good so get_ambient_light still works
 				LIGHTS->SetSysAmbientLight(color.r,color.g,color.b);
@@ -160,6 +186,7 @@ void CQLight::UpdateLight(bool bUseThisLight)
 	
 	if (bReallyReallyOn && CQFLAGS.b3DEnabled && this->bAmbient == 0)
 	{
+#if defined(_WIN32)
 		//const Transform *trans = CAMERA->GetInverseTransform();
 		//Vector v = trans->rotate_translate(transform.translation);
 		// changed for DX9 - Ryan
@@ -211,6 +238,12 @@ void CQLight::UpdateLight(bool bUseThisLight)
 		
 		PIPE->set_light(engineID,&d3dl);
 		//	PIPE->set_light_enable(engineID,TRUE);
+#else
+		if (!NATIVE_SKIP_LEGACY_LIGHTING) {
+			std::fputs("Native dynamic light needs IRenderPipeline light-state support\n", stderr);
+			std::abort();
+		}
+#endif
 	}
 }
 
@@ -458,7 +491,7 @@ SINGLE GameLight::TestHighlight (const RECT & rect)
 			_rect.top = F2LONG(center_y - radius);
 			_rect.bottom = F2LONG(center_y + radius);
 
-			RECT screenRect = { 0, 0, SCREENRESX, SCREENRESY };
+			RECT screenRect = { 0, 0, static_cast<LONG>(SCREENRESX), static_cast<LONG>(SCREENRESY) };
 
 			if (RectIntersects(_rect, screenRect) != 0)
 			{
@@ -851,15 +884,27 @@ void GameLight::QuickSave (struct IFileSystem * file)
 	strcpy(buffer,"000");
 	if (unique > 99)
 	{
+#if defined(_WIN32)
 		_ltoa(unique,buffer,10);
+#else
+		std::snprintf(buffer, sizeof(buffer), "%u", static_cast<unsigned>(unique));
+#endif
 	}
 	else if (unique > 9)
 	{
+#if defined(_WIN32)
 		_ltoa(unique,&buffer[1],10);
+#else
+		std::snprintf(&buffer[1], sizeof(buffer)-1, "%u", static_cast<unsigned>(unique));
+#endif
 	}
 	else
 	{
+#if defined(_WIN32)
 		_ltoa(unique,&buffer[2],10);
+#else
+		std::snprintf(&buffer[2], sizeof(buffer)-2, "%u", static_cast<unsigned>(unique));
+#endif
 	}
 	strcpy(&buffer[3],name);
 	fdesc.lpFileName = buffer;
@@ -1092,7 +1137,9 @@ struct DACOM_NO_VTABLE Lights : public IEventCallback, DocumentClient, IObjectFa
 
 //	BOOL32 RegBmp(char *fileName);
 
+#if defined(_WIN32)
 	static BOOL CALLBACK LightListDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+#endif
 
 	virtual void loadTextures (bool bEnable);
 
@@ -1222,6 +1269,13 @@ GENRESULT Lights::OnUpdate (struct IDocument *doc, const C8 *message, void *parm
 		lights[1].set_On(false);
 		LIGHTS->SetSysAmbientLight(0,0,0);
 		LIGHTS->SetAmbientLight(0,0,0);
+#if !defined(_WIN32)
+		if (!SECTOR)
+		{
+			std::fputs("Native light startup requires the production Sector owner\n", stderr);
+			std::abort();
+		}
+#endif
 		EVENTSYS->Send(CQE_SYSTEM_CHANGED,(void *)SECTOR->GetCurrentSystem());
 	}
 	
@@ -1233,8 +1287,9 @@ GENRESULT Lights::OnUpdate (struct IDocument *doc, const C8 *message, void *parm
 //
 BOOL32 Lights::CreateViewer (void)
 {
-	DACOMDESC desc = "IViewConstructor";
 	COMPTR<IDAConnectionPoint> connection;
+#if defined(_WIN32)
+	DACOMDESC desc = "IViewConstructor";
 	HMENU hMenu = MENU->GetSubMenu(MENUPOS_VIEW);
 	MENUITEMINFO minfo;
 
@@ -1248,6 +1303,7 @@ BOOL32 Lights::CreateViewer (void)
 		
 	if (InsertMenuItem(hMenu, 0x7FFE, 1, &minfo))
 		menuID = IDS_VIEWLIGHTS;
+#endif
 
 	if (GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 	{
@@ -1281,6 +1337,9 @@ BOOL32 Lights::CreateViewer (void)
 	}
 
 	OnUpdate(0,0,0);
+#if !defined(_WIN32)
+	return FALSE; // No native document/view editor; ownership and lighting still initialize.
+#else
 	if (CQFLAGS.bNoGDI)
 		return 1;
 
@@ -1314,13 +1373,18 @@ BOOL32 Lights::CreateViewer (void)
 	}
 
 	return (viewer != 0);
+#endif
 }
 //--------------------------------------------------------------------------//
 // receive notifications from event system
 //
 GENRESULT Lights::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	(void)param;
+#endif
 
 	switch (message)
 	{
@@ -1339,6 +1403,7 @@ GENRESULT Lights::Notify (U32 message, void *param)
 
 		break;
 
+#if defined(_WIN32)
 	case WM_CLOSE:
 		if (viewer)
 			viewer->set_display_state(0);
@@ -1397,7 +1462,7 @@ GENRESULT Lights::Notify (U32 message, void *param)
 			viewer->set_display_state(1);
 		}*/
 		break;
-
+#endif
 	case CQE_ENTERING_INGAMEMODE:
 		loadTextures(true);
 	//	EnableSpecular(param!=0);
@@ -1409,6 +1474,7 @@ GENRESULT Lights::Notify (U32 message, void *param)
 		
 	
 
+#if defined(_WIN32)
 	case WM_COMMAND:
 		if (LOWORD(msg->wParam) == menuID)
 		{
@@ -1416,6 +1482,7 @@ GENRESULT Lights::Notify (U32 message, void *param)
 				viewer->set_display_state(1);
 		}
 		break;
+#endif
 	
 	}
 
@@ -1464,6 +1531,7 @@ void Lights::loadTextures (bool bEnable)
 	}*/
 }
 
+#if defined(_WIN32)
 BOOL Lights::LightListDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 {
 	BOOL result=0;
@@ -1597,6 +1665,7 @@ BOOL Lights::LightListDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam
 
 	return result;
 }
+#endif
 
 void Lights::DeleteLight(GameLight *light)
 {
@@ -1800,7 +1869,11 @@ void Lights::ActivateBestLights (const Vector &_spot, int maxLights, float radiu
 	static bool bSkipLights = 0;
 	if (bSkipLights) return;
 	U64 pretick,posttick;
+#if defined(_WIN32)
 	QueryPerformanceCounter((LARGE_INTEGER *)&pretick);
+#else
+	pretick = FrontierX::Platform::MonotonicMicroseconds();
+#endif
 	Vector spot = _spot;
 
 	CQASSERT(spot.x > -10*GRIDSIZE && spot.x < (64+10)*GRIDSIZE);
@@ -1834,7 +1907,11 @@ void Lights::ActivateBestLights (const Vector &_spot, int maxLights, float radiu
 	}
 
 
+#if defined(_WIN32)
 	QueryPerformanceCounter((LARGE_INTEGER *)&posttick);
+#else
+	posttick = FrontierX::Platform::MonotonicMicroseconds();
+#endif
 	OBJLIST->AddTimerTicksToLighting(posttick-pretick);
 }
 
@@ -1878,7 +1955,14 @@ void Lights::SetAmbientLight (U8 r,U8 g,U8 b)
 
 	if (CQFLAGS.b3DEnabled)
 	{
+#if defined(_WIN32)
 		PIPE->set_render_state(D3DRS_AMBIENT,D3DCOLOR_RGBA(__min(255,r+sys_amb.r),__min(255,g+sys_amb.g),__min(255,b+sys_amb.b),0));
+#else
+		if (!NATIVE_SKIP_LEGACY_LIGHTING) {
+			std::fputs("Native ambient light needs IRenderPipeline ambient state\n", stderr);
+			std::abort();
+		}
+#endif
 	}
 }
 //-----------------------------------------------------------------------------
@@ -1924,7 +2008,9 @@ BOOL32 Lights::DestroyArchetype (HANDLE hArchetype)
 {
 	GameLightArchetype * arch = (GameLightArchetype *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(arch->pArchetype);
+#endif
 	delete arch;
 
 	return 1;
@@ -1986,8 +2072,14 @@ IBaseObject * Lights::CreateInstance (HANDLE hArchetype)
 //
 void Lights::EditorCreateInstance(HANDLE hArchetype, const MISSION_INFO & info)
 {
+#if defined(_WIN32)
 	GameLightArchetype * arch = (GameLightArchetype *)hArchetype;
 	EditorStartObjectInsertion(arch->pArchetype, info);
+#else
+	(void)hArchetype;
+	(void)info;
+	std::abort();
+#endif
 }
 
 

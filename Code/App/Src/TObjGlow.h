@@ -52,11 +52,30 @@ template <class Base=IBaseObject>
 struct _NO_VTABLE ObjectGlow : public Base
 {
 //	struct PreRenderNode preRenderNode;
+#if defined(_WIN32)
 	struct PostRenderNode postRenderNode;
 	struct InitNode	     initNode;
+#else
+	typename Base::PostRenderNode postRenderNode;
+	typename Base::InitNode initNode;
+#endif
 //	struct UpdateNode	updateNode;
 
+#if defined(_WIN32)
 	typename typedef Base::INITINFO GLOWINITINFO;
+#else
+	typedef typename Base::INITINFO GLOWINITINFO;
+	using typename Base::RenderProc;
+	using typename Base::InitProc;
+	using Base::instanceIndex;
+	using Base::bExploding;
+	using Base::bCloaked;
+	using Base::bSpecialRender;
+	using Base::billboardThreshhold;
+	using Base::areThrustersOn;
+	using Base::techLevel;
+	using Base::transform;
+#endif
 
 	//	Mesh *mesh;
 	//Material *mat;

@@ -17,7 +17,7 @@
 #endif
 
 #ifndef IFABRICATOR_H
-#include "IFabricator.h"
+#include "ifabricator.h"
 #endif
 
 //--------------------------------------------------------------------------//

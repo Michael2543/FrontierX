@@ -5,3 +5,4 @@
 #include "TObjFrame.h"
 #include "TObjTrans.h"
 #include "TObjRender.h"
+#include "TObjMission.h"

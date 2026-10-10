@@ -13,13 +13,28 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <ICamera.h>
+struct IMeshArchetype;
+#include <ObjClass.h>
+#include <DMissionEnum.h>
+#include <IRenderPrimitive.h>
+#include <DEffectOpts.h>
+#include "MyVertex.h"
+#endif
 #include "Sector.h"
 #include "Camera.h"
 #include "FogOfWar.h"
 #include "TerrainMap.h"
 #include "UserDefaults.h"
+#include "MGlobals.h"
+#include "GridVector.h"
 
 #include "IDust.h"
 #include "Startup.h"
@@ -27,6 +42,7 @@
 #include <TSmartPointer.h>
 #include <DPlatform.h>
 #include <renderer.h>
+#include <TComponent.h>
 
 //--------------------------------------------------------------------------------------
 //
@@ -75,6 +91,11 @@ Dust::~Dust()
 //
 void Dust::Render()
 {
+#if !defined(_WIN32)
+	// Dust points are part of the optional space background presentation.
+	if (CQEFFECTS.bBackground == GlobalEffectsOptions::off)
+		return;
+#endif
 	timer = timer+10;
 	//find four courners
 	Vector vec[4];
@@ -227,7 +248,11 @@ struct _dustMang : GlobalComponent
 	virtual void Startup (void)
 	{
 		DUSTMANAGER = dust = new DAComponent<Dust>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&dust);
+#else
+		AddToGlobalCleanupList((IDAComponent **) &DUSTMANAGER);
+#endif
 	}
 
 	virtual void Initialize (void)
@@ -244,5 +269,3 @@ static _dustMang __dustMang;
 //---------------------------------------------------------------------------
 //------------------------End Dust.cpp----------------------------------------
 //---------------------------------------------------------------------------
-
-

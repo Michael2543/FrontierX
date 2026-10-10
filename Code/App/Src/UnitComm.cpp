@@ -10,8 +10,20 @@
 */
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppMissionMedia.h"
+#include "IObject.h"
+#include <ICamera.h>
+#include <cstdint>
+#include <cstring>
+#include <cwchar>
+#include <cstdlib>
+#include <cstddef>
+#endif
 
 #include "UnitComm.h"
 #include "Startup.h"
@@ -25,24 +37,31 @@
 #include "Hotkeys.h"
 #include "ObjList.h"
 #include "Sector.h"
-#include "Sysmap.h"
+#include "SysMap.h"
 #include "Camera.h"
 #include "UserDefaults.h"
 #include "MScript.h"
 #include "GenData.h"
+#if defined(_WIN32)
 #include "ScrollingText.h"
+#endif
 #include <stdio.h>
+#include <cstdio>
+#include <algorithm>
+#include <cstdint>
 
 #include <TSmartPointer.h>
 #include <EventSys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <HeapObj.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
+#if defined(_WIN32)
 #include <commctrl.h>
 #include <malloc.h>
+#endif
 
 #define cqoffsetofmember(base, member) (size_t)((&(((base *)0)->member))+0)
 
@@ -100,11 +119,15 @@ struct DACOM_NO_VTABLE UnitComm : public IUnitComm, IEventCallback
 	//--------------------------------
 	// data items go here
 	//--------------------------------
+	#if defined(_WIN32)
 	COMPTR<IFontDrawAgent> pFont[MAX_ALERT_FONTS];
 
 	COLORREF fontColor[NUM_ALERT_STRINGS];
 	wchar_t alertStrings[NUM_ALERT_STRINGS][ALERT_STRING_LENGTH];
 	HFONT hFont;
+#else
+	bool skipAlerts = false;
+#endif
 	
 	U32 eventHandle;		// handle to event callback
 
@@ -145,7 +168,7 @@ struct DACOM_NO_VTABLE UnitComm : public IUnitComm, IEventCallback
 
 	/* UnitComm methods  */
 
-	void init (void);
+	bool init (void);
 
 	void reset (void);
 
@@ -189,16 +212,22 @@ UnitComm::~UnitComm (void)
 {
 	COMPTR<IDAConnectionPoint> connection;
 
+#if defined(_WIN32)
 	if (GS && GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#else
+	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#endif
 		connection->Unadvise(eventHandle);
 
 	reset();
 
+#if defined(_WIN32)
 	if (hFont)
 	{
 		DeleteObject(hFont);
 		hFont = 0;
 	}
+#endif
 }
 //-------------------------------------------------------------------
 //
@@ -315,6 +344,7 @@ Done:
 
 void UnitComm::drawAlerts()
 {
+#if defined(_WIN32)
 	CommNode * node = findActiveAlert();
 	if (node)
 	{
@@ -335,6 +365,13 @@ void UnitComm::drawAlerts()
 			node = node->pNext;
 		}
 	}
+#else
+	if (!skipAlerts)
+	{
+		std::fputs("Native UnitComm alert text requires a font owner\n", stderr);
+		std::abort();
+	}
+#endif
 }
 //-------------------------------------------------------------------
 // receive notifications from event system
@@ -353,7 +390,7 @@ GENRESULT UnitComm::Notify (U32 message, void *param)
 			reset();
 		else
 		if (CQFLAGS.bGamePaused==0 && DEFAULTS->GetDefaults()->bEditorMode==0)
-			update(U32(param) >> 10);
+			update(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
 		break;
 	case CQE_START3DMODE:
 		on3DEnable(true);
@@ -367,7 +404,7 @@ GENRESULT UnitComm::Notify (U32 message, void *param)
 	case CQE_HOTKEY:
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
-			switch (U32(param))
+			switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
 			{
 			case IDH_SEEK_EVENT:
 				gotoSeekEvent();
@@ -404,13 +441,28 @@ const char * UnitComm::getFilename (IBaseObject * obj, U32 index)
 			if (pSpeech)
 			{
 				CQASSERT(dataSize == sizeof(UNITSOUNDS::SPEECH) && "StringPack out of sync");
+#if !defined(_WIN32)
+                if (dataSize != sizeof(UNITSOUNDS::SPEECH) || index >= dataSize / sizeof(M_STRING))
+                { std::fputs("Native UnitComm speech schema mismatch\n", stderr); std::abort(); }
+#endif
 
 				const M_STRING * stringName = (const M_STRING *) pSpeech;
+#if !defined(_WIN32)
+                if (!std::memchr(stringName[index], 0, sizeof(M_STRING)))
+                { std::fputs("Native UnitComm speech slot is unterminated\n", stderr); std::abort(); }
+#endif
 				const M_STRING * stringPack = (const M_STRING * )  STRINGDATA->GetArchetypeData(stringName[index], dataSize);
 
 				if (stringPack && dataSize)
 				{
 					CQASSERT(dataSize % sizeof(M_STRING) == 0);
+#if !defined(_WIN32)
+                    if (dataSize % sizeof(M_STRING))
+                    { std::fputs("Native UnitComm speech pack size mismatch\n", stderr); std::abort(); }
+                    for (U32 offset = 0; offset < dataSize / sizeof(M_STRING); ++offset)
+                        if (!std::memchr(stringPack[offset], 0, sizeof(M_STRING)))
+                        { std::fputs("Native UnitComm speech pack slot is unterminated\n", stderr); std::abort(); }
+#endif
 					U32 numStrings = dataSize / sizeof(M_STRING);
 					U32 which = rand() % numStrings;
 					stringName = stringPack + which;
@@ -474,7 +526,7 @@ void UnitComm::flushQueuedSelection (void)
 			if (pPrev)
 				pPrev->pNext = node->pNext;
 			else
-				queuedList = node->pNext;
+			queuedList = node->pNext;
 			delete node;
 			break;
 		}
@@ -531,7 +583,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, U32 indexPos
 					indexPos = cqoffsetofmember(UNITSOUNDS::SPEECH::SPACESHIP, aggravated) / sizeof(M_STRING);
 				else
 				{
-					node->decayTime = __max(node->decayTime, SHORT_DECAY/2);
+					node->decayTime = (std::max)(node->decayTime, SHORT_DECAY/2);
 					goto Done;		// throw away redundant
 				}
 			}
@@ -547,7 +599,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, U32 indexPos
 		{
 			if (node->index == indexPos)
 			{
-				node->decayTime = __max(node->decayTime, SHORT_DECAY/2);
+				node->decayTime = (std::max)(node->decayTime, SHORT_DECAY/2);
 				goto Done;		// throw away redundant message
 			}
 		}
@@ -562,7 +614,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, U32 indexPos
 		CommNode * node = findAlertFromUnit(dwMissionID);
 		if (node)
 		{
-			node->decayTime = __max(node->decayTime, GOTO_DECAY);
+			node->decayTime = (std::max)(node->decayTime, GOTO_DECAY);
 			node->gotoDecay = GOTO_DECAY;
 			flags &= ~COMMF_ALERT;
 		}
@@ -627,7 +679,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, U32 indexPos
 
 		if (param == ALERT_UNDER_ATTACK)
 		{
-			EVENTSYS->Send(CQE_UNIT_UNDER_ATTACK, (void *) dwMissionID);
+			EVENTSYS->Send(CQE_UNIT_UNDER_ATTACK, reinterpret_cast<void *>(static_cast<std::uintptr_t>(dwMissionID)));
 			MScript::RunProgramsWithEvent(CQPROGFLAG_UNDERATTACK, dwMissionID);
 		}
 		else if (param == ALERT_ENEMY_SIGHTED)
@@ -668,7 +720,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, char * fileN
 		CommNode * node = findAlertFromUnit(dwMissionID);
 		if (node)
 		{
-			node->decayTime = __max(node->decayTime, GOTO_DECAY);
+			node->decayTime = (std::max)(node->decayTime, GOTO_DECAY);
 			node->gotoDecay = GOTO_DECAY;
 			flags &= ~COMMF_ALERT;
 		}
@@ -723,7 +775,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, char * fileN
 
 		if (param == ALERT_UNDER_ATTACK)
 		{
-			EVENTSYS->Send(CQE_UNIT_UNDER_ATTACK, (void *) dwMissionID);
+			EVENTSYS->Send(CQE_UNIT_UNDER_ATTACK, reinterpret_cast<void *>(static_cast<std::uintptr_t>(dwMissionID)));
 			MScript::RunProgramsWithEvent(CQPROGFLAG_UNDERATTACK, dwMissionID);
 		}
 		else if (param == ALERT_ENEMY_SIGHTED)
@@ -807,6 +859,7 @@ void UnitComm::update (U32 dt)	// milliseconds
 					SYSMAP->ZoneOn(node->pos);
 			}
 
+#if defined(_WIN32)
 			if(DEFAULTS->GetDefaults()->bSubtitles && node->subtitle && node->unitNameID)
 			{
 				CQASSERT(node->subtitle >= SUB_FIRST && node->subtitle <= SUB_LAST);//happens to be ok ok check because strings are sequential in table
@@ -831,6 +884,13 @@ void UnitComm::update (U32 dt)	// milliseconds
 				swprintf(buffer,_localLoadStringW(node->subtitle),ptr);
 				SCROLLTEXT->SetTextString(buffer);
 			}
+#else
+            if (DEFAULTS->GetDefaults()->bSubtitles && node->subtitle && node->unitNameID)
+            {
+                std::fputs("Native UnitComm subtitles require a text owner\n", stderr);
+                std::abort();
+            }
+#endif
 
 			queuedList = node->pNext;
 			node->pNext = 0;
@@ -846,6 +906,7 @@ void UnitComm::update (U32 dt)	// milliseconds
 //
 void UnitComm::on3DEnable (bool bEnable)
 {
+#if defined(_WIN32)
 	if (bEnable)
 	{
 		COLORREF pen, background;
@@ -928,6 +989,10 @@ void UnitComm::on3DEnable (bool bEnable)
 			hFont = 0;
 		}
 	}
+#else
+    (void)bEnable;
+    if (!skipAlerts) drawAlerts();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -962,15 +1027,21 @@ void UnitComm::gotoSeekEvent (void)
 }
 //--------------------------------------------------------------------------//
 //
-void UnitComm::init (void)
+bool UnitComm::init (void)
 {
-	COMPTR<IDAConnectionPoint> connection;
-
-	if (GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
-		connection->Advise(getBase(), &eventHandle);
+    COMPTR<IDAConnectionPoint> connection;
+#if defined(_WIN32)
+    if (GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+        return connection->Advise(getBase(), &eventHandle) == GR_OK;
+#else
+    if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+        return connection->Advise(getBase(), &eventHandle) == GR_OK;
+#endif
+    return false;
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 struct _unitcomm : GlobalComponent
 {
 	UnitComm * comm;
@@ -988,6 +1059,20 @@ struct _unitcomm : GlobalComponent
 };
 
 static _unitcomm UnitComm;
+#else
+namespace FrontierX
+{
+IUnitComm *CreateNativeUnitComm(bool skipAlerts)
+{
+    if (!skipAlerts || !EVENTSYS || !STRINGDATA || !SOUNDMANAGER || !OBJLIST || !DEFAULTS)
+        return nullptr;
+    auto *comm = new DAComponent<UnitComm>;
+    comm->skipAlerts = skipAlerts;
+    if (!comm->init()) { comm->Release(); return nullptr; }
+    return comm;
+}
+}
+#endif
 
 //------------------------------------------------------------------------------------//
 //---------------------------------End UnitComm.cpp-----------------------------------//

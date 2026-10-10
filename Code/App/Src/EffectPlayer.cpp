@@ -11,25 +11,38 @@
     $Header: /App/Src/EffectPlayer.cpp 27    11/24/03 3:50p Jthomas $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "CQTrace.h"
+#include "Include/NativeAppGlobals.h"
+#include <ICamera.h>
+#endif
 
 #include <IParticleManager.h>
 
 #include "EffectPlayer.h"
 #include "IObject.h"
-#include "startup.h"
-#include "objwatch.h"
+#include "Startup.h"
+#include "Objwatch.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
+#include "ObjList.h"
 
-#include <DACOM.h>
+#include <DACOM.H>
 #include <TSmartPointer.h>
 #include <TConnPoint.h>
 #include <TConnContainer.h>
-#include <IHardpoint.h>
+#include <IHardPoint.h>
 #include <IMeshManager.h>
+
+#if !defined(_WIN32)
+static SINGLE NativeMinAngularStep(SINGLE first, SINGLE second)
+{
+	return first < second ? first : second;
+}
+#endif
 
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -1188,13 +1201,23 @@ void EffectInstance::updateTurrets()
 				{
 					if (relYaw < 0)			// turn to the left needed
 					{
-						SINGLE minVal = __min(search->angVelocity*MUL_DEG_TO_RAD*dt, -relYaw);
+						SINGLE minVal =
+#if defined(_WIN32)
+							__min(search->angVelocity*MUL_DEG_TO_RAD*dt, -relYaw);
+#else
+							NativeMinAngularStep(search->angVelocity*MUL_DEG_TO_RAD*dt, -relYaw);
+#endif
 						rot += minVal;
 						relYaw += minVal;
 					}
 					else
 					{
-						SINGLE minVal = -__min(search->angVelocity*MUL_DEG_TO_RAD*dt, relYaw);
+						SINGLE minVal =
+#if defined(_WIN32)
+							-__min(search->angVelocity*MUL_DEG_TO_RAD*dt, relYaw);
+#else
+							-NativeMinAngularStep(search->angVelocity*MUL_DEG_TO_RAD*dt, relYaw);
+#endif
 						rot += minVal;
 						relYaw += minVal;
 					}

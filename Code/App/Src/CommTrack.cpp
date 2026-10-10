@@ -9,8 +9,18 @@
     $Header: /Conquest/App/Src/CommTrack.cpp 9     9/30/00 10:52p Jasony $
 */			    
 //---------------------------------------------------------------------------
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <DACOM.H>
+#include <cstdint>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <limits>
+#endif
 
 #include "CommTrack.h"
 #include "Startup.h"
@@ -20,13 +30,15 @@
 #include "MPart.h"
 #include "OpAgent.h"
 
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <TSmartPointer.h>
 #include <EventSys.h>
 #include <TComponent.h>
 #include <IConnection.h>
 
+#if defined(_WIN32)
 #include <commctrl.h>
+#endif
 
 #define TRACKING_LISTS  256
 
@@ -179,7 +191,7 @@ struct CommTrack : ICommTrack, IEventCallback, TRACKDATA
 
 	void update (U32 dt);
 
-	static void CommTrack::printCmdQueue (U32 dwMissionID, TrackingNode * node, char *buffer);
+	static void printCmdQueue (U32 dwMissionID, TrackingNode * node, char *buffer);
 
 	IDAComponent * getBase (void)
 	{
@@ -187,7 +199,9 @@ struct CommTrack : ICommTrack, IEventCallback, TRACKDATA
 	}
 
 
+	#if defined(_WIN32)
 	static BOOL CALLBACK dlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+	#endif
 };
 //----------------------------------------------------------------------------------------------
 //
@@ -203,19 +217,34 @@ CommTrack::~CommTrack (void)
 //
 GENRESULT CommTrack::Notify (U32 message, void *param)
 {
+	#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+	#endif
 
 	switch (message)
 	{
 	case CQE_UPDATE:
+		{
+		#if defined(_WIN32)
 		update(U32(param) >> 10);
+		#else
+		const std::uintptr_t encoded = reinterpret_cast<std::uintptr_t>(param);
+		if (encoded >> 10 > std::numeric_limits<U32>::max())
+		{
+			std::fputs("Native command-track update exceeds U32 milliseconds\n", stderr);
+			std::abort();
+		}
+		update(static_cast<U32>(encoded >> 10));
+		#endif
 		break;
+		}
 
 	case CQE_MISSION_CLOSE:
 		if (param!=0)
 			reset();
 		break;
 
+	#if defined(_WIN32)
 	case WM_COMMAND:
 		switch (LOWORD(msg->wParam))
 		{
@@ -224,6 +253,7 @@ GENRESULT CommTrack::Notify (U32 message, void *param)
 			break;
 		}
 		break;  // end case WM_COMMAND
+	#endif
 	}
 
 	return GR_OK;
@@ -378,6 +408,7 @@ U32 CommTrack::getCommandCount (U32 dwMissionID)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 BOOL CommTrack::dlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 {
 	BOOL result=0;
@@ -459,6 +490,7 @@ BOOL CommTrack::dlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 
 	return result;
 }
+#endif
 //----------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------
@@ -470,7 +502,11 @@ struct _commtrack : GlobalComponent
 	virtual void Startup (void)
 	{
 		COMMTRACK = ct = new DAComponent<CommTrack>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&COMMTRACK);
+		#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&COMMTRACK));
+		#endif
 	}
 	
 	virtual void Initialize (void)

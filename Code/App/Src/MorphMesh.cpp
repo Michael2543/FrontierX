@@ -11,17 +11,33 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include <vector.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <DACOM.H>
+#include <TComponent.h>
+#include <IProfileParser.h>
+#include "Include/NativeAppProfileParser.h"
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <cstring>
+#endif
 
 #include <stdio.h>
 
-#include "TSmartpointer.h"
+#include "TSmartPointer.h"
 #include "CQTrace.h"
 #include "IMorphMesh.h"
 
-#include <FileSys.h>
-#include <Renderer.h>
+#include <Filesys.h>
+#include <renderer.h>
 #include <Mesh.h>
 #include <HeapObj.h>
 //
@@ -461,7 +477,11 @@ struct AnimQueue
 	bool bLooping;
 	AnimQueue *next;
 
+#if defined(_WIN32)
 	AnimQueue::AnimQueue()
+#else
+	AnimQueue()
+#endif
 	{
 		next = NULL;
 	}
@@ -495,7 +515,11 @@ struct MorphMesh : IMorphMesh
 		::free(ptr);
 	}
 
+#if defined(_WIN32)
 	MorphMesh::MorphMesh();
+#else
+	MorphMesh();
+#endif
 	~MorphMesh();
 
 	virtual SINGLE GetMorphPos(Mesh **mesh0,Mesh **mesh1);

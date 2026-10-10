@@ -610,12 +610,13 @@ void AnimNugget::DrawHighlighted (void)
 	if ((nextHighlighted==0) && (OBJLIST->GetHighlightedList()==this))
 	{
 		COMPTR<IFontDrawAgent> pFont;
-		OBJLIST->GetUnitFont(pFont);
-
-		pFont->SetFontColor(RGB(180,180,180) | 0xFF000000, 0);
-		wchar_t temp[M_MAX_STRING];
-		swprintf(temp,L"#%x#",dwMissionID);
-		pFont->StringDraw(pane, x-20, y+10, temp);
+		if (OBJLIST->GetUnitFont(pFont) == GR_OK)
+		{
+			pFont->SetFontColor(RGB(180,180,180) | 0xFF000000, 0);
+			wchar_t temp[M_MAX_STRING];
+			swprintf(temp,L"#%x#",dwMissionID);
+			pFont->StringDraw(pane, x-20, y+10, temp);
+		}
 	}
 #endif
 

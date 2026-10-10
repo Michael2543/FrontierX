@@ -25,6 +25,10 @@
 #include "IExplosion.h"
 #endif
 
+#if !defined(_WIN32)
+#include "IBlast.h"
+#endif
+
 #ifndef SECTOR_H
 #include "Sector.h"
 #endif
@@ -75,9 +79,28 @@ struct _NO_VTABLE ObjectExtent : public Base, IWeaponTarget, IExplosionOwner, IE
 
 	//S32 numChildren;
 
+#if defined(_WIN32)
 	typename typedef Base::INITINFO EXTENTINITINFO;
-	struct InitNode			initNode;
-	struct PostRenderNode	postRenderNode;
+	struct InitNode initNode;
+	struct PostRenderNode postRenderNode;
+#else
+	typedef typename Base::INITINFO EXTENTINITINFO;
+	typename Base::InitNode initNode;
+	typename Base::PostRenderNode postRenderNode;
+	using Base::GetObjectBox;
+	using Base::ComputeCorners;
+	using Base::instanceIndex;
+	using Base::transform;
+	using Base::bVisible;
+	using Base::systemID;
+	using Base::aliasArchetypeID;
+	using Base::aliasPlayerID;
+	using Base::objMapNode;
+	using Base::box;
+	using Base::boxRadius;
+	using typename Base::InitProc;
+	using typename Base::RenderProc;
+#endif
 
 	//child blasts
 	IBaseObject *childBlastList;

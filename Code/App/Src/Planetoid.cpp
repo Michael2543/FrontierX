@@ -11,8 +11,40 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <DEffectOpts.h>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+#include <iterator>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+#define METAL_MULTIPLIER 25
+#define GAS_MULTIPLIER 25
+#define CREW_MULTIPLIER 10
+#endif
 #include <stdio.h>
 
 static FILE * g_planetDiag;
@@ -20,7 +52,7 @@ static FILE * g_planetDiag;
 #define PLANET_LOGF(...) do { if (!g_planetDiag) g_planetDiag = fopen("debug/planet_diag.txt", "w"); if (g_planetDiag) { fprintf(g_planetDiag, __VA_ARGS__); fflush(g_planetDiag); } } while (0)
 
 #include "MGlobals.h"
-#include "FogofWar.h"
+#include "FogOfWar.h"
 #include "TComponent.h"
 #include "TObjFrame.h"
 #include "TObject.h"
@@ -39,7 +71,7 @@ static FILE * g_planetDiag;
 #include "Startup.h"
 #include "DrawAgent.h"
 #include "TerrainMap.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "ILight.h"
 #include "CQLight.h"
 #include "MyVertex.h"
@@ -54,20 +86,20 @@ static FILE * g_planetDiag;
 #include "ObjMap.h"
 #include "IUnbornMeshList.h"
 #include "IShapeLoader.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "MPart.h"
 #include "IVertexBuffer.h"
 
 //test stuff
 #include <Mesh.h>
-#include <Material.h>
+#include <material.h>
 #include <DEffectOpts.h>
 
 #include <WindowManager.h>
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <IRenderPrimitive.h>
 #include <IAnim.h>
@@ -1197,6 +1229,10 @@ BOOL32 Planetoid::TestSlotHighlight (const S32 &mouseX,const S32 &mouseY)
 
 void Planetoid::DrawFleetMoniker (bool bAllShips)
 {
+#if !defined(_WIN32)
+	if (NATIVE_SKIP_PLANET_UI)
+		return;
+#endif
 	if (bVisible==0 || bMouseOver==0 || renderArch1->bMoon)
 		return;
 
@@ -1259,11 +1295,19 @@ void Planetoid::DrawFleetMoniker (bool bAllShips)
 		if(maxMetal)
 		{
 			wcscpy(buffer2, _localLoadStringW(IDS_METAL_SIGN));		
+#if defined(_WIN32)
 			swprintf(buffer,L"%s %d/%d",buffer2,metalValue*METAL_MULTIPLIER,maxMetal*METAL_MULTIPLIER);
+#else
+			swprintf(buffer,std::size(buffer),L"%ls %d/%d",buffer2,metalValue*METAL_MULTIPLIER,maxMetal*METAL_MULTIPLIER);
+#endif
 			pPlanetFont1->StringDraw(CAMERA->GetPane(),screenX+IDEAL2REALX(70),screenY+IDEAL2REALY(26),buffer);
 
 			U32 val = F2LONG(playerMetalRate[playerIndex]*METAL_MULTIPLIER*60);
+#if defined(_WIN32)
 			swprintf(buffer,L"%d%s",val,buffer3);
+#else
+			swprintf(buffer,std::size(buffer),L"%d%ls",val,buffer3);
+#endif
 			pPlanetFont4->StringDraw(CAMERA->GetPane(),screenX+IDEAL2REALX(175),screenY+IDEAL2REALY(26),buffer);
 
 			metalShape->Draw(CAMERA->GetPane(),screenX+IDEAL2REALX(60),screenY+IDEAL2REALY(28));
@@ -1273,11 +1317,19 @@ void Planetoid::DrawFleetMoniker (bool bAllShips)
 		if(maxGas)
 		{
 			wcscpy(buffer2, _localLoadStringW(IDS_GAS_SIGN));		
+#if defined(_WIN32)
 			swprintf(buffer,L"%s %d/%d",buffer2,gasValue*GAS_MULTIPLIER,maxGas*GAS_MULTIPLIER);
+#else
+			swprintf(buffer,std::size(buffer),L"%ls %d/%d",buffer2,gasValue*GAS_MULTIPLIER,maxGas*GAS_MULTIPLIER);
+#endif
 			pPlanetFont2->StringDraw(CAMERA->GetPane(),screenX+IDEAL2REALX(70),screenY+IDEAL2REALY(42),buffer);
 
 			U32 val = F2LONG(playerGasRate[playerIndex]*GAS_MULTIPLIER*60);
+#if defined(_WIN32)
 			swprintf(buffer,L"%d%s",val,buffer3);
+#else
+			swprintf(buffer,std::size(buffer),L"%d%ls",val,buffer3);
+#endif
 			pPlanetFont5->StringDraw(CAMERA->GetPane(),screenX+IDEAL2REALX(175),screenY+IDEAL2REALY(42),buffer);
 
 			gasShape->Draw(CAMERA->GetPane(),screenX+IDEAL2REALX(60),screenY+IDEAL2REALY(44));
@@ -1288,11 +1340,19 @@ void Planetoid::DrawFleetMoniker (bool bAllShips)
 		if(maxCrew)
 		{
 			wcscpy(buffer2, _localLoadStringW(IDS_CREW_SIGN));		
+#if defined(_WIN32)
 			swprintf(buffer,L"%s %d/%d",buffer2,crewValue*CREW_MULTIPLIER,maxCrew*CREW_MULTIPLIER);
+#else
+			swprintf(buffer,std::size(buffer),L"%ls %d/%d",buffer2,crewValue*CREW_MULTIPLIER,maxCrew*CREW_MULTIPLIER);
+#endif
 			pPlanetFont3->StringDraw(CAMERA->GetPane(),screenX+IDEAL2REALX(70),screenY+IDEAL2REALY(58),buffer);
 
 			U32 val = F2LONG(playerCrewRate[playerIndex]*CREW_MULTIPLIER*60);
+#if defined(_WIN32)
 			swprintf(buffer,L"%d%s",val,buffer3);
+#else
+			swprintf(buffer,std::size(buffer),L"%d%ls",val,buffer3);
+#endif
 			pPlanetFont6->StringDraw(CAMERA->GetPane(),screenX+IDEAL2REALX(175),screenY+IDEAL2REALY(58),buffer);
 
 			crewShape->Draw(CAMERA->GetPane(),screenX+IDEAL2REALX(60),screenY+IDEAL2REALY(60));
@@ -1816,7 +1876,7 @@ void Planetoid::ResolveAssociations()
 //
 void Planetoid::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = partName.string;
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_PLANET_QLOAD");
@@ -2628,7 +2688,11 @@ HANDLE PlanetFactory::CreateArchetype (const char *szArchname, OBJCLASS objClass
 
 		result->ambientEffect = NULL;
 		
-		if(!pPlanetFont1)
+		if(!pPlanetFont1
+#if !defined(_WIN32)
+			&& !NATIVE_SKIP_PLANET_UI
+#endif
+		)
 		{
 			pPlanetFontType = GENDATA->LoadArchetype("Font!!PlanetInfo");
 			CQASSERT(pPlanetFontType);
@@ -2724,7 +2788,9 @@ BOOL32 PlanetFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	if(pPlanetFont1)
@@ -2768,7 +2834,13 @@ IBaseObject * PlanetFactory::CreateInstance (HANDLE hArchetype)
 void PlanetFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	CQERROR0("Planet editor insertion is unavailable in the native mission shell");
+#endif
 }
 
 //--------------------------------------------------------------------------//

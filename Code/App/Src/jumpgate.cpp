@@ -11,8 +11,35 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <3dmath.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cwchar>
+#include <string>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+#endif
 
 #include "TObjFrame.h"
 #include "TDocClient.h"
@@ -22,9 +49,9 @@
 #include "SuperTrans.h"
 #include "Sector.h"
 #include "UserDefaults.h"
-#include "ANIM2D.h"
+#include "anim2d.h"
 //next 4 for factory
-#include "TResclient.h"
+#include "TResClient.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "resource.h"
@@ -38,7 +65,7 @@
 #include "SFX.h"
 #include "ICamera.h"
 #include "MyVertex.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "IMorphMesh.h"
 #include "BBMesh.h"
 #include "FogOfWar.h"
@@ -52,19 +79,23 @@
 #include "IUnbornMeshList.h"
 #include "DPlatform.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <HKEvent.h>
-#include <3DMath.h>
-#include <Physics.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <physics.h>
+#include <Filesys.h>
 #include <WindowManager.h>
 #include <ITextureLibrary.h>
-#include <Renderer.h>
+#include <renderer.h>
 #include <Mesh.h>
 #include <EventSys.h>
 
 #include <stdlib.h>
+
+#if !defined(_WIN32)
+#define max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#endif
 
 #define NUM_LINE_SEGS 30
 
@@ -292,7 +323,7 @@ struct Jumper
 	SINGLE aim;
 	Jumper *next;
 
-	Jumper::Jumper()
+	Jumper()
 	{
 	}
 
@@ -759,7 +790,16 @@ void Jumpgate::DrawHighlighted (void)
 				wchar_t nameBuffer[128];
 				wcsncpy(buffer, _localLoadStringW(IDS_JUMPGATE_NAME), sizeof(buffer)/sizeof(wchar_t));
 				SECTOR->GetSystemName(nameBuffer,sizeof(nameBuffer),SECTOR->GetJumpgateDestination(this)->GetSystemID());
+#if defined(_WIN32)
 				swprintf(buffer2,buffer,nameBuffer);
+#else
+				std::wstring label(buffer);
+				const size_t nameSlot = label.find(L"%s");
+				if (nameSlot != std::wstring::npos)
+					label.replace(nameSlot, 2, nameBuffer);
+				std::wcsncpy(buffer2, label.c_str(), 127);
+				buffer2[127] = 0;
+#endif
 				pFont->StringDraw(CAMERA->GetPane(), x-20, y+10, buffer2);		// testing!!! fix this GetDisplayName()
 			}
 		}
@@ -1949,7 +1989,7 @@ void Jumpgate::ResolveAssociations()
 //
 void Jumpgate::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = static_cast<const char *>(partName);
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_QJGATELOAD");
@@ -2494,7 +2534,9 @@ BOOL32 JumpgateManager::DestroyArchetype(HANDLE hArchetype)
 	TMANAGER->ReleaseTextureRef(flashTexID);
 
 	JumpgateArchetype *deadguy = (JumpgateArchetype *)hArchetype;
+#if defined(_WIN32)
 	EditorStopObjectInsertion(deadguy->pArchetype);
+#endif
 	delete deadguy;
 
 	return 1;
@@ -2549,7 +2591,14 @@ IBaseObject * JumpgateManager::CreateInstance(HANDLE hArchetype)
 void JumpgateManager::EditorCreateInstance(HANDLE hArchetype,const MISSION_INFO & _info)
 {
 	JumpgateArchetype * objtype = (JumpgateArchetype *) hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, _info);
+#else
+	(void)objtype;
+	(void)_info;
+	std::fprintf(stderr, "Native Jumpgate editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 
 static struct JumpgateManager *JUMPGATEMGR;

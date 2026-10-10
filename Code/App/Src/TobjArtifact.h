@@ -50,10 +50,25 @@
 template <class Base=IBaseObject> 
 struct _NO_VTABLE ObjectArtifact : public Base, IArtifactHolder
 {
+#if !defined(_WIN32)
+    using typename Base::InitNode;
+    using typename Base::UpdateNode;
+    using typename Base::InitProc;
+    using typename Base::UpdateProc;
+    using Base::castInitProc;
+    using Base::GetPartID;
+    using ARTIFACTINITINFO = typename Base::INITINFO;
+#else
 	struct InitNode	     initNode;
 	struct UpdateNode       updateNode;
 
 	typename typedef Base::INITINFO ARTIFACTINITINFO;
+#endif
+
+#if !defined(_WIN32)
+    InitNode initNode;
+    UpdateNode updateNode;
+#endif
 
 	OBJPTR<IArtifact> artifact;
 
@@ -82,7 +97,12 @@ struct _NO_VTABLE ObjectArtifact : public Base, IArtifactHolder
 //
 template <class Base> 
 ObjectArtifact< Base >::ObjectArtifact (void) :
+#if defined(_WIN32)
 					initNode(this, InitProc(CASTINITPROC(&ObjectArtifact::initArtifact))),
+#else
+                    initNode(this, this->castInitProc(
+                        reinterpret_cast<typename Base::InitProc2>(&ObjectArtifact::initArtifact))),
+#endif
 					updateNode(this, UpdateProc(&ObjectArtifact::updateArtifact))
 {
 }

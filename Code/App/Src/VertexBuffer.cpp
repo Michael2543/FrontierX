@@ -12,17 +12,26 @@
     $Header: /Conquest/App/Src/VertexBuffer.cpp 8     10/25/00 1:05a Jasony $
 */			    
 //--------------------------------------------------------------------------//
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <cstdlib>
+#endif
 
 #include "IVertexBuffer.h"
 #include "CQBatch.h"
+#if defined(_WIN32)
 #include "CQLight.h"
 #include <IDDBackDoor.h>
+#endif
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 ICQ_VB_Manager *vb_mgr;
+#endif
 
 struct CQ_VB_Manager : ICQ_VB_Manager
 {
@@ -62,6 +71,10 @@ void CQ_VB_Manager::Delete(IVertexBufferOwner *obj)
 
 void CQ_VB_Manager::RestoreSurfaces()
 {
+#if !defined(_WIN32)
+	// Native device-loss restoration is not wired into the SDL GPU owner.
+	std::abort();
+#else
 	IVertexBufferOwner *obj=list;
 
 	VBMEMORYUSED = 0;
@@ -70,6 +83,7 @@ void CQ_VB_Manager::RestoreSurfaces()
 		obj->RestoreVertexBuffers();
 		obj = obj->next;
 	}
+#endif
 }
 
 //----------------------------------------------------------------------------------
@@ -83,6 +97,9 @@ static int zvid_WaitForCooperativeLevel (void)
 
 void __stdcall RestoreAllSurfaces()
 {
+#if !defined(_WIN32)
+	std::abort();
+#else
 	if (CQFLAGS.b3DEnabled)
 	{
 		zvid_WaitForCooperativeLevel();
@@ -90,6 +107,7 @@ void __stdcall RestoreAllSurfaces()
 		CQBATCH->RestoreSurfaces();
 		LIGHTS->RestoreAllLights();
 	}
+#endif
 }
 
 //----------------------------------------------------------------------------------

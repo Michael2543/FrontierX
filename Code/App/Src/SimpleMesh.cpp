@@ -1,12 +1,20 @@
+#if defined(_WIN32)
 #include "pch.h"
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <cstring>
+#endif
 
 #include "SimpleMesh.h"
+#if defined(_WIN32)
 #include "Globals.h"
+#endif
 
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
 
-#include <CMesh.h>
+#include <cmesh.h>
 
 void SMesh::MakeEdges()
 {

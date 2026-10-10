@@ -1,5 +1,59 @@
 # Native IStreamer contract
 
+Current unit voice checkpoint, 2026-10-10: original UnitComm and StringData
+now connect normal selection/movement in the selected external `Sol_Train`
+mission to native ISoundManager and production IStreamer. Separate visible
+Wayland/Vulkan GCC/Clang optional-FFmpeg Debug runs started two unit voices,
+completed one, stopped one and retained no active stream; both preserved
+movement, objectives and source mission save/reload and exited zero.
+This requires the reviewed external shared-LGPL IAC decoder and explicit
+unit-alert/subtitle and mission-SFX exclusions. Next: restore in-window
+text/teletype through the original owners. Windows/ABI, full mission
+sanitizers, audible comparison and retail parity remain unverified. See
+[the focused voice record](NATIVE_SINGLEPLAYER_SLICE.md#original-unit-voice-mission-checkpoint-2026-10-10).
+Older entries below are historical.
+
+Current mission audio boundary, 2026-10-10: the source `Sol_T` game-active
+program requested `solarian_game14.wav`, then animated `STMG03.wav` speech.
+The native mission sound owner now performs the source music fade request via
+`IMusicManager::SetVolume(0)`. With the default SDL-only decoder, the real
+`IStreamer` correctly fails the external IAC speech open. For a bounded
+gameplay-owner diagnostic, the native shell explicitly used
+`--skip-animated-portraits --skip-training-speech --skip-subtitles`; the
+portrait exclusion otherwise retains real `IStreamer` speech playback.
+The GDB-confirmed subtitle owner is still absent, and the default audio
+build is not a complete training media path. No claim of speech playback in
+this mission run is made. See
+[the focused mission record](NATIVE_SINGLEPLAYER_SLICE.md#original-planet-owner-game-active-update-and-first-object-render-blocker-2026-10-10).
+Entries below are historical snapshots.
+
+Current native App sound-effect check, 2026-10-03: the native `ISFX`
+owner now maps the source `SFX::BUTTONPRESS1` ID to the lawfully
+external IAC effect and invokes required `IStreamer` for preload,
+play, loop and stop. GCC and Clang FFmpeg-enabled shells actually
+exercised it on SDL dummy audio; the mission remained unstarted.
+Spatial attenuation and source priority are still unsupported.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#native-isfx-and-field-object-closure-2026-10-03).
+Entries below are historical snapshots.
+
+Current selected-SFX IAC check, 2026-10-03: the lawful external
+`interface1.wav` used by source `SFX::BUTTONPRESS1` has WAVE tag
+`0x0402`. Default GCC/Clang window-probe builds rejected its decode,
+as their optional IAC adapter is disabled. The pinned official FFmpeg
+9.0.1 source was fetched again outside the repository with the recorded
+SHA-256 and rebuilt unmodified using the restricted shared LGPL
+configuration below. Separate GCC 16.2.1 and Clang 22.1.8 Debug builds
+of `frontierx_native_window_manager_probe` and `frontierx_native_shell`
+passed CMake's LGPL query and focused shell/window checks. On SDL
+dummy audio, both external-input probes decoded 30720 bytes of
+22050-Hz mono float PCM with FNV1a64 `16092735175899199743` and
+completed playback after 404/408 ms. The selected mission still has
+no native `ISFX` owner or running gameplay; this is `IStreamer`
+decoder/output evidence only. The FFmpeg-enabled full test matrix,
+hardware audibility, native Windows/ABI and retail-runtime checks were
+not performed. See [the focused mission record](NATIVE_SINGLEPLAYER_SLICE.md#external-sfx-source-binding-2026-10-03).
+
+
 Latest App music owner, 2026-09-27: the original `MusicManager.cpp`
 now creates and subscribes a native App owner after required
 `IStreamer` startup in the selected external-mission shell. GCC and

@@ -11,20 +11,47 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include "CQImage.h"
+#include <ICamera.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <IConnection.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#define __min(a, b) std::min((a), (b))
+#define BASE_MAX_CREW 250
+#define BASE_MAX_METAL 220
+#define BASE_MAX_GAS 180
+#define GAS_MULTIPLIER 25
+#define METAL_MULTIPLIER 25
+#define CREW_MULTIPLIER 10
+#endif
 
-#include "startup.h"
+#include "Startup.h"
 #include "IBanker.h"
 #include "EventSys.h"
 #include "IStatic.h"
 #include "IProgressStatic.h"
 #include "MGlobals.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "IToolbar.h"
 #include "OpAgent.h"
 #include "SoundManager.h"
-#include "ObjWatch.h"
+#include "Objwatch.h"
 #include "ObjList.h"
 #include <DBaseData.h>
 
@@ -49,6 +76,7 @@ struct stalledNode
 	{
 		void * result = calloc(size, 1);
 		{
+#if defined(_WIN32)
 			DWORD dwAddr;
 			__asm
 			{
@@ -56,6 +84,7 @@ struct stalledNode
 				mov DWORD PTR dwAddr, eax
 			}
 			HEAP->SetBlockOwner(result, dwAddr);
+#endif
 		}
 		return result;
 	}
@@ -66,12 +95,18 @@ struct stalledNode
 	}
 };
 
+#if defined(_WIN32)
 struct DACOM_NO_VTABLE Banker : public IBanker, IEventCallback, IHotControlEvent
+#else
+struct DACOM_NO_VTABLE Banker : public IBanker, IEventCallback
+#endif
 {
 	BEGIN_DACOM_MAP_INBOUND(Banker)
 	DACOM_INTERFACE_ENTRY(IBanker)
 	DACOM_INTERFACE_ENTRY(IEventCallback)
+#if defined(_WIN32)
 	DACOM_INTERFACE_ENTRY(IHotControlEvent)
+#endif
 	END_DACOM_MAP()
 
     void * operator new (size_t size)
@@ -199,6 +234,7 @@ Banker::~Banker()
 {
 	reset();
 
+#if defined(_WIN32)
 	if (TOOLBAR)
 	{
 		COMPTR<IDAConnectionPoint> connection;
@@ -206,6 +242,7 @@ Banker::~Banker()
 		if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Unadvise(eventHandle);
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -597,6 +634,7 @@ S32 getDiff(U32 trueVal,U32 displayVal)
 //
 void Banker::onUpdate()
 {
+#if defined(_WIN32)
 	if (--trueDisplayTimer <= 0)
 	{
 		trueDisplayTimer = 4;
@@ -677,6 +715,7 @@ void Banker::onUpdate()
 				commandPtArea->SetTextColor(0,255,255);
 		}
 	}
+#endif
 
 	//see if I can unstall any stalled processes
 	if(THEMATRIX->IsMaster())
@@ -726,6 +765,13 @@ void Banker::onUpdate()
 //
 void Banker::enableMenu (bool bEnable)
 {
+#if !defined(_WIN32)
+	if (bEnable)
+	{
+		ICQImage::Bomb("native Banker resource HUD unavailable");
+		abort();
+	}
+#else
 	if(bEnable)
 	{
 		COMPTR<IDAComponent> pComp;
@@ -777,15 +823,18 @@ void Banker::enableMenu (bool bEnable)
 		crewArea.free();
 		commandPtArea.free();
 	}
+#endif
 	
 }
 //--------------------------------------------------------------------------//
 //
 void Banker::init()
 {
+#if defined(_WIN32)
 	COMPTR<IDAConnectionPoint> connection;
 	if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Advise(getBase(), &eventHandle);
+#endif
 	for(U32 playerID = 1; playerID <= MAX_PLAYERS; ++playerID)
 	{
 		stallLists[playerID] = NULL;
@@ -837,11 +886,19 @@ void Banker::onClose (void)
 struct _banker : GlobalComponent
 {
 	Banker * banker;
+#if !defined(_WIN32)
+	IDAComponent *cleanupBase;
+#endif
 
 	virtual void Startup (void)
 	{
 		BANKER = banker = new DAComponent<Banker>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&banker);
+#else
+		cleanupBase = static_cast<IBanker *>(banker);
+		AddToGlobalCleanupList(&cleanupBase);
+#endif
 	}
 
 	virtual void Initialize (void)

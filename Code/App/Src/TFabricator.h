@@ -57,9 +57,15 @@
 template <class Base>
 struct _NO_VTABLE TFabricator : public Base, IFabricator, IBuildQueue, FAB_SAVELOAD
 {
+#if defined(_WIN32)
 	typename typedef Base::INITINFO FABINITINFO;
 	typename typedef Base::SAVEINFO FABSAVEINFO;
+#else
+	typedef typename Base::INITINFO FABINITINFO;
+	typedef typename Base::SAVEINFO FABSAVEINFO;
+#endif
 
+#if defined(_WIN32)
 	struct UpdateNode       updateNode;
 	struct PhysUpdateNode	physUpdateNode;
 	struct PostRenderNode	postRenderNode;
@@ -68,6 +74,33 @@ struct _NO_VTABLE TFabricator : public Base, IFabricator, IBuildQueue, FAB_SAVEL
 	struct LoadNode			loadNode;
 	struct ResolveNode      resolveNode;
 	struct UpgradeNode		upgradeNode;
+#else
+	typename Base::UpdateNode updateNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typename Base::PostRenderNode postRenderNode;
+	typename Base::InitNode initNode;
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::ResolveNode resolveNode;
+	typename Base::UpgradeNode upgradeNode;
+	using typename Base::RenderProc;
+	using typename Base::UpdateProc;
+	using typename Base::PhysUpdateProc;
+	using typename Base::InitProc;
+	using typename Base::SaveLoadProc;
+	using typename Base::ResolveProc;
+	using typename Base::UpgradeProc;
+	using typename Base::InitProc2;
+	using typename Base::SaveLoadProc2;
+	using Base::castInitProc;
+	using Base::castSaveLoadProc;
+	using Base::mObjClass;
+	using Base::bVisible;
+	using Base::bReady;
+	using Base::failSound;
+	using Base::instanceIndex;
+	using Base::transform;
+#endif
 
 	//----------------------------------
 	// animation index

@@ -18,6 +18,9 @@ struct NativeAppStringEntry
 
 const wchar_t *FindNativeAppString(U32 id)
 {
+    // The source LoadString returns an empty buffer for the zero display ID
+    // used by invisible mission triggers.
+    if (id == 0) return L"";
     std::size_t first = 0;
     std::size_t last = sizeof(appStringEntries) / sizeof(appStringEntries[0]);
     while (first < last)

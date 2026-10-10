@@ -11,24 +11,42 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <HeapObj.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+using std::max;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DEffect.h"
-#include "Objlist.h"
-#include "Anim2D.h"
-#include "CQlight.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "anim2d.h"
+#include "CQLight.h"
+#include "SFX.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "IBlast.h"
 
-#include <FileSys.h>
-#include <Engine.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <IRenderPrimitive.h>
 
 

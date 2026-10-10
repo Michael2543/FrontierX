@@ -12,8 +12,15 @@
 //----------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#define MEXTERN
+#include <alloca.h>
+#define _alloca alloca
+#endif
 
 #include "Scripting.h"
 
@@ -22,7 +29,7 @@
 #include <EventSys.h>
 #include <IConnection.h>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 #include <SaveLoad.h>
 #include <DQuickSave.h>
@@ -405,7 +412,7 @@ struct Scripting : public IScripting, public IEventCallback, public ISaverLoader
 	bool applyRegionToTerrainMap( Region& _region );
 	bool removeRegionToTerrainMap( Region& _region );
 
-	void update( MSG* _msg );
+	void update( void* _msg );
 
 	IObject* findObjectByName( const char* _scriptHandle )
 	{
@@ -558,7 +565,7 @@ bool Scripting::SetConstant( int _constant, char* _constantName, const char* _mo
 //
 GENRESULT Scripting::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+	void *msg = param;
 
 	switch (message)
 	{
@@ -578,6 +585,7 @@ GENRESULT Scripting::Notify (U32 message, void *param)
 		case CQE_HOTKEY:
 			break;
 
+		#if defined(_WIN32)
 		case WM_CLOSE:
 			break;
 
@@ -604,6 +612,7 @@ GENRESULT Scripting::Notify (U32 message, void *param)
 
 		case WM_COMMAND:
 			break;
+		#endif
 	}
 
 	return GR_OK;
@@ -611,7 +620,7 @@ GENRESULT Scripting::Notify (U32 message, void *param)
 
 //----------------------------------------------------------------------------------------------
 
-void Scripting::update( MSG* _msg )
+void Scripting::update( void* _msg )
 {
 	_msg = NULL;
 }

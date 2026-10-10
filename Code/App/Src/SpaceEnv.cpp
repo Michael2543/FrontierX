@@ -13,13 +13,28 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <rendpipeline.h>
+#include <IRenderPrimitive.h>
+#include <da_d3dtypes.h>
+#include <algorithm>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#define __min std::min
+#endif
 #include <stdio.h>
 #define IGM_LOG(s) do{FILE*_igf=fopen("debug/ingame_diag.txt","a");if(_igf){fputs((s),_igf);fclose(_igf);}}while(0)
 
 #include "Menu.h"
-#include "Resource.h"
+#include "resource.h"
 //#include "SysMap.h"
 #include "Camera.h"
 #include "Startup.h"
@@ -31,16 +46,16 @@
 #include <DEffectOpts.h>
 #include "IVertexBuffer.h"
 
-#include <3DMath.h>
+#include <3dmath.h>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <EventSys.h>
 #include <IConnection.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <renderer.h>
-#include <mesh.h>
+#include <Mesh.h>
 
 #include <malloc.h>
 #include <stdlib.h>
@@ -116,7 +131,10 @@ struct DACOM_NO_VTABLE SpaceEnvironment : public IEventCallback, IBackground, IV
 	
 	SpaceEnvironment (void)
 	{
-		vb_mgr->Add(this);
+		if (vb_mgr)
+			vb_mgr->Add(this);
+		else if (CQEFFECTS.bBackground || CQEFFECTS.bExpensiveTerrain)
+			CQBOMB0("Native SpaceEnvironment requires the vertex-buffer owner for background rendering.");
 	}
 
 	~SpaceEnvironment (void);
@@ -168,8 +186,10 @@ SpaceEnvironment::~SpaceEnvironment (void)
 		free (nebColor[i]);
 		nebColor[i] = 0;
 	}*/
-	vb_mgr->Delete(this);
-	TMANAGER->ReleaseTextureRef(textureID);
+	if (vb_mgr)
+		vb_mgr->Delete(this);
+	if (textureID)
+		TMANAGER->ReleaseTextureRef(textureID);
 	textureID = 0;
 	
 	if (GS)
@@ -626,6 +646,10 @@ GENRESULT SpaceEnvironment::Notify (U32 message, void *param)
 	switch (message)
 	{
 	case CQE_ENTERING_INGAMEMODE:
+#if !defined(_WIN32)
+		if (CQEFFECTS.bBackground == GlobalEffectsOptions::off)
+			break;
+#endif
 		IGM_LOG("SpaceEnv: entered\n");
 		textureID = TMANAGER->CreateTextureFromFile("StarBk.tga", TEXTURESDIR, DA::TGA, PF_RGB5_A1);
 		IGM_LOG("SpaceEnv: after CreateTextureFromFile\n");
@@ -643,7 +667,8 @@ GENRESULT SpaceEnvironment::Notify (U32 message, void *param)
 				vb_handle[i] = 0;
 			}
 		}
-		TMANAGER->ReleaseTextureRef(textureID);
+		if (textureID)
+			TMANAGER->ReleaseTextureRef(textureID);
 		textureID = 0;
 		for (U32 i=0;i<MAX_SYSTEMS;i++)
 		{
@@ -700,7 +725,7 @@ struct _stars : GlobalComponent
 	virtual void Startup (void)
 	{
 		BACKGROUND = spaceEnv = new DAComponent<SpaceEnvironment>;
-		AddToGlobalCleanupList(&BACKGROUND);
+		AddToGlobalCleanupList((IDAComponent **) &BACKGROUND);
 	}
 
 	virtual void Initialize (void)

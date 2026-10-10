@@ -11,10 +11,19 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <cmath>
+#include <algorithm>
+using std::sqrt;
+#define __min(a, b) std::min((a), (b))
+#endif
 
-#include <Extent.h>
+#include <extent.h>
 #include "CQExtent.h"
 
 static float square(float n)
