@@ -21,7 +21,7 @@
 //--------------------------------------------------------------------------//
  
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
 typedef struct _pane PANE;

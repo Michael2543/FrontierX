@@ -13,21 +13,49 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppFont.h"
+#include "resource.h"
+#include <VFX.H>
+#include <EventSys.h>
+#include <IConnection.h>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+#include <cstdint>
+#include <limits>
+#include <vector>
+#endif
 
 #include "ITeletype.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "EventPriority.h"
 #include "DrawAgent.h"
+#include "CQTrace.h"
 #include "Startup.h"
 
+#if defined(_WIN32)
 #include "frame.h"
-#include "hotkeys.h"
-#include "Sfx.h"
+#endif
+#include "Hotkeys.h"
+#include "SFX.h"
 
+#if defined(_WIN32)
 #include <da_vector>
 using namespace da_std;
+#else
+using std::vector;
+static void OffsetRect(RECT *rect, int x, int y)
+{ rect->left += x; rect->right += x; rect->top += y; rect->bottom += y; }
+#endif
 
 #define MAX_CHARS 256
 
@@ -40,6 +68,9 @@ struct TeletypeLine
 	{
 		reloadFonts(true);
 		wcsncpy(string, szString, sizeof(string)/sizeof(wchar_t));
+#if !defined(_WIN32)
+        string[MAX_CHARS-1] = 0;
+#endif
 		bDone = false;
 		bLast = false;
 		blink = 0;
@@ -109,7 +140,11 @@ struct TeletypeLine
 	const bool bCenter;
 
 	wchar_t string[MAX_CHARS];
-	S32     pos[MAX_CHARS];
+	S32     pos[MAX_CHARS
+#if !defined(_WIN32)
+        + 1
+#endif
+        ];
 
 	RECT rcFull;
 	const U32  fontID;
@@ -119,7 +154,11 @@ struct TeletypeLine
 	bool bDone;
 	bool bLast;
 	U32  counter;
-	U32  oldcounter;
+	U32  oldcounter
+#if !defined(_WIN32)
+        = 0
+#endif
+        ;
 	U32  timer;
 	U32  blink;
 	U32  nChars;
@@ -242,6 +281,7 @@ struct TeletypeLine
 	{
 		if (bReload)
 		{
+#if defined(_WIN32)
 			HFONT hFont;
 			COLORREF pen, background;
 
@@ -251,6 +291,11 @@ struct TeletypeLine
 
 			CreateFontDrawAgent(hFont, 1, pen, background, fontAgent);
 			CreateFontDrawAgent(hFont, 0, background | 0xFF000000, background, backAgent);
+#else
+            *static_cast<IFontDrawAgent **>(fontAgent) = FrontierX::CreateNativeFontDrawAgent(fontID, color);
+            *static_cast<IFontDrawAgent **>(backAgent) = FrontierX::CreateNativeFontDrawAgent(fontID, RGB(0,0,0));
+            if (!fontAgent || !backAgent) { std::fputs("Native teletype font creation failed\n", stderr); std::abort(); }
+#endif
 		}
 		else
 		{
@@ -279,7 +324,12 @@ struct TeletypeObj
 		timer = 0;
 
 		nChars = (U16)(string[0]-1);
-		string = string++;
+#if defined(_WIN32)
+        string = string++;
+#else
+        nChars = static_cast<U16>(string[0]); // RT_STRING count excludes the terminator.
+        ++string; // Skip the source counted-string prefix without unsequenced access.
+#endif
 		text = string;
 
 		rect.left = IDEAL2REALX(rc.left);
@@ -402,8 +452,9 @@ struct TeletypeObj
 
 	void createTestAgent (void)
 	{
-		if (testAgent == NULL)
+		if (testAgent == 0)
 		{
+#if defined(_WIN32)
 			HFONT hFont;
 			COLORREF pen, background;
 
@@ -412,6 +463,10 @@ struct TeletypeObj
 			hFont = CQCreateFont(fontID);
 
 			CreateFontDrawAgent(hFont, 1, pen, background, testAgent);
+#else
+            *static_cast<IFontDrawAgent **>(testAgent) = FrontierX::CreateNativeFontDrawAgent(fontID, color);
+            if (!testAgent) { std::fputs("Native teletype layout font failed\n", stderr); std::abort(); }
+#endif
 		}
 	}
 
@@ -463,6 +518,10 @@ struct TeletypeObj
 			}
 
 			next = getNextLineLength(&text[idx], nChars-idx);
+#if !defined(_WIN32)
+            if (next <= 0 || next >= MAX_CHARS)
+            { std::fputs("Native teletype line exceeds source buffer\n", stderr); std::abort(); }
+#endif
 
 			memset(buffer, 0, sizeof(buffer));
 			wcsncpy(buffer, &text[idx], next);
@@ -638,11 +697,13 @@ Teletype::Teletype (void)
 //
 Teletype::~Teletype (void)
 {
-	if (TELETYPE)
-	{
-		TELETYPE->Flush();
-	}
+#if defined(_WIN32)
+    if (TELETYPE) TELETYPE->Flush();
+#else
+    Flush();
+#endif
 
+#if defined(_WIN32)
 	if (FULLSCREEN)
 	{
 		COMPTR<IDAConnectionPoint> connection;
@@ -651,6 +712,14 @@ Teletype::~Teletype (void)
 			connection->Unadvise(handle);
 	}
 
+#else
+    if (EVENTSYS && handle)
+    {
+        COMPTR<IDAConnectionPoint> connection;
+        if (EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+            connection->Unadvise(handle);
+    }
+#endif
 	// close the  sound handles
 	if (SFXMANAGER && hsndTeletype)
 	{
@@ -663,6 +732,12 @@ Teletype::~Teletype (void)
 U32 Teletype::CreateTeletypeDisplay (const wchar_t *_string, RECT rc, U32 _fontID, COLORREF color, U32 _lifetime, U32 _textTime, bool bMute, bool bCenter)
 {
 	U32 result;
+#if !defined(_WIN32)
+    if (!_string || _string[0] < 1 || ! _textTime || rc.left < 0 || rc.top < 0 ||
+        rc.right <= rc.left || rc.bottom <= rc.top ||
+        wcslen(_string + 1) != static_cast<unsigned>(_string[0]))
+    { std::fputs("Native source teletype parameters invalid\n", stderr); std::abort(); }
+#endif
 
 	if (hsndTeletype == NULL)
 	{
@@ -684,6 +759,12 @@ U32 Teletype::CreateTeletypeDisplay (const wchar_t *_string, RECT rc, U32 _fontI
 U32 Teletype::CreateTeletypeDisplayEx (const wchar_t *_string, RECT rc, U32 _fontID, COLORREF color, U32 _lifetime, U32 _textTime, bool bMute, bool bIgnorePause)
 {
 	U32 result;
+#if !defined(_WIN32)
+    if (!_string || _string[0] < 1 || ! _textTime || rc.left < 0 || rc.top < 0 ||
+        rc.right <= rc.left || rc.bottom <= rc.top ||
+        wcslen(_string + 1) != static_cast<unsigned>(_string[0]))
+    { std::fputs("Native source teletype parameters invalid\n", stderr); std::abort(); }
+#endif
 
 	if (hsndTeletype == NULL)
 	{
@@ -722,6 +803,7 @@ void Teletype::draw (void)
 {
 	bool bFrameLocked = (CQFLAGS.bFrameLockEnabled != 0);
 
+	#if defined(_WIN32)
 	if (bFrameLocked)
 	{
 		if (SURFACE->Lock() == false)
@@ -730,16 +812,21 @@ void Teletype::draw (void)
 		}
 	}
 
+#else
+    if (bFrameLocked) { std::fputs("Native teletype framebuffer lock unsupported\n", stderr); std::abort(); }
+#endif
 	U32 i;
 	for (i = 0; i < teletypes.size(); i++)
 	{
 		teletypes[i]->Draw();
 	}
 		
+	#if defined(_WIN32)
 	if (bFrameLocked)
 	{
 		SURFACE->Unlock();
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -794,7 +881,12 @@ GENRESULT Teletype::Notify (U32 message, void *param)
 
 	case CQE_UPDATE:
 //		if (!CQFLAGS.bGamePaused)
-			onUpdate(S32(param) >> 10);
+			#if defined(_WIN32)
+            onUpdate(S32(param) >> 10);
+#else
+            if (reinterpret_cast<std::uintptr_t>(param) > std::numeric_limits<U32>::max()) return GR_INVALID_PARMS;
+            onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 	}
 
@@ -813,6 +905,7 @@ void Teletype::reloadFonts (bool bLoad)
 
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 struct _teletype : GlobalComponent
 {
 	Teletype * TTYPE;
@@ -836,6 +929,62 @@ struct _teletype : GlobalComponent
 };
 
 static _teletype startup;
+#else
+namespace FrontierX
+{
+ITeletype *CreateNativeSourceTeletype()
+{
+    if (!EVENTSYS || !SFXMANAGER) return nullptr;
+    auto *owner = new DAComponent<Teletype>;
+    COMPTR<IDAConnectionPoint> connection;
+    if (EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+        connection->Advise(owner->GetBase(), &owner->handle) != GR_OK)
+    { owner->Release(); return nullptr; }
+    return owner;
+}
+// The existing shell process check exercises this source owner without a GPU.
+// Counted RT_STRING handling, pause and delayed expiry were unreachable while
+// the shell substituted timer-only handles. Passing enables the mission owner.
+bool CheckNativeSourceTeletype()
+{
+    ITeletype *interface = CreateNativeSourceTeletype();
+    if (!interface) return false;
+    auto *owner = static_cast<Teletype *>(interface);
+    const unsigned savedFonts = NativeFontLiveCount();
+    const auto savedPause = CQFLAGS.bGamePaused;
+    const U32 savedID = owner->GetLastTeletypeID();
+    const wchar_t text[] = {2, L'A', L'B', 0};
+    const RECT bounds{10,10,200,100};
+    const U32 normal = owner->CreateTeletypeDisplay(text, bounds, IDS_TELETYPE_FONT,
+        RGB(255,255,0), 10, 100, true, true);
+    const U32 ignoring = owner->CreateTeletypeDisplayEx(text, bounds, IDS_TELETYPE_FONT,
+        RGB(255,255,0), 10, 100, true, true);
+    const U32 persistent = owner->CreateTeletypeDisplay(text, bounds, IDS_TELETYPE_FONT,
+        RGB(255,255,0), 0, 100, true, false);
+    bool valid = owner->teletypes.size() == 3;
+    for (auto *object : owner->teletypes)
+        valid = valid && object->nChars == 2 && object->lines.size() == 1 &&
+            std::wcscmp(object->lines[0]->string, L"AB") == 0 &&
+            object->lines[0]->pos[2] == object->testAgent->GetStringWidth(L"AB");
+    CQFLAGS.bGamePaused = 1;
+    owner->onUpdate(11); owner->onUpdate(0);
+    valid = valid && owner->IsPlaying(normal) && !owner->IsPlaying(ignoring) &&
+        owner->IsPlaying(persistent);
+    CQFLAGS.bGamePaused = 0;
+    owner->onUpdate(11);
+    valid = valid && owner->IsPlaying(normal); // Original removal is on the next update.
+    owner->onUpdate(0);
+    valid = valid && !owner->IsPlaying(normal) && owner->IsPlaying(persistent);
+    owner->Flush();
+    valid = valid && !owner->IsPlaying(persistent) && NativeFontLiveCount() == savedFonts;
+    owner->SetLastTeletypeID(savedID);
+    CQFLAGS.bGamePaused = savedPause;
+    interface->Release();
+    return valid;
+}
+
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------End Teletype.cpp--------------------------------//

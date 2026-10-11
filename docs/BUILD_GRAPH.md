@@ -1,5 +1,24 @@
 # Windows build declarations and next portable slice
 
+Native source Teletype graph, 2026-10-10: original Teletype and the optional
+native FreeType adapter join the existing mission-media object owner; the
+existing shell process test accepts an explicitly external font fixture.
+Linux x86_64 Debug Ninja GCC 16.2.1 and Clang 22.1.8 complete default trees
+`/tmp/frontierx-mission-{gcc,clang}` and optional FFmpeg+font trees
+`/tmp/frontierx-voice-{gcc,clang}` built with `cmake --build <tree> -j6`.
+Each `ctest --test-dir <tree> -E '^portability.sdl3_gpu$'
+--output-on-failure -j4` passed all 50 executing CPU/process checks.
+The GPU resize test was deliberately excluded from these reruns because its
+previous desktop-tiling failure is unchanged; there is no new CTest GPU pass.
+Separate visible Wayland/Vulkan missions under both compilers passed source
+teletype, normal selection/movement, unit voices and source save/reload.
+A focused Clang ASan/UBSan shell CTest passed, including source text lifecycle
+and font-release validation with leak checking disabled. The system FreeType
+binary and full mission were not sanitizer-instrumented/executed respectively.
+Windows Debug/Final, module ABI, Windows font/image comparison and full retail
+parity remain unperformed. See [the focused text record](NATIVE_SINGLEPLAYER_SLICE.md#original-in-window-mission-teletype-checkpoint-2026-10-10).
+Older records below are historical.
+
 Native unit voice graph, 2026-10-10: original UnitComm joins the existing
 native mission-media owner; original StringData now has a native object
 owner linked into the shell and existing data-root probe. Complete SDL-only

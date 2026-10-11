@@ -1,5 +1,18 @@
 # Linux Port Readiness Plan
 
+Current in-window teletype checkpoint, 2026-10-10: original `Teletype.cpp`
+now owns selected training objective text, reveal/caret and expiry through
+EventSystem and the existing native App render boundary. An optional
+FreeType `IFontDrawAgent` uses an explicitly external face and source pixel
+height; default builds remain FreeType-free. Separate visible GCC/Clang
+Wayland/Vulkan mission runs passed text, normal selection/movement, unit
+voices and source save/reload. The original owner lifecycle check also
+passed under Clang ASan/UBSan with leak checking disabled. Next: status,
+hint/scrolling text and subtitles through their production owners.
+Windows font/ABI, full mission sanitizers and retail parity remain open.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-in-window-mission-teletype-checkpoint-2026-10-10).
+Older entries below are historical.
+
 Current unit voice checkpoint, 2026-10-10: original UnitComm and StringData
 now connect normal selection/movement in the selected external `Sol_Train`
 mission to native ISoundManager and production IStreamer. Separate visible

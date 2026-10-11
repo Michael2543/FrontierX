@@ -64,7 +64,11 @@ Read the smallest relevant authoritative document before changing code:
   compilers with the optional external shared-LGPL decoder. Unit alert text,
   subtitles and mission spatial SFX remain explicitly excluded. See
   `docs/NATIVE_SINGLEPLAYER_SLICE.md` for bounded runtime evidence; the next
-  media/UI gate is original in-window text/teletype presentation.
+  media/UI gate is status/hint/scrolling text and subtitles. Original Teletype
+  now draws objective text through an optional FreeType IFontDrawAgent and an
+  explicitly external font face; GCC/Clang visible mission and focused source
+  lifecycle checks pass. Default builds remain FreeType-free; family/weight,
+  Unicode and Windows font parity remain bounded or unverified.
   Generated PCM playback works; an explicit external shared-LGPL FFmpeg
   configuration also decodes and plays the selected training speech. See `docs/NATIVE_AUDIO_STREAMER.md`.
   The native shell enters the selected retail-data mission with explicit
@@ -348,7 +352,10 @@ ctest --preset linux-gcc-debug
 Use `linux-clang-debug` for the corresponding Clang sequence. The optional IAC
 path uses `-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON -DCMAKE_PREFIX_PATH=/external/lgpl-prefix`
 at configure; see `docs/NATIVE_AUDIO_STREAMER.md` for the reviewed external
-shared-LGPL dependency build. Default builds remain SDL-only and reject IAC. The checked-in presets currently
+shared-LGPL dependency build. Default builds remain SDL-only and reject IAC. Optional mission text uses
+`-DFRONTIERX_BUILD_NATIVE_FONTS=ON` (FreeType >=2.14) and `--ui-font FILE`;
+`FRONTIERX_TEST_FONT_FILE` supplies an external face to the existing shell
+lifecycle CTest. See `docs/NATIVE_SINGLEPLAYER_SLICE.md`. The checked-in presets currently
 enable SDL3 and the isolated SDL GPU target and therefore require SDL3's `pkg-config` module and
 `glslc`; the selected `Sol_T` source-resource target also requires Python 3 and `llvm-rc`. These commands build the documented native graph, not the game. For the latest measured
 targets and results, use [docs/BUILD_GRAPH.md](docs/BUILD_GRAPH.md).

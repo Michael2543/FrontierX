@@ -1,5 +1,17 @@
 # FrontierX
 
+Selected native mission text (2026-10-10): original Teletype now draws
+training objectives in the running Linux scene, alongside normal movement
+and unit voices. Configure with `-DFRONTIERX_BUILD_NATIVE_FONTS=ON` and pass
+`--ui-font <external-install>/FONTS/bauhmib.ttf` instead of
+`--skip-teletype-visuals`. This optional path requires FreeType >=2.14;
+default builds do not. The external font and retail data remain outside the
+repository. `-DFRONTIERX_TEST_FONT_FILE=<external-font>` enables original
+text lifecycle validation in the existing shell CTest. See the
+[bounded mission record](docs/NATIVE_SINGLEPLAYER_SLICE.md#original-in-window-mission-teletype-checkpoint-2026-10-10)
+for the complete command and remaining exclusions. Full game and Windows
+font parity remain open.
+
 Native audio status (2026-09-27): the existing window-manager check now also
 executes `IStreamer` PCM playback and notifications. Retail training speech
 executes with the optional external shared-LGPL FFmpeg IAC decoder; see [the audio contract](docs/NATIVE_AUDIO_STREAMER.md).

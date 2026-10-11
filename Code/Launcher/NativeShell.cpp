@@ -32,6 +32,7 @@
 #include "ScrollingText.h"
 #include "resource.h"
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppFont.h"
 #include "Include/NativeAppSfx.h"
 #include "Include/NativeAppProfileParser.h"
 #include "SFX.h"
@@ -361,6 +362,8 @@ struct Options
     std::filesystem::path genDataPath;
     std::filesystem::path gameTypesPath;
     std::filesystem::path stringPackPath;
+    std::filesystem::path uiFontPath;
+    std::filesystem::path fontSmokePath;
     std::filesystem::path preferencesPath;
     std::filesystem::path hotkeysPath;
     std::filesystem::path vertexShaderPath;
@@ -419,7 +422,7 @@ Options ParseOptions(int argc, char ** argv)
         if (option == "--help" && argc == 2)
         {
             std::cout << "Usage: frontierx_native_shell [--config FILE] [--system-profile FILE] [--preferences FILE] "
-                         "[--data-root DIRECTORY] [--material-root DIRECTORY] [--save-root DIRECTORY] [--gen-data FILE] [--game-types FILE] [--string-pack FILE] [--hotkeys FILE] "
+                         "[--data-root DIRECTORY] [--material-root DIRECTORY] [--save-root DIRECTORY] [--gen-data FILE] [--game-types FILE] [--string-pack FILE] [--ui-font FILE] [--font-smoke FILE] [--hotkeys FILE] "
                          "[--render-smoke VERTEX_SPV FRAGMENT_SPV] "
                          "[--game-scene MATERIAL_SOURCE MESH_UTF VERTEX_SPV "
                          "FRAGMENT_SPV EXTENDED_SPV GAME_SPV] "
@@ -671,7 +674,7 @@ Options ParseOptions(int argc, char ** argv)
         }
         if ((option != "--config" && option != "--system-profile" &&
              option != "--preferences" && option != "--hotkeys" &&
-             option != "--data-root" && option != "--material-root" && option != "--save-root" && option != "--gen-data" && option != "--game-types" && option != "--string-pack" && option != "--smoke-ms" &&
+             option != "--data-root" && option != "--material-root" && option != "--save-root" && option != "--gen-data" && option != "--game-types" && option != "--string-pack" && option != "--ui-font" && option != "--font-smoke" && option != "--smoke-ms" &&
              option != "--capture-ppm") ||
             index + 1 == argc)
             throw std::invalid_argument(
@@ -727,6 +730,16 @@ Options ParseOptions(int argc, char ** argv)
             if (!options.genDataPath.empty())
                 throw std::invalid_argument("duplicate option: --gen-data");
             options.genDataPath = value;
+        }
+        else if (option == "--font-smoke")
+        {
+            if (!options.fontSmokePath.empty()) throw std::invalid_argument("duplicate option: --font-smoke");
+            options.fontSmokePath = value;
+        }
+        else if (option == "--ui-font")
+        {
+            if (!options.uiFontPath.empty()) throw std::invalid_argument("duplicate option: --ui-font");
+            options.uiFontPath = value;
         }
         else if (option == "--string-pack")
         {
@@ -795,8 +808,12 @@ Options ParseOptions(int argc, char ** argv)
     if (options.missionStart && !options.skipUnitVoice &&
         (options.stringPackPath.empty() || !options.skipUnitAlerts || !options.skipSubtitles))
         throw std::invalid_argument("native unit voice requires --string-pack, --skip-unit-alerts and --skip-subtitles");
-    if (options.missionStart && !options.skipTeletypeVisuals)
-        throw std::invalid_argument("native mission script requires explicit --skip-teletype-visuals until text rendering is ported");
+    if (options.missionStart && !options.skipTeletypeVisuals && options.uiFontPath.empty())
+        throw std::invalid_argument("native source teletype requires --ui-font or explicit --skip-teletype-visuals");
+    if (!options.fontSmokePath.empty() && (!options.sfxSmoke || options.missionStart))
+        throw std::invalid_argument("--font-smoke requires --sfx-smoke without --mission-start");
+    if (!options.uiFontPath.empty() && (!options.missionStart || options.skipTeletypeVisuals))
+        throw std::invalid_argument("--ui-font requires --mission-start with teletype visuals");
     if (options.skipMissionMusic && !options.missionStart)
         throw std::invalid_argument("--skip-mission-music requires --mission-start");
     if (options.sfxSmoke && options.missionSourceName.empty())
@@ -1843,6 +1860,15 @@ int Run(int argc, char ** argv)
     SCREENRESY = static_cast<DWORD>(clientArea.h);
     SCREEN_WIDTH = 800;
     SCREEN_HEIGHT = 600;
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    if (!options.fontSmokePath.empty())
+    {
+        if (!FrontierX::SetNativeFontFile(options.fontSmokePath.string().c_str()) ||
+            !FrontierX::CheckNativeSourceTeletype())
+        { std::cerr << "Native source teletype lifecycle check failed\n"; return 6; }
+        std::cout << "Native source teletype counted string, pause, expiry and flush checked\n";
+    }
+#endif
     const std::string driver = FrontierX::CurrentSdlVideoDriverName();
     if (driver.empty())
     {
@@ -2007,8 +2033,10 @@ int Run(int argc, char ** argv)
             }
             *appSoundManager.Receive() = FrontierX::CreateNativeMissionSoundManager(
                 options.skipTrainingSpeech, options.skipAnimatedPortraits);
-            *appTeletype.Receive() = FrontierX::CreateNativeMissionTeletype(
-                options.skipTeletypeVisuals);
+            if (!options.skipTeletypeVisuals && !FrontierX::SetNativeFontFile(options.uiFontPath.string().c_str()))
+            { std::cerr << "Native external UI font unavailable; enable FRONTIERX_BUILD_NATIVE_FONTS\n"; return 6; }
+            *appTeletype.Receive() = options.skipTeletypeVisuals ?
+                FrontierX::CreateNativeMissionTeletype(true) : FrontierX::CreateNativeSourceTeletype();
             if (options.skipUnitVoice)
                 *appUnitComm.Receive() = FrontierX::CreateNativeDisabledUnitComm();
             if (!appSoundManager.Get() || !appTeletype.Get())
@@ -2339,6 +2367,9 @@ int Run(int argc, char ** argv)
                 return 6;
             }
             std::cout << "Native App selected training checkpoint preserved after source reload\n";
+            std::cout << "Native App source teletype font draws: " << FrontierX::NativeFontDrawCount() << '\n';
+            if (!options.skipTeletypeVisuals && !FrontierX::NativeFontDrawCount())
+            { std::cerr << "Native source teletype did not draw\n"; return 7; }
             FrontierX::NativeMissionAudioStats audioStats;
             if (!FrontierX::GetNativeMissionAudioStats(appSoundManager.Get(), audioStats)) return 7;
             std::cout << "Native App unit voice streams: started=" << audioStats.unitStarted

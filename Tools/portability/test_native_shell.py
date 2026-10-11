@@ -13,6 +13,7 @@ EXECUTABLE = str(Path(sys.argv.pop(1)).resolve())
 EVENT_MODULE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else ''
 HOTKEY_TABLE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else ''
 GPU_ENABLED = sys.argv.pop(1) == '1' if len(sys.argv) > 1 else False
+FONT_FILE = sys.argv.pop(1) if len(sys.argv) > 1 else ''
 
 
 class NativeShellTests(unittest.TestCase):
@@ -146,9 +147,12 @@ class NativeShellTests(unittest.TestCase):
                                     '--save-root', save_root,
                                     '--skip-notification-cue',
                                     '--sfx-smoke',
+                                    *(['--font-smoke', FONT_FILE] if FONT_FILE else []),
                                     '--profile-smoke', 'native-smoke.ini',
                                     '--smoke-ms', '1', '--hidden')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            if FONT_FILE:
+                self.assertIn('Native source teletype counted string, pause, expiry and flush checked', result.stdout)
             self.assertIn('Native App parser schema loaded from embedded data.i',
                           result.stdout)
             self.assertIn('Native App mission source opened through SPMAPDIR', result.stdout)

@@ -1543,11 +1543,23 @@ target_compile_features(frontierx_native_sfx_owner PRIVATE cxx_std_17)
 add_library(frontierx_native_mission_media_owner OBJECT
 	Code/App/Src/NativeAppMissionSound.cpp
 	Code/App/Src/NativeAppMissionTeletype.cpp
+	Code/App/Src/Teletype.cpp
+	Code/App/Src/NativeAppFont.cpp
 	Code/App/Src/UnitComm.cpp)
 target_include_directories(frontierx_native_mission_media_owner PRIVATE
 	Code/App/Src Code/App/Src/Include Code/App/DInclude
 	Code/Libs/Include Code/Libs/Src/Include)
 target_compile_features(frontierx_native_mission_media_owner PRIVATE cxx_std_17)
+set(FRONTIERX_TEST_FONT_FILE "" CACHE FILEPATH "External font for the optional native shell lifecycle check")
+option(FRONTIERX_BUILD_NATIVE_FONTS "Enable the optional FreeType App font adapter" OFF)
+if(FRONTIERX_TEST_FONT_FILE AND NOT FRONTIERX_BUILD_NATIVE_FONTS)
+    message(FATAL_ERROR "FRONTIERX_TEST_FONT_FILE requires FRONTIERX_BUILD_NATIVE_FONTS")
+endif()
+if(FRONTIERX_BUILD_NATIVE_FONTS)
+    find_package(Freetype 2.14 REQUIRED)
+    target_link_libraries(frontierx_native_mission_media_owner PRIVATE Freetype::Freetype)
+    target_compile_definitions(frontierx_native_mission_media_owner PRIVATE FRONTIERX_NATIVE_FREETYPE=1)
+endif()
 
 # Production StringData owns the fixed-width unit speech slots in StringPack.db.
 add_library(frontierx_app_string_data_owner OBJECT Code/App/Src/StringData.cpp)
@@ -1896,6 +1908,9 @@ int main() {
 			frontierx_view_constructor
 			frontierx_platform
 			PkgConfig::SDL3)
+    if(FRONTIERX_BUILD_NATIVE_FONTS)
+        target_link_libraries(frontierx_native_shell PRIVATE Freetype::Freetype)
+    endif()
 	target_sources(frontierx_native_shell PRIVATE
 		$<TARGET_OBJECTS:frontierx_app_system_container_owner>
 		$<TARGET_OBJECTS:frontierx_app_global_startup_owner>
@@ -2239,7 +2254,7 @@ if(BUILD_TESTING)
 			$<TARGET_FILE:frontierx_native_shell>
 			$<TARGET_FILE:frontierx_event_system_module>
 			${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Hotkeys.utf
-			$<BOOL:${FRONTIERX_BUILD_SDL3_GPU}>)
+			$<BOOL:${FRONTIERX_BUILD_SDL3_GPU}> "${FRONTIERX_TEST_FONT_FILE}")
 	endif()
 	if(TARGET frontierx_sdl3_gpu_probe)
 		# Existing production closure: Engine -> RenderMgr -> PolyMesh -> SDL GPU.

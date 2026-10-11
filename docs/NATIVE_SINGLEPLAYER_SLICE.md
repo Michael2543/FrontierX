@@ -1,5 +1,114 @@
 # First native single-player acceptance path
 
+## Original in-window mission teletype checkpoint (2026-10-10)
+
+**Blocker and hypothesis.** The voice checkpoint still replaced Teletype
+with explicitly disabled timed handles. Review of original `Teletype.cpp`,
+its `MScript::PlayTeletype` caller, `Sol_T::DisplayObjectiveHandler`,
+`DrawAgent16.cpp` and `System.cpp::CQCreateLogFont` showed that source line
+wrapping, reveal, caret, centering, scrolling, pause and expiry already
+existed. GDI font creation/rasterization and the Win32 callback container
+were the blockers. The falsifiable milestone was an original objective
+teletype visibly drawn during source `CQDoModal`, with the existing normal
+selection/movement, voice and moved-state save/reload still passing.
+
+**Integrated owners.** Original `Teletype.cpp` now compiles and subscribes
+to the existing native EventSystem. Its source `CQE_ENDFRAME` draw and
+`CQE_UPDATE` timing own the live text. The Windows GDI/FULLSCREEN branches
+remain in place. A native-only adapter implements existing `IFontDrawAgent`
+with optional FreeType; it reads the resource pixel height using the source
+`IDEAL2REALY` scaling and an explicitly supplied external face. Monochrome
+glyph spans reach the existing App PrimitiveBuilder, batcher and production
+native render boundary. Pixel clipping respects the original reveal pane;
+no new shader, SDL debug-text overlay or replacement teletype scheduler was
+introduced. Glyphs are cached in each font owner and released with its face.
+The old `--skip-teletype-visuals` timer-only exclusion remains available.
+
+Source review plus the first native runtime disproved an assumed counted
+string contract: source-built RT_STRING stores the character count without
+a terminator. Native Teletype now skips that prefix with sequenced pointer
+advance and uses its full count; the original Windows expression and branch
+remain unchanged. Native line buffers are checked before copying, position
+storage includes the final extent, and the reveal's formerly uninitialized
+`oldcounter` is initialized. None of these runtime types crosses a disk or
+module interface; serialized mission fields and source queue/update order
+are unchanged.
+
+**Configuration and dependency.** Default presets stay FreeType-free.
+Optional native text is configured with `-DFRONTIERX_BUILD_NATIVE_FONTS=ON`
+and requires FreeType >=2.14. The shell requires `--ui-font FILE` for
+mission teletype visuals; an absent backend or invalid face fails explicitly.
+This checkpoint uses lawful external `FONTS/bauhmib.ttf`, matching the
+selected source Bauhaus descriptor's family. Other resource families,
+weights, Unicode outside printable ASCII, shaping, multiline font-agent
+semantics and Windows glyph/metric parity remain unsupported or unverified.
+The single-face option is explicit and is not automatic font substitution.
+See [DEPENDENCIES](DEPENDENCIES.md#optional-native-font-rasterizer-freetype-2143)
+for the system package, FTL selection, credit and outstanding release gates.
+
+**Automated execution.** GCC 16.2.1 and Clang 22.1.8 Linux x86_64 Debug
+Ninja built `frontierx_native_shell` in the existing optional-FFmpeg trees
+`/tmp/frontierx-voice-{gcc,clang}`, then built both complete graphs with
+`cmake --build <tree> -j6`. Each preset was configured with
+`-DFRONTIERX_BUILD_NATIVE_FONTS=ON` and
+`-DFRONTIERX_TEST_FONT_FILE=<external-install>/FONTS/bauhmib.ttf`, retaining
+the previously reviewed external shared-LGPL FFmpeg prefix. The exact
+focused command `ctest --test-dir <tree> -R '^portability.native_shell$'
+--output-on-failure` passed under both compilers.
+
+The existing generated-data shell process check now optionally supplies
+`--font-smoke FILE` alongside its existing `--sfx-smoke`. It constructs the
+original Teletype owner, checks that counted `AB` is retained completely,
+checks source line positions against font width, distinguishes ordinary
+pause from ignore-pause, preserves lifetime-zero text, verifies the original
+next-update removal of expired handles, flushes and requires live font
+ownership to return to its starting count. It restores the native ID counter
+and pause flag. This is needed because the old archive and timer-only checks
+could not execute source layout or its font ownership; passing permits the
+mission to use that owner. No new probe executable was added. Inputs are
+generated PCM, schema and counted text plus the explicitly external font.
+With no font path supplied, that optional case is not claimed as execution.
+
+A separate Clang Debug ASan/UBSan tree at `/tmp/frontierx-voice-asan` retained
+`-fsanitize=address,undefined -fno-omit-frame-pointer` and matching executable
+linker flags, enabled fonts with the same external test file, and built
+`frontierx_native_shell frontierx_event_system_module`. Its existing shell
+CTest passed with `ASAN_OPTIONS=detect_leaks=0` without a reported finding,
+including the actual source text lifecycle and font-release check.
+The system FreeType binary was not sanitizer-instrumented; LeakSanitizer
+and a full mission sanitizer run were not performed. Complete default and
+optional CPU/process test runs are recorded only in [BUILD_GRAPH](BUILD_GRAPH.md).
+The desktop-dependent GPU resize test was excluded from those reruns because
+its previously documented tiling failure is unchanged; it is not a pass.
+
+**Visible external-data runtime.** Separate GCC and Clang Wayland/Vulkan
+processes ran the previous voice checkpoint's mission command, removed
+`--skip-teletype-visuals`, and added
+`--ui-font <external-install>/FONTS/bauhmib.ttf`. Each used 15 seconds,
+isolated save/settings roots, lawfully external mission/archives/audio/font,
+the repository profile/hotkeys/material root and generated shaders.
+Normal mouse selection at `(303,425)` and movement at `(624,480)` retained
+objectives 1 and 2, two original unit voices, no active audio stream at
+acceptance, modal result 4, moved-state source save/reload and mission close.
+The GCC acceptance observed 383 modal frames, 450 source updates and 1144
+font draws; The final delayed-input Clang capture run observed 367 frames, 450 updates
+and 2153 font draws.
+Respective moved positions `(49926.4,66613.2,-1000)` and
+`(47970.1,67008.8,-400)` retained owner 1 through reload. Wall-clock input
+and render counts are not a cross-build determinism result.
+Temporary cropped desktop captures outside the repository were visually
+inspected: the source objective text is yellow, progressively revealed with
+its caret over the live scene. No retail asset, capture or log was added to
+source control. This is bounded external retail-input runtime, not full
+retail game parity or a Windows image comparison.
+
+**Next gate.** Connect status/hint/scrolling text and subtitles through their
+existing font/presentation owners, then remove their individual exclusions.
+Unit alert text, training portraits/speech, mission music, spatial SFX,
+other UI/render exclusions, menu/briefing paths and full-game behavior remain
+open. Native Windows Debug/Final, module ABI, Windows font/audio comparison,
+cross-compiler determinism and full retail parity were not performed.
+
 ## Original unit voice mission checkpoint (2026-10-10)
 
 **Blocker and hypothesis.** Normal selection and movement already reached

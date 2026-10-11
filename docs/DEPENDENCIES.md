@@ -144,3 +144,34 @@ all LGPL obligations against the Conquest distribution terms before conveying
 an artifact. Local execution is not distribution approval. Neither a GPL-enabled
 system build nor a successful runtime test satisfies that gate. Exact build and
 execution evidence belongs in [NATIVE_AUDIO_STREAMER.md](NATIVE_AUDIO_STREAMER.md).
+
+## Optional native font rasterizer (FreeType 2.14.3)
+
+The optional `FRONTIERX_BUILD_NATIVE_FONTS=ON` adapter uses the existing
+`IFontDrawAgent` boundary for original Teletype layout and rendering. The
+validated Linux x86_64 host provides Arch `freetype2 2.14.3-1`, shared
+`libfreetype.so.6`; its pkg-config module reports ABI-oriented `26.6.20`.
+CMake uses `Freetype::Freetype` and requires >=2.14. The official upstream is
+[FreeType](https://freetype.org/); the source release is 2.14.3. No FreeType
+source or binary was copied or modified by FrontierX. Distribution-package
+patch provenance and every transitive dependency still require package-level
+review before conveying a binary.
+
+For this optional use FrontierX selects the permissive FreeType License
+(FTL), rather than the alternate GPL license. The host's complete
+`FTL.TXT` and the [official license description](https://freetype.org/license.html)
+were reviewed. The FTL permits linking with notice/credit obligations; it
+does not replace the controlling Conquest license. This software is based
+in part on the work of the FreeType Team. Portions of this software are
+copyright © 1996–2026 The FreeType Project (https://freetype.org).
+All rights reserved. A package containing FreeType must retain its complete
+license and applicable source/component notices; this inventory is not
+release approval.
+
+Fonts are independently licensed input, not covered by the FreeType license.
+The runtime evidence uses `FONTS/bauhmib.ttf` only from the lawful external
+retail installation. That font must not enter the repository or a package;
+no redistribution permission is claimed. Single-face, printable-ASCII,
+monochrome rendering is a bounded adapter, not a general text/shaping or
+Windows-font compatibility claim. See [the mission record](NATIVE_SINGLEPLAYER_SLICE.md#original-in-window-mission-teletype-checkpoint-2026-10-10)
+for GCC/Clang builds, source-owner lifecycle and visible runtime evidence.
