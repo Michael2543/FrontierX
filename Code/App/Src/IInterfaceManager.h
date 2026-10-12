@@ -13,7 +13,7 @@
 //--------------------------------------------------------------------------//
  
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
 struct IInterfaceManager : IDAComponent

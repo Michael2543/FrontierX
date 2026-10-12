@@ -21,7 +21,7 @@
 #endif
 
 #ifndef DLISTBOX_H
-#include "DListbox.h"
+#include "DListBox.h"
 #endif
 
 #ifndef DEDIT_H
@@ -194,9 +194,17 @@ struct GT_MENU1
 		DROPDOWN_DATA dropPlayers[MAX_PLAYERS];
 		STATIC_DATA staticNames[MAX_PLAYERS];
 		STATIC_DATA staticPings[MAX_PLAYERS];
+#if defined(_WIN32) || defined(_ADB)
 		M_STRINGW terranComputerNames[MAX_PLAYERS];
 		M_STRINGW mantisComputerNames[MAX_PLAYERS];
 		M_STRINGW solarianComputerNames[MAX_PLAYERS];
+#else
+		// Preserve UTF-16 storage in the native menu resource's unused lobby data.
+		struct COMPUTER_NAME { U16 string[32]; };
+		COMPUTER_NAME terranComputerNames[MAX_PLAYERS];
+		COMPUTER_NAME mantisComputerNames[MAX_PLAYERS];
+		COMPUTER_NAME solarianComputerNames[MAX_PLAYERS];
+#endif
 	} slots;
 
 	struct FINAL

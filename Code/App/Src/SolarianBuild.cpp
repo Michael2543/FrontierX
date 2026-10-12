@@ -11,8 +11,38 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "IBuild.h"
 #include "ObjList.h"
@@ -33,13 +63,13 @@
 //temp?
 #include "TObject.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <IHardPoint.h>
-#include <LightMan.h>
+#include <lightman.h>
 #include <TSmartPointer.h>
 #include <IConnection.h>
 #include <ITextureLibrary.h>
-#include <FileSys.h>
+#include <Filesys.h>
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 

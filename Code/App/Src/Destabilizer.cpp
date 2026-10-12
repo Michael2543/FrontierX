@@ -13,14 +13,37 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "MyVertex.h"
+#include <algorithm>
+using std::min;
+using std::max;
+#endif
+
 
 #include "TObject.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -30,7 +53,7 @@
 #include "TObjFrame.h"
 #include "Mesh.h"
 #include "ArchHolder.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "FogOfWar.h"
 #include "UserDefaults.h"
 #include "Mission.h"
@@ -50,16 +73,16 @@
 #include "IVertexBuffer.h"
 #include "TObjRender.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <TComponent.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Pixel.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
 
@@ -840,7 +863,11 @@ void Destabilizer::renderSpark (void)
 			alpha = 128*((1-factor)*1.25); 
 		}else if(factor < 0.1)
 		{
+#if defined(_WIN32)
 			factor = __max(factor -0.05,0.0);
+#else
+			factor = std::max(factor -0.05,0.0);
+#endif
 			alpha = 128*(factor*20);
 		}else
 		{
@@ -1629,5 +1656,3 @@ static _destabilizer __destabilizer;
 //---------------------------------------------------------------------------
 //------------------------End Destabilizer.cpp----------------------------------------
 //---------------------------------------------------------------------------
-
-

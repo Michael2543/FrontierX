@@ -9,9 +9,18 @@
    $Header: /Conquest/App/Src/Menu_Pause.cpp 23    5/04/01 2:59p Tmauer $
 */
 //--------------------------------------------------------------------------//
- 
+
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include <cwchar>
+#include <cstdlib>
+#include <cstdio>
+#endif
 
 #include "Frame.h"
 #include "IButton2.h"
@@ -22,7 +31,9 @@
 #include "NetPacket.h"
 #include "DrawAgent.h"
 
+#if defined(_WIN32)
 #include <Dplay.h>
+#endif
 
 #include <stdio.h>
 
@@ -81,6 +92,7 @@ struct MenuPause : public DAComponent<Frame>, IPlayerStateCallback
 		return Frame::onTabPressed();
 	}
 
+#if defined(_WIN32)
 	static U32 getPlayerName (DPID id, wchar_t szName[64])
 	{
 		//
@@ -99,6 +111,7 @@ struct MenuPause : public DAComponent<Frame>, IPlayerStateCallback
 		}
 		return wcslen(szName);
 	}
+#endif
 
 	virtual bool onEscPressed (void)	//  return true if message was handled
 	{
@@ -110,6 +123,7 @@ struct MenuPause : public DAComponent<Frame>, IPlayerStateCallback
 		else
 		if (CQFLAGS.bGameActive)
 		{
+#if defined(_WIN32)
 			U32 igResult = CreateMenu_igoptions();
 			if(igResult)// player wants to resign
 			{
@@ -127,6 +141,10 @@ struct MenuPause : public DAComponent<Frame>, IPlayerStateCallback
 					}
 				}
 			}
+#else
+			std::fputs("Native remote-pause options are unavailable\n", stderr);
+			std::abort();
+#endif
 		}
 		return true;
 	}
@@ -176,7 +194,12 @@ bool MenuPause::EnumeratePlayer (struct NP_PLAYERINFO & info, void * context)
 			U32 minutes = (timeLeft/60);
 			U32 seconds = (timeLeft%60);
 
-			swprintf(time, L"%d:%02d", minutes, seconds);
+
+#if defined(_WIN32)
+		swprintf(time, L"%d:%02d", minutes, seconds);
+#else
+		swprintf(time, sizeof(time)/sizeof(wchar_t), L"%d:%02d", minutes, seconds);
+#endif
 			wcsncpy(format, _localLoadStringW(IDS_FORMAT_TIMETOBOOT), sizeof(format)/sizeof(wchar_t));
 		}
 
@@ -185,7 +208,12 @@ bool MenuPause::EnumeratePlayer (struct NP_PLAYERINFO & info, void * context)
 		else
 			wcsncpy(reason, _localLoadStringW(IDS_PLAYER_CONGESTED), sizeof(reason)/sizeof(wchar_t));
 
+
+#if defined(_WIN32)
 		swprintf(buffer, format, info.szPlayerName, reason, time);
+#else
+		swprintf(buffer, sizeof(buffer)/sizeof(wchar_t), format, info.szPlayerName, reason, time);
+#endif
 
 		staticDescription[*i]->SetTextColor(MISSION->GetPlayerColorForDPID(info.dpid));
 		staticDescription[*i]->SetText(buffer);

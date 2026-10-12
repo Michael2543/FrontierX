@@ -77,6 +77,7 @@ public:
         exit_callback_ = exit_handler;
         live_window_ = this;
         active_ = true;
+        close_requested_ = false;
         return 1;
     }
 
@@ -105,7 +106,7 @@ public:
 
     void ServeMessageQueue(U32 flags) override
     {
-        if (!window_.IsOpen()) return;
+        if (!window_.IsOpen() || (close_requested_ && !(flags & WMF_BACKGROUND))) return;
 
         UpdateNativeStreamers();
         const bool background = (flags & WMF_BACKGROUND) != 0;
@@ -117,10 +118,11 @@ public:
             if (wait)
             {
                 if (!window_.WaitEvent(event, error)) return;
-                HandleEvent(event);
-                wait = !background && !active_;
+                if (HandleEvent(event)) return;
             }
-            while (window_.PollEvent(event)) HandleEvent(event);
+            while (window_.PollEvent(event))
+                if (HandleEvent(event)) return;
+            if (wait) wait = !background && !active_;
         } while (wait);
     }
 
@@ -162,7 +164,7 @@ private:
         return node->client->OnAppClose() != FALSE;
     }
 
-    void HandleEvent(const WindowEvent & event)
+    bool HandleEvent(const WindowEvent & event)
     {
         if (event.type == WindowEventType::FocusGained) active_ = true;
         if (event.type == WindowEventType::FocusLost) active_ = false;
@@ -175,10 +177,11 @@ private:
         if (event.type == WindowEventType::QuitRequested)
         {
             if (exit_callback_) exit_callback_(0);
-            return;
+            close_requested_ = true;
+            return true;
         }
         if (event.type == WindowEventType::CloseRequested &&
-            CloseVetoed(close_callbacks_.pClientList)) return;
+            CloseVetoed(close_callbacks_.pClientList)) return false;
 
         const auto translated = input_adapter_.Translate(event);
         for (const auto & item : translated)
@@ -191,6 +194,9 @@ private:
             else if (message.message == LegacyMessage::Close && exit_callback_)
                 exit_callback_(0);
         }
+        // Return to the mission/modal owner even when this window lacks focus.
+        if (event.type == WindowEventType::CloseRequested) close_requested_ = true;
+        return event.type == WindowEventType::CloseRequested;
     }
 
     void FillArea(WM_WINAREA & area, bool client) const
@@ -217,6 +223,7 @@ private:
     S32 cursor_x_ = 0;
     S32 cursor_y_ = 0;
     bool active_ = true;
+    bool close_requested_ = false;
 };
 
 NativeWindowManager * NativeWindowManager::live_window_ = nullptr;

@@ -11,8 +11,22 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include "resource.h"
+#include <renderer.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <cstdint>
+#include <DSupplyShipSave.h>
+#endif
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -50,8 +64,16 @@
 inline MISSION_DATA::M_CAPS & MISSION_DATA::M_CAPS::operator |= (const MISSION_DATA::M_CAPS & other)
 {
 	CQASSERT(sizeof(*this) == sizeof(U32));
+#if defined(_WIN32)
 	U32 * ptr = (U32 *) this;
 	*ptr |= *((U32 *) &other);
+#else
+	U32 bits, otherBits;
+	std::memcpy(&bits, this, sizeof(bits));
+	std::memcpy(&otherBits, &other, sizeof(otherBits));
+	bits |= otherBits;
+	std::memcpy(this, &bits, sizeof(bits));
+#endif
 
 	return *this;
 };
@@ -60,8 +82,16 @@ inline MISSION_DATA::M_CAPS & MISSION_DATA::M_CAPS::operator |= (const MISSION_D
 inline MISSION_DATA::M_CAPS & MISSION_DATA::M_CAPS::operator &= (const MISSION_DATA::M_CAPS & other)
 {
 	CQASSERT(sizeof(*this) == sizeof(U32));
+#if defined(_WIN32)
 	U32 * ptr = (U32 *) this;
 	*ptr &= *((U32 *) &other);
+#else
+	U32 bits, otherBits;
+	std::memcpy(&bits, this, sizeof(bits));
+	std::memcpy(&otherBits, &other, sizeof(otherBits));
+	bits &= otherBits;
+	std::memcpy(this, &bits, sizeof(bits));
+#endif
 
 	return *this;
 }
@@ -168,7 +198,11 @@ GENRESULT CMenu_MulMix::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
+#if defined(_WIN32)
 		onUpdate(U32(param) >> 10);
+#else
+		onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 
 	}
@@ -177,6 +211,9 @@ GENRESULT CMenu_MulMix::Notify (U32 message, void *param)
 }
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+static
+#endif
 MISSION_DATA::M_CAPS getCaps (IBaseObject * selected)
 {
 	MISSION_DATA::M_CAPS caps;
@@ -713,7 +750,11 @@ struct _cmenu_mulmix : GlobalComponent
 	virtual void Startup (void)
 	{
 		menu = new DAComponent<CMenu_MulMix>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&menu);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

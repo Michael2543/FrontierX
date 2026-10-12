@@ -29,11 +29,19 @@ typedef float SINGLE;
 #define SET_MANTSEED(a) (((unsigned long)(a)) << SEED_POS)  /* Set mantissa
                                                              * 8 MSB's */
 
+#if !defined(_WIN32)
+#include <cstdint>
+#include <cstring>
+#endif
 #include <stdlib.h>
 #include <math.h>
 
 union _flint {
+#if defined(_WIN32)
     unsigned long    i;
+#else
+    std::uint32_t    i;
+#endif
     float            f;
 };// _fi, _fo;
 
@@ -70,7 +78,12 @@ public:
 	/* The following returns the inverse square root */
 	inline SINGLE InvSqrt(const float x) const
 	{
+#if defined(_WIN32)
 		const unsigned long a = ((union _flint*)(&x))->i;
+#else
+		std::uint32_t a;
+		std::memcpy(&a, &x, sizeof(a));
+#endif
 		union _flint seed;
 
 		/* Seed: accurate to LOOKUP_BITS */

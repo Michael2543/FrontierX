@@ -97,6 +97,11 @@ SdlWindow::~SdlWindow()
     Close();
 }
 
+void ShutdownSdlRuntime()
+{
+    SDL_Quit();
+}
+
 bool SdlWindow::Open(const char * title, int width, int height, bool hidden, std::string & error)
 {
     Close();

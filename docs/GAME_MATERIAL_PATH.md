@@ -1,5 +1,17 @@
 # Game Mesh and Material Ownership for Milestone 5
 
+Native mesh pre-sort sanitizer correction, 2026-10-11: an instrumented
+external Sol_Train start found signed overflow in the original
+`rand() * (face_cnt - 1)` intermediate with Linux's larger RAND_MAX. The
+native path widens only that product; the Windows expression and source
+one-draw-per-face order remain unchanged. The existing state_material
+generated fixture reproduced the overflow before the fix, then checked
+three distinct sorted areas and the next CRT RNG value after exactly
+three draws. Focused GCC/Clang and leak-disabled Clang ASan/UBSan checks
+pass. Existing original PolyMesh leak reports, native Windows rebuild/ABI
+and cross-platform RNG/retail comparison remain open. See
+[the M2 sanitizer record](NATIVE_SINGLEPLAYER_SLICE.md#full-sol_train-acceptance-ledger-m2-2026-10-11-in-progress).
+
 Current playable mission render, 2026-10-10: the production Engine,
 RenderMgr, texture/material/mesh owners and original `ObjectList::Render`
 presented a visible external `Sol_Train` frame under GCC and Clang on

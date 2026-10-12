@@ -11,8 +11,26 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#define _wcsdup DuplicateWide
+#define _ltow DecimalToWide
+#include <TManager.h>
+#endif
 
 #include "IHotButton.h"
 #include "Startup.h"
@@ -24,11 +42,11 @@
 #include <DHotButton.h>
 #include "DrawAgent.h"
 #include "IShapeLoader.h"
-#include "Sfx.h"
+#include "SFX.h"
 #include <DSounds.h>
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 
@@ -410,7 +428,13 @@ U32 TabButton::GetControlID (void)
 //
 GENRESULT TabButton::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+#ifdef _WIN32
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==0)
 	switch (message)
@@ -504,7 +528,7 @@ GENRESULT TabButton::Notify (U32 message, void *param)
 	case WM_CHAR:
 		if (isInvisibleMenu() == false)
 		{
-			switch (TCHAR(msg->wParam))
+			switch (static_cast<U32>(msg->wParam))
 			{
 			case '\t':
 				if (onTabPressed())
@@ -570,7 +594,7 @@ void TabButton::draw (void)
 	if ((bPushState || bHighlight) && shapes[GTHBSHP_SELECTED]!=0)
 		shapes[GTHBSHP_SELECTED]->Draw(0, screenRect.left, screenRect.top);
 
-	if ((pFont != NULL) && szButtonText[0])
+	if ((pFont.ptr != nullptr) && szButtonText[0])
 	{
 		int index = 0;
 		
@@ -598,7 +622,11 @@ bool TabButton::onTabPressed (void)
 {
 	if (bKeyboardFocusEnabled)
 	{
-		SHORT shiftDown = GetAsyncKeyState(VK_SHIFT) >> 1;
+		#ifdef _WIN32
+        SHORT shiftDown = GetAsyncKeyState(VK_SHIFT) >> 1;
+#else
+        const bool shiftDown = FrontierX::NativeShiftPressed();
+#endif
 
 		// if the shift button is down, then we want to go back a tab
 		if (shiftDown == 0)
@@ -656,7 +684,7 @@ void TabButton::SetTabSelected (bool bSelected)
 			BaseHotRect::Notify(CQE_SET_FOCUS, 0);
 
 		// set our default focus control if there is no ordinary focus control
-		if (bKeyboardFocusEnabled && (focusControl == NULL) && (defaultFocusControl != NULL))
+		if (bKeyboardFocusEnabled && (focusControl.ptr == nullptr) && (defaultFocusControl.ptr != nullptr))
 		{
 			setFocus(defaultFocusControl);
 		}
@@ -664,15 +692,31 @@ void TabButton::SetTabSelected (bool bSelected)
 
 	// send a mouse update
 	{
-		MSG msg;
+#ifdef _WIN32
+        MSG msg;
+#else
+        FrontierX::LegacyWindowMessage msg;
+#endif
 		S32 x, y;
 
 		WM->GetCursorPos(x, y);
 
-		msg.hwnd = hMainWindow;
+#ifdef _WIN32
+        msg.hwnd = hMainWindow;
+#else
+        msg.window = WM->GetWindowHandle();
+#endif
 		msg.message = WM_MOUSEMOVE;
-		msg.wParam = 0;
-		msg.lParam = MAKELPARAM(x,y);
+		#ifdef _WIN32
+        msg.wParam = 0;
+#else
+        msg.wparam = 0;
+#endif
+		#ifdef _WIN32
+        msg.lParam = MAKELPARAM(x,y);
+#else
+        msg.lparam = MAKELPARAM(x,y);
+#endif
 		Notify(WM_MOUSEMOVE, &msg);
 	}
 }
@@ -712,7 +756,7 @@ void TabButton::setFocus (struct IDAComponent * component)
 		CQASSERT(res!=0);
 	}
 
-	if (focusControl != res)
+	if (focusControl.ptr != res.ptr)
 	{
 		if (focusControl!=0)
 		{
@@ -943,7 +987,11 @@ HANDLE TabButtonFactory::CreateArchetype (PGENTYPE _pArchetype, GENBASE_TYPE obj
 {
 	{
 		const char* _n = GENDATA->GetArchName(_pArchetype);
+		#if defined(_WIN32)
 		if (_n && strstr(_n, "Tab"))
+#else
+		if (objClass == GBT_HOTBUTTON && _n && strstr(_n, "Tab"))
+#endif
 		{
 			GT_HOTBUTTON * _d = (GT_HOTBUTTON *) _data;
 			FILE* _dbgf = fopen("debug/factory_debug.txt", "a");
@@ -1005,7 +1053,11 @@ struct _tabbuttonfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<TabButtonFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

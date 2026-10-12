@@ -39,7 +39,12 @@ struct DACOM_NO_VTABLE IAnimate : IDAComponent
 
 	virtual bool HasAnimationCompleted (void) = 0;
 
+#if defined(_WIN32)
 	virtual void SetAnimationFrameRate (U32 frameRate);
+#else
+	// The source Animate owner supplies this method; there is no base implementation.
+	virtual void SetAnimationFrameRate (U32 frameRate) = 0;
+#endif
 };
 
 #endif

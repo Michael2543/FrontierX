@@ -11,15 +11,47 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
+
 
 #include "Sector.h"
 #include "TSpaceShip.h"
-#include <DSpaceShip.h>
+#include <DSpaceship.h>
 #include "TObject.h"
-#include "Objlist.h"
-#include "Iplanet.h"
+#include "ObjList.h"
+#include "IPlanet.h"
 #include "Startup.h"
 #include "Mission.h"
 #include "SysMap.h"
@@ -36,7 +68,7 @@
 #include <IConnection.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <FileSys.h>
+#include <Filesys.h>
 
 #define NUM_LINE_SEGS 40
 #define CIRC_TIME 4.0
@@ -165,7 +197,7 @@ struct _NO_VTABLE SupplyShip : public SpaceShip<SUPPLYSHIP_SAVELOAD, SUPPLYSHIP_
 
 	/* SpaceShip methods */
 	
-	void SupplyShip::ResolveAssociations (void);
+	void ResolveAssociations (void);
 
 	virtual const char * getSaveStructName (void) const
 	{
@@ -1080,7 +1112,9 @@ BOOL32 SupplyShipFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -1097,7 +1131,14 @@ IBaseObject * SupplyShipFactory::CreateInstance (HANDLE hArchetype)
 void SupplyShipFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fprintf(stderr, "Native SupplyShip editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

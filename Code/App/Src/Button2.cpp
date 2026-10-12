@@ -11,8 +11,26 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "NativeAppImage.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+constexpr U32 VK_SPACE = FrontierX::LegacyVirtualKey::Space;
+#define __min(a,b) (std::min)((a),(b))
+#endif
 
 #include "IButton2.h"
 #include "Startup.h"
@@ -22,7 +40,7 @@
 #include "DrawAgent.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 #define BEGIN_MAPPING(parent, name) \
@@ -406,7 +424,7 @@ void Button2::InitButton (const BUTTON_DATA & data, BaseHotRect * _parent)
 		wcsncpy(szButtonText, _localLoadStringW(buttonText), sizeof(szButtonText)/sizeof(wchar_t));
 
 	// are we using an art file for the dimension data?
-	bUseShapeFile = (pButtonType->shapes[0] != NULL);
+	bUseShapeFile = (pButtonType->shapes[0] != nullptr);
 
 	if (!bUseShapeFile)
 	{
@@ -570,7 +588,13 @@ U32 Button2::GetControlID (void)
 //
 GENRESULT Button2::Notify (U32 message, void *param)
 {
+	#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==0)
 	switch (message)
@@ -626,7 +650,11 @@ GENRESULT Button2::Notify (U32 message, void *param)
 
 	case CQE_UPDATE:
 		if(pButtonType->buttonType == GT_BUTTON::REPEATER)
+			#if defined(_WIN32)
 			doRepeatButton(U32(param)>>10);
+#else
+			doRepeatButton(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param))>>10);
+#endif
 		bPostMessageBlocked = false;
 		if (bKeyboardFocus)
 		{
@@ -816,9 +844,20 @@ void Button2::drawByPrimitives (void)
 	if (bDropdown)
 	{
 		// draw a  triangle
+#if defined(_WIN32)
 		POINT pt[3];
+#else
+		struct { S32 x, y; } pt[3];
+#endif
 		RECT rc = { 0, 0, screenRect.right-screenRect.left-1, screenRect.bottom-screenRect.top-1};
+#if defined(_WIN32)
 		InflateRect(&rc, -3, -3);
+#else
+		rc.left += 3;
+		rc.top += 3;
+		rc.right -= 3;
+		rc.bottom -= 3;
+#endif
 		
 		pt[0].x = rc.left;
 		pt[0].y = rc.top;
@@ -986,11 +1025,16 @@ HANDLE ButtonFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objClas
 		//
 		if (data->shapeFile[0])
 		{
+#if !defined(_WIN32)
+			for (int i = 0; i < GTBSHP_MAX_SHAPES; ++i)
+				CreateDrawAgent(data->shapeFile, INTERFACEDIR, DA::VFX, i, result->shapes[i]);
+#else
 			BEGIN_MAPPING(INTERFACEDIR, data->shapeFile);
 				int i;
 				for (i = 0; i < GTBSHP_MAX_SHAPES; i++)
 					CreateDrawAgent((VFX_SHAPETABLE *) pImage, i, result->shapes[i]);
 			END_MAPPING(INTERFACEDIR);
+#endif
 
 			result->shapes[0]->GetDimensions(result->width, result->height);
 		}
@@ -1033,7 +1077,11 @@ struct _buttonfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<ButtonFactory>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&factory);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

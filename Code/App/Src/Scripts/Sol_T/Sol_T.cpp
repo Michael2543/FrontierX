@@ -129,6 +129,9 @@ bool SolTrain_Briefing::Update (void)
 						strcpy( slotAnim.szTypeName, "Animate!!Elan" );
 						slotAnim.slotID = 0;
 						slotAnim.bHighlite = false;
+#if !defined(_WIN32)
+						slotAnim.bContinueAnimating = false;
+#endif
 						data.mhandle = MScript::PlayBriefingTalkingHead( slotAnim );
 						MScript::BriefingSubtitle(data.mhandle,IDS_SOL_SUB_STMG02);
 						

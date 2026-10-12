@@ -30,9 +30,7 @@ struct BaseHotRect;
 #include "VideoSurface.h"
 #endif
 #include "Startup.h"
-#if defined(_WIN32)
 #include "BaseHotRect.h"
-#endif
 #include "DEffectOpts.h"
 #include "Hotkeys.h"
 #include "SoundManager.h"
@@ -229,6 +227,9 @@ struct DACOM_NO_VTABLE ModalEventCallback : public IEventCallback
 	U32 eventHandle;
 	IDAConnectionPoint * parentConnection;
 	bool bResultSet;
+#if !defined(_WIN32)
+	bool nativeDialog = false;
+#endif
 	U32 dwResult;
 
 	static ModalEventCallback * root;
@@ -254,6 +255,19 @@ struct DACOM_NO_VTABLE ModalEventCallback : public IEventCallback
 	{
 		switch (message)
 		{
+#if !defined(_WIN32)
+		case FrontierX::LegacyMessage::Close:
+			if (root == this)
+			{
+				for (ModalEventCallback *modal = this; modal; modal = modal->next)
+				{
+					modal->bResultSet = true;
+					modal->dwResult = modal->nativeDialog ? 0 : MISSION_END_QUIT;
+				}
+				return GR_GENERIC;
+			}
+			break;
+#endif
 		case CQE_DLG_RESULT:
 			if (root == this)
 			{
@@ -282,6 +296,23 @@ struct DACOM_NO_VTABLE ModalEventCallback : public IEventCallback
 	}
 
 };
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool CheckNativeModalClose()
+{
+    DAComponent<ModalEventCallback> mission;
+    DAComponent<ModalEventCallback> selector;
+    selector.nativeDialog = true;
+    DAComponent<ModalEventCallback> briefing;
+    briefing.nativeDialog = true;
+    briefing.Notify(LegacyMessage::Close, nullptr);
+    return briefing.bResultSet && briefing.dwResult == 0 &&
+        selector.bResultSet && selector.dwResult == 0 &&
+        mission.bResultSet && mission.dwResult == MISSION_END_QUIT;
+}
+}
+#endif
 static bool bResultWasReturned;
 ModalEventCallback * ModalEventCallback::root;
 
@@ -467,15 +498,15 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 		modalEvent.init(FULLSCREEN->parentEventConnection);
 	}
 #else
-	// The native selected mission has no menu hot rectangle. Subscribe to the
-	// same EventSystem connection used by the source mission exit events.
+	IDAConnectionPoint *modalPoint = nullptr;
 	if (pDialog)
 	{
-		std::fputs("Native CQDoModal requires the mission event connection\n", stderr);
-		return 0;
+		modalPoint = pDialog->parentEventConnection;
+		if (!modalPoint) return 0;
+		modalPoint->AddRef();
+		modalEvent.nativeDialog = true;
 	}
-	IDAConnectionPoint *modalPoint = nullptr;
-	if (EVENTSYS->QueryOutgoingInterface("IEventCallback", &modalPoint) != GR_OK ||
+	else if (EVENTSYS->QueryOutgoingInterface("IEventCallback", &modalPoint) != GR_OK ||
 		!modalPoint)
 	{
 		std::fputs("Native CQDoModal event connection unavailable\n", stderr);
@@ -507,7 +538,9 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 		OBJLIST->BeginFrame();	// frame timing stuff
 		BATCH->set_viewport(0,0,SCREENRESX,SCREENRESY);
 
+#if defined(_WIN32)
 		if (CQFLAGS.bGameActive)
+#endif
 		{
 			QueryPerformanceCounter((LARGE_INTEGER *)&time1);
 #if defined(_WIN32)

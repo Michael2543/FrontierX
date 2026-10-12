@@ -11,8 +11,24 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include <cwchar>
+#include <cstdlib>
+#include <cstring>
+#include <cstdint>
+template <std::size_t N, class... Args>
+static int swprintf(wchar_t (&buffer)[N], const wchar_t *format, Args... args)
+{
+    const int result = std::swprintf(buffer, N, format, args...);
+    if (result < 0) std::abort();
+    return result;
+}
+#endif
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -150,7 +166,11 @@ GENRESULT CMenu_GenPlat::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
+		#if defined(_WIN32)
 		onUpdate(U32(param) >> 10);
+#else
+        onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 
 	}
@@ -247,7 +267,11 @@ void CMenu_GenPlat::onUpdate (U32 dt)
 				else
 					namePtr = name;
 
+				#if defined(_WIN32)
 				swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), namePtr);
+#else
+                if (!FrontierX::FormatNativeUnitSubtitle(IDS_IND_SHIPCLASS, namePtr, buffer, 256)) std::abort();
+#endif
 				if(shipclass)
 					shipclass->SetText(buffer);
 			}
@@ -274,7 +298,11 @@ void CMenu_GenPlat::onUpdate (U32 dt)
 			{
 				SECTOR->GetSystemName(nameBuff,sizeof(nameBuff),systemID);
 			}
+			#if defined(_WIN32)
 			swprintf(buffer,_localLoadStringW(IDS_CONTEXT_LOCATION),nameBuff);
+#else
+            if (!FrontierX::FormatNativeUnitSubtitle(IDS_CONTEXT_LOCATION, nameBuff, buffer, 256)) std::abort();
+#endif
 			location->SetText(buffer);
 		}
 	}
@@ -378,7 +406,11 @@ struct _cmenu_genplat: GlobalComponent
 	virtual void Startup (void)
 	{
 		menu = new DAComponent<CMenu_GenPlat>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&menu);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

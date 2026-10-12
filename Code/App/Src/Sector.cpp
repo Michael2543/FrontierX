@@ -20,6 +20,18 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "FrontierX/NativeTextureDC.h"
+using namespace FrontierX::TextureDC;
+using namespace FrontierX::NativeAppUi;
+#define CQE_UI_RALLYPOINT 0x104A
+#define CQE_MOVE_SELECTED_UNITS 0x102C
+#define CQE_QMOVE_SELECTED_UNITS 0x1036
+#define CQE_SQMOVE_SELECTED_UNITS 0x105a
+#define CQE_SMOVE_SELECTED_UNITS 0x105b
+#define CQE_SET_RALLY_POINT 0x1033
+#define MK_SHIFT FrontierX::LegacyMouseMask::Shift
+#define MK_CONTROL FrontierX::LegacyMouseMask::Control
 #include <ICamera.h>
 #include <ENGINE.H>
 #include <rendpipeline.h>
@@ -54,10 +66,9 @@ using std::max;
 #include <TSmartPointer.h>
 #include <IConnection.h>
 #include "TResClient.h"
-#if defined(_WIN32)
 #include "BaseHotRect.h"
+#include "SFX.h"
 #include "DSounds.h"
-#endif
 #include "IShapeLoader.h"
 #include "resource.h"
 #include "MPart.h"
@@ -446,10 +457,8 @@ struct DACOM_NO_VTABLE Sector : public ISector,
 	//
 	// gdi items
 	//
-#if defined(_WIN32)
 	HPEN hAquaPen, hGrayPen, hDimRedPen, hWhitePen, hYellowPen, hRedPen;
 	HBRUSH hAquaBrush, hYellowBrush;
-#endif
 
 
 	U32 flash;
@@ -724,10 +733,6 @@ struct MyRECT : RECT
 
 void Sector::loadTextures (bool bEnable)
 {
-#if !defined(_WIN32)
-	if (bEnable)
-		CQBOMB0("Native sector-map texture rendering is not implemented.");
-#else
 	if (bEnable)
 	{	
 		M_RACE race = MGlobals::GetPlayerRace(MGlobals::GetThisPlayer());
@@ -772,14 +777,10 @@ void Sector::loadTextures (bool bEnable)
 		drawTextureID = 0;
 		destroyGDIObjects();
 	}
-#endif
 }
 
 void Sector::loadInterface(IShapeLoader *loader)
 {
-#if !defined(_WIN32)
-	loadTextures(loader != 0);
-#else
 	COMPTR<IToolbar> toolbar;
 	if (TOOLBAR && TOOLBAR->QueryInterface("IToolbar", toolbar) == GR_OK)
 	{
@@ -793,7 +794,6 @@ void Sector::loadInterface(IShapeLoader *loader)
 	else
 	{
 	}
-#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -803,13 +803,11 @@ Sector::~Sector (void)
 
 	Close();
 
-#if defined(_WIN32)
 	if (TOOLBAR)
 	{
 		if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Unadvise(eventHandle);
 	}
-#endif
 
 #ifdef _DEBUG
 	DEFAULTS->SetDataInRegistry(szRegKey, static_cast<SECTOR_DATA *>(this), sizeof(SECTOR_DATA));
@@ -1892,15 +1890,17 @@ Sector::Notify(U32 message, void *param)
 {
 #if defined(_WIN32)
 	MSG * msg = (MSG *)param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	MessageFields *msg = &fields;
 #endif
 	
 	switch (message)
 	{
-#if defined(_WIN32)
 	case CQE_UI_RALLYPOINT:
 		bRallyEnabled = (param != 0);
 		break;
-#endif
 
 	case CQE_UPDATE:
 		if (CQFLAGS.bGameActive && mapTextureID && drawTextureID && CQFLAGS.bNoToolbar==0)
@@ -1954,7 +1954,6 @@ Sector::Notify(U32 message, void *param)
 		}
 		break;
 
-#if defined(_WIN32)
 	case WM_RBUTTONDOWN:
 		if (bHasFocus && sectmapMode != SECTMODE_NONE && ownsResources())
 			bRightButtonValid = true;
@@ -2015,7 +2014,6 @@ Sector::Notify(U32 message, void *param)
 		}
 		bLeftButtonValid = false;
 		break;
-#endif
 
 	case CQE_CAMERA_MOVED:
 		if (bHasFocus)
@@ -2375,9 +2373,6 @@ void Sector::updateCursorState (S32 x, S32 y)
 //
 void Sector::onMoveClick (S32 x, S32 y, WPARAM wParam)
 {
-#if !defined(_WIN32)
-	CQBOMB0("Native sector-map move input is not implemented.");
-#else
 	if ((sectmapMode == SECTMODE_MOVE||sectmapMode==SECTMODE_MOVE_ONLY) && ownsResources())
 	{
 		System * sys = GetPokedSystem(x,y);
@@ -2455,7 +2450,6 @@ void Sector::onMoveClick (S32 x, S32 y, WPARAM wParam)
 			}
 		}
 	}
-#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -2554,9 +2548,6 @@ void Sector::Render()
 //
 void Sector::DrawLinks(const PANE &tPane,const Transform &trans,SINGLE scale)
 {
-#if !defined(_WIN32)
-	CQBOMB0("Native sector-map link drawing is not implemented.");
-#else
 	GateLink *linkPos = firstLink;
 	
 	const bool editMode = DEFAULTS->GetDefaults()->bEditorMode;
@@ -2620,7 +2611,6 @@ void Sector::DrawLinks(const PANE &tPane,const Transform &trans,SINGLE scale)
 		}
 		linkPos = linkPos->next;
 	}
-#endif
 }
 
 void Sector::PrepareTexture()
@@ -2645,9 +2635,6 @@ SectorEffects * Sector::GetSectorEffects(U32 playerID, U32 systemID)
 //
 void Sector::updateTexture (U32 dt)
 {
-#if !defined(_WIN32)
-	CQBOMB0("Native sector-map GDI texture updates are not implemented.");
-#else
 	S32 ox,oy;
 	S32 px,py;
 	unsigned int i;
@@ -2901,15 +2888,11 @@ void Sector::updateTexture (U32 dt)
 	}
 
 	PIPE->release_texture_dc(drawTextureID, hdc);
-#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Sector::createGDIObjects (void)
 {
-#if !defined(_WIN32)
-	CQBOMB0("Native sector-map GDI objects are not implemented.");
-#else
 	hAquaPen =  CreatePen(PS_SOLID, 3, _CLR_AQUA);
 	hGrayPen =  CreatePen(PS_SOLID, 3, _CLR_GRAY);
 	hWhitePen = CreatePen(PS_SOLID, 3, _CLR_WHITE);
@@ -2918,13 +2901,11 @@ void Sector::createGDIObjects (void)
 	hRedPen = CreatePen(PS_SOLID, 3, _CLR_DIM_RED);
 	hAquaBrush = CreateSolidBrush(_CLR_AQUA);
 	hYellowBrush = CreateSolidBrush(_CLR_YELLOW);
-#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Sector::destroyGDIObjects (void)
 {
-#if defined(_WIN32)
 	if (hAquaPen)
 		DeleteObject(hAquaPen);
 	if (hGrayPen)
@@ -2943,7 +2924,6 @@ void Sector::destroyGDIObjects (void)
 		DeleteObject(hYellowBrush);
 	hAquaPen = hGrayPen = hDimRedPen = hRedPen = hWhitePen = hYellowPen = 0;
 	hAquaBrush = hYellowBrush = 0;
-#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -4257,8 +4237,12 @@ struct _sector : GlobalComponent
 		if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Advise(SECTOR, &sector->eventHandle);
 #else
-		if (!CQFLAGS.bNoGDI || !CQFLAGS.bNoToolbar)
-			CQBOMB0("Native Sector requires explicit no-GDI and no-toolbar mode.");
+		if (!CQFLAGS.bNoGDI)
+        {
+            sector->initializeResources();
+            if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+                connection->Advise(SECTOR, &sector->eventHandle);
+        }
 #endif
 
 		if (!CreateDummyTerrainMap(sector->dummyMap))
@@ -4292,9 +4276,6 @@ static _sector startup;
 //------------------TOYS FOR ME---------------------------------------------//
 void DrawRect(S32 x0,S32 y0,S32 x1,S32 y1,U32 pen)
 {
-#if !defined(_WIN32)
-	CQBOMB0("Native sector-map line drawing is not implemented.");
-#else
 	DA::LineDraw (0,
 			x0,y0,x1,y0, 
 			LD_DRAW,
@@ -4311,7 +4292,6 @@ void DrawRect(S32 x0,S32 y0,S32 x1,S32 y1,U32 pen)
 			x0,y0,x0,y1, 
 			LD_DRAW,
 			pen);
-#endif
 
 }
 

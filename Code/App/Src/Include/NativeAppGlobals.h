@@ -9,8 +9,24 @@
 #include "AppPacketTypes.h"
 #include "AppObjectContracts.h"
 
+enum InterfaceRes
+{
+    IR_NO_RESOLUTION = 0,
+    IR_IN_GAME_RESOLUTION,
+    IR_FRONT_END_RESOLUTION,
+};
+InterfaceRes __stdcall GetCurrentInterfaceRes();
+void __stdcall ChangeInterfaceRes(InterfaceRes resolution);
+
 struct GENNODE;
 struct BaseHotRect;
+struct IMeshArchetype;
+extern BaseHotRect *TOOLBAR;
+extern BaseHotRect *FULLSCREEN;
+bool NativeAppCheckOperationStorage();
+bool NativeAppCheckObjectiveStorage();
+void __stdcall CreateDrawAgent(struct IImageReader *reader, struct IDrawAgent **drawAgent,
+    BOOL32 bHiRes = false, RECT *rect = nullptr);
 typedef GENNODE *PGENTYPE;
 
 // Native declarations of the App globals needed by the active mesh caller.
@@ -34,6 +50,20 @@ extern bool NATIVE_SKIP_SUBTITLES;
 #define LOWER_EXP_BOUND 5
 #define UPPER_EXP_BOUND 10
 #define NUM_CIRCLE_SEGS 80
+#define FAB_MAX_QUEUE_SIZE 15
+#define CQE_BUILDQUEUE_REMOVE 0x103F
+#define CQE_TABCONTROL_CHANGE 0x1055
+#define GAS_MULTIPLIER 25
+#define METAL_MULTIPLIER 25
+#define CREW_MULTIPLIER 10
+#define SCREEN_HRIDEAL_WIDTH 1024
+#define SCREEN_HRIDEAL_HEIGHT 768
+#define HRIDEAL2IDEALX(x) (((x) * (S32)SCREEN_WIDTH) / SCREEN_HRIDEAL_WIDTH)
+#define HRIDEAL2IDEALY(y) (((y) * (S32)SCREEN_HEIGHT) / SCREEN_HRIDEAL_HEIGHT)
+#define HRIDEAL2REALX(x) (((x) * (S32)SCREENRESX) / SCREEN_HRIDEAL_WIDTH)
+#define HRIDEAL2REALY(y) (((y) * (S32)SCREENRESY) / SCREEN_HRIDEAL_HEIGHT)
+#define IDEAL2HRIDEALX(x) (((x) * SCREEN_HRIDEAL_WIDTH) / (S32)SCREEN_WIDTH)
+#define IDEAL2HRIDEALY(y) (((y) * SCREEN_HRIDEAL_HEIGHT) / (S32)SCREEN_HEIGHT)
 #define REAL2IDEALX(x) ((((x) * SCREEN_WIDTH) / (S32)SCREENRESX))
 #define REAL2IDEALY(y) ((((y) * SCREEN_HEIGHT) / (S32)SCREENRESY))
 #define IDEAL2REALX(x) ((((x) * ((S32)SCREENRESX) / SCREEN_WIDTH)))
@@ -41,6 +71,21 @@ extern bool NATIVE_SKIP_SUBTITLES;
 #define HYPER_SYSTEM_MASK 0x80
 #define DBG_SOME -1
 #define DBG_ALL 1
+#define CQE_UNICHAR 0x1019
+#define CQE_EDIT_CHANGED 0x1032
+#define CQE_LDBLHOTBUTTON 0x1029
+#define CQE_LOAD_TOOLBAR 0x102A
+#define CQE_ADMIRALBAR_ACTIVE 0x1041
+#define CQE_PANEL_OWNED 0x1002
+#define CQE_BUTTON 0x1007
+#define CQE_UNALERT 0x1008
+#define CQE_KEYBOARD_FOCUS 0x101A
+#define CQE_DELETE_HOTRECT 0x101E
+#define CQE_LIST_SELECTION 0x1021
+#define CQE_LIST_CARET_MOVED 0x1022
+#define CQE_LHOTBUTTON 0x1027
+#define CQE_RHOTBUTTON 0x1028
+#define CQE_SLIDER 0x1037
 #define CQE_NEW_SELECTION 0x1000
 #define CQE_HOTKEY 0x1003
 #define CQE_KILL_FOCUS 0x1005
@@ -64,6 +109,7 @@ extern bool NATIVE_SKIP_SUBTITLES;
 #define CQE_DPLAY_MSGWAITING 0x1023
 #define CQE_PAUSE_WARNING 0x103C
 #define CQE_NETDELETEPLAYER 0x1042
+#define CQE_INTERFACE_RES_CHANGE 0x105E
 #define CQE_START3DMODE 0x105F
 #define CQE_END3DMODE 0x1060
 #define CQE_UNIT_UNDER_ATTACK 0x1049
@@ -84,6 +130,8 @@ extern bool NATIVE_SKIP_SUBTITLES;
 #define CQE_MISSION_ENDING_SPLASH 0x105D
 #define CQE_ENTERING_INGAMEMODE 0x1062
 #define CQE_LEAVING_INGAMEMODE 0x1061
+#define CQE_LEAVING_FRONTENDMODE 0x1063
+#define CQE_ENTERING_FRONTENDMODE 0x1064
 #define CQE_MISSION_CLOSE 0x103A
 #define CQE_PAUSE_CHANGE 0x103B
 #define CQE_MISSION_LOAD_COMPLETE 0x103E
@@ -228,6 +276,7 @@ extern struct ITManager *TMANAGER;
 extern struct IMaterialManager *MATMAN;
 extern struct IFileSystem *TEXTURESDIR;
 extern struct IFileSystem *OBJECTDIR;
+extern struct IFileSystem *INTERFACEDIR;
 extern struct IFileSystem *SPMAPDIR;
 extern struct IFileSystem *MATERIALDIR;
 extern struct IFileSystem *PROFILEDIR;
@@ -237,11 +286,20 @@ extern struct IHintResource *HINTBOX;
 extern struct ICursorResource *CURSOR;
 extern struct ICommTrack *COMMTRACK;
 extern struct ICQ_VB_Manager *vb_mgr;
+extern class ISQRT SQRT;
+S32 __stdcall FindChild(const char *pathname, S32 parent);
 void __stdcall SetupDiffuseBlend(U32 texture_id, bool clamp);
 U32 __stdcall GetBuildVersion(void);
 U32 __stdcall GetBuildVersion(char *buffer, U32 bufferSize);
 const char * __cdecl _localLoadString(U32 id);
 const wchar_t * __cdecl _localLoadStringW(U32 id);
+inline constexpr U32 MB_OK = 0;
+inline constexpr U32 MB_OKCANCEL = 1;
+inline constexpr U32 MB_YESNO = 4;
+U32 __stdcall CQMessageBox(wchar_t *message, wchar_t *title, U32 type, BaseHotRect *parent = nullptr);
+U32 __stdcall CQMessageBox(U32 message, U32 title, U32 type, BaseHotRect *parent = nullptr);
+U32 __stdcall CQMessageBox(U32 message, wchar_t *title, U32 type, BaseHotRect *parent = nullptr);
+U32 __stdcall CQMessageBox(wchar_t *message, U32 title, U32 type, BaseHotRect *parent = nullptr);
 int __stdcall _localAnsiToWide(const char * input, wchar_t * output, U32 bufferSize);
 int __stdcall _localWideToAnsi(const wchar_t * input, char * output, U32 bufferSize);
 
@@ -295,12 +353,16 @@ public:
 
     bool Bind(IFileSystem * objects, IFileSystem * campaign,
               IFileSystem * materials, IFileSystem * profiles);
+    bool BindInterface(IFileSystem * interfaceDirectory);
+    bool BindTextures(IFileSystem * textureDirectory);
 
 private:
     IFileSystem *objects_ = nullptr;
     IFileSystem *campaign_ = nullptr;
     IFileSystem *materials_ = nullptr;
     IFileSystem *profiles_ = nullptr;
+    IFileSystem *interface_ = nullptr;
+    IFileSystem *textures_ = nullptr;
 };
 
 class NativeAppSaveBinding

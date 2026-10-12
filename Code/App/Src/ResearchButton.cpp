@@ -11,8 +11,26 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#define _wcsdup DuplicateWide
+#define _ltow DecimalToWide
+#include <TManager.h>
+#endif
 
 #include "IHotButton.h"
 #include "Startup.h"
@@ -21,14 +39,15 @@
 #include <DHotButton.h>
 #include "DrawAgent.h"
 #include "IShapeLoader.h"
-#include "Sfx.h"
+#include "SFX.h"
 #include "IActiveButton.h"
 #include <DSounds.h>
 #include "DResearch.h"
 #include "ObjList.h"
 
+#include <cstdint>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 #include <stdio.h>
 
@@ -75,6 +94,10 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 	HOTKEYS::HOTKEY hotkey;
 
 	bool bReseachState:1;
+#ifndef _WIN32
+	// Flagship/Fleet owners are outside the current native link closure.
+	bool bNativeUnavailable = false;
+#endif
 
 	bool bDisabled:1;
 	bool bPushState:1;			// used for selection state
@@ -216,6 +239,9 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 
 	void doLPushAction (void)
 	{
+#ifndef _WIN32
+		if (bNativeUnavailable) return;
+#endif
 		if (bPostMessageBlocked==false)
 		{
 			parent->PostMessage(CQE_LHOTBUTTON, (void*)controlID);
@@ -226,6 +252,9 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 
 	void doRPushAction (void)
 	{
+#ifndef _WIN32
+		if (bNativeUnavailable) return;
+#endif
 		if (bPostMessageBlocked==false)
 		{
 			parent->PostMessage(CQE_RHOTBUTTON, (void*)controlID);
@@ -235,6 +264,9 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 
 	void doDblPushAction (void)
 	{
+#ifndef _WIN32
+		if (bNativeUnavailable) return;
+#endif
 		parent->PostMessage(CQE_LDBLHOTBUTTON, (void*)controlID);
 	}
 };
@@ -273,6 +305,9 @@ void ResearchButton::InitResearchButton (const RESEARCHBUTTON_DATA & data, BaseH
 
 	buttonText = data.tooltip;
 
+	#ifndef _WIN32
+	bNativeUnavailable = false;
+	#endif
 	EnableButton(data.bDisabled==false);
 
 	buildCost.gas = 0;
@@ -299,6 +334,10 @@ void ResearchButton::InitResearchButton (const RESEARCHBUTTON_DATA & data, BaseH
 			}
 			else if(resData->type == RESEARCH_ADMIRAL)
 			{
+				#ifndef _WIN32
+				bNativeUnavailable = true;
+				EnableButton(false);
+				#endif
 				BT_ADMIRAL_RES * admiral = (BT_ADMIRAL_RES *) resData;
 				upgradeID = -2;
 				nodeDepend = admiral->dependancy;
@@ -371,6 +410,9 @@ void ResearchButton::InitMultiHotButton (const MULTIHOTBUTTON_DATA & data, BaseH
 //
 void ResearchButton::EnableButton (bool bEnable)
 {
+#ifndef _WIN32
+	if (bNativeUnavailable) bEnable = false;
+#endif
 	if (bEnable == bDisabled)	// if we are changing state
 	{
 		bDisabled = !bEnable;
@@ -556,7 +598,13 @@ void ResearchButton::ResetActiveButton()
 //
 GENRESULT ResearchButton::Notify (U32 message, void *param)
 {
-//	MSG *msg = (MSG *) param;
+#ifdef _WIN32
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==0)
 	switch (message)
@@ -646,6 +694,9 @@ HOTKEYS::HOTKEY ResearchButton::GetHotkey()
 //
 bool ResearchButton::IsActive()
 {
+#ifndef _WIN32
+	if (bNativeUnavailable) return false; // Context hotkeys bypass mouse actions.
+#endif
 	return bReseachState;
 }
 //--------------------------------------------------------------------------//
@@ -712,7 +763,11 @@ void ResearchButton::draw (void)
 		pane.y1 = screenRect.bottom;
 
 		wchar_t buffer[10];
-		swprintf(buffer,L"%d",queueNumber);
+		#ifdef _WIN32
+        swprintf(buffer, L"%d", queueNumber);
+#else
+        std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), L"%d", queueNumber);
+#endif
 		pFont->StringDraw(&pane, 0, 0,buffer);
 	}
 	if((stall == NO_MONEY) && (noMoneyShape != 0))
@@ -724,6 +779,14 @@ void ResearchButton::draw (void)
 //
 void ResearchButton::setStatus (void)
 {
+#ifndef _WIN32
+	if (bNativeUnavailable)
+	{
+		STATUS->SetTextString(L"Fleet admirals are not available in this native build.", STM_BUILD);
+		STATUS->SetRect(screenRect);
+		return;
+	}
+#endif
 	if(!buttonText)
 		return;
 
@@ -751,7 +814,13 @@ void ResearchButton::setStatus (void)
 
 			wcscpy(ext, ptr+1);		// copy everything after the mark
 			len = HOTKEY->GetHotkeyText(hotkey, keytext, sizeof(keytext));
+			#ifdef _WIN32
+
 			i = MultiByteToWideChar(CP_ACP, 0, keytext, len, ptr, sizeof(buffer)/sizeof(buffer[0]));
+#else
+
+			i = ConvertHotkeyToWide(keytext, len, ptr, sizeof(buffer)/sizeof(buffer[0]));
+#endif
 			ptr += i;
 			wcscpy(ptr, ext);
 			CQASSERT(wcslen(buffer) < sizeof(buffer)/sizeof(buffer[0]));
@@ -963,7 +1032,7 @@ HANDLE ResearchButtonFactory::CreateArchetype (PGENTYPE _pArchetype, GENBASE_TYP
 //
 BOOL32 ResearchButtonFactory::DestroyArchetype (HANDLE hArchetype)
 {
-	CQASSERT((U32)hArchetype == 1 && pArchetype != 0);
+	CQASSERT(reinterpret_cast<std::uintptr_t>(hArchetype) == 1 && pArchetype != 0);
 
 	pArchetype = 0;
 	SFXMANAGER->CloseHandle(hSound);
@@ -978,7 +1047,7 @@ BOOL32 ResearchButtonFactory::DestroyArchetype (HANDLE hArchetype)
 //
 GENRESULT ResearchButtonFactory::CreateInstance (HANDLE hArchetype, IDAComponent ** pInstance)
 {
-	CQASSERT((U32)hArchetype == 1 && pArchetype != 0);
+	CQASSERT(reinterpret_cast<std::uintptr_t>(hArchetype) == 1 && pArchetype != 0);
 	ResearchButton * result = new DAComponent<ResearchButton>;
 
 	result->init(pArchetype, hSound, pFontType,fontColor);
@@ -994,7 +1063,11 @@ struct _researchbuttonfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<ResearchButtonFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

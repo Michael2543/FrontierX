@@ -21,7 +21,7 @@
 #endif
 
 #ifndef HOTKEYS_H
-#include "..\Src\Hotkeys.h"
+#include "../Src/Hotkeys.h"
 #endif
 
 #ifndef DHOTBUTTONTEXT_H

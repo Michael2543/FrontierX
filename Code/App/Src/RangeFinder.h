@@ -22,7 +22,7 @@
 #endif
 
 #ifndef OBJLIST_H
-#include "Objlist.h"
+#include "ObjList.h"
 #endif
 
 #ifndef __INV_SQRT

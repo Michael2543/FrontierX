@@ -1237,10 +1237,15 @@ int main()
                     D3DFVF_RPVERTEX,
                     ownerVertices.data(),
                     4,
-                    0U) == GR_NOT_IMPLEMENTED,
-                "native owner triangle-fan rejection") ||
-        !Expect(ownerCapture.calls == 1U,
-                "native owner invoked callback for rejected topology"))
+                    0U) == GR_OK,
+                "original SysMap triangle-fan submission") ||
+        !Expect(ownerCapture.calls == 2U && ownerCapture.indices ==
+                    std::vector<std::uint16_t>{0, 1, 2, 0, 2, 3},
+                "fan preserves original vertex order and winding") ||
+        !Expect(nativeOwner->draw_primitive(D3DPT_TRIANGLEFAN, D3DFVF_RPVERTEX,
+                    ownerVertices.data(), 2, 0U) == GR_INVALID_PARMS &&
+                    ownerCapture.calls == 2U,
+                "invalid fan never reaches backend"))
     {
         nativeOwner->Release();
         return 1;

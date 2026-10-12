@@ -34,6 +34,7 @@
 #else
 #include <FrontierX/LegacyFileTypes.h>
 #include <cstdint>
+#include <type_traits>
 #endif
 
 #include <CQTrace.h>
@@ -51,6 +52,21 @@
 #define scriptoffsetofclass(base, derived) (reinterpret_cast<std::uintptr_t>(static_cast<base*>(reinterpret_cast<derived*>(8))) - 8)
 #endif
 
+#if defined(_WIN32)
+#define CQ_SCRIPT_SAVE_BASE(Save) Save
+#else
+// Empty save records still occupy one disk byte; keep it outside the vtable.
+template <class Save, bool Empty = std::is_empty<Save>::value>
+struct NativeScriptSaveBase : Save {};
+
+template <class Save>
+struct NativeScriptSaveBase<Save, true> : Save
+{
+	U8 emptySaveByte = 0;
+};
+#define CQ_SCRIPT_SAVE_BASE(Save) NativeScriptSaveBase<Save>
+#endif
+
 extern CQSCRIPTDATADESC g_CQScriptDataDesc;
 
 //
@@ -58,7 +74,7 @@ extern CQSCRIPTDATADESC g_CQScriptDataDesc;
 //
 
 #define CQSCRIPTPROGRAM(ProgClass, ProgSave, EventFlags)  \
-struct ProgClass : CQBaseProgram, ProgSave  \
+struct ProgClass : CQBaseProgram, CQ_SCRIPT_SAVE_BASE(ProgSave)  \
 {											\
 	virtual void Initialize (U32, const MPartRef &); 			\
 											\

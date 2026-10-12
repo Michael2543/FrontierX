@@ -15,6 +15,8 @@
 #else
 #include "FrontierX/LegacyFileTypes.h"
 #include "FrontierX/LegacyWindowTypes.h"
+#include <vector>
+#include <cstring>
 #endif
 
 #include "IImageReader.h"
@@ -408,6 +410,14 @@ void BMP_READER::depalettize (BITMAPINFOHEADER * header)
 GENRESULT BMP_READER::LoadImage (void *fileImage, U32 fileSize, U32 imageNumber)
 {
 	GENRESULT result = GR_OK;
+#if !defined(_WIN32)
+	// A BMP file's 14-byte prefix leaves this header unaligned. Preserve the
+	// original decoder's contiguous header/palette/pixel view on aligned storage.
+	if (!fileImage || fileSize < sizeof(BITMAPINFOHEADER)) return GR_INVALID_PARMS;
+	std::vector<U32> alignedImage((static_cast<size_t>(fileSize) + 3) / 4);
+	std::memcpy(alignedImage.data(), fileImage, fileSize);
+	fileImage = alignedImage.data();
+#endif
 	BITMAPINFOHEADER *header = (BITMAPINFOHEADER *) fileImage;
 
 	free();

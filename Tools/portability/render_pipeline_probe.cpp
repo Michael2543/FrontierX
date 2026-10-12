@@ -796,6 +796,46 @@ bool CheckRgb565AlphaPlane()
                "RGB565 alpha texture releases its native owner");
 }
 
+bool CheckIndexedPaletteAlphaPlane()
+{
+    LockTextureBackend backend;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &backend;
+    operations.create = CreateLockTexture;
+    operations.upload = UploadLockTexture;
+    operations.destroy = DestroyLockTexture;
+    FrontierX::NativeRenderPipeline pipeline{nullptr, operations};
+    PixelFormat source;
+    source.init(8, 0, 0, 0, 0);
+    const PixelFormat output(PF_RGBA8);
+    std::array<RGB, 256> palette{};
+    palette[0] = {255, 0, 0};
+    palette[1] = {0, 255, 0};
+    palette[2] = {0, 0, 255};
+    palette[255] = {15, 31, 63};
+    const std::array<std::uint8_t, 6> indices{{0, 1, 99, 2, 255, 99}};
+    const std::array<std::uint8_t, 4> alphas{{0, 64, 128, 255}};
+    const std::array<std::uint8_t, 16> expected{{
+        255, 0, 0, 0, 0, 255, 0, 64,
+        0, 0, 255, 128, 15, 31, 63, 255}};
+    U32 handle = 0;
+    auto opaque = expected;
+    for (std::size_t i = 3; i < opaque.size(); i += 4) opaque[i] = 255;
+    const bool valid = Expect(pipeline.create_texture(2, 2, output, 0, 0, handle) == GR_OK &&
+        pipeline.set_texture_level_data(handle, 0, 2, 2, 3, source,
+            indices.data(), alphas.data(), palette.data()) == GR_OK &&
+        backend.committed == expected,
+        "Original smoke's indexed palette upload preserves RGB, stride and alpha") &&
+        Expect(pipeline.set_texture_level_data(handle, 0, 2, 2, 3, source,
+            indices.data(), nullptr, palette.data()) == GR_OK && backend.committed == opaque,
+            "Indexed palette without alpha plane uploads opaque texels") &&
+        Expect(pipeline.set_texture_level_data(handle, 0, 2, 2, 3, source,
+            indices.data(), nullptr, nullptr) != GR_OK && backend.committed == opaque,
+            "Indexed texture without palette is rejected");
+    pipeline.destroy_texture(handle);
+    return valid;
+}
+
 bool CheckTextureLockLifecycle()
 {
     LockTextureBackend backend;
@@ -922,13 +962,66 @@ bool CheckTextureBlit()
     backend.failUpload = false;
     if (!Expect(pipeline.unlock_texture(destination, 0) == GR_OK,
                 "destination unlock after failed blit")) return false;
-    if (!Expect(pipeline.blit_texture(destination, 0, partial, source, 0, full) ==
-                    GR_NOT_IMPLEMENTED &&
+    if (!Expect(pipeline.blit_texture(destination, 0, partial, source, 0, full) == GR_OK &&
+                    backend.committed[1][0] == 1U && backend.committed[1][8] == 9U &&
+                    backend.committed[1][4] == 0U &&
+                    pipeline.blit_texture(destination, 0, RECT{-1, 0, 2, 2}, source, 0, full) ==
+                    GR_INVALID_PARMS &&
                     pipeline.blit_texture(destination, 1, full, source, 0, full) ==
                     GR_INVALID_PARMS &&
                     pipeline.blit_texture(destination, 0, full, source, 0, full) == GR_OK &&
                     backend.committed[1] == pixels,
-                "bounded RGBA8 full copy and explicit unsupported rectangles")) return false;
+                "RGBA8 scaled subrectangle, bounds rejection and full copy")) return false;
+    using namespace FrontierX::TextureDC;
+    HDC dc = nullptr, duplicate = nullptr;
+    if (!Expect(pipeline.get_texture_dc(destination, &dc) == GR_OK && dc &&
+                    pipeline.get_texture_dc(destination, &duplicate) == GR_INVALID_PARMS && !duplicate &&
+                    pipeline.unlock_texture(destination, 0) == GR_INVALID_PARMS &&
+                    pipeline.release_texture_dc(source, dc) == GR_INVALID_PARMS &&
+                    pipeline.destroy_texture(destination) == GR_GENERIC,
+                "texture DC owns exclusive lock and rejects mismatched release")) return false;
+    HBRUSH brush = CreateSolidBrush(RGB(100, 50, 25));
+    RECT pixelRect{0, 0, 1, 1};
+    if (!Expect(brush && FillRect(dc, &pixelRect, brush) && DeleteObject(brush),
+                "original map brush draws RGBA color")) return false;
+    HDC sourceDc = nullptr;
+    if (!Expect(pipeline.get_texture_dc(source, &sourceDc) == GR_OK &&
+                    StretchBlt(dc, 0, 0, 2, 2, sourceDc, 0, 0, 2, 2, SRCCOPY) &&
+                    pipeline.release_texture_dc(source, sourceDc) == GR_OK,
+                "original map icon copy uses independently owned texture DC")) return false;
+    brush = CreateSolidBrush(RGB(100, 50, 25));
+    FillRect(dc, &pixelRect, brush); DeleteObject(brush);
+    std::array<unsigned char, 8 * 8 * 4> shapePixels{};
+    Context shape{shapePixels.data(), 8, 8, 8 * 4};
+    brush = CreateSolidBrush(RGB(90, 45, 22));
+    auto oldBrush = SelectObject(&shape, brush);
+    if (!Expect(brush && Ellipse(&shape, -2, -2, 6, 6) &&
+                    shapePixels[(2 * 8 + 2) * 4] == 90 && shapePixels[(7 * 8 + 7) * 4] == 0,
+                "map ellipse clips to texture and paints interior")) return false;
+    SelectObject(&shape, oldBrush); DeleteObject(brush);
+    shapePixels.fill(0);
+    auto pen = CreatePen(PS_SOLID, 1, RGB(120, 60, 30));
+    auto oldPen = SelectObject(&shape, pen);
+    oldBrush = SelectObject(&shape, GetStockObject(NULL_BRUSH));
+    if (!Expect(pen && Ellipse(&shape, 0, 0, 8, 8) &&
+                    shapePixels[(4 * 8 + 4) * 4] == 0 && shapePixels[(3 * 8) * 4] == 120,
+                "original map ring retains hollow interior")) return false;
+    shapePixels.fill(0);
+    if (!Expect(MoveToEx(&shape, -2, 4, nullptr) && LineTo(&shape, 10, 4) &&
+                    shapePixels[(4 * 8 + 4) * 4] == 120 && shapePixels[(2 * 8 + 4) * 4] == 0,
+                "original sector link clips and uses selected pen")) return false;
+    SelectObject(&shape, oldPen); SelectObject(&shape, oldBrush); DeleteObject(pen);
+    backend.failUpload = true;
+    if (!Expect(pipeline.release_texture_dc(destination, dc) == GR_GENERIC &&
+                    pipeline.destroy_texture(destination) == GR_GENERIC,
+                "failed DC upload retains owner for retry")) return false;
+    backend.failUpload = false;
+    if (!Expect(pipeline.release_texture_dc(destination, dc) == GR_OK &&
+                    pipeline.release_texture_dc(destination, dc) == GR_INVALID_PARMS &&
+                    backend.committed[1][0] == 100U && backend.committed[1][1] == 50U &&
+                    backend.committed[1][2] == 25U && backend.committed[1][3] == 255U &&
+                    pipeline.blit_texture(destination, 0, full, source, 0, full) == GR_OK,
+                "DC commits original map drawing and rejects stale release")) return false;
     RPLOCKDATA locked{};
     return Expect(pipeline.lock_texture(destination, 0, &locked) == GR_OK &&
                       std::memcmp(locked.pixels, pixels.data(), pixels.size()) == 0 &&
@@ -1034,6 +1127,7 @@ int main()
         !CheckOwnedVertexBufferRegressions() ||
         !CheckExtendedSubmissionRegressions() || !CheckTextureHandleCollision() ||
         !CheckTextureStateIdBoundary() || !CheckRgb565AlphaPlane() ||
+        !CheckIndexedPaletteAlphaPlane() ||
         !CheckTextureLockLifecycle() || !CheckTextureBlit())
     {
         return 1;

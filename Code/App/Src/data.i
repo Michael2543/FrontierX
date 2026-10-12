@@ -5181,7 +5181,7 @@ struct MISSION_SAVELOAD
 	U8	 groupIndex;			
 
 
-	U32 caps;		
+	MISSION_DATA_BIN::M_CAPS caps;
 
 
 

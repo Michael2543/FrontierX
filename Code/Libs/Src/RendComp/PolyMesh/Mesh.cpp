@@ -8,6 +8,7 @@
 #include <windows.h>
 #else
 #include "FrontierX/LegacyFileTypes.h"
+#include <cstdint>
 #endif
 #include <stdlib.h>
 
@@ -307,7 +308,14 @@ void XMesh::sort_faces_by_area (void)
 				// randomize faces in case they are almost sorted to avoid O(N^2) qsort
 				for(fid = 0; fid < ifg.face_cnt; fid++)
 				{
+#if defined(_WIN32)
 					swap_faces(&ifg, fid, (rand() * (ifg.face_cnt - 1)) / RAND_MAX);
+#else
+					// Linux RAND_MAX is larger; keep one CRT draw and the source ratio.
+					const int randomizedFace = static_cast<int>(
+						(static_cast<std::uint64_t>(rand()) * (ifg.face_cnt - 1)) / RAND_MAX);
+					swap_faces(&ifg, fid, randomizedFace);
+#endif
 				}
 
 				sortQ(ifg.face_area, ifg.face_cnt, sizeof(float), 
@@ -518,6 +526,14 @@ void XMesh::release_full_mesh(void)
 
 	delete [] material_list;
 	material_list = NULL;
+
+#if !defined(_WIN32)
+	// XMesh owns the CQ2 pointer array; MaterialManager owns its materials.
+	delete [] imaterial_list;
+	imaterial_list = NULL;
+	imaterial_cnt = 0;
+#endif
+
 
 	delete [] uv_channel_list;
 	uv_channel_list = NULL;

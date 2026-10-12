@@ -11,8 +11,14 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <cstdlib>
+#endif
+#include <cstdint>
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -25,7 +31,7 @@
 #include "IHotButton.h"
 #include "IActiveButton.h"
 #include "CommPacket.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "MGlobals.h"
 #include "Hotkeys.h"
 #include "Sector.h"
@@ -162,7 +168,7 @@ GENRESULT CMenu_FindButtons::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
-		onUpdate(U32(param) >> 10);
+		onUpdate(U32(reinterpret_cast<std::uintptr_t>(param)) >> 10);
 		break;
 	case CQE_KILL_FOCUS:
 		bHasFocus = false;
@@ -173,7 +179,7 @@ GENRESULT CMenu_FindButtons::Notify (U32 message, void *param)
 
 	case CQE_HOTKEY:
 		if ((bHasFocus || ( (TOOLBAR != 0) && (TOOLBAR->bInvisible) && (TOOLBAR->bHasFocus) ) )&& CQFLAGS.bGameActive   )
-			onHotkey((U32)param);
+			onHotkey(U32(reinterpret_cast<std::uintptr_t>(param)));
 		break;
 	}
 
@@ -1078,7 +1084,11 @@ struct _cmenu_findbuttons: GlobalComponent
 	virtual void Startup (void)
 	{
 		menu = new DAComponent<CMenu_FindButtons>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&menu);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

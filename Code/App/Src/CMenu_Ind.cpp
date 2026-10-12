@@ -11,8 +11,16 @@
 //--------------------------------------------------------------------------//
 
  
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppTextResources.h"
+#include <cwchar>
+#include <cstdlib>
+#include <cstdint>
+#endif
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -369,7 +377,7 @@ GENRESULT CMenu_Ind::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
-		onUpdate(U32(param) >> 10);
+		onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
 		break;
 	}
 
@@ -454,7 +462,11 @@ void CMenu_Ind::onUpdate (U32 dt)
 						}
 						else
 						{
-							swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), ptr);
+							#ifdef _WIN32
+                        swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), ptr);
+#else
+                        if (!FrontierX::FormatNativeUnitSubtitle(IDS_IND_SHIPCLASS, ptr, buffer, sizeof(buffer)/sizeof(buffer[0]))) std::abort();
+#endif
 							namearea->SetText(buffer);
 						}
 						if(namearea->IsTextAllVisible())
@@ -523,10 +535,18 @@ void CMenu_Ind::onUpdate (U32 dt)
 					specialWpnMulti->NullState();
 				}
 
-				swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), ptr);
+				#ifdef _WIN32
+                        swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), ptr);
+#else
+                        if (!FrontierX::FormatNativeUnitSubtitle(IDS_IND_SHIPCLASS, ptr, buffer, sizeof(buffer)/sizeof(buffer[0]))) std::abort();
+#endif
 				shipclass->SetText(buffer);
 
-				swprintf(buffer, _localLoadStringW(IDS_IND_HULL), (actor)?actor->GetDisplayHullPoints() : ship->hullPoints, ship->hullPointsMax);
+				#ifdef _WIN32
+                swprintf(buffer, _localLoadStringW(IDS_IND_HULL), (actor)?actor->GetDisplayHullPoints() : ship->hullPoints, ship->hullPointsMax);
+#else
+                std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_HULL), (actor)?actor->GetDisplayHullPoints() : ship->hullPoints, ship->hullPointsMax);
+#endif
 				hull->SetText(buffer);
 
 				if((ship->mObjClass == M_HARVEST) || (ship->mObjClass == M_GALIOT) || (ship->mObjClass == M_SIPHON))
@@ -540,22 +560,38 @@ void CMenu_Ind::onUpdate (U32 dt)
 						numGas = harvest->GetGas();
 						numMetal = harvest->GetMetal();
 					}
-					swprintf(buffer, _localLoadStringW(IDS_IND_METAL), numMetal*METAL_MULTIPLIER, (ship->supplyPointsMax-numGas)*METAL_MULTIPLIER);
+					#ifdef _WIN32
+                swprintf(buffer, _localLoadStringW(IDS_IND_METAL), numMetal*METAL_MULTIPLIER, (ship->supplyPointsMax-numGas)*METAL_MULTIPLIER);
+#else
+                std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_METAL), numMetal*METAL_MULTIPLIER, (ship->supplyPointsMax-numGas)*METAL_MULTIPLIER);
+#endif
 					metal->SetText(buffer);
 
-					swprintf(buffer, _localLoadStringW(IDS_IND_GAS),numGas*GAS_MULTIPLIER, (ship->supplyPointsMax-numMetal)*GAS_MULTIPLIER);
+					#ifdef _WIN32
+                swprintf(buffer, _localLoadStringW(IDS_IND_GAS),numGas*GAS_MULTIPLIER, (ship->supplyPointsMax-numMetal)*GAS_MULTIPLIER);
+#else
+                std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_GAS),numGas*GAS_MULTIPLIER, (ship->supplyPointsMax-numMetal)*GAS_MULTIPLIER);
+#endif
 					gas->SetText(buffer);
 				}
 				else
 				{
-					swprintf(buffer, _localLoadStringW(IDS_IND_SUPPLIES), (actor) ? actor->GetDisplaySupplies() : ship->supplies, ship->supplyPointsMax);
+					#ifdef _WIN32
+                swprintf(buffer, _localLoadStringW(IDS_IND_SUPPLIES), (actor) ? actor->GetDisplaySupplies() : ship->supplies, ship->supplyPointsMax);
+#else
+                std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_SUPPLIES), (actor) ? actor->GetDisplaySupplies() : ship->supplies, ship->supplyPointsMax);
+#endif
 					supplies->SetText(buffer);
 					if(obj->fieldFlags.suppliesLocked())
 						supplies->SetTextColor(RGB(240,128,0));
 					else
 						supplies->SetTextColor(RGB(0,255,255));
 
-					swprintf(buffer, _localLoadStringW(IDS_IND_KILLS),(U32)(ship->numKills));
+					#ifdef _WIN32
+                swprintf(buffer, _localLoadStringW(IDS_IND_KILLS),(U32)(ship->numKills));
+#else
+                std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_KILLS),(U32)(ship->numKills));
+#endif
 					kills->SetText(buffer);
 				}
 
@@ -951,7 +987,11 @@ struct _cmenu_ind : GlobalComponent
 	virtual void Startup (void)
 	{
 		menu = new DAComponent<CMenu_Ind>;
-		AddToGlobalCleanupList(&menu);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&menu);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

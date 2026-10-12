@@ -1,5 +1,24 @@
 # FrontierX
 
+Selected original gameplay hints, M1 (2026-10-11): normal SDL mouse hover in
+Sol_Train now visibly shows original Cygnus/asteroid hints under GCC and Clang,
+including resource switch/removal and renewed hover after source save/reload.
+The original edge-scroll owner provides camera access. Optional
+`--mission-hint-check` adds a six-second normal-hover observation after reload
+and fails without source Cygnus draws; it requires `--mission-start` and an
+external `--ui-font`, and injects no hint text or input. Builds, focused
+checks and Clang ASan/UBSan passed. Native Windows Debug/Final and ABI remain
+open. See [commands, provenance and limits](docs/NATIVE_SINGLEPLAYER_SLICE.md#original-gameplay-hintbox-checkpoint-m1-2026-10-11).
+Older dated summaries below are historical.
+
+Selected native alert smoke (2026-10-11): font-enabled missions can now run
+original UnitComm alert text without `--skip-unit-alerts`. Explicit
+`--mission-alert-smoke` invokes the original MScript caller once on the
+selected Forger for a controlled rendering check; it requires unit voice,
+Teletype and the external font. GCC/Clang visible checks passed movement and
+source save/reload. Gameplay hints, map pings and natural combat alerts remain
+open. See [commands, provenance and limits](docs/NATIVE_SINGLEPLAYER_SLICE.md#original-unitcomm-alert-rendering-checkpoint-2026-10-11).
+
 Selected native mission text (2026-10-10): original Teletype now draws
 training objectives in the running Linux scene, alongside normal movement
 and unit voices. Configure with `-DFRONTIERX_BUILD_NATIVE_FONTS=ON` and pass
@@ -741,3 +760,9 @@ parallel directions, inside/away box rays, both triangle windings, barycentric r
 behind-origin rejection. The remaining D3DX9 surface is classified by feature in
 [D3DX9_PORT.md](docs/D3DX9_PORT.md). A native Windows comparison is still required for exact D3DX
 edge tolerances before parity is accepted.
+
+Native training entry checkpoint (2026-10-12): optional --mission-campaign
+uses the original Solar training selector and briefing with --mission-start
+and Sol_Train.dmission. Visible Clang initial entry executes; other campaigns,
+full training and winning return are unaccepted. Commands, requirements and
+limits: [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).

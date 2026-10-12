@@ -11,22 +11,43 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include "MyVertex.h"
+using std::min;
+using std::max;
+#endif
 
 #include "IEngineTrail.h"
 #include "DEngineTrail.h"
 #include "TObject.h"
-#include "IHardpoint.h"
+#include <IHardPoint.h>
 #include "ArchHolder.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "Startup.h"
 #include "Camera.h"
 #include <DEffectOpts.h>
 #include "TManager.h"
 
-#include <FileSys.h>
-#include <Engine.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IConnection.h>
 
@@ -224,7 +245,11 @@ void EngineTrail::PhysUpdate (SINGLE dt)
 	if(bHasHardpoint)
 	{
 		TRANSFORM hpTrans;
+#if defined(_WIN32)
 		hpTrans.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#else
+		hpTrans = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#endif
 		hpTrans = ENGINE->get_transform(engineIndex).multiply(hpTrans);
 
 		pos = hpTrans.translation;

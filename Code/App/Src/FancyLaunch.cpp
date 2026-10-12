@@ -11,15 +11,46 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "FancyLaunch.h"
 #include <DFancyLaunch.h>
 
 #include "SuperTrans.h"
 #include "ObjList.h"
-#include "sfx.h"
+#include "SFX.h"
 
 #include "Mission.h"
 #include "IMissionActor.h"
@@ -32,10 +63,10 @@
 #include "ObjMapIterator.h"
 #include "OpAgent.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IAnim.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <IConnection.h>
 
@@ -520,7 +551,11 @@ void FancyLaunch::getSighting (TRANSFORM & result) const
 {
 
 
+	#if defined(_WIN32)
 	result.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+	#else
+	result = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+	#endif
 	result = ENGINE->get_transform(barrelIndex).multiply(result);
 
 /*	if (jointIndex == -1)	// if 360 degree fancyLaunch
@@ -833,6 +868,13 @@ struct DACOM_NO_VTABLE FancyLaunchFactory : public IObjectFactory
 		{
 			return calloc(size,1);
 		}
+
+		#if !defined(_WIN32)
+		void operator delete (void *ptr)
+		{
+			std::free(ptr);
+		}
+		#endif
 
 		OBJTYPE (void)
 		{

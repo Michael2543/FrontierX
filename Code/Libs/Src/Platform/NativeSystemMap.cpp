@@ -4,6 +4,13 @@
 #include "SysMap.h"
 #include "Sector.h"
 #include "Startup.h"
+#include "Camera.h"
+#include "UserDefaults.h"
+#include <EventSys.h>
+#include <IConnection.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstdint>
 
 #include <Filesys.h>
 #include <TComponent.h>
@@ -25,10 +32,11 @@ namespace
     std::abort();
 }
 
-struct NativeSystemMap : ISystemMap
+struct NativeSystemMap : ISystemMap, IEventCallback
 {
     BEGIN_DACOM_MAP_INBOUND(NativeSystemMap)
     DACOM_INTERFACE_ENTRY(ISystemMap)
+    DACOM_INTERFACE_ENTRY(IEventCallback)
     END_DACOM_MAP()
 
     GENRESULT SetRect(tagRECT *rect) override
@@ -58,19 +66,70 @@ struct NativeSystemMap : ISystemMap
         rect->top = systemRect.top + padding;
         rect->bottom = systemRect.bottom - padding;
     }
-    GENRESULT ScrollUp(BOOL32) override { Unsupported("ScrollUp"); }
-    GENRESULT ScrollDown(BOOL32) override { Unsupported("ScrollDown"); }
-    GENRESULT ScrollLeft(BOOL32) override { Unsupported("ScrollLeft"); }
-    GENRESULT ScrollRight(BOOL32) override { Unsupported("ScrollRight"); }
+    ~NativeSystemMap()
+    {
+        COMPTR<IDAConnectionPoint> connection;
+        if (eventHandle_ && EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+            connection->Unadvise(eventHandle_);
+    }
+    void Initialize()
+    {
+        COMPTR<IDAConnectionPoint> connection;
+        if (!EVENTSYS || EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+            connection->Advise(static_cast<IEventCallback *>(this), &eventHandle_) != GR_OK)
+            Unsupported("scroll callback subscription");
+    }
+    // SysMap.cpp's in-game camera branch; fullscreen map scrolling is unported.
+    GENRESULT Scroll(BOOL32 singleStep, bool horizontal, S32 direction)
+    {
+        if (CQFLAGS.bFullScreenMap) Unsupported("fullscreen scrolling");
+        if (!CAMERA || !DEFAULTS || !CAMERA->PaneToPoints(p_[0], p_[1], p_[2], p_[3]))
+            return GR_GENERIC;
+        Vector pos = CAMERA->GetRotatedPosition();
+        U32 amount;
+        if (singleStep)
+        {
+            amount = 100;
+            scrollRemainderX_ = scrollRemainderY_ = 0;
+        }
+        else
+        {
+            U32 &remainder = horizontal ? scrollRemainderX_ : scrollRemainderY_;
+            const U32 rate = DEFAULTS->GetDefaults()->scrollRate *
+                std::fabs(horizontal ? p_[1].x-p_[0].x : p_[2].y-p_[1].y);
+            const U32 value = (lastFrameTime_ >> 10) * rate + remainder;
+            amount = value >> 10;
+            remainder = value & 1023;
+        }
+        if (horizontal) pos.x += direction * static_cast<S32>(amount);
+        else pos.y += direction * static_cast<S32>(amount);
+        CAMERA->SetRotatedPosition(&pos, 1);
+        return GR_OK;
+    }
+    GENRESULT ScrollUp(BOOL32 step) override { return Scroll(step, false, 1); }
+    GENRESULT ScrollDown(BOOL32 step) override { return Scroll(step, false, -1); }
+    GENRESULT ScrollLeft(BOOL32 step) override { return Scroll(step, true, -1); }
+    GENRESULT ScrollRight(BOOL32 step) override { return Scroll(step, true, 1); }
     GENRESULT ZoneOn(const Vector &) override { Unsupported("ZoneOn"); }
     void RegisterAttack(U32, GRIDVECTOR, U32) override { Unsupported("RegisterAttack"); }
-    S32 GetLastFrameTime() override { return 0; }
+    S32 GetLastFrameTime() override { return static_cast<S32>(lastFrameTime_); }
     U64 GetMapTiming() override { return 0; }
     const Transform &GetMapTrans() override { Unsupported("GetMapTrans"); }
     void SetScrollRate(SINGLE) override { Unsupported("SetScrollRate"); }
     SINGLE GetScrollRate() override { Unsupported("GetScrollRate"); }
     void BeginFullScreen() override { Unsupported("BeginFullScreen"); }
-    GENRESULT Notify(U32, void *) override { Unsupported("Notify"); }
+    GENRESULT Notify(U32 message, void *param) override
+    {
+        if (message == CQE_RENDER_LAST3D && CQFLAGS.bGameActive)
+        {
+            const auto value = reinterpret_cast<std::uintptr_t>(param);
+            if (value > UINT32_MAX) return GR_INVALID_PARMS;
+            lastFrameTime_ = static_cast<U32>(value);
+        }
+        if (message == CQE_MISSION_CLOSE)
+            lastFrameTime_ = scrollRemainderX_ = scrollRemainderY_ = 0;
+        return GR_OK;
+    }
     void InvalidateMap(U32 systemID) override
     {
         if (!systemID || systemID > MAX_SYSTEMS)
@@ -126,6 +185,10 @@ struct NativeSystemMap : ISystemMap
         Unsupported("Load saved mission animations");
     }
 
+    U32 eventHandle_ = 0;
+    U32 lastFrameTime_ = 0;
+    U32 scrollRemainderX_ = 0, scrollRemainderY_ = 0;
+    Vector p_[4]{};
     tagRECT systemRect_{};
     tagRECT sysMapRect_{};
     bool hasRect_ = false;
@@ -136,10 +199,14 @@ struct SystemMapStartup : GlobalComponent
 {
     void Startup() override
     {
+        if (!CQFLAGS.bNoGDI) return; // The original SysMap owns enabled presentation.
         SYSMAP = new DAComponent<NativeSystemMap>;
         AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&SYSMAP));
     }
-    void Initialize() override {}
+    void Initialize() override
+    {
+        if (CQFLAGS.bNoGDI) static_cast<NativeSystemMap *>(SYSMAP)->Initialize();
+    }
 };
 
 SystemMapStartup startup;

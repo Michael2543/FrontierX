@@ -11,27 +11,57 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DEffect.h"
-#include "Objlist.h"
-#include "Anim2D.h"
-#include "CQlight.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "anim2d.h"
+#include "CQLight.h"
+#include "SFX.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "IBlast.h"
 #include "IParticleSystem.h"
 
 
-#include <FileSys.h>
-#include <Engine.h>
-#include <RendPipeline.h>
+#include <Filesys.h>
+#include <ENGINE.H>
+#include <rendpipeline.h>
 
 
 struct ParticleObjArchetype

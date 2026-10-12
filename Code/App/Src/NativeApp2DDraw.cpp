@@ -149,12 +149,23 @@ void DA::RectangleFill(const PANE * pane, S32 x0, S32 y0, S32 x1, S32 y1,
 void DA::LineDraw(const PANE * pane, S32 x0, S32 y0, S32 x1, S32 y1,
                   COLORREF color, BOOL32 bSmooth)
 {
-    if (bSmooth || (x0 != x1 && y0 != y1))
-    {
-        ICQImage::Bomb("native App 2D line mode unsupported");
-        std::abort();
-    }
-    DrawRectangle(pane, std::min(x0, x1), std::min(y0, y1),
-                  std::max(x0, x1), std::max(y0, y1), color, false);
+    Check2D(pane);
+    if (HiddenUnderToolbar(pane, y0, y1)) return;
+    // DrawAgent's unlocked 3D path uses the same line for both smooth modes.
+    (void)bSmooth;
+    OrthoView(pane);
+    DisableTextures();
+    Require2D(BATCH->set_state(RPR_STATE_ID, 5U), "line batch state");
+    PB.Color3ub(static_cast<U8>(color), static_cast<U8>(color >> 8U),
+                static_cast<U8>(color >> 16U));
+    const std::int64_t offsetX = pane ? pane->x0 : 0;
+    const std::int64_t offsetY = pane ? pane->y0 : 0;
+    PB.Begin(PB_LINES);
+    PB.Vertex3f(static_cast<float>(x0 + offsetX) + 0.5F,
+                static_cast<float>(y0 + offsetY) + 0.5F, 0.0F);
+    PB.Vertex3f(static_cast<float>(x1 + offsetX) + 0.5F,
+                static_cast<float>(y1 + offsetY) + 0.5F, 0.0F);
+    PB.End();
+    Require2D(BATCH->set_state(RPR_STATE_ID, 0U), "restore batch state");
 }
 #endif

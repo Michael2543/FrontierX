@@ -14,27 +14,57 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppFont.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "IObject.h"
+#include "ObjList.h"
+#include <MGlobals.h>
+#include <VFX.H>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+#include <cstdint>
+#include <limits>
+#include <vector>
+#include <string>
+using std::vector;
+static std::uint64_t scrollingDraws = 0;
+#endif
 
 #include <wchar.h>
 
 #include "resource.h"
 #include "TResource.h"
 #include "ScrollingText.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "EventPriority.h"
 #include "DrawAgent.h"
 #include "Startup.h"
 #include "UserDefaults.h"
+#if defined(_WIN32)
 #include "VideoSurface.h"
+#endif
+#if defined(_WIN32)
 #include "CQGame.h"
+#endif
 #include "SoundManager.h"
 #include "SFX.h"
+#if defined(_WIN32)
 #include "IBanker.h"
+#endif
 
+#if defined(_WIN32)
 #include "frame.h"
-#include "hotkeys.h"
+#endif
+#include "Hotkeys.h"
 
 #include <TComponent.h>
 #include <IConnection.h>
@@ -44,25 +74,41 @@
 #include <TSmartPointer.h>
 #include <EventSys.h>
 #include <IConnection.h>
+#if defined(_WIN32)
 #include <commctrl.h>
+#endif
 
 #include "CommPacket.h"
+#if defined(_WIN32)
 #include "NetPacket.h"
+#endif
+#if defined(_WIN32)
 #include "MGlobals.h"
+#endif
+#if defined(_WIN32)
 #include "Sector.h"
+#endif
+#if defined(_WIN32)
 #include "ObjList.h"
+#endif
+#if defined(_WIN32)
 #include "IAttack.h"
+#endif
 
 #pragma warning (disable : 4018 4245 4530 4663)
 
+#if defined(_WIN32)
 #include <da_vector>
 using namespace da_std;
+#endif
 
+#if defined(_WIN32)
 Frame * __stdcall CreateMenuChat (bool bChatAll);
 Frame * __stdcall CreatePlayerMenu (void);
 Frame * __stdcall CreateMenuDiplomacy (void);
 Frame * __stdcall CreateMenuPlayerChat (void);
 Frame * __stdcall CreateMenuObjectives (void);
+#endif
 
 
 //--------------------------------------------------------------------------//
@@ -103,12 +149,16 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 	U32 toolbarHeight;
 	bool bHasFocus;
 
+#if defined(_WIN32)
 	// our chat dlg pointer
 	Frame * pChatDlg;
 	Frame * pPlayerMenu;
 	Frame * pDiplomacyDlg;
 	Frame * pChatFilterDlg;
 	Frame * pObjectivesDlg;
+#else
+    bool skipNotificationCue = false;
+#endif
 
 	int y_positionChat;
 	int bottomAdmiralEdge;
@@ -185,6 +235,7 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 
 	}
 
+#if defined(_WIN32)
 	void addStringToPlayerChat (U32 dwResourceID);
 
 	void addStringToPlayerChat (const wchar_t * string);
@@ -239,6 +290,7 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 	}
 
 	void handleAlliancePacket (ALLIANCE_PACKET * ap);
+#endif
 };
 //--------------------------------------------------------------------------//
 //
@@ -250,6 +302,7 @@ ScrollingText::ScrollingText (void)
 //
 ScrollingText::~ScrollingText (void)
 {
+#if defined(_WIN32)
 	if (FULLSCREEN)
 	{
 		COMPTR<IDAConnectionPoint> connection;
@@ -257,6 +310,14 @@ ScrollingText::~ScrollingText (void)
 		if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Unadvise(handle);
 	}
+#else
+    if (EVENTSYS && handle)
+    {
+        COMPTR<IDAConnectionPoint> connection;
+        if (EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+            connection->Unadvise(handle);
+    }
+#endif
 
 	// close the  sound handles
 	if (SFXMANAGER && hsndMessage)
@@ -276,11 +337,16 @@ void ScrollingText::Redraw (void)
 	//
 	if (CQFLAGS.bGameActive)
 	{
+#if !defined(_WIN32)
+        if (!fontAgentText[0]) reloadFonts(true);
+        const auto drawsBefore = FrontierX::NativeFontDrawCount();
+#endif
 		y_positionChat = bottomAdmiralEdge + 6;
 		
 		S32 font_height = fontAgentText[0]->GetFontHeight();
 		bool bFrameLocked = (CQFLAGS.bFrameLockEnabled != 0);
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 		{
 			if (SURFACE->Lock() == false)
@@ -288,6 +354,9 @@ void ScrollingText::Redraw (void)
 				return;
 			}
 		}
+#else
+        CQASSERT(!bFrameLocked);
+#endif
 
 		S32 y = font_height;
 		S32 w;
@@ -325,15 +394,21 @@ void ScrollingText::Redraw (void)
 			y += (font_height + 6) * multiply;
 		}
 
+#if defined(_WIN32)
 		if (pChatDlg)
 		{
 			pChatDlg->PostMessage(CQE_CHATDLG_SETYPOS, (void*)y_positionChat);
 		}
+#else
+        scrollingDraws += FrontierX::NativeFontDrawCount() - drawsBefore;
+#endif
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 		{
 			SURFACE->Unlock();
 		}
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -345,6 +420,7 @@ void ScrollingText::unDraw (void)
 		S32 font_height = fontAgentText[0]->GetFontHeight();
 		bool bFrameLocked=(CQFLAGS.bFrameLockEnabled!=0);
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 		{
 			if (SURFACE->Lock() == false)
@@ -352,6 +428,9 @@ void ScrollingText::unDraw (void)
 				return;
 			}
 		}
+#else
+        CQASSERT(!bFrameLocked);
+#endif
 
 		// _todo_
 		for (U32 i = 0; i < teVector.size(); i++)
@@ -371,12 +450,15 @@ void ScrollingText::unDraw (void)
 			DA::RectangleFill(0, 10, y, w, y + font_height, 0);
 		}
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 			SURFACE->Unlock();
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 void ScrollingText::addStringToPlayerChat (U32 dwResourceID)
 {
 	wchar_t buffer[256];
@@ -409,6 +491,7 @@ void ScrollingText::addStringToPlayerChat (const wchar_t * string, const U32 pla
 }
 //--------------------------------------------------------------------------//
 //
+#endif
 U32 ScrollingText::GetText (void)
 {
 	return dwTextID[0];
@@ -421,12 +504,14 @@ GENRESULT ScrollingText::SetText (U32 dwResourceID)
 	{
 		return GR_INVALID_PARMS;
 	}
+#if defined(_WIN32)
 	if (pChatFilterDlg)
 	{
 		// display the text in the player chat menu
 		addStringToPlayerChat(dwResourceID);
 		return GR_OK;
 	}
+#endif
 
 	TextEntity te;
 	memset(&te, 0, sizeof(TextEntity));
@@ -443,6 +528,12 @@ GENRESULT ScrollingText::SetText (U32 dwResourceID)
 	}
 
 	// play the sound
+
+#if !defined(_WIN32)
+        if (!skipNotificationCue)
+        {
+            CQASSERT(SFXMANAGER);
+#endif
 	if (hsndMessage == NULL && SFXMANAGER)
 	{
 		// load the sounds
@@ -450,12 +541,17 @@ GENRESULT ScrollingText::SetText (U32 dwResourceID)
 		hsndMessage = SFXMANAGER->Open(SFX::BEACON);
 	}
 	SFXMANAGER->Play(hsndMessage, 0, 0);
+#if !defined(_WIN32)
+        }
+#endif
 
 	if (bInMenuLoop && CQFLAGS.bFrameLockEnabled)
 	{
 		unDraw();
 		Redraw();
+#if defined(_WIN32)
 		InvalidateRect(hMainWindow, 0, 0);
+#endif
 	}
 	
 	return GR_OK;
@@ -467,12 +563,14 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 {
 	if (string && *string)
 	{
+#if defined(_WIN32)
 		if (pChatFilterDlg)
 		{
 			// display the text in the player chat menu
 			addStringToPlayerChat(string);
 			return GR_OK;
 		}
+#endif
 
 		TextEntity te;
 		memset(&te, 0, sizeof(TextEntity));
@@ -482,6 +580,9 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 		te.name[0] = 0;
 
 		wcsncpy(te.text, string, CHARCOUNT(te.text));
+#if !defined(_WIN32)
+        te.text[CHARCOUNT(te.text)-1] = 0;
+#endif
 
 		// _todo_
 		teVector.push_back(te);
@@ -493,6 +594,12 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 		}
 
 		// play the sound
+
+#if !defined(_WIN32)
+        if (!skipNotificationCue)
+        {
+            CQASSERT(SFXMANAGER);
+#endif
 		if (hsndMessage == NULL && SFXMANAGER)
 		{
 			// load the sounds
@@ -500,6 +607,9 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 			hsndMessage = SFXMANAGER->Open(SFX::BEACON);
 		}
 		SFXMANAGER->Play(hsndMessage, 0, 0);
+#if !defined(_WIN32)
+        }
+#endif
 
 	}
 	return GR_OK;
@@ -509,6 +619,7 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 //
 GENRESULT ScrollingText::SetTextStringEx (const wchar_t *string, U32 playerID, U32 dplayID)
 {
+#if defined(_WIN32)
 	if (string && *string)
 	{
 		if (pChatFilterDlg)
@@ -568,6 +679,12 @@ GENRESULT ScrollingText::SetTextStringEx (const wchar_t *string, U32 playerID, U
 
 	}
 	return GR_OK;
+
+#else
+    (void)string; (void)playerID; (void)dplayID;
+    std::fputs("Native attributed chat is not part of the single-player text closure\n", stderr);
+    return GR_GENERIC;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -595,6 +712,7 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		reloadFonts(false);
 		break;
 
+#if defined(_WIN32)
 	case CQE_ADMIRALBAR_ACTIVE:
 		bottomAdmiralEdge = (int)param;
 		break;
@@ -605,10 +723,12 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 	case WM_EXITMENULOOP:
 		bInMenuLoop=0;
 		break;
+#endif
 	case CQE_ENDFRAME:
 		Redraw();
 		break;
 
+#if defined(_WIN32)
 	case CQE_MISSION_ENDING:
 	case CQE_GAME_ACTIVE:
 		deletePlayerMenu();
@@ -696,6 +816,20 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		}
 		break;
 
+#else
+    case CQE_MISSION_CLOSE:
+        teVector.clear();
+        break;
+    case CQE_HOTKEY:
+        switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
+        {
+        case IDH_CHATALL: case IDH_CHATTEAM: case IDH_CHAT_MENU:
+        case IDH_DIPLOMACY: case IDH_MULTIPLAYER_SCORE: case IDH_MISSION_OBJ:
+            std::fputs("Native scrolling-text menus are not ported\n", stderr);
+            return GR_GENERIC;
+        }
+        break;
+#endif
 	case CQE_KILL_FOCUS:
 		bHasFocus = 0;
 		break;
@@ -704,6 +838,7 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		bHasFocus = 1;
 		break;
 
+#if defined(_WIN32)
 	case CQE_NETPACKET:
 		if (CQFLAGS.bGameActive)
 		{
@@ -762,8 +897,14 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		}
 		break;
 
+#endif
 	case CQE_UPDATE:
-		onUpdate(S32(param) >> 10);
+		#if defined(_WIN32)
+        onUpdate(S32(param) >> 10);
+#else
+        if (reinterpret_cast<std::uintptr_t>(param) > std::numeric_limits<U32>::max()) return GR_INVALID_PARMS;
+        onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 	}
 
@@ -771,6 +912,7 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 void ScrollingText::handleAlliancePacket (ALLIANCE_PACKET * ap)
 {
 	const U32 oldOneWayMask = MGlobals::GetOneWayAllyMask(ap->playerID);
@@ -842,6 +984,7 @@ void ScrollingText::handleAlliancePacket (ALLIANCE_PACKET * ap)
 		}
 	}
 }
+#endif
 //--------------------------------------------------------------------------//
 //
 void ScrollingText::reloadFonts (bool bLoad)
@@ -850,16 +993,24 @@ void ScrollingText::reloadFonts (bool bLoad)
 
 	if (bLoad)
 	{
+#if defined(_WIN32)
 		HFONT hFont;
+#endif
 		COLORREF pen, background;
 
 		pen			= RGB(255,255,255)   | 0xFF000000;		
 		background	= RGB(0,0,0);	   //| 0xFF000000;		// black	(background color)
+#if defined(_WIN32)
 		hFont = CQCreateFont(IDS_TOOLBAR_MONEY_FONT);
 
 		CreateMultilineFontDrawAgent(0, hFont, pen, background, fontAgentText[0]);
 //		CreateFontDrawAgent(hFont, 1, pen, background, fontAgentText[0]);
 		CreateFontDrawAgent(hFont, 0, pen, background, fontAgentPlayer[0]);
+#else
+        *static_cast<IFontDrawAgent **>(fontAgentText[0]) = FrontierX::CreateNativeFontDrawAgent(IDS_TOOLBAR_MONEY_FONT, pen, true);
+        *static_cast<IFontDrawAgent **>(fontAgentPlayer[0]) = FrontierX::CreateNativeFontDrawAgent(IDS_TOOLBAR_MONEY_FONT, pen);
+        CQASSERT(fontAgentText[0] && fontAgentPlayer[0]);
+#endif
 		
 		for (i = 1; i < MAX_LINES_TEXT; i++)
 		{
@@ -884,6 +1035,7 @@ void ScrollingText::reloadFonts (bool bLoad)
 
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 struct _scrollingText : GlobalComponent
 {
 	ScrollingText * STEXT;
@@ -909,6 +1061,54 @@ struct _scrollingText : GlobalComponent
 };
 
 static _scrollingText startup;
+#else
+namespace FrontierX
+{
+std::uint64_t NativeScrollingTextDrawCount() { return scrollingDraws; }
+IScrollingText *CreateNativeSourceScrollingText(bool skipNotificationCue)
+{
+    if (!EVENTSYS) return nullptr;
+    auto *owner = new DAComponent<ScrollingText>;
+    owner->skipNotificationCue = skipNotificationCue;
+    COMPTR<IDAConnectionPoint> connection;
+    if (EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+        connection->Advise(owner->GetBase(), &owner->handle) != GR_OK)
+    { owner->Release(); return nullptr; }
+    return owner;
+}
+// Original capacity/strict expiry/erase order were absent from terminal-only
+// messages. This check enables the selected single-player production owner.
+bool CheckNativeSourceScrollingText()
+{
+    const unsigned fonts = NativeFontLiveCount();
+    auto *interface = CreateNativeSourceScrollingText(true);
+    if (!interface) return false;
+    auto *owner = static_cast<ScrollingText *>(interface);
+    bool valid = owner->SetText(0) == GR_INVALID_PARMS;
+    for (unsigned i = 0; i < MAX_LINES_TEXT+1; ++i) owner->SetText(IDS_DISABLED);
+    valid = valid && owner->teVector.size() == MAX_LINES_TEXT;
+    owner->onUpdate(TEXT_LIFETIME);
+    valid = valid && owner->teVector.size() == MAX_LINES_TEXT;
+    owner->onUpdate(1);
+    valid = valid && owner->teVector.size() == 2; // Source erase advances past the next entry.
+    owner->onUpdate(0);
+    valid = valid && owner->teVector.size() == 2 && owner->teVector[0].lifetime == TEXT_LIFETIME;
+    owner->onUpdate(1); owner->onUpdate(1);
+    valid = valid && owner->teVector.empty();
+    std::wstring longText(MAX_CHAT_LENGTH+1, L'A');
+    owner->SetTextString(longText.c_str());
+    valid = valid && owner->teVector.size() == 1 &&
+        std::wcslen(owner->teVector[0].text) == MAX_CHAT_LENGTH-1;
+    owner->reloadFonts(true);
+    valid = valid && NativeFontLiveCount() == fonts + 2*MAX_LINES_TEXT;
+    owner->Notify(CQE_MISSION_CLOSE);
+    valid = valid && owner->teVector.empty();
+    owner->Notify(CQE_END3DMODE);
+    interface->Release();
+    return valid && NativeFontLiveCount() == fonts;
+}
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------End ScrollingText.cpp---------------------------//

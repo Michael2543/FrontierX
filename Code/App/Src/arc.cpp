@@ -13,14 +13,46 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
+
+#include "MyVertex.h"
 #include "TObject.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -31,7 +63,7 @@
 #include "TObjFrame.h"
 #include "Mesh.h"
 #include "ArchHolder.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "FogOfWar.h"
 #include "UserDefaults.h"
 #include "Mission.h"
@@ -42,18 +74,18 @@
 #include "GridVector.h"
 #include "ObjMapIterator.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <TComponent.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Physics.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <physics.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Collision.h>
-#include <Pixel.h>
+#include <collision.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
 //--------------------------------------------------------------------------//
@@ -146,7 +178,11 @@ void Tendril::Render()
 		length = 1;
 	}
 	direction /= length;
+	#if defined(_WIN32)
 	segments = min(ceil(length*0.0012),MAX_SEGMENTS);
+	#else
+	segments = static_cast<int>(std::min<double>(std::ceil(length*0.0012), MAX_SEGMENTS));
+	#endif
 	
 	if (distanceCounter > 1)
 	{
@@ -323,7 +359,11 @@ void Tendril::Update()
 		if (!bFeedBack)
 		{
 			length = (end-start).magnitude();
+			#if defined(_WIN32)
 			segments = min(ceil(length*0.0012),MAX_SEGMENTS);
+			#else
+			segments = static_cast<int>(std::min<double>(std::ceil(length*0.0012), MAX_SEGMENTS));
+			#endif
 			frame_ref[0] = rand()%3;
 			for (i=1;i<segments;i++)
 			{
@@ -375,7 +415,11 @@ void Tendril::Init ()
 		
 		
 		length = (end-start).magnitude();
+		#if defined(_WIN32)
 		segments = min(ceil(length*0.0012),MAX_SEGMENTS);
+		#else
+		segments = static_cast<int>(std::min<double>(std::ceil(length*0.0012), MAX_SEGMENTS));
+		#endif
 //		segment_length = length/segments;
 		
 		offset[0] = 0;
@@ -1014,6 +1058,13 @@ struct DACOM_NO_VTABLE ArcCannonFactory : public IObjectFactory
 			return calloc(size,1);
 		}
 		
+		#if !defined(_WIN32)
+		void operator delete (void *ptr)
+		{
+			std::free(ptr);
+		}
+		#endif
+
 		OBJTYPE (void)
 		{
 			archIndex = -1;

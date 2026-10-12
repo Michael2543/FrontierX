@@ -155,6 +155,31 @@ int main()
             (translated[0].window_message.lparam & 0x01000000) != 0,
             "right-control compatibility bits");
 
+        // Original Frame::onEscPressed and focus navigation consume WM_CHAR.
+        for (const auto control : {SDLK_ESCAPE, SDLK_TAB, SDLK_BACKSPACE, SDLK_RETURN})
+        {
+            key.payload = FrontierX::KeyEvent{SDL_SCANCODE_ESCAPE, control, SDL_KMOD_NONE, false};
+            translated = adapter.Translate(key);
+            Require(translated.size() == 3 &&
+                translated[0].message == FrontierX::LegacyMessage::KeyDown &&
+                translated[1].message == FrontierX::LegacyMessage::UnicodeCharacter &&
+                translated[2].message == FrontierX::LegacyMessage::Character &&
+                translated[2].window_message.wparam == translated[0].window_message.wparam,
+                "Frame control key lacks ordered character delivery");
+            key.type = FrontierX::WindowEventType::KeyUp;
+            Require(adapter.Translate(key).size() == 1,
+                "control release generated a duplicate character");
+            key.type = FrontierX::WindowEventType::KeyDown;
+        }
+        key.payload = FrontierX::KeyEvent{SDL_SCANCODE_TAB, SDLK_TAB, SDL_KMOD_SHIFT, true};
+        translated = adapter.Translate(key);
+        Require(translated.size() == 3 &&
+            (translated[2].window_message.lparam & 0x40000000) != 0,
+            "shift-tab/repeat character contract");
+        key.payload = FrontierX::KeyEvent{SDL_SCANCODE_ESCAPE, SDLK_ESCAPE, SDL_KMOD_CTRL, false};
+        Require(adapter.Translate(key).size() == 1,
+            "Ctrl shortcut generated an unrequested Frame character");
+
         key.payload = FrontierX::KeyEvent{SDL_SCANCODE_A, SDLK_A, SDL_KMOD_LALT, false};
         translated = adapter.Translate(key);
         Require(translated[0].message == FrontierX::LegacyMessage::SystemKeyDown &&

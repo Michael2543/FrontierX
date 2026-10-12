@@ -10,8 +10,39 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "TPlatform.h"
 #include "Startup.h"
@@ -27,9 +58,9 @@
 
 #include <DBuildPlat.h>
 
-#include <Physics.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <physics.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <HeapObj.h>
@@ -73,6 +104,19 @@ struct BuildCommandWHandleIndex
 };
 
 #pragma pack(pop)
+
+static_assert(sizeof(BaseBuildCommand) == 1, "build-platform command layout changed");
+static_assert(sizeof(BuildCommandWHandle) == 5 && offsetof(BuildCommandWHandle, handle) == 1,
+    "build-platform handle packet layout changed");
+static_assert(sizeof(BuildCommandWIndex) == 2 && sizeof(BuildCommandWHandleIndex) == 6 &&
+    offsetof(BuildCommandWHandleIndex, handle) == 2, "build-platform queue packet layout changed");
+static_assert(sizeof(BT_PLAT_BUILD_DATA) == 828 && offsetof(BT_PLAT_BUILD_DATA, buildRate) == 820 &&
+    offsetof(BT_PLAT_BUILD_DATA, maxQueueSize) == 824, "build-platform source data layout changed");
+static_assert(sizeof(BASE_BUILDPLAT_SAVELOAD) == 20 &&
+    offsetof(BASE_BUILDPLAT_SAVELOAD, rallyPoint) == 4 &&
+    offsetof(BASE_BUILDPLAT_SAVELOAD, buidTimeSpent) == 8 &&
+    offsetof(BASE_BUILDPLAT_SAVELOAD, constructionID) == 12,
+    "build-platform source save layout changed");
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -2089,7 +2133,10 @@ BOOL32 BuildPlatFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	BUILDPLAT_INIT * objtype = (BUILDPLAT_INIT *)hArchetype;
 
+
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -2106,7 +2153,15 @@ IBaseObject * BuildPlatFactory::CreateInstance (HANDLE hArchetype)
 void BuildPlatFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	BUILDPLAT_INIT * objtype = (BUILDPLAT_INIT *)hArchetype;
+
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fprintf(stderr, "Native build-platform editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

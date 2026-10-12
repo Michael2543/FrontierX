@@ -5,6 +5,7 @@
 #include "xmesh.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <initializer_list>
@@ -70,7 +71,8 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
                           bool cq2 = false, U32 materialCount = 1U,
                           const char * cq2MaterialName = "Base",
                           bool wrapForComponent = false,
-                          bool embeddedTexture = false)
+                          bool embeddedTexture = false, bool threeSortFaces = false,
+                          bool indexedTexture = false)
 {
     std::vector<Entry> entries;
     entries.push_back({"/", {}, {}, true});
@@ -95,11 +97,13 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
     file(groups, "Count", words({1U}));
     const U32 group = directory(groups, "Group0");
     file(group, "Material", words({0U}));
-    file(group, "Face count", words({2U}));
-    file(group, "Face vertex chain", words({0U, 1U, 2U, 0U, 3U, 4U}));
-    file(group, "Face normal", words({0U, 0U}));
-    file(group, "Face D-coefficient", words({0U, 0U}));
-    file(group, "Face property", words({4U, 4U}));
+    file(group, "Face count", words({threeSortFaces ? 3U : 2U}));
+    file(group, "Face vertex chain", threeSortFaces
+        ? words({0U, 1U, 2U, 0U, 3U, 4U, 0U, 3U, 2U})
+        : words({0U, 1U, 2U, 0U, 3U, 4U}));
+    file(group, "Face normal", threeSortFaces ? words({0U, 0U, 0U}) : words({0U, 0U}));
+    file(group, "Face D-coefficient", threeSortFaces ? words({0U, 0U, 0U}) : words({0U, 0U}));
+    file(group, "Face property", threeSortFaces ? words({4U, 4U, 4U}) : words({4U, 4U}));
     const U32 vertices = directory(meshRoot, "Vertices");
     file(vertices, "Vertex batch count", words({5U}));
     file(vertices, "Vertex batch list", words({0U, 1U, 2U, 3U, 4U}));
@@ -152,14 +156,21 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
     const U32 textureLibrary = directory(meshRoot, "Texture library");
     if (embeddedTexture)
     {
-        const U32 tile = directory(textureLibrary, "Tile");
+        const U32 tile = directory(textureLibrary, indexedTexture ? "Tile8" : "Tile");
         file(tile, "Image X size", words({2U}));
         file(tile, "Image Y size", words({2U}));
-        const U32 rgb = directory(tile, "True RGB 565");
+        const U32 rgb = directory(tile, indexedTexture ? "Palette 8 Bit" : "True RGB 565");
         const U32 mip = directory(rgb, "MIP0");
         // Distinct primaries make a sampled draw differ from white fallback.
-        file(mip, "Image colors", std::vector<unsigned char>{
-            0x00U, 0xf8U, 0xe0U, 0x07U, 0x1fU, 0x00U, 0xffU, 0xffU});
+        if (indexedTexture)
+        {
+            file(mip, "Image indices", {0, 1, 2, 3});
+            file(rgb, "Palette color count", words({4U}));
+            file(rgb, "Palette RGB 888", {255, 0, 0, 0, 255, 0, 0, 0, 255, 15, 31, 63});
+        }
+        else
+            file(mip, "Image colors", std::vector<unsigned char>{
+                0x00U, 0xf8U, 0xe0U, 0x07U, 0x1fU, 0x00U, 0xffU, 0xffU});
     }
 
     constexpr U32 headerSize = 56U;
@@ -225,10 +236,10 @@ bool WriteVertexColorGameMeshFixture(const std::filesystem::path & path)
 }
 
 bool WriteLegacyGameMeshFixture(const std::filesystem::path & path,
-                                bool textured)
+                                bool textured, bool indexed)
 {
-    return WritePolyMeshFixture(path, textured ? "Tile" : "", false,
-                                1U, "Base", true, textured);
+    return WritePolyMeshFixture(path, textured ? (indexed ? "Tile8" : "Tile") : "", false,
+                                1U, "Base", true, textured, false, indexed);
 }
 
 bool RunPolyMeshFixture(const std::filesystem::path & path,
@@ -273,6 +284,35 @@ bool RunPolyMeshFixture(const std::filesystem::path & path,
     if (!loaded)
     {
         error = "production XMesh UTF load and face-area reorder";
+        return false;
+    }
+    // Two faces never multiply rand() by more than one. Three faces expose
+    // Linux's larger RAND_MAX while also verifying the original draw count.
+    const std::filesystem::path sortPath = path.string() + ".sort";
+    if (!WritePolyMeshFixture(sortPath, "Tile", false, 1U, "Base", false, false, true) ||
+        !FrontierX::OpenNativeUtfFileSystem(sortPath, &archive, error) || !archive)
+    {
+        error = "three-face sorting fixture creation";
+        return false;
+    }
+    std::srand(1);
+    for (int face = 0; face < 3; ++face) (void) std::rand();
+    const int expectedNextRandom = std::rand();
+    std::srand(1);
+    {
+        XMesh mesh;
+        loaded = mesh.read(archive, textures, nullptr, 0U) &&
+            mesh.face_cnt == 3 && mesh.sorted_faces == 1U &&
+            mesh.face_groups[0].face_area[0] == 2.0F &&
+            mesh.face_groups[0].face_area[1] == 1.0F &&
+            mesh.face_groups[0].face_area[2] == 0.5F &&
+            std::rand() == expectedNextRandom;
+    }
+    archive->Release();
+    archive = nullptr;
+    if (!loaded)
+    {
+        error = "three-face order or original RNG draw count";
         return false;
     }
     const std::filesystem::path missingPath = path.string() + ".missing";

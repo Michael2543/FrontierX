@@ -7,6 +7,11 @@
 
 namespace FrontierX
 {
+bool NativeShiftPressed()
+{
+    return (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+}
+
 namespace
 {
 constexpr auto vkBack = LegacyVirtualKey::Back;
@@ -386,6 +391,15 @@ std::vector<LegacyInputEvent> SdlLegacyInputAdapter::Translate(const WindowEvent
             ? (released ? LegacyMessage::SystemKeyUp : LegacyMessage::SystemKeyDown)
             : (released ? LegacyMessage::KeyUp : LegacyMessage::KeyDown);
         result.push_back(WindowMessage(message, window, virtual_key, KeyLParam(key, released)));
+        // SDL text input omits the control characters used by original Frames.
+        if (!released && !system_key && !(key.modifiers & SDL_KMOD_CTRL) &&
+            (virtual_key == vkEscape || virtual_key == vkTab ||
+             virtual_key == vkBack || virtual_key == vkReturn))
+        {
+            result.push_back(Immediate(LegacyMessage::UnicodeCharacter, virtual_key));
+            result.push_back(WindowMessage(LegacyMessage::Character, window,
+                virtual_key, KeyLParam(key, false)));
+        }
         break;
     }
     case WindowEventType::TextInput:

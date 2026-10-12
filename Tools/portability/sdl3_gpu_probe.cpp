@@ -636,6 +636,33 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
         renderer.Readback64(twoFrameDraws, error) &&
         twoFrameDraws.changedPixels > firstFrameDraw.changedPixels &&
         twoFrameDraws.checksum != firstFrameDraw.checksum;
+    // FogOfWar updates its sampled map texture after the original frame draws.
+    const std::array<std::uint8_t, 16> mapRed{{255,0,0,255,255,0,0,255,
+                                             255,0,0,255,255,0,0,255}};
+    const std::array<std::uint8_t, 16> mapGreen{{0,255,0,255,0,255,0,255,
+                                               0,255,0,255,0,255,0,255}};
+    U32 mapHandle = 0U;
+    FrontierX::SdlGpuReadback mapBefore, mapCaptured, mapNext;
+    const bool mapReplacementValid = frameDrawsValid &&
+        renderer.CreateTexture(2U, 2U, mapHandle) == GR_OK &&
+        renderer.ReplaceTexture(mapHandle, {mapRed.data(), 2U, 2U, mapRed.size()}) == GR_OK &&
+        renderer.BeginFrame(error) &&
+        pipeline.set_texture_stage_texture(0U, mapHandle) == GR_OK &&
+        pipeline.set_modelview(left) == GR_OK &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        renderer.Readback64(mapBefore, error) && mapBefore.changedPixels > 0U &&
+        renderer.ReplaceTexture(mapHandle, {mapGreen.data(), 2U, 2U, mapGreen.size()}) == GR_OK &&
+        renderer.Readback64(mapCaptured, error) &&
+        mapCaptured.checksum == mapBefore.checksum &&
+        renderer.BeginFrame(error) &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        renderer.Readback64(mapNext, error) && mapNext.changedPixels > 0U &&
+        mapNext.checksum != mapBefore.checksum;
+    const bool mapReplacementReleased = renderer.BeginFrame(error) &&
+        pipeline.set_texture_stage_texture(0U, renderer.FixtureTextureHandle()) == GR_OK &&
+        (!mapHandle || renderer.DestroyTexture(mapHandle) == GR_OK);
+    if (mapReplacementValid && mapReplacementReleased)
+        std::cout << "Captured map texture replacement preserves current frame and updates next frame\n";
     int outputWidth = 0;
     int outputHeight = 0;
     const bool windowViewportRestored =
@@ -696,12 +723,14 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
     if (!stateValid || !indexedValid || !secondUvObserved || !directValid ||
         !textureStageValid || !samplerValid || !transformValid || !viewportValid ||
         !windowViewportRestored || !lifecycleValid ||
-        !frameDrawsValid ||
+        !frameDrawsValid || !mapReplacementValid || !mapReplacementReleased ||
         !textureBindingValid ||
         !productionTextureValid || !loadedReleased ||
         shutdownResult != GR_OK)
     {
-        if (!textureBindingValid && textureStageValid)
+        if (!mapReplacementValid || !mapReplacementReleased)
+            error = "captured map texture replacement/lifetime failed";
+        else if (!textureBindingValid && textureStageValid)
             error = "native texture handle binding or rollback failed: handle=" +
                 std::to_string(alternateHandle) + " bound=" + std::to_string(boundHandle) +
                 " current=" + std::to_string(renderer.CurrentTextureHandle()) +
@@ -827,6 +856,26 @@ int main(int argc, char ** argv)
     std::uint64_t alternateChecksum = 0U;
     std::uint64_t copiedChecksum = 0U;
     std::uint64_t loadedChecksum = 0U;
+    // Original Beam blur submits RPVERTEX strips, including odd-triangle winding.
+    const std::array<RenderVertexP3DiffuseT2, 4> stripVertices{{
+        kVertices[3], kVertices[4], kVertices[6], kVertices[5]}};
+    const std::array<std::uint16_t, 6> stripTriangles{{0U, 1U, 2U, 2U, 1U, 3U}};
+    const std::array<std::uint16_t, 4> stripIndices{{0U, 1U, 2U, 3U}};
+    FrontierX::SdlGpuReadback stripExpected, stripDirect, stripIndexed;
+    if (renderer.Submit({FrontierX::PrimitiveTopology::TriangleList,
+            stripVertices.data(), stripVertices.size(), stripTriangles.data(), stripTriangles.size()}) != GR_OK ||
+        !renderer.Readback64(stripExpected, error) ||
+        renderer.Submit({FrontierX::PrimitiveTopology::TriangleStrip,
+            stripVertices.data(), stripVertices.size(), nullptr, 0U}) != GR_OK ||
+        renderer.VertexCount() != 6U || !renderer.Readback64(stripDirect, error) ||
+        renderer.Submit({FrontierX::PrimitiveTopology::TriangleStrip,
+            stripVertices.data(), stripVertices.size(), stripIndices.data(), stripIndices.size()}) != GR_OK ||
+        !renderer.Readback64(stripIndexed, error) || stripExpected.changedPixels == 0U ||
+        stripDirect.checksum != stripExpected.checksum || stripIndexed.checksum != stripExpected.checksum)
+    {
+        std::cerr << "beam strip differs from explicit triangles: " << error << '\n';
+        return 1;
+    }
     if (!SubmitProductionFixture(renderer, windowRuntime.window, utfFixturePath,
                                  extendedChecksumA, extendedChecksumB,
                                  materialChecksum, alternateChecksum,
@@ -871,7 +920,8 @@ int main(int argc, char ** argv)
             {
                 initialWidth = renderer.DepthWidth();
                 initialHeight = renderer.DepthHeight();
-                if (!SDL_SetWindowSize(windowRuntime.window, 800, 450))
+                if (!SDL_SetWindowSize(windowRuntime.window, 800, 450) ||
+                    !SDL_SyncWindow(windowRuntime.window))
                 {
                     std::cerr << "window resize request failed: " << SDL_GetError() << '\n';
                     return 1;

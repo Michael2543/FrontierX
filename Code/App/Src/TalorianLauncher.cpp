@@ -11,12 +11,34 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "MyVertex.h"
+#include <algorithm>
+using std::min;
+using std::max;
+#endif
 
 #include "SuperTrans.h"
 #include "ObjList.h"
-#include "sfx.h"
+#include "SFX.h"
 
 #include "Mission.h"
 #include "IMissionActor.h"
@@ -28,22 +50,22 @@
 #include <DTalorianLauncher.h>
 #include "ILauncher.h"
 #include "IWeapon.h"
-#include "DSpaceShip.h"
+#include "DSpaceship.h"
 #include "IGotoPos.h"
 #include "OpAgent.h"
 #include "IShipMove.h"
 #include "CommPacket.h"
-#include "sector.h"
+#include "Sector.h"
 #include "ObjSet.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IPlanet.h"
 #include "ITalorianEffect.h"
 #include "ObjMapIterator.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IAnim.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <IConnection.h> 
 #include <MGlobals.h>
@@ -485,6 +507,13 @@ struct DACOM_NO_VTABLE TalorianLauncherFactory : public IObjectFactory
 		{
 			return calloc(size,1);
 		}
+
+#if !defined(_WIN32)
+		void operator delete (void *ptr)
+		{
+			::free(ptr);
+		}
+#endif
 
 		OBJTYPE (void)
 		{

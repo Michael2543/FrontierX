@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <cstddef>
 #include <cstdlib>
 #include <type_traits>
 using std::min;
@@ -208,6 +209,10 @@ struct NETVALUES
 	U16 hullPoints;
 	U16 supplies;
 };
+#ifndef _WIN32
+static_assert(sizeof(NETVALUES) == 4 && offsetof(NETVALUES, hullPoints) == 0 &&
+	offsetof(NETVALUES, supplies) == 2, "Ship sync byte layout");
+#endif
 
 template <class SaveStruct, class InitStruct>
 U32 SpaceShip<SaveStruct,InitStruct>::getSyncShipData (void * buffer)
@@ -216,9 +221,18 @@ U32 SpaceShip<SaveStruct,InitStruct>::getSyncShipData (void * buffer)
 	if (supplies != trueNetSupplies || hullPoints != trueNetHull)
 	{
 		// values have changed
+#ifndef _WIN32
+		NETVALUES alignedData;
+		NETVALUES * const data = &alignedData;
+#else
 		NETVALUES * const data = (NETVALUES *) buffer;
+#endif
 		data->supplies = supplies;
 		data->hullPoints = hullPoints;
+#ifndef _WIN32
+		// Sync records can start at an unaligned byte offset.
+		std::memcpy(buffer, data, sizeof(*data));
+#endif
 		trueNetSupplies = supplies;
 		trueNetHull = hullPoints;
 		return sizeof(*data);
@@ -231,8 +245,16 @@ U32 SpaceShip<SaveStruct,InitStruct>::getSyncShipData (void * buffer)
 template <class SaveStruct, class InitStruct>
 void SpaceShip<SaveStruct,InitStruct>::putSyncShipData (void * buffer, U32 bufferSize, bool bLateDelivery)
 {
+#ifndef _WIN32
+	NETVALUES alignedData;
+	const NETVALUES * const data = &alignedData;
+#else
 	const NETVALUES * const data = (NETVALUES *) buffer;
+#endif
 	CQASSERT(bufferSize == sizeof(NETVALUES));
+#ifndef _WIN32
+	std::memcpy(&alignedData, buffer, sizeof(alignedData));
+#endif
 	supplies = data->supplies;
 	hullPoints = data->hullPoints;
 }
@@ -1552,6 +1574,8 @@ bool arch_callback( ARCHETYPE_INDEX parent_arch_index, ARCHETYPE_INDEX child_arc
 #if !defined(_WIN32)
 template struct SpaceShip<FABRICATOR_SAVELOAD, FABRICATOR_INIT>;
 template struct SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>;
+template struct SpaceShip<HARVEST_SAVELOAD, HARVEST_INIT>;
+template struct SpaceShip<SUPPLYSHIP_SAVELOAD, SUPPLYSHIP_INIT>;
 #endif
 
 //------------------------End SpaceShip.cpp----------------------------------

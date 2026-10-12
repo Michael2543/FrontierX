@@ -1,7 +1,9 @@
 #include "CQTrace.h"
+#include "NativeAppImage.h"
 #include "FrontierX/GameMaterialManager.h"
 #include "FrontierX/GameTextureManager.h"
 #include "FrontierX/NativeEngine.h"
+#include "FrontierX/NativeHardpoint.h"
 #include "FrontierX/LegacyRenderSubmission.h"
 #include "FrontierX/NativeGameVertexBuffer.h"
 #include "FrontierX/NativeGameIndexBuffer.h"
@@ -20,6 +22,8 @@
 #include "3dmath.h"
 #include "FDump.h"
 #include "ICamera.h"
+#include "IHardPoint.h"
+#include "HPEnum.h"
 #include "ENGINE.H"
 #include "IMaterialManager.h"
 #include "IImageReader.h"
@@ -47,12 +51,14 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <iostream>
 #include <iterator>
 #include <string>
 #include <vector>
 
 void COMAPI CreateTGAReader(IImageReader **reader);
+void COMAPI CreateBMPReader(IImageReader **reader);
 
 namespace
 {
@@ -85,6 +91,8 @@ struct AppStateCapture
     unsigned samplerCalls = 0U;
     unsigned rectangleDraws = 0U;
     std::size_t rectangleVertices = 0U;
+    unsigned lineDraws = 0U;
+    std::array<FrontierX::RenderVertexP3DiffuseT2, 2> lineVertices{};
     Matrix4 projection{true};
     std::array<int, 4> viewport{{0, 0, 0, 0}};
 };
@@ -94,8 +102,17 @@ GENRESULT DACOM_CDECL CaptureApp2DDraw(
 {
     auto & capture = *static_cast<AppStateCapture *>(context);
     if (!view.IsValid()) return GR_INVALID_PARMS;
-    ++capture.rectangleDraws;
-    capture.rectangleVertices = view.vertexCount;
+    if (view.topology == FrontierX::PrimitiveTopology::LineList)
+    {
+        if (view.vertexCount != 2U) return GR_INVALID_PARMS;
+        ++capture.lineDraws;
+        std::copy(view.vertices, view.vertices + 2U, capture.lineVertices.begin());
+    }
+    else
+    {
+        ++capture.rectangleDraws;
+        capture.rectangleVertices = view.vertexCount;
+    }
     return GR_OK;
 }
 
@@ -152,7 +169,8 @@ GENRESULT DACOM_CDECL CaptureAppSamplerState(
 
 struct TextureCapture
 {
-    std::array<std::uint8_t, 64> pixels{};
+    std::vector<U32> liveHandles;
+    std::array<std::uint8_t, 1024> pixels{};
     unsigned creates = 0U;
     unsigned uploads = 0U;
     unsigned destroys = 0U;
@@ -175,9 +193,14 @@ GENRESULT CreateTexture(void *context, U32 width, U32 height, U32 &handle)
         return GR_OK;
     }
 #endif
-    if (width != 4U || height != 4U) return GR_INVALID_PARMS;
+    if (!((width == 4U && height == 4U) || (width == 2U && height == 2U) || (width == 16U && height == 16U)))
+        return GR_INVALID_PARMS;
+    handle = 64U;
+    while (std::find(capture.liveHandles.begin(), capture.liveHandles.end(), handle) !=
+           capture.liveHandles.end()) ++handle;
+    capture.liveHandles.push_back(handle);
     ++capture.creates;
-    handle = capture.firstHandle = 64U;
+    if (!capture.firstHandle) capture.firstHandle = handle;
     return GR_OK;
 }
 
@@ -192,12 +215,18 @@ GENRESULT UploadTexture(void *context, U32 handle, const std::uint8_t *pixels,
             {pixels, width, height, byteCount});
         if (result != GR_OK) return result;
         ++capture.uploads;
-        if (width == 4U && height == 4U && byteCount == 64U)
+        if ((width == 4U && height == 4U && byteCount == 64U) ||
+            (width == 2U && height == 2U && byteCount == 16U) ||
+            (width == 16U && height == 16U && byteCount == 1024U))
             std::memcpy(capture.pixels.data(), pixels, byteCount);
         return GR_OK;
     }
 #endif
-    if (handle != 64U || width != 4U || height != 4U || byteCount != 64U)
+    if (std::find(capture.liveHandles.begin(), capture.liveHandles.end(), handle) ==
+            capture.liveHandles.end() ||
+        !((width == 4U && height == 4U && byteCount == 64U) ||
+          (width == 2U && height == 2U && byteCount == 16U) ||
+            (width == 16U && height == 16U && byteCount == 1024U)))
         return GR_INVALID_PARMS;
     ++capture.uploads;
     std::memcpy(capture.pixels.data(), pixels, byteCount);
@@ -215,7 +244,9 @@ GENRESULT DestroyTexture(void *context, U32 handle)
         return result;
     }
 #endif
-    if (handle != 64U) return GR_INVALID_PARMS;
+    const auto found = std::find(capture.liveHandles.begin(), capture.liveHandles.end(), handle);
+    if (found == capture.liveHandles.end()) return GR_INVALID_PARMS;
+    capture.liveHandles.erase(found);
     ++capture.destroys;
     return GR_OK;
 }
@@ -429,6 +460,7 @@ struct ProbeCamera final : ICamera
     Vector position{0.0F, 0.0F, 5.0F};
     Vector look{0.0F, 0.0F, 0.0F};
     ViewRect pane{0, 0, 63, 63};
+    bool projectCenter = false;
 
     ProbeCamera()
     {
@@ -458,9 +490,13 @@ struct ProbeCamera final : ICamera
     SINGLE COMAPI get_aspect() const override { return 1.0F; }
     SINGLE COMAPI get_hpc() const override { return 32.0F; }
     SINGLE COMAPI get_vpc() const override { return -32.0F; }
-    bool COMAPI point_to_screen(float &, float &, float &, const Vector &) const override
+    bool COMAPI point_to_screen(float &x, float &y, float &depth, const Vector &) const override
     {
-        return false;
+        if (!projectCenter) return false;
+        x = 32.0F;
+        y = 32.0F;
+        depth = 5.0F;
+        return true;
     }
     void COMAPI screen_to_point(Vector &point, float, float) const override
     {
@@ -690,6 +726,21 @@ extern bool RegisterNativeLightManager(ICOManager *manager);
 
 int main(int argc, char **argv)
 {
+    PixelFormat opaqueFormat;
+    opaqueFormat.awidth = std::numeric_limits<int>::min();
+    DDPIXELFORMAT rgbx{};
+    rgbx.dwSize = sizeof(rgbx);
+    rgbx.dwFlags = DDPF_RGB;
+    rgbx.dwRGBBitCount = 32;
+    rgbx.dwRBitMask = 0x000000ff;
+    rgbx.dwGBitMask = 0x0000ff00;
+    rgbx.dwBBitMask = 0x00ff0000;
+    opaqueFormat.init(rgbx);
+    if (!Expect(opaqueFormat.rwidth == 8 && opaqueFormat.gwidth == 8 &&
+            opaqueFormat.bwidth == 8 && opaqueFormat.ar == 0 &&
+            opaqueFormat.al == 0 && opaqueFormat.awidth == 0,
+            "opaque map texture masks do not read the previous absent alpha width")) return 1;
+    if (!Expect(FrontierX::CheckNativeVfxReader(), "original SHP literal/run/skip/empty bounds and truncated input")) return 1;
 	PROPERTY numericProperty{"NativeCount", 42U, 0.0F, DAVT_U32};
 	DACOM_VARIANT numericVariant(numericProperty);
 	PROPERTY pointerProperty{"LegacyPointer", 0x1234U, 0.0F, DAVT_PVOID};
@@ -707,7 +758,44 @@ int main(int argc, char **argv)
 	if (!Expect(boundedReader && boundedReader->LoadImage(truncatedTga.data(),
 			static_cast<U32>(truncatedTga.size()), 0U) != GR_OK,
 			"production TGA reader rejects truncated mapped pixels")) return 1;
+	// Original Static!!Briefing uses uncompressed 8-bit indices and a 24-bit palette.
+	std::vector<unsigned char> indexedTga(18U, 0U);
+	indexedTga[1] = indexedTga[2] = 1;
+	indexedTga[5] = 2;
+	indexedTga[7] = 24;
+	indexedTga[12] = 2;
+	indexedTga[14] = 1;
+	indexedTga[16] = 8;
+	indexedTga[17] = 0x20;
+	indexedTga.insert(indexedTga.end(), {51,34,17,102,85,68,0,1});
+	std::array<unsigned char,8> indexedPixels{};
+	if (!Expect(boundedReader->LoadImage(indexedTga.data(), indexedTga.size()-1, 0) != GR_OK,
+			"briefing TGA rejects truncated index data") ||
+		!Expect(boundedReader->LoadImage(indexedTga.data(), indexedTga.size(), 0) == GR_OK &&
+			boundedReader->GetImage(PF_RGBA, indexedPixels.data(), nullptr) == GR_OK &&
+			indexedPixels == std::array<unsigned char,8>{17,34,51,255,68,85,102,255},
+			"original briefing palette decoder preserves both colors")) return 1;
+	indexedTga.back() = 2;
+	if (!Expect(boundedReader->LoadImage(indexedTga.data(), indexedTga.size(), 0) != GR_OK,
+			"briefing TGA rejects an index outside the palette")) return 1;
 	boundedReader->Release();
+	std::vector<unsigned char> unalignedBmp(1U + 40U + 12U, 0U);
+	unsigned char *bmp = unalignedBmp.data() + 1;
+	bmp[0] = 40; bmp[4] = 4; bmp[8] = 1; bmp[12] = 1; bmp[14] = 24;
+	for (unsigned i = 0; i < 4; ++i)
+	{
+		bmp[40+i*3] = 51; bmp[41+i*3] = 34; bmp[42+i*3] = 17;
+	}
+	IImageReader *bmpReader = nullptr;
+	CreateBMPReader(&bmpReader);
+	std::array<unsigned char,16> bmpPixels{};
+	if (!Expect(bmpReader && bmpReader->LoadImage(bmp, 52, 0) == GR_OK &&
+			bmpReader->GetImage(PF_RGBA, bmpPixels.data(), nullptr) == GR_OK &&
+			bmpPixels[0] == 17 && bmpPixels[1] == 34 && bmpPixels[2] == 51 && bmpPixels[3] == 255,
+			"original BMP decoder accepts an unaligned mapped header") ||
+		!Expect(bmpReader->LoadImage(bmp, 39, 0) != GR_OK,
+			"native BMP rejects a truncated mapped header")) return 1;
+	bmpReader->Release();
     const bool cr = argc == 3 && std::strcmp(argv[2], "cr") == 0;
     const bool missingEnd = argc == 3 && std::strcmp(argv[2], "missing-end") == 0;
 #if defined(FRONTIERX_GAME_GPU)
@@ -765,6 +853,7 @@ int main(int argc, char **argv)
                 RegisterNativeTextureLibrary(components) &&
                 FrontierX::RegisterNativePolyMesh(components) &&
                 FrontierX::RegisterNativeEngine(components) &&
+                FrontierX::RegisterNativeHardpoint(components) &&
                 FrontierX::RegisterNativeRenderManager(components),
                 "production game material manager registration")) return 1;
     const Transform mathLeft(Vector(1.0F, 2.0F, 3.0F));
@@ -1021,6 +1110,76 @@ int main(int argc, char **argv)
     gameTextures->Flush();
     if (!Expect(textureCapture.destroys == 2U,
                 "production game texture manager releases the inferred texture")) return 1;
+    // SysMap::loadTextures uses the real ITManager for opaque map images
+    // larger than the previous four-pixel fixture; exercise that caller.
+    std::vector<unsigned char> mapImage(18U, 0U);
+    mapImage[2] = 2U;
+    mapImage[12] = mapImage[14] = 16U;
+    mapImage[16] = 32U;
+    mapImage[17] = 0x28U;
+    for (unsigned pixel = 0; pixel < 256U; ++pixel)
+        mapImage.insert(mapImage.end(), {51U, 34U, 17U, 0U});
+    const auto mapPath = materialDirectoryPath / "NativeMap.tga";
+    {
+        std::ofstream output(mapPath, std::ios::binary | std::ios::trunc);
+        output.write(reinterpret_cast<const char *>(mapImage.data()), static_cast<std::streamsize>(mapImage.size()));
+        if (!Expect(output.good(), "synthetic original map texture written")) return 1;
+    }
+    const bool previousTexturePolicy = FrontierX::SetNativeGameTextureBaseLevelOnly(true);
+    U32 mapTexture = 0U;
+    {
+        FrontierX::NativeAppDataSources textureSources;
+        FrontierX::NativeAppDataSources conflictingSources;
+        if (!Expect(!textureSources.BindTextures(nullptr) &&
+                    textureSources.BindTextures(materialDirectory) &&
+                    TEXTURESDIR == materialDirectory &&
+                    !textureSources.BindTextures(materialDirectory) &&
+                    !conflictingSources.BindTextures(materialDirectory),
+                    "original texture directory has a single retained native owner")) return 1;
+        mapTexture = gameTextures->CreateTextureFromFile(
+            "NativeMap.tga", TEXTURESDIR, DA::TGA, PF_4CC_DAOT);
+    }
+    FrontierX::SetNativeGameTextureBaseLevelOnly(previousTexturePolicy);
+    if (!Expect(TEXTURESDIR == nullptr, "original texture directory cleared on owner release")) return 1;
+    if (!Expect(mapTexture != 0U, "original opaque map texture reaches native pipeline")) return 1;
+    for (std::size_t offset = 0; offset < 1024U; offset += 4U)
+        if (!Expect(textureCapture.pixels[offset] == 17U &&
+                    textureCapture.pixels[offset + 1U] == 34U &&
+                    textureCapture.pixels[offset + 2U] == 51U &&
+                    textureCapture.pixels[offset + 3U] == 255U,
+                    "opaque map texture preserves RGB and discards source alpha")) return 1;
+    PixelFormat mapFormat;
+    RPLOCKDATA mapLock{};
+    if (!Expect(pipeline->get_texture_format(mapTexture, &mapFormat) == GR_OK &&
+                mapFormat.num_bits() == 32U && mapFormat.num_a_bits() == 0U &&
+                pipeline->lock_texture(mapTexture, 0, &mapLock) == GR_OK,
+                "opaque map format is inherited by original canvas callers")) return 1;
+    auto * mapPixels = static_cast<unsigned char *>(mapLock.pixels);
+    mapPixels[0] = 91U;
+    mapPixels[3] = 0U; // original player-icon recolouring writes RGB only
+    if (!Expect(pipeline->unlock_texture(mapTexture, 0) == GR_OK &&
+                textureCapture.pixels[0] == 91U && textureCapture.pixels[3] == 255U,
+                "opaque icon lock/upload preserves opacity after RGB writes")) return 1;
+    U32 unsupportedMipTexture = 0;
+    if (!Expect(pipeline->create_texture(16, 16, PF_4CC_DAOT, 3, 0,
+                                        unsupportedMipTexture) != GR_OK &&
+                unsupportedMipTexture == 0U,
+                "native mip chains remain explicitly unsupported")) return 1;
+    gameTextures->Flush();
+    // The supported D3D path permits RGBA8 for both of these requested classes
+    // (planet ownership art, compass and ring); retain source alpha here.
+    for (const PFenum alphaClass : {PF_4CC_DAA1, PF_4CC_DAA4})
+    {
+        const bool previous = FrontierX::SetNativeGameTextureBaseLevelOnly(true);
+        const U32 alphaMap = gameTextures->CreateTextureFromFile(
+            "NativeMap.tga", materialDirectory, DA::TGA, alphaClass);
+        FrontierX::SetNativeGameTextureBaseLevelOnly(previous);
+        if (!Expect(alphaMap != 0U && textureCapture.pixels[0] == 17U &&
+                    textureCapture.pixels[1] == 34U && textureCapture.pixels[2] == 51U &&
+                    textureCapture.pixels[3] == 0U,
+                    "original map alpha classes use their supported RGBA8 representation")) return 1;
+        gameTextures->Flush();
+    }
     DACOMDESC engineDescriptor("IEngine");
     IEngine *engine = nullptr;
     if (!Expect(components->CreateInstance(&engineDescriptor,
@@ -1081,7 +1240,7 @@ int main(int argc, char **argv)
                 profileAggregate, "production engine profile creation")) return 1;
     IProfileParser2 *profile2 = nullptr;
     IProfileParser *profile = nullptr;
-    constexpr char engineProfile[] = "[Engine]\nIRenderer\n[RenderManager]\n  PolyMesh\n";
+    constexpr char engineProfile[] = "[Engine]\nIHardpoint\nIRenderer\n[RenderManager]\n  PolyMesh\n";
     if (!Expect(profileAggregate->QueryInterface(IID_IProfileParser2,
                     reinterpret_cast<void **>(&profile2)) == GR_OK && profile2 &&
                 profile2->Initialize2(engineProfile, sizeof(engineProfile) - 1U) == GR_OK &&
@@ -1103,7 +1262,7 @@ int main(int argc, char **argv)
     polyMesh->destroy_archetype(1);
     polyMesh->Release();
     if (!Expect(engine->load_engine_components(&outer) == GR_OK &&
-                engine->enumerate_engine_components(nullptr) == 1,
+                engine->enumerate_engine_components(nullptr) == 2,
                 "production engine loads RenderMgr and PolyMesh from profile")) return 1;
     const auto legacyMeshPath = meshPath.parent_path() / "legacy_game_mesh_fixture.utf";
     IFileSystem *legacyMeshArchive = nullptr;
@@ -1116,9 +1275,18 @@ int main(int argc, char **argv)
     if (!Expect(engineArchetype != INVALID_ARCHETYPE_INDEX &&
                 std::strcmp(engine->get_archetype_name(engineArchetype), "fixture.3db") == 0,
                 "production engine dispatches the game mesh archetype")) return 1;
+    // ENGINE.H returns a held archetype, including for observational checks.
+    const auto instanceHasArchetype = [engine](INSTANCE_INDEX instance,
+                                              ARCHETYPE_INDEX expected)
+    {
+        const ARCHETYPE_INDEX actual = engine->get_instance_archetype(instance);
+        const bool matches = actual == expected;
+        if (actual != INVALID_ARCHETYPE_INDEX) engine->release_archetype(actual);
+        return matches;
+    };
     const INSTANCE_INDEX engineInstance = engine->create_instance2(engineArchetype, nullptr);
     if (!Expect(engineInstance != INVALID_INSTANCE_INDEX &&
-                engine->get_instance_archetype(engineInstance) == engineArchetype,
+                instanceHasArchetype(engineInstance, engineArchetype),
                 "production engine creates a PolyMesh instance")) return 1;
     IRenderer *renderer = nullptr;
     if (!Expect(engine->QueryInterface(IID_IRenderer,
@@ -1127,6 +1295,44 @@ int main(int argc, char **argv)
                 "production RenderMgr exposes the PolyMesh instance")) return 1;
     ENGINE = engine;
     REND = renderer;
+    IHardpoint *hardpoints = nullptr;
+    if (!Expect(engine->QueryInterface(IID_IHardpoint,
+                    reinterpret_cast<void **>(&hardpoints)) == GR_OK && hardpoints,
+                "production Engine hardpoint owner")) return 1;
+    const INSTANCE_INDEX hardpointSibling = engine->create_instance2(engineArchetype, nullptr);
+    const INSTANCE_INDEX hardpointInstance = engine->create_instance2(engineArchetype, nullptr);
+    HardpointInfo fixtureHardpoint{};
+    fixtureHardpoint.type = JT_FIXED;
+    fixtureHardpoint.point = Vector(3, 4, 5);
+    fixtureHardpoint.orientation.set_identity();
+    if (!Expect(hardpointInstance != INVALID_INSTANCE_INDEX && hardpointInstance != engineArchetype &&
+                hardpoints->set_hardpoint_info(engineArchetype, "hp_fixture", fixtureHardpoint),
+                "hardpoint fixture separates instance from archetype IDs")) return 1;
+    HARDPOINT = hardpoints;
+    S32 foundHardpoint = INVALID_INSTANCE_INDEX;
+    HardpointInfo foundHardpointInfo{};
+    const bool hardpointFound = FindHardpoint("\\hp_fixture", foundHardpoint,
+                                              foundHardpointInfo, hardpointInstance);
+    struct HardpointEnumeration : IHPEnumerator
+    {
+        unsigned count = 0;
+        S32 instance = INVALID_INSTANCE_INDEX;
+        bool EnumerateHardpoint(const HPENUMINFO &info) override
+        {
+            ++count;
+            instance = info.index;
+            return false;
+        }
+    } hardpointEnumeration;
+    EnumerateHardpoints(hardpointInstance, "\\hp_*", &hardpointEnumeration);
+    HARDPOINT = nullptr;
+    hardpoints->Release();
+    engine->destroy_instance(hardpointInstance);
+    engine->destroy_instance(hardpointSibling);
+    if (!Expect(hardpointFound && foundHardpoint == hardpointInstance &&
+                foundHardpointInfo.point.z == 5 && hardpointEnumeration.count == 1 &&
+                hardpointEnumeration.instance == hardpointInstance,
+                "App hardpoint lookup/enumeration uses the held archetype for the instance")) return 1;
     IMeshInfoTree *meshInfoTree = CreateMeshInfoTree(engineInstance);
     MeshInfo *meshInfo = meshInfoTree ? meshInfoTree->GetMeshInfo() : nullptr;
     const bool meshInfoValid = meshInfo && meshInfo->instanceIndex == engineInstance &&
@@ -1136,9 +1342,27 @@ int main(int argc, char **argv)
     ENGINE = nullptr;
     REND = nullptr;
     if (!Expect(meshInfoValid &&
-                engine->get_instance_archetype(engineInstance) == engineArchetype,
+                instanceHasArchetype(engineInstance, engineArchetype),
                 "production App MeshInfo tree preserves borrowed Engine instance")) return 1;
     ProbeCamera camera;
+    if (!gpuMode)
+    {
+        camera.projectCenter = true;
+        ViewPoint projectedHull[64]{};
+        int hullPoints = 64;
+        float hullDepth = 0.0F;
+        if (!Expect(renderer->get_instance_projected_bounding_polygon(engineInstance,
+                        &camera, 1.0F, hullPoints, projectedHull, 64, hullDepth) &&
+                    hullPoints >= 3,
+                    "production RenderMgr projects a representable selection hull")) return 1;
+        camera.inverse.translation.y = 1.0e10F;
+        hullPoints = 64;
+        if (!Expect(!renderer->get_instance_projected_bounding_polygon(engineInstance,
+                        &camera, 1.0F, hullPoints, projectedHull, 64, hullDepth),
+                    "production RenderMgr rejects unrepresentable selection coordinates")) return 1;
+        camera.inverse.translation.y = 0.0F;
+        camera.projectCenter = false;
+    }
     U32 primitiveStateId = 0U;
     U32 cullMode = 0U;
     if (!Expect((!gpuMode ||
@@ -1740,6 +1964,21 @@ int main(int argc, char **argv)
         appState.stage.colorArgument1 == D3DTA_DIFFUSE &&
         appState.stage.alphaOperation == D3DTOP_SELECTARG1 &&
         appState.stage.alphaArgument1 == D3DTA_DIFFUSE;
+    // The fixed-turret hardpoint is a -Z-forward frame, unlike ship navigation.
+    for (const Vector direction : {Vector(1, 1, 0), Vector(-1, 1, 0),
+                                   Vector(1, -1, 0), Vector(-1, -1, 0)})
+    {
+        const float heading = get_angle(direction.x, direction.y);
+        TRANSFORM sight;
+        sight.rotate_about_i(90 * MUL_DEG_TO_RAD);
+        sight.rotate_about_j(heading);
+        if (std::fabs(sight.get_yaw_zbased() - heading) > 1.0e-5F ||
+            std::fabs(sight.get_pitch_zbased()) > 1.0e-5F) return 1;
+        const Vector look = -sight.get_k();
+        if (std::fabs(look.x - std::sin(heading)) > 1.0e-5F ||
+            std::fabs(look.y - std::cos(heading)) > 1.0e-5F) return 1;
+    }
+
     bool app2dSubmitted = false;
     {
         FrontierX::NativeRenderPipeline app2dPipeline(appPrimitive);
@@ -1755,6 +1994,17 @@ int main(int argc, char **argv)
             appState.projection.d[0][0] == 2.0F / 64.0F &&
             appState.projection.d[1][1] == -2.0F / 64.0F &&
             appState.texture == 0U;
+        // Sector::DrawLinks requests a diagonal smooth line after gate discovery.
+        DA::LineDraw(nullptr, 3, 4, 20, 30, RGB(16, 32, 48), true);
+        const auto & start = appState.lineVertices[0];
+        const auto & end = appState.lineVertices[1];
+        if (!Expect(appState.lineDraws == 1U &&
+                    start.x == 3.5F && start.y == 4.5F &&
+                    end.x == 20.5F && end.y == 30.5F &&
+                    start.diffuseBgra == FrontierX::PackDiffuseBgra(16, 32, 48, 255) &&
+                    end.diffuseBgra == start.diffuseBgra &&
+                    appState.viewport == std::array<int, 4>{{0, 0, 64, 64}},
+                    "original Sector map link uses native diagonal line submission")) return 1;
         PB.SetIRenderPrimitive(nullptr);
         SCREENRESX = 0U;
         SCREENRESY = 0U;
@@ -1774,11 +2024,11 @@ int main(int argc, char **argv)
                 app2dSubmitted &&
                 appBuffers.adds == 3U &&
                 appBuffers.deletes == 3U && appBuffers.owner == nullptr &&
-                engine->get_instance_archetype(engineInstance) == engineArchetype,
+                instanceHasArchetype(engineInstance, engineArchetype),
                 "production App mesh ownership and CQ2 effect draw")) return 1;
     renderer->Release();
     engine->set_instance_handler(engineInstance, nullptr);
-    if (!Expect(engine->get_instance_archetype(engineInstance) == engineArchetype,
+    if (!Expect(instanceHasArchetype(engineInstance, engineArchetype),
                 "production engine replaces its owned instance handler")) return 1;
     engine->destroy_instance(engineInstance);
     engine->release_archetype(engineArchetype);
@@ -1789,6 +2039,22 @@ int main(int argc, char **argv)
     outer.lightManager = nullptr;
     lightAggregate->Release();
     lights->Release();
+    const auto indexedPath = std::filesystem::path(meshPath.string() + ".indexed");
+    IFileSystem *indexedArchive = nullptr;
+    IFileSystem *indexedDirectory = nullptr;
+    DAFILEDESC indexedDescriptor("openFLAME 3D N-mesh");
+    const std::array<std::uint8_t, 16> indexedExpected{{
+        255, 0, 0, 255, 0, 255, 0, 255,
+        0, 0, 255, 255, 15, 31, 63, 255}};
+    if (!Expect(FrontierXTest::WriteLegacyGameMeshFixture(indexedPath, true, true) &&
+        FrontierX::OpenNativeUtfFileSystem(indexedPath, &indexedArchive, error) &&
+        indexedArchive->CreateInstance(&indexedDescriptor,
+            reinterpret_cast<void **>(&indexedDirectory)) == GR_OK &&
+        textures->load_texture(indexedDirectory, "Tile8") == GR_OK &&
+        std::equal(indexedExpected.begin(), indexedExpected.end(), textureCapture.pixels.begin()),
+        "Original TextureLibrary indexed palette reaches real native upload owner")) return 1;
+    indexedDirectory->Release();
+    indexedArchive->Release();
     textures->Release();
     textureAggregate->Release();
     textureInner->Release();

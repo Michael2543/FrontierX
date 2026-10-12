@@ -5,6 +5,7 @@
 #include "FrontierX/NativeMaterialEffect.h"
 #include "FrontierX/RenderPipelineAdapter.h"
 #include "FrontierX/RenderSubmission.h"
+#include "FrontierX/NativeTextureDC.h"
 
 #include <atomic>
 #include <cstddef>
@@ -132,6 +133,8 @@ public:
     GENRESULT COMAPI create_texture(int width, int height, const PixelFormat & format,
                                     int lodCount, U32 flags, U32 & handle) override;
     GENRESULT COMAPI destroy_texture(U32 handle) override;
+    GENRESULT COMAPI get_texture_dc(U32 handle, HDC *dc) override;
+    GENRESULT COMAPI release_texture_dc(U32 handle, HDC dc) override;
     GENRESULT COMAPI lock_texture(U32 handle, int level, RPLOCKDATA * lockData) override;
     GENRESULT COMAPI unlock_texture(U32 handle, int level) override;
     GENRESULT COMAPI set_texture_level_data(
@@ -185,6 +188,8 @@ private:
         U32 height = 0U;
         std::vector<std::uint8_t> pixels;
         bool locked = false;
+        bool opaque = false;
+        std::unique_ptr<TextureDC::Context> dc;
     };
 
     struct OwnedVertexBuffer

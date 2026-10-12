@@ -1357,10 +1357,11 @@ HRESULT TextureLibrary::choose_texture_format( ITL_TEXTUREIMAGEDATA *data, Pixel
 {
 #if !defined(_WIN32)
 	// The native pipeline converts this retail source format into its RGBA8 owner.
-	if( data->format.ddpf.dwRGBBitCount == 16 &&
+	if( (data->format.is_indexed() && data->format.ddpf.dwRGBBitCount == 8) ||
+		(data->format.ddpf.dwRGBBitCount == 16 &&
 		data->format.ddpf.dwRBitMask == 0xf800 &&
 		data->format.ddpf.dwGBitMask == 0x07e0 &&
-		data->format.ddpf.dwBBitMask == 0x001f ) {
+		data->format.ddpf.dwBBitMask == 0x001f) ) {
 		out_pf->init( PF_RGBA8 );
 		return S_OK;
 	}
@@ -3445,7 +3446,12 @@ GENRESULT TextureLibrary::get_texture_ref_texture_id( ITL_TEXTURE_REF_ID texture
 
 		if (it != ref_map.end ())
 		{
+#if defined(_WIN32)
 			it->second.texture->addref ();
+#else
+			// The public lookup contract borrows the ID from the live texture-ref.
+			// TexInfo owns that ref, not an additional texture-ID reference.
+#endif
 
 			ID_MAP::const_iterator cit = id_map.begin ();
 

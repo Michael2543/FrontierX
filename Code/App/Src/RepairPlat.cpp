@@ -10,8 +10,38 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TPlatform.h"
 #include "Startup.h"
@@ -23,17 +53,18 @@
 #include "ObjSet.h"
 #include "IRepairee.h"
 #include "CQLight.h"
-#include "Isupplier.h"
-#include "IFabricator.h"
+#include "DSupplyShipSave.h"
+#include "ISupplier.h"
+#include "ifabricator.h"
 #include "DSupplyShipSave.h"
 #include "ObjMapIterator.h"
 
 #include <DResearch.h>
 #include <DRepairPlat.h>
 
-#include <Physics.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <physics.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <HeapObj.h>
@@ -641,7 +672,11 @@ void RepairPlat::RepaireeDocked ()
 {
 	mode = REP_REPAIRING;
 
+	#if defined(_WIN32)
 	MPart part = repairTarget;
+#else
+	MPart part(repairTarget.Ptr());
+#endif
 	oldHullPoints = part->hullPoints;
 
 	Vector pos,dir;
@@ -1648,7 +1683,9 @@ BOOL32 RepairPlatFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	REPAIRPLAT_INIT * objtype = (REPAIRPLAT_INIT *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -1665,7 +1702,14 @@ IBaseObject * RepairPlatFactory::CreateInstance (HANDLE hArchetype)
 void RepairPlatFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	REPAIRPLAT_INIT * objtype = (REPAIRPLAT_INIT *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fprintf(stderr, "Native repair-platform editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

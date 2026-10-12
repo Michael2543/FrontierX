@@ -11,17 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "MyVertex.h"
+#include <algorithm>
+using std::min;
+using std::max;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DEffect.h"
-#include "Objlist.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "IExplosion.h"
 #include "IFighter.h"
@@ -31,7 +53,9 @@
 #include "ArchHolder.h"
 #include "MGlobals.h"
 #include <TSmartPointer.h>
+#if defined(_WIN32)
 #include "TObjTeam.h"
+#endif
 #include "MPart.h"
 #include "IUnbornMeshList.h"
 #include "FogOfWar.h"
@@ -41,10 +65,10 @@
 
 
 #include <Mesh.h>
-#include <FileSys.h>
-#include <Engine.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <IRenderPrimitive.h>
-#include <Renderer.h>
+#include <renderer.h>
 
 struct MimicArchetype
 {
@@ -274,7 +298,8 @@ void Mimic::PhysicalUpdate (SINGLE dt)
 	
 		if (owner.Ptr()->bSpecialRender != bLastState)
 		{
-			VOLPTR(IExtent) extentObj = owner;
+			VOLPTR(IExtent) extentObj;
+			extentObj = owner;
 			CQASSERT(extentObj);
 			if (owner.Ptr()->bSpecialRender)
 			{
@@ -320,7 +345,8 @@ BOOL32 Mimic::Update ()
 			//	enableCloak(bCloakEnabled);
 
 				
-				VOLPTR(IExtent) extentObj = owner;
+				VOLPTR(IExtent) extentObj;
+				extentObj = owner;
 				CQASSERT(extentObj);
 				extentObj->SetAliasData(-1,0);
 				aliasArchetypeID = -1;
@@ -494,7 +520,8 @@ void Mimic::DoSpecialAbility (IBaseObject * obj)
 		enableCloak(bCloakEnabled);
 	}*/
 	
-	VOLPTR(IExtent) extentObj = owner;
+	VOLPTR(IExtent) extentObj;
+	extentObj = owner;
 	CQASSERT(extentObj);
 	extentObj->SetAliasData(aliasArchetypeID,aliasPlayerID);
 }

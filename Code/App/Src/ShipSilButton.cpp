@@ -11,8 +11,26 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#define _wcsdup DuplicateWide
+#define _ltow DecimalToWide
+#include <TManager.h>
+#endif
 
 #include "IShipSilButton.h"
 #include "Startup.h"
@@ -22,10 +40,10 @@
 #include "DrawAgent.h"
 #include "IShapeLoader.h"
 #include "MPart.h"
-#include "Objlist.h"
+#include "ObjList.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 
 #define SHIPSIL_MAX_SHAPES 3
 
@@ -203,7 +221,7 @@ void ShipSilButton::SetShip(IBaseObject * _ship)
 	//
 	// load the shapes
 	//
-	MPart part = ship;
+	MPart part(ship.ptr);
 	if(part.isValid())
 	{
 		int base;
@@ -273,7 +291,13 @@ U32 ShipSilButton::GetControlID (void)
 //
 GENRESULT ShipSilButton::Notify (U32 message, void *param)
 {
-//	MSG *msg = (MSG *) param;
+#ifdef _WIN32
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==0 && (ship != 0))
 	switch (message)
@@ -325,7 +349,7 @@ GENRESULT ShipSilButton::Notify (U32 message, void *param)
 void ShipSilButton::draw (void)
 {
 	U32 state;
-	MPart part = ship;
+	MPart part(ship.ptr);
 	if(part->hullPoints < part->hullPointsMax * gtData->redYellowBreak)
 	{
 		state = SHIPSIL_RED;
@@ -365,7 +389,7 @@ void ShipSilButton::setStatus (void)
 	if (ship != 0)
 	{
 		wchar_t buffer[256];
-		MPart part = ship;
+		MPart part(ship.ptr);
 		if(part->bShowPartName)
 			_localAnsiToWide(part->partName,buffer,sizeof(buffer));
 		else
@@ -501,7 +525,7 @@ HANDLE ShipSilButtonFactory::CreateArchetype (PGENTYPE _pArchetype, GENBASE_TYPE
 //
 BOOL32 ShipSilButtonFactory::DestroyArchetype (HANDLE hArchetype)
 {
-	CQASSERT((U32)hArchetype != 0 && pArchetype != 0);
+	CQASSERT(reinterpret_cast<std::uintptr_t>(hArchetype) != 0 && pArchetype != 0);
 
 	pArchetype = 0;
 	return 1;
@@ -526,7 +550,11 @@ struct _shipSilbuttonfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<ShipSilButtonFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

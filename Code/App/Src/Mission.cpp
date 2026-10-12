@@ -90,9 +90,7 @@ static FILE *g_mis_f = NULL;
 #include "Cursor.h"
 #include "Hotkeys.h"
 #include "CQGame.h"
-#if defined(_WIN32)
 #include "BaseHotRect.h"
-#endif
 #include "MGlobals.h"
 #include <DBaseData.h>
 #include "OpAgent.h"
@@ -502,8 +500,10 @@ Mission::~Mission (void)
 	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
 #else
-	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
-		connection->Unadvise(eventHandle);
+	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+        connection->Unadvise(eventHandle);
+    else if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+        connection->Unadvise(eventHandle);
 #endif
 
 	if (FILETRANSFER && FILETRANSFER->QueryOutgoingInterface("IFileTransferCallback", connection) == GR_OK)
@@ -1208,7 +1208,8 @@ BOOL32 Mission::QuickLoadFile (void)
 	
 	// first make sure that the file exists!
 	WIN32_FIND_DATA data;
-	if (SAVEDIR && SAVEDIR->FindFirstFile(szDescription, &data) == INVALID_HANDLE_VALUE)
+	const HANDLE findHandle = SAVEDIR ? SAVEDIR->FindFirstFile(szDescription, &data) : INVALID_HANDLE_VALUE;
+	if (findHandle == INVALID_HANDLE_VALUE)
 	{
 		SCROLLTEXT->SetText(IDS_QUICKLOAD_FAILED);
 		return FALSE;
@@ -1216,6 +1217,7 @@ BOOL32 Mission::QuickLoadFile (void)
 	else
 	{
 //		SCROLLTEXT->SetText(IDS_QUICKLOAD_WAIT);
+		SAVEDIR->FindClose(findHandle);
 		BOOL32 result = MISSION->Load(szDescription, SAVEDIR);
 		SCROLLTEXT->SetText(IDS_QUICKLOAD_SUCCESS);
 		return result;
@@ -3254,7 +3256,6 @@ void Mission::EndMission (U32 allyMask, bool bNonWinLose)
 		EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
 	}
 
-#if defined(_WIN32)
 	if (result == MISSION_END_WON)
 	{
 		CQMessageBox(IDS_MISSION_PRESSOK, IDS_MISSION_SUCCESS, MB_OK);
@@ -3263,7 +3264,6 @@ void Mission::EndMission (U32 allyMask, bool bNonWinLose)
 	{
 		CQMessageBox(IDS_MISSION_PRESSOK, IDS_MISSION_FAILURE, MB_OK);
 	}
-#endif
 
 	if (bOldGamePaused==0 && ((allyMask & 0x80000000) == 0))
 	{
@@ -3873,8 +3873,15 @@ struct _mission : GlobalComponent
 
 		SendMessage(hMainWindow, CQE_DATA_CHECKSUM, 3, CreateZBufferAnalog(buffer));
 #else
-		if (!EVENTSYS || EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
-			connection->Advise(MISSION, &mission->eventHandle) != GR_OK)
+        if (FULLSCREEN)
+        {
+            if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+                connection->Advise(MISSION, &mission->eventHandle) != GR_OK)
+                std::abort();
+            FULLSCREEN->SetCallbackPriority(mission, EVENT_PRIORITY_MISSION);
+        }
+        else if (!EVENTSYS || EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+            connection->Advise(MISSION, &mission->eventHandle) != GR_OK)
 		{
 			std::fputs("Native mission requires the game event callback\n", stderr);
 			std::abort();

@@ -22,7 +22,7 @@
 #endif
 
 #ifndef _3DMATH_H
-#include <3DMath.h>
+#include <3dmath.h>
 #endif
 
 #ifndef _IHARDPOINT_H_

@@ -13,14 +13,30 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "TObjFrame.h"
+#include "MyVertex.h"
+#include "ILauncher.h"
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -30,7 +46,7 @@
 #include "TObjFrame.h"
 #include "Mesh.h"
 #include "ArchHolder.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "FogOfWar.h"
 #include "UserDefaults.h"
 #include "Mission.h"
@@ -44,18 +60,18 @@
 #include "CQLight.h"
 #include "IBlast.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <TComponent.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Physics.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <physics.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Collision.h>
-#include <Pixel.h>
+#include <collision.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
 
@@ -454,7 +470,11 @@ void MassDisruptor::ResolveAssociations()
 	OBJLIST->FindObject(ownerID,NONSYSVOLATILEPTR,owner,ILaunchOwnerID);
 	if(target && owner)
 	{
+		#if defined(_WIN32)
 		VOLPTR(IExtent) extentObj = target;
+#else
+		VOLPTR(IExtent) extentObj = target.Ptr();
+#endif
 //		mc = &extentObj->GetMeshChain();
 		float box[6];
 		target.Ptr()->GetObjectBox(box);

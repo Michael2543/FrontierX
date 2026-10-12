@@ -12,8 +12,23 @@
 // Single player options
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include "Include/NativeAppUiInput.h"
+#include "GenData.h"
+#include "resource.h"
+#include "UserDefaults.h"
+#include <MGlobals.h>
+#include <WindowManager.h>
+#include <VFX.H>
+#include <cwchar>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+#endif
 #include <wchar.h>
 #include <string.h>
 #include <stdio.h>
@@ -30,10 +45,12 @@ static FILE *g_mc_f = NULL;
 #include "IButton2.h"
 #include "IStatic.h"
 #include "IEdit2.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "Mission.h"
+#if defined(_WIN32)
 #include "NetConnectBuffers.h"
 #include "NetBuffer.h"
+#endif
 #include "IGameProgress.h"
 #include "MusicManager.h"
 
@@ -66,7 +83,11 @@ struct Menu_campaign : public DAComponent<Frame>
 	bool bSkipToMisisonOne;
 	U32 uUpdateRecursion;
 
+#if defined(_WIN32)
 	INSTANCE_INDEX	terran1ID;
+#else
+	S32 terran1ID;
+#endif
 
 	//
 	// instance methods
@@ -173,6 +194,10 @@ void Menu_campaign::setStateInfo (void)
 	if (buttonMantis)   buttonMantis->InitButton(data.buttonMantis, this);
 	if (buttonSolarian) buttonSolarian->InitButton(data.buttonSolarian, this);
 	if (buttonBack)     buttonBack->InitButton(data.buttonBack, this);
+#if !defined(_WIN32)
+	if (buttonTerran) buttonTerran->EnableButton(false);
+	if (buttonMantis) buttonMantis->EnableButton(false);
+#endif
 
 	if (buttonTerran)   buttonTerran->SetTransparent(true);
 	if (buttonMantis)   buttonMantis->SetTransparent(true);
@@ -204,16 +229,26 @@ void Menu_campaign::setStateInfo (void)
 			break;
 
 		default:
+#if defined(_WIN32)
 			if (buttonTerran) setFocus(buttonTerran);
+#else
+			if (buttonSolarian) setFocus(buttonSolarian);
+#endif
 			break;
 		}
 	}
 
 	// kludge - send a benign mouse move message to the system
 	// otherwise the user has to click twice on the terran campaign button if fullscreen mode
+#if defined(_WIN32)
 	POINT pt;
 	WM->GetCursorPos(pt.x, pt.y);
 	WM->SetCursorPos(pt.x, pt.y);
+#else
+	S32 x = 0, y = 0;
+	WM->GetCursorPos(x, y);
+	WM->SetCursorPos(x, y);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -270,6 +305,7 @@ void Menu_campaign::init (void)
 //
 void Menu_campaign::onButtonTerran (void)
 {
+#if defined(_WIN32)
 	MISSION->SetSinglePlayerRace(M_TERRAN);
 
 	// is this our first time playing the game as this player??
@@ -310,6 +346,9 @@ void Menu_campaign::onButtonTerran (void)
 	}
 	Notify(CQE_SET_FOCUS, 0);
 	bModalUp = false;
+#else
+	throw std::runtime_error("Native Terran campaign is not integrated");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -328,12 +367,20 @@ void Menu_campaign::onButtonPressed (U32 buttonID)
 		break;
 
 	case IDS_MANTIS_TRAINING:	
+#if defined(_WIN32)
 		swprintf(szMission, L"Mantis_Train.dmission");
+#else
+		std::swprintf(szMission, sizeof(szMission)/sizeof(szMission[0]), L"Mantis_Train.dmission");
+#endif
 		onButtonTraining(szMission, M_MANTIS);
 		break;
 
 	case IDS_SOLARIAN_TRAINING:	
+#if defined(_WIN32)
 		swprintf(szMission, L"Sol_Train.dmission");
+#else
+		std::swprintf(szMission, sizeof(szMission)/sizeof(szMission[0]), L"Sol_Train.dmission");
+#endif
 		onButtonTraining(szMission, M_SOLARIAN);
 		break;		
 	}
@@ -342,6 +389,10 @@ void Menu_campaign::onButtonPressed (U32 buttonID)
 // 
 void Menu_campaign::onButtonTraining(wchar_t *wch_buf, const enum M_RACE race)
 {
+#if !defined(_WIN32)
+	if (race != M_SOLARIAN)
+		throw std::runtime_error("Native training entry currently supports Sol_Train only");
+#endif
 	MISSION->SetSinglePlayerRace(race);
 
 	char abuffer[MAX_PATH];

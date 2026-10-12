@@ -132,6 +132,11 @@ struct GT_BUTTON : GENBASE_DATA
 	S32 leftMargin:8;		// skip pixels on the edge (for dropdown arrows)
 	S32 rightMargin:8;
 
+#if !defined(_WIN32)
+	// The Win32 schema reserves the complete four-byte bitfield allocation unit.
+	U8 nativeBitfieldPadding;
+#endif
+
 	char fontName[GT_PATH];
 	struct COLOR
 	{

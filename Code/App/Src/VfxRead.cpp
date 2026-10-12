@@ -10,8 +10,19 @@
 */
 //------------------------------- #INCLUDES --------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppImage.h"
+#include <pixel.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+#endif
 #include "IImageReader.h"
 
 #include <TComponent.h>
@@ -106,6 +117,7 @@ void VFXREADER::free (void)
 //
 GENRESULT VFXREADER::LoadImage (void *fileImage, U32 fileSize, U32 imageNumber)
 {
+#if defined(_WIN32)
 	GENRESULT result = GR_OK;
 	VFX_CRGB colors[256];
 	S32 numColors, i;
@@ -157,6 +169,87 @@ GENRESULT VFXREADER::LoadImage (void *fileImage, U32 fileSize, U32 imageNumber)
 	VFX_shape_draw8(&pane, (VFX_SHAPETABLE *)fileImage, imageNumber, 0, 0);
 	
 	return result;
+#else
+    free();
+    width = height = 0;
+    std::memset(palette, 0, sizeof(palette));
+    if (!fileImage || fileSize < 8) return GR_INVALID_PARMS;
+    const auto *bytes = static_cast<const U8 *>(fileImage);
+    const auto word = [bytes](std::size_t offset) -> U32 {
+        return U32(bytes[offset]) | (U32(bytes[offset+1]) << 8) |
+            (U32(bytes[offset+2]) << 16) | (U32(bytes[offset+3]) << 24);
+    };
+    const auto signedWord = [&word](std::size_t offset) -> S32 {
+        const U32 value = word(offset);
+        return value <= 0x7fffffffU ? static_cast<S32>(value) :
+            static_cast<S32>(static_cast<std::int64_t>(value) - 0x100000000LL);
+    };
+    // SHP tables store 32-bit relative shape/palette offsets, never native pointers.
+    const U32 count = word(4);
+    if (imageNumber >= count || count > (fileSize-8)/8) return GR_GENERIC;
+    const std::size_t entry = 8 + std::size_t(imageNumber)*8;
+    const U32 shape = word(entry), colors = word(entry+4);
+    if (shape > fileSize || fileSize-shape < 24 ||
+        (colors && (colors > fileSize || fileSize-colors < 4))) return GR_GENERIC;
+    const U32 colorCount = colors ? word(colors) : 0;
+    if (colorCount > 256 || (colors && colorCount > (fileSize-colors-4)/4)) return GR_GENERIC;
+    for (U32 color = 0; color < colorCount; ++color)
+    {
+        const std::size_t item = colors+4+std::size_t(color)*4;
+        const U8 index = bytes[item];
+        palette[index] = RGB(bytes[item+1]<<2, bytes[item+2]<<2, bytes[item+3]<<2) | 0xff000000U;
+    }
+    const U32 bounds = word(shape);
+    const U32 candidateWidth = (bounds >> 16)+1;
+    const U32 candidateHeight = (bounds & 0xffff)+1;
+    const S32 xmin = signedWord(shape+8), ymin = signedWord(shape+12);
+    const S32 xmax = signedWord(shape+16), ymax = signedWord(shape+20);
+    // Bound this original UI reader's allocation and encoded row/column traversal.
+    // The original VFX drawer returns without reading packets for empty bounds.
+    // Retail edit-shp uses INT_MAX/INT_MIN extrema for these transparent frames.
+    const bool empty = xmax < xmin || ymax < ymin;
+    if (candidateWidth > 4096 || candidateHeight > 4096 ||
+        (!empty && (std::int64_t(xmax)-xmin+1 > 4096 ||
+                    std::int64_t(ymax)-ymin+1 > 4096)))
+        return GR_GENERIC;
+    U8 transparent = 0xff;
+    for (S32 index=255; index>=0; --index)
+        if (!(palette[index] & 0xff000000U)) { transparent=static_cast<U8>(index); break; }
+    std::vector<U8> decoded(std::size_t(candidateWidth)*candidateHeight, transparent);
+    std::size_t cursor = std::size_t(shape)+24;
+    for (std::int64_t y=ymin; !empty && y<=ymax; ++y)
+    {
+        std::int64_t x=xmin;
+        for (;;)
+        {
+            if (cursor >= fileSize) return GR_GENERIC;
+            const U8 token = bytes[cursor++];
+            if (!token) break; // End of encoded row.
+            if (token == 1)
+            {
+                if (cursor >= fileSize) return GR_GENERIC;
+                x += bytes[cursor++]; // Transparent skip.
+                if (x > std::int64_t(xmax)+1) return GR_GENERIC;
+                continue;
+            }
+            const U32 pixels = token >> 1;
+            const bool literal = (token & 1) != 0;
+            const U32 payload = literal ? pixels : 1;
+            if (payload > fileSize-cursor || x+pixels > std::int64_t(xmax)+1)
+                return GR_GENERIC;
+            for (U32 pixel=0; pixel<pixels; ++pixel, ++x)
+                if (x>=0 && x<candidateWidth && y>=0 && y<candidateHeight)
+                    decoded[std::size_t(y)*candidateWidth+std::size_t(x)] = bytes[cursor+(literal ? pixel : 0)];
+            cursor += payload;
+        }
+    }
+    indexMap = static_cast<U8 *>(std::malloc(decoded.size()));
+    if (!indexMap) return GR_OUT_OF_MEMORY;
+    std::memcpy(indexMap, decoded.data(), decoded.size());
+    width = candidateWidth;
+    height = candidateHeight;
+    return GR_OK;
+#endif
 }
 //---------------------------------------------------------------------------
 //
@@ -368,3 +461,55 @@ void __stdcall CreateVFXReader (struct IImageReader ** reader)
 //-------------------------------------------------------------------------//
 //----------------------------END VFXREAD.CPP------------------------------//
 //-------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool CheckNativeVfxReader()
+{
+    // One original SHP table entry, 4x2 canvas: literal, run, skip and EOL packets.
+    std::vector<U8> fixture(70, 0);
+    const auto put = [&fixture](std::size_t offset, U32 value) {
+        for (U32 byte=0; byte<4; ++byte) fixture[offset+byte]=static_cast<U8>(value>>(byte*8));
+    };
+    put(4,1); put(8,16); put(12,54); put(16,(3U<<16)|1);
+    put(32,3); put(36,1); put(54,3);
+    const U8 colors[12] = {1,63,0,0, 2,0,63,0, 3,0,0,63};
+    std::memcpy(fixture.data()+58,colors,sizeof(colors));
+    const U8 packets[14] = {9,1,2,3,1,0, 1,1,4,2,1,1,0,0};
+    std::memcpy(fixture.data()+40,packets,sizeof(packets));
+    IImageReader *reader = nullptr;
+    CreateVFXReader(&reader);
+    if (!reader) return false;
+    U8 indices[8] = {};
+    COLORREF rgba[8] = {};
+    bool valid = reader->LoadImage(fixture.data(), fixture.size(), 0) == GR_OK &&
+        reader->GetWidth()==4 && reader->GetHeight()==2 &&
+        reader->GetImage(PF_COLOR_INDEX,indices)==GR_OK &&
+        reader->GetImage(PF_RGBA,rgba)==GR_OK;
+    const U8 expected[8] = {1,2,3,1,255,2,2,255};
+    valid = valid && std::memcmp(indices,expected,sizeof(indices))==0 &&
+        rgba[0]==0xff0000fcU && rgba[1]==0xff00fc00U && rgba[2]==0xfffc0000U && rgba[4]==0;
+    valid = valid && reader->LoadImage(fixture.data(), fixture.size(), 1)!=GR_OK &&
+        reader->GetImage(PF_COLOR_INDEX,indices)!=GR_OK;
+    put(24,0x7ffffffeU); put(28,0x7ffffffeU);
+    put(32,0x80000000U); put(36,0x80000000U);
+    valid = valid && reader->LoadImage(fixture.data(),fixture.size(),0)==GR_OK &&
+        reader->GetWidth()==4 && reader->GetHeight()==2 &&
+        reader->GetImage(PF_RGBA,rgba)==GR_OK;
+    for (COLORREF pixel : rgba) valid = valid && pixel==0;
+    put(12,0); // Source no-palette frame: indices remain fully transparent.
+    valid = valid && reader->LoadImage(fixture.data(),fixture.size(),0)==GR_OK &&
+        reader->GetImage(PF_RGBA,rgba)==GR_OK;
+    for (COLORREF pixel : rgba) valid = valid && pixel==0;
+    put(24,0); put(28,0); put(32,3); put(36,1);
+    put(12, fixture.size()-2);
+    valid = valid && reader->LoadImage(fixture.data(),fixture.size(),0)!=GR_OK;
+    put(12,54); fixture[40]=255; // Literal packet would overrun the row.
+    valid = valid && reader->LoadImage(fixture.data(),fixture.size(),0)!=GR_OK &&
+        reader->LoadImage(fixture.data(),0,0)!=GR_OK;
+    reader->Release();
+    return valid;
+}
+}
+#endif

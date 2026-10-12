@@ -587,6 +587,8 @@ SINGLE ObjectControl< Base >::calculateCoastingDistance (SINGLE finalVel, SINGLE
 #if !defined(_WIN32)
 template struct ObjectControl<ObjectTransform
 	<ObjectFrame<IBaseObject, SPACESHIP_SAVELOAD, BASESHIPINIT> > >;
+template struct ObjectControl<ObjectTransform
+	<ObjectFrame<IBaseObject, FIGHTER_SAVELOAD, BASE_FIGHTER_INIT> > >;
 #endif
 
 //------------------------End ObjControl.cpp----------------------------------

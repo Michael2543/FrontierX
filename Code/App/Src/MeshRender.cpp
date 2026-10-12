@@ -1353,6 +1353,9 @@ void MeshRender::Init(ARCHETYPE_INDEX idx)
 					TEXLIB->get_texture_name(id, texName, 255);
 					if (!texName[0])
 					{
+#if !defined(_WIN32)
+						delete [] mesh->imaterial_list;
+#endif
 						// toDo: cleanup properly and prevent leaks
 						//delete mesh->imaterial_list;
 						mesh->imaterial_list = 0;
@@ -1404,6 +1407,9 @@ void MeshRender::Init(ARCHETYPE_INDEX idx)
 						}
 						else
 						{
+#if !defined(_WIN32)
+							delete [] mesh->imaterial_list;
+#endif
 							// toDo: cleanup properly and prevent leaks
 							//delete mesh->imaterial_list;
 							mesh->imaterial_list = 0;
@@ -1415,6 +1421,10 @@ void MeshRender::Init(ARCHETYPE_INDEX idx)
 				{
 					// toDo: cleanup properly and prevent leaks
 					mesh->imaterial_cnt = mesh->material_cnt;
+#if !defined(_WIN32)
+					// Promotion retains manager-owned CQ2 materials, not this legacy array.
+					delete [] mesh->material_list;
+#endif
 					mesh->material_list = 0;
 					mesh->material_cnt = 0;
 				}
@@ -2034,6 +2044,10 @@ FaceGroupRender::~FaceGroupRender()
 	{
 		if (index_list4[i])
 			delete [] index_list4[i];
+#if !defined(_WIN32)
+		if (IB4[i])
+			IB4[i]->Release();
+#endif
 	}
 }
 

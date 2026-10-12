@@ -11,8 +11,26 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#define _wcsdup DuplicateWide
+#define _ltow DecimalToWide
+#include <TManager.h>
+#endif
 
 #include "IHotButton.h"
 #include "Startup.h"
@@ -21,15 +39,16 @@
 #include <DHotButton.h>
 #include "DrawAgent.h"
 #include "IShapeLoader.h"
-#include "Sfx.h"
+#include "SFX.h"
 #include "IActiveButton.h"
 #include <DSounds.h>
 #include "ObjList.h"
 #include <DSpaceship.h>
 #include <DPlatform.h>
 
+#include <cstdint>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 #include <stdio.h>
@@ -545,7 +564,13 @@ void BuildButton::SetBuildModeOn(bool value)
 //
 GENRESULT BuildButton::Notify (U32 message, void *param)
 {
-//	MSG *msg = (MSG *) param;
+#ifdef _WIN32
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==0)
 	switch (message)
@@ -726,7 +751,11 @@ void BuildButton::draw (void)
 		pane.y1 = screenRect.bottom;
 
 		wchar_t buffer[10];
-		swprintf(buffer,L"%d",queueNumber);
+		#ifdef _WIN32
+        swprintf(buffer, L"%d", queueNumber);
+#else
+        std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), L"%d", queueNumber);
+#endif
 		pFont->StringDraw(&pane, 0, 0,buffer);
 	}
 
@@ -781,7 +810,13 @@ void BuildButton::setStatus (void)
 
 				wcscpy(ext, ptr+1);		// copy everything after the mark
 				len = HOTKEY->GetHotkeyText(hotkey, keytext, sizeof(keytext));
+				#ifdef _WIN32
+
 				i = MultiByteToWideChar(CP_ACP, 0, keytext, len, ptr, sizeof(buffer)/sizeof(buffer[0]));
+#else
+
+				i = ConvertHotkeyToWide(keytext, len, ptr, sizeof(buffer)/sizeof(buffer[0]));
+#endif
 				ptr += i;
 				wcscpy(ptr, ext);
 				CQASSERT(wcslen(buffer) < sizeof(buffer)/sizeof(buffer[0]));
@@ -987,7 +1022,7 @@ HANDLE BuildButtonFactory::CreateArchetype (PGENTYPE _pArchetype, GENBASE_TYPE o
 //
 BOOL32 BuildButtonFactory::DestroyArchetype (HANDLE hArchetype)
 {
-	CQASSERT((U32)hArchetype == 1 && pArchetype != 0);
+	CQASSERT(reinterpret_cast<std::uintptr_t>(hArchetype) == 1 && pArchetype != 0);
 
 	pArchetype = 0;
 	SFXMANAGER->CloseHandle(hSound);
@@ -1001,7 +1036,7 @@ BOOL32 BuildButtonFactory::DestroyArchetype (HANDLE hArchetype)
 //
 GENRESULT BuildButtonFactory::CreateInstance (HANDLE hArchetype, IDAComponent ** pInstance)
 {
-	CQASSERT((U32)hArchetype == 1 && pArchetype != 0);
+	CQASSERT(reinterpret_cast<std::uintptr_t>(hArchetype) == 1 && pArchetype != 0);
 	BuildButton * result = new DAComponent<BuildButton>;
 
 	result->init(pArchetype, hSound, pFontType, fontColor);
@@ -1017,7 +1052,11 @@ struct _buildbuttonfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<BuildButtonFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

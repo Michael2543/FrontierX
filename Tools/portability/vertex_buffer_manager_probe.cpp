@@ -48,6 +48,14 @@ int main()
     if (!Expect(manager->add_vertex_buffer(FrontierX::LegacyD3d9::kRpVertexFvf,
                     64, 0) == GR_INVALID_PARMS,
                 "pre-initialization addition rejected")) return 1;
+    IRP_VERTEXBUFFERHANDLE beforeHandle = 0;
+    void * beforeVertices = nullptr;
+    U32 beforeFormat = 0, beforeCount = 0;
+    if (!Expect(manager->acquire_vertex_buffer(FrontierX::LegacyD3d9::kRpVertexFvf,
+                    120, 0, DDLOCK_WRITEONLY | DDLOCK_DISCARDCONTENTS, IVBM_AVBF_EXACT,
+                    &beforeHandle, &beforeVertices, &beforeFormat, &beforeCount) == GR_INVALID_PARMS &&
+                !beforeHandle && !beforeVertices && !beforeFormat && !beforeCount,
+                "uninitialized Fighter batch allocation rejected")) return 1;
     if (!Expect(manager->initialize(nullptr) == GR_OK, "native default initialization")) return 1;
 
     constexpr U32 format = FrontierX::LegacyD3d9::kRpVertexFvf;
@@ -84,11 +92,11 @@ int main()
     void * roundedVertices = nullptr;
     U32 roundedFormat = 0;
     U32 roundedCount = 0;
-    if (!Expect(manager->acquire_vertex_buffer(format, 65, 0, 0, 0,
+    if (!Expect(manager->acquire_vertex_buffer(format, 120, 0, DDLOCK_WRITEONLY | DDLOCK_DISCARDCONTENTS, IVBM_AVBF_EXACT,
                     &rounded, &roundedVertices, &roundedFormat, &roundedCount) == GR_OK &&
                 rounded != 0 && rounded != handle && roundedVertices &&
                 roundedFormat == format && roundedCount == 128,
-                "dynamic rounded allocation")) return 1;
+                "Fighter exact-format batch allocation rounded to 128")) return 1;
     if (!Expect(pipeline.unlock_vertex_buffer(rounded) == GR_OK &&
                 manager->release_vertex_buffer(rounded) == GR_OK,
                 "dynamic buffer release")) return 1;

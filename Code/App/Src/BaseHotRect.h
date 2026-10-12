@@ -13,6 +13,12 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 
+#if !defined(_WIN32)
+#include "Include/NativeAppGlobals.h"
+#include "DrawAgent.h"
+#include "FrontierX/LegacyInput.h"
+#endif
+
 #ifndef TCPOINT_H 
 #include "TCPoint.h"
 #endif
@@ -74,7 +80,9 @@
 #define HOTRECT_PRIORITY  0x80000000
 
 #undef BASEHOTRECTEXTERN
-#ifdef BUILD_TRIM
+#if !defined(_WIN32)
+#define BASEHOTRECTEXTERN
+#elif defined(BUILD_TRIM)
 #define BASEHOTRECTEXTERN __declspec(dllexport)
 #else
 #define BASEHOTRECTEXTERN __declspec(dllimport)
@@ -227,7 +235,7 @@ public:
 		if(systemComponent)
 		{
 			systemComponent->QueryOutgoingInterface("IEventCallback", parentEventConnection);
-			CQASSERT(parentEventConnection!=0);
+			CQASSERT(parentEventConnection.ptr!=nullptr);
 		 	systemComponent->QueryOutgoingInterface("IKeyboardFocus", parentKeyboardFocusConnection);
 			initializeBaseHotRect();
 		}
@@ -240,7 +248,7 @@ public:
 			parent = _parent;
 			CQASSERT(parent);
 			parent->GetBase()->QueryOutgoingInterface("IEventCallback", parentEventConnection);
-			CQASSERT(parentEventConnection!=0);
+			CQASSERT(parentEventConnection.ptr!=nullptr);
 	 		parent->QueryOutgoingInterface("IKeyboardFocus", parentKeyboardFocusConnection);
 			initializeBaseHotRect();
 		}
@@ -250,9 +258,9 @@ public:
 	//
 	void lateInitialize (IDAComponent * systemComponent)
 	{
-	 	CQASSERT(parentEventConnection==0);	// cannot init twice!
+		CQASSERT(parentEventConnection.ptr==nullptr);	// cannot init twice!
 	 	systemComponent->QueryOutgoingInterface("IEventCallback", parentEventConnection);
-	 	CQASSERT(parentEventConnection!=0);
+		CQASSERT(parentEventConnection.ptr!=nullptr);
 	 	systemComponent->QueryOutgoingInterface("IKeyboardFocus", parentKeyboardFocusConnection);
 	 	initializeBaseHotRect();
 	}
@@ -263,6 +271,12 @@ public:
 	{
 		return HEAP->ClearAllocateMemory(size, "BaseHotRect");
 	}
+#if !defined(_WIN32)
+	void operator delete (void *memory)
+	{
+		HEAP->FreeMemory(memory);
+	}
+#endif
 
 	GENRESULT QueryOutgoingInterface (const C8 *connectionName, struct IDAConnectionPoint **connection)
 	{
@@ -325,7 +339,16 @@ public:
 
 	DEFMETHOD(Notify) (U32 message, void *param)
 	{
+#if defined(_WIN32)
 		MSG *msg = (MSG *) param;
+#else
+		const auto *msg = static_cast<const FrontierX::LegacyWindowMessage *>(param);
+		if (message == FrontierX::LegacyMessage::MouseMove ||
+			message == FrontierX::LegacyMessage::LeftButtonDown)
+		{
+			if (!msg || msg->message != message) return GR_INVALID_PARMS;
+		}
+#endif
 		GENRESULT genresult = GR_OK;
 
 		switch (message)
@@ -371,6 +394,7 @@ public:
 				DrawRect();
 			break;
 
+#if defined(_WIN32)
 		case WM_MOUSEMOVE:
 			CheckRect(S16(LOWORD(msg->lParam)), S16(HIWORD(msg->lParam)));
 			break;
@@ -380,6 +404,17 @@ public:
 			break;
 
 		case WM_CLOSE:
+#else
+		case FrontierX::LegacyMessage::MouseMove:
+			CheckRect(S16(msg->lparam & 0xffff), S16((msg->lparam >> 16) & 0xffff));
+			break;
+
+		case FrontierX::LegacyMessage::LeftButtonDown:
+			onRequestKeyboardFocus(S16(msg->lparam & 0xffff), S16((msg->lparam >> 16) & 0xffff));
+			break;
+
+		case FrontierX::LegacyMessage::Close:
+#endif
 		case CQE_FLUSHMESSAGES:
 			{
 				MESSAGE *pNode;

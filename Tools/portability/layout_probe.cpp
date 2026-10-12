@@ -4,6 +4,7 @@
 
 #include "Include/NativeAppGlobals.h"
 #include "CQTrace.h"
+#include "resource.h"
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -14,6 +15,9 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #endif
 #include <DataDef.h>
+#include <DMBaseData.h>
+#include <DButton.h>
+#include "Scripts/Include/ScriptDef.h"
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
@@ -27,6 +31,8 @@
 static_assert(sizeof(void *) == 8, "The Linux port requires a 64-bit process");
 static_assert(sizeof(long) == 8, "The Linux x86_64 probe requires the LP64 data model");
 static_assert(sizeof(U8) == 1, "U8 must remain an 8-bit storage type");
+static_assert(sizeof(GT_BUTTON) == 84,
+    "Original button archetypes retain their Win32 schema extent and text/image offsets");
 static_assert(sizeof(S8) == 1, "S8 must remain an 8-bit storage type");
 static_assert(sizeof(U16) == 2, "U16 must remain a 16-bit storage type");
 static_assert(sizeof(S16) == 2, "S16 must remain a 16-bit storage type");
@@ -35,6 +41,13 @@ static_assert(sizeof(S32) == 4, "S32 must remain a 32-bit storage type");
 static_assert(sizeof(BOOL32) == 4, "BOOL32 must remain a 32-bit storage type");
 static_assert(sizeof(U64) == 8, "U64 must remain a 64-bit storage type");
 static_assert(sizeof(S64) == 8, "S64 must remain a 64-bit storage type");
+static_assert(sizeof(MISSION_SAVELOAD) == 104,
+    "Mission save records retain their original extent");
+static_assert(offsetof(MISSION_SAVELOAD, caps) == 70,
+    "Mission capabilities retain their original byte-aligned offset");
+static_assert(offsetof(MISSION_SAVELOAD, groupID) == 76 &&
+    offsetof(MISSION_SAVELOAD, pendingOp) + sizeof(U32) == 104,
+    "Mission fields after capabilities retain their original offsets");
 static_assert(sizeof(MPartRef) == 16,
 	"MPartRef in script mission data must retain its Win32 save stride");
 static_assert(alignof(MPartRef) == 4,
@@ -106,6 +119,30 @@ bool checkScriptReferenceBytes()
 	return true;
 }
 
+bool checkEmptyScriptSaveStorage()
+{
+    struct EmptyProgram : CQBaseProgram, CQ_SCRIPT_SAVE_BASE(SolTrain_STowerFinished_Save)
+    {
+        void Initialize(U32, const MPartRef &) override {}
+        bool Update() override { return true; }
+        void Destroy() override {}
+    };
+    EmptyProgram instance;
+    CQBaseProgram *program = &instance;
+    auto *save = static_cast<SolTrain_STowerFinished_Save *>(&instance);
+    const auto offset = reinterpret_cast<const char *>(save) -
+        reinterpret_cast<const char *>(program);
+    if (offset < static_cast<std::ptrdiff_t>(sizeof(CQBaseProgram)) ||
+        offset != static_cast<std::ptrdiff_t>(
+            scriptoffsetofclass(SolTrain_STowerFinished_Save, EmptyProgram)))
+        return false;
+    static_assert(sizeof(SolTrain_STowerFinished_Save) == 1,
+        "Empty original script save records retain their one-byte extent");
+    const U8 savedByte = 0xa5;
+    std::memcpy(save, &savedByte, sizeof(savedByte));
+    return program->Update();
+}
+
 bool checkSolTrainMissionOffsets()
 {
 	MissionData data = {};
@@ -151,11 +188,24 @@ bool checkCapabilityBits()
 
 int main()
 {
+    GT_BUTTON button{};
+    const auto *buttonBytes = reinterpret_cast<const unsigned char *>(&button);
+    if (reinterpret_cast<const unsigned char *>(button.fontName) - buttonBytes != 8 ||
+        reinterpret_cast<const unsigned char *>(button.shapeFile) - buttonBytes != 49)
+    {
+        std::cerr << "Original button schema offsets differ\n";
+        return 1;
+    }
 	if (!checkScriptReferenceBytes())
 	{
 		std::cerr << "MPartRef retained pointer bytes in a new script reference\n";
 		return 4;
 	}
+    if (!checkEmptyScriptSaveStorage())
+    {
+        std::cerr << "Empty script save overlaps polymorphic program storage\n";
+        return 1;
+    }
 	if (!checkSolTrainMissionOffsets())
 	{
 		std::cerr << "Sol_T mission reference offsets changed\n";

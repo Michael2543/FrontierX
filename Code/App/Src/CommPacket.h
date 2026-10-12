@@ -1,5 +1,8 @@
 #ifndef COMMPACKET_H
 #define COMMPACKET_H
+#ifndef _WIN32
+#include <cstring>
+#endif
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                               CommPacket.h                               //
@@ -630,8 +633,17 @@ struct USR_PACKET : Type
 #else
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 inline void VerifySet (U32 objectID[MAX_SELECTED_UNITS], int numObjects)
+#else
+inline void VerifySet (const void * packetObjectID, int numObjects)
+#endif
 {
+#ifndef _WIN32
+	U32 alignedObjectID[MAX_SELECTED_UNITS];
+	std::memcpy(alignedObjectID, packetObjectID, numObjects * sizeof(U32));
+	const U32 * const objectID = alignedObjectID;
+#endif
 	int i;
 
 	for (i = 1; i < numObjects; i++)

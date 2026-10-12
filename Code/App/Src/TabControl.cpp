@@ -11,8 +11,17 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "CQTrace.h"
+#include "NativeAppGlobals.h"
+#include <IRenderPrimitive.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#endif
 
 #include <TComponent.h>
 #include <DTabControl.h>
@@ -32,7 +41,7 @@
 #include "DrawAgent.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 
@@ -353,7 +362,7 @@ GENRESULT TabControl::Notify (U32 message, void *param)
 		break;
 
 	case CQE_LHOTBUTTON:
-		onLeftHotbutton((U32)param);
+		onLeftHotbutton(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)));
 		break;
 
 //	case WM_KEYDOWN:
@@ -519,7 +528,11 @@ struct _tabcontrolfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<TabControlFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

@@ -13,13 +13,46 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
+
+#include <IRenderPrimitive.h>
+#include "MyVertex.h"
 #include "TObject.h"
 #include "Camera.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -34,20 +67,20 @@
 #include "IMissionActor.h"
 #include "IEngineTrail.h"
 #include "TManager.h"
-#include "Anim2D.h"
+#include "anim2d.h"
 #include "UserDefaults.h"
 
 #include <TComponent.h>
 #include <lightman.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <ITextureLibrary.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Pixel.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -55,6 +88,14 @@
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 //
+static_assert(sizeof(BASE_BOLT_SAVELOAD) == 56);
+static_assert(offsetof(BASE_BOLT_SAVELOAD, direction) == 44);
+static_assert(sizeof(BOLT_SAVELOAD) == 96);
+static_assert(sizeof(BT_PLASMABOLT_DATA::_pBolt) == 48);
+static_assert(sizeof(BT_PLASMABOLT_DATA) == 380);
+static_assert(offsetof(BT_PLASMABOLT_DATA, bolts) == 188);
+static_assert(offsetof(BT_PLASMABOLT_DATA, bolts) + sizeof(BT_PLASMABOLT_DATA::bolts) == sizeof(BT_PLASMABOLT_DATA));
+
 struct PlasmaBoltArchetype : RenderArch
 {
 	const char *name;

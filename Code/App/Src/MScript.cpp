@@ -679,6 +679,10 @@ static void loadProgramData (IFileSystem * inFile, IViewConstructor2 * parser)
 				appendProgram(program, script);
 			}
 		} while (pDir->FindNextFile(handle, &data));
+#if !defined(_WIN32)
+		if (handle != INVALID_HANDLE_VALUE)
+			pDir->FindClose(handle);
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -880,8 +884,15 @@ void MScript::Load (IFileSystem * inFile)
 void MScript::LoadScript (void)
 {
 #if !defined(_WIN32)
-	std::fputs("Native MScript briefing module loading is not implemented\n", stderr);
-	std::abort();
+	// Use the same source module/resource binding as mission load, then its
+	// original briefing entry. No saved mission programs are loaded here.
+	Load(static_cast<IFileSystem *>(nullptr));
+	if (!findScript("SolTrain_Briefing") || !BRIEFING)
+	{
+		std::fputs("Native training briefing prerequisites missing\n", stderr);
+		std::abort();
+	}
+	runStartProgram(true);
 #else
 	char abuffer[MAX_PATH];
 	int len;

@@ -153,6 +153,13 @@ class NativeShellTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             if FONT_FILE:
                 self.assertIn('Native source teletype counted string, pause, expiry and flush checked', result.stdout)
+                self.assertIn('subtitle wrapping and release checked', result.stdout)
+                self.assertIn('status/hint/scrolling lifecycle checked', result.stdout)
+                self.assertIn('hot-rectangle input/post/lifecycle checked', result.stdout)
+                self.assertIn('original VFX image reader checked', result.stdout)
+                self.assertIn('unit alert lifecycle checked', result.stdout)
+            if GPU_ENABLED:
+                self.assertIn('Native effect-animation randomization and RNG consumption checked', result.stdout)
             self.assertIn('Native App parser schema loaded from embedded data.i',
                           result.stdout)
             self.assertIn('Native App mission source opened through SPMAPDIR', result.stdout)
@@ -172,6 +179,9 @@ class NativeShellTests(unittest.TestCase):
             self.assertIn('Native mission loading: 5%', result.stderr)
             self.assertIn('Native App MusicManager initialized', result.stdout)
             self.assertIn('Native ISFX BUTTONPRESS1 preload/open/play/stop checked', result.stdout)
+            if GPU_ENABLED:
+                self.assertIn('Native operation storage alignment/copy/load checked', result.stdout)
+                self.assertIn('Native objective storage compaction/state checked', result.stdout)
             self.assertIn('Native App PROFILEDIR CreateProfileParser checked', result.stdout)
             self.assertIn('mission not started', result.stdout)
             (self.data / 'SFX/interface1.wav').unlink()
@@ -286,9 +296,14 @@ class NativeShellTests(unittest.TestCase):
                 ('--mission-source',), ('--mission-source', '../Sol_Train.dmission'),
                 ('--mission-source', 'Sol_Train.mission'),
                 ('--mission-start',),
+                ('--mission-briefing',),
+                ('--mission-briefing', '--mission-briefing'),
+                ('--mission-briefing', '--mission-start', '--hidden'),
                 ('--skip-sector-map',),
                 ('--skip-space-background',),
                 ('--skip-unit-labels',),
+                ('--mission-alert-smoke',),
+                ('--mission-hint-check',),
                 ('--base-textures-only',),
                 ('--skip-legacy-lighting',),
                 ('--skip-training-speech',),

@@ -11,23 +11,37 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <cstring>
+#include <cstdlib>
+#endif
 
 #include "TObject.h"
 #include "ObjList.h"
 #include "Startup.h"
 #include <DGroup.h>
+#include <cstddef>
+
+static_assert(sizeof(GROUPOBJ_SAVELOAD) == 8, "group save layout");
+static_assert(offsetof(GROUPOBJ_SAVELOAD, numObjects) == 4, "group save object count offset");
 #include "MGlobals.h"
 #include "Mission.h"
 #include "IGroup.h"
 #include "MPart.h"
 #include "OpAgent.h"
 
-#include <Engine.h>
+#if !defined(_WIN32)
+#include <ICamera.h>
+#endif
+#include <ENGINE.H>
 #include <TSmartPointer.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 

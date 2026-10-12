@@ -1,5 +1,9 @@
 #ifndef TPLATFORM_H
 #define TPLATFORM_H
+#ifndef _WIN32
+#include <cstddef>
+#include <cstring>
+#endif
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                                TPlatform.h                               //
@@ -139,6 +143,10 @@ struct _NO_VTABLE Platform : public 	ObjectEffectTarget
 		U16 hullPoints;
 		U16 supplies;
 	};
+#ifndef _WIN32
+	static_assert(sizeof(NETVALUES) == 4 && offsetof(NETVALUES, hullPoints) == 0 &&
+		offsetof(NETVALUES, supplies) == 2, "Platform sync byte layout");
+#endif
 	
 	ExplodeNode explodeNode;
 	struct InitNode    initNode;
@@ -738,6 +746,22 @@ template <class SaveStruct, class InitStruct>
 void Platform<SaveStruct,InitStruct>::ResolveAssociations (void)
 {
 	FRAME_resolve();
+#if !defined(_WIN32)
+	// The saved single angle cannot reconstruct the planet slot's full basis.
+	// Use the existing association without re-parking or resetting rally state.
+	if (buildPlanetID && buildSlot)
+	{
+		IBaseObject * obj = OBJLIST->FindObject(buildPlanetID);
+		OBJPTR<IPlanet> planet;
+		if (obj && obj->QueryInterface(IPlanetID, planet))
+		{
+			TRANSFORM restored = transform;
+			restored.set_orientation(planet->GetSlotTransform(buildSlot).get_orientation());
+			SetTransform(restored, systemID);
+			ENGINE->update_instance(instanceIndex, 0, 0);
+		}
+	}
+#endif
 }
 //--------------------------------------------------------------------------------------
 //
@@ -982,7 +1006,11 @@ void Platform<SaveStruct,InitStruct>::OnMasterChange (bool bIsMaster)
 	{
 		if(bPlatDead)
 		{
+#if defined(_WIN32)
 			UnregisterWatchersForObjectForPlayerMask(this,((~shadowVisibilityFlags) << 1)|(0x01 << SYSVOLATILEPTR));
+#else
+			UnregisterWatchersForObjectForPlayerMask(this,((~U32(shadowVisibilityFlags)) << 1)|(U32(1) << SYSVOLATILEPTR));
+#endif
 		}
 	}
 }
@@ -1298,12 +1326,21 @@ U32 Platform<SaveStruct,InitStruct>::getSyncPlatData (void * buffer)
 
 	if (bPlatDead==false)
 	{
+#ifndef _WIN32
+		NETVALUES alignedData;
+		NETVALUES * const data = &alignedData;
+#else
 		NETVALUES * const data = (NETVALUES *) buffer;
+#endif
 
 		if (supplies != trueNetSupplies || hullPoints != trueNetHull)  // have values changed?
 		{
 			data->supplies = supplies;
 			data->hullPoints = hullPoints;
+#ifndef _WIN32
+			// Sync records can start at an unaligned byte offset.
+			std::memcpy(buffer, data, sizeof(*data));
+#endif
 			trueNetSupplies = supplies;
 			trueNetHull = hullPoints;
 			result = sizeof(*data);
@@ -1317,8 +1354,16 @@ U32 Platform<SaveStruct,InitStruct>::getSyncPlatData (void * buffer)
 template <class SaveStruct, class InitStruct>
 void Platform<SaveStruct,InitStruct>::putSyncPlatData (void * buffer, U32 bufferSize, bool bLateDelivery)
 {
+#ifndef _WIN32
+	NETVALUES alignedData;
+	const NETVALUES * const data = &alignedData;
+#else
 	const NETVALUES * const data = (NETVALUES *) buffer;
+#endif
 	CQASSERT(bufferSize == sizeof(*data));
+#ifndef _WIN32
+	std::memcpy(&alignedData, buffer, sizeof(alignedData));
+#endif
 
 	supplies = data->supplies;
 	CQASSERT((!THEMATRIX->IsMaster()) || data->hullPoints <= hullPointsMax);
@@ -2340,8 +2385,16 @@ void Platform<SaveStruct,InitStruct>::DrawHighlighted (void)
 			{
 				SINGLE diff = (0.5F - hull) / (0.5F - 0.25F);
 				U8 r, g, b;
+				#if defined(_WIN32)
 				r = (U8) ((224 - 227) * diff) + 227;
+#else
+				r = static_cast<U8>(static_cast<S32>((224 - 227) * diff) + 227);
+#endif
+				#if defined(_WIN32)
 				g = (U8) ((51 - 227) * diff) + 227;
+#else
+				g = static_cast<U8>(static_cast<S32>((51 - 227) * diff) + 227);
+#endif
 				b = (U8) ((37 - 34) * diff) + 34;
 				color = RGB(r,g,b);
 			}
@@ -2567,7 +2620,11 @@ void Platform<SaveStruct,InitStruct>::SelfDestruct (bool bExplode)
 		if(objMapNode)
 			objMapNode->flags |= (OM_SHADOW| (flags << 24));
 		if(THEMATRIX->IsMaster())
+#if defined(_WIN32)
 			UnregisterWatchersForObjectForPlayerMask(this,((~shadowVisibilityFlags) << 1)|(0x01 << SYSVOLATILEPTR));
+#else
+			UnregisterWatchersForObjectForPlayerMask(this,((~U32(shadowVisibilityFlags)) << 1)|(U32(1) << SYSVOLATILEPTR));
+#endif
 	}
 }
 //---------------------------------------------------------------------------
@@ -3220,7 +3277,12 @@ PLATFORM_INIT<Base>::~PLATFORM_INIT (void)
 {
 	if (animArchetype != -1)
 		ANIM->release_script_set_arch(animArchetype);
+#if defined(_WIN32)
 	if (archIndex != -1)
+#else
+	// CreateMeshArch owns this engine reference; archIndex is only an alias.
+	if (meshArch == NULL && archIndex != -1)
+#endif
 		ENGINE->release_archetype(archIndex);
 	if (smoke_archID != -1)
 		ENGINE->release_archetype(smoke_archID);
@@ -3258,6 +3320,14 @@ PLATFORM_INIT<Base>::~PLATFORM_INIT (void)
 
 	if (smesh)
 		delete smesh;
+#if !defined(_WIN32)
+	if (meshArch)
+	{
+		meshArch->Release();
+		meshArch = NULL;
+		archIndex = -1;
+	}
+#endif
 //	if (m_extent)
 //		delete m_extent;
 }

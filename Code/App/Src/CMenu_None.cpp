@@ -11,8 +11,14 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <cstdlib>
+#include <cstdint>
+#endif
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -139,7 +145,11 @@ GENRESULT CMenu_None::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
+		#if defined(_WIN32)
 		onUpdate(U32(param) >> 10);
+#else
+        onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 
 	}
@@ -232,7 +242,11 @@ struct _cmenu_none: GlobalComponent
 	virtual void Startup (void)
 	{
 		menu = new DAComponent<CMenu_None>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&menu);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

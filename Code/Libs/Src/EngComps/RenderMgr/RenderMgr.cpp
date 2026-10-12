@@ -1204,6 +1204,16 @@ BOOL32 RenderMgr::find_visible_polys( INSTANCE_INDEX inst_index, ICamera *camera
 	{
 		if( projected[i].z != 0.0f )
 		{
+#if !defined(_WIN32)
+			// ViewPoint stores integers. Off-screen projections can exceed their
+			// range; reject those corners before the float-to-int conversion.
+			const double x = projected[i].x, y = projected[i].y;
+			if (!(x >= std::numeric_limits<int>::min() &&
+			      x <= std::numeric_limits<int>::max() &&
+			      y >= std::numeric_limits<int>::min() &&
+			      y <= std::numeric_limits<int>::max()))
+				continue;
+#endif
 			out_points[out_num_points].x = projected[i].x;
 			out_points[out_num_points].y = projected[i].y;
 			out_num_points++;
@@ -1733,7 +1743,6 @@ bool FrontierX::RegisterNativeRenderManager( ICOManager *manager )
 #endif
 
 // EOF
-
 
 
 

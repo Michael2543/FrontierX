@@ -368,6 +368,9 @@ BOOL32 Explosion::Update (void)
 					extentObj = owner.Ptr();
 					CQASSERT(extentObj);
 //					extentObj->SetMeshInfoTree(0);
+#if !defined(_WIN32)
+					extentObj->SetMeshInfoTree(0);
+#endif
 					//	owner = 0;
 					
 					if (shrapnel_cnt)
@@ -553,19 +556,34 @@ void Explosion::doExplode (void)
 			offset.z = (rand() * dim.z *0.25 / RAND_MAX) - dim.z*0.125;
 			
 			boom_pos += offset;
+#if defined(_WIN32)
 			if (boom_pos.x < bounding_box[1]+100 || boom_pos.x > bounding_box[0]-100)
 				boom_pos.x -= 2*offset.x;
 			//	if (boom_pos.y < bounding_box[3] || boom_pos.y > bounding_box[2])
 			//		boom_pos.y -= 2*offset.y;
 			if (boom_pos.z < bounding_box[5]+100 || boom_pos.z > bounding_box[4]-100)
 				boom_pos.z -= 2*offset.z;
+#else
+			// Native extents slice X/Y; Z is the surface height, as in Damage.
+			if (boom_pos.x < bounding_box[1] || boom_pos.x > bounding_box[0])
+				boom_pos.x -= 2*offset.x;
+			if (boom_pos.y < bounding_box[3] || boom_pos.y > bounding_box[2])
+				boom_pos.y -= 2*offset.y;
+#endif
 			
 			OBJPTR<IExtent> extentObj;
 			owner->QueryInterface(IExtentID,extentObj);
 			CQASSERT(extentObj);
 			
+#if defined(_WIN32)
 			const RECT *rect = extentObj->GetExtentRect(boom_pos.z);
 			boom_pos.y = rect->top+50;
+#else
+			const bool sliceX = bounding_box[0]-bounding_box[1]+1 >
+				bounding_box[2]-bounding_box[3]+1;
+			const RECT *rect = extentObj->GetExtentRect(sliceX ? boom_pos.x : boom_pos.y);
+			boom_pos.z = rect->top+50;
+#endif
 			
 		//	Matrix R = transform.get_orientation();
 		//	Vector loc = pos + R * boom_pos;
@@ -609,7 +627,11 @@ void Explosion::doExplode (void)
 			{
 				// Disconnect and explode random child object.
 				
+#if defined(_WIN32)
 				int child_to_explode = rand() * num_first_children / RAND_MAX;
+#else
+				int child_to_explode = S64(rand()) * num_first_children / RAND_MAX;
+#endif
 				int cnt = 0;
 				
 				INSTANCE_INDEX child = ENGINE->get_instance_child_next(ownerIdx,0,INVALID_INSTANCE_INDEX);
@@ -714,6 +736,11 @@ void Explosion::doRipple(void)
 			ENGINE->destroy_instance(ownerIdx);
 			DestroyMeshInfoTree(mesh_info);
 //			extentObj->SetMeshInfoTree(out0);
+#if !defined(_WIN32)
+			VOLPTR(IExtent) extentObj = owner.Ptr();
+			CQASSERT(extentObj);
+			extentObj->SetMeshInfoTree(out0);
+#endif
 			mesh_info = out0;
 			CQASSERT(eng_inst);
 			children->numChildren = out0->ListChildren(children->mi);
@@ -795,6 +822,11 @@ void Explosion::doChunk(void)
 			ENGINE->destroy_instance(ownerIdx);
 			DestroyMeshInfoTree(mesh_info);
 //			extentObj->SetMeshInfoTree(out0);
+#if !defined(_WIN32)
+			VOLPTR(IExtent) extentObj = owner.Ptr();
+			CQASSERT(extentObj);
+			extentObj->SetMeshInfoTree(out0);
+#endif
 			mesh_info = out0;
 			CQASSERT(eng_inst);
 			children->numChildren = out0->ListChildren(children->mi);
@@ -1443,10 +1475,19 @@ BOOL32 Explosion::InitExplosion (IBaseObject * _owner,U32 _playerID,U16 _sensorR
 		CQASSERT(extentObj);
 		
 		boom_pos.x = bounding_box[1] + rand() * (bounding_box[0] - bounding_box[1]) / RAND_MAX;
+#if defined(_WIN32)
 		//	boom_pos.y = bounding_box[3] + rand() * (bounding_box[2] - bounding_box[3]) / RAND_MAX;
 		boom_pos.z = bounding_box[5] + rand() * (bounding_box[4] - bounding_box[5]) / RAND_MAX;
 		const RECT *rect = extentObj->GetExtentRect(boom_pos.z);
 		boom_pos.y = rect->top+50;
+#else
+		// Retain the two original random draws, sampling the native X/Y plane.
+		boom_pos.y = bounding_box[3] + rand() * (bounding_box[2] - bounding_box[3]) / RAND_MAX;
+		const bool sliceX = bounding_box[0]-bounding_box[1]+1 >
+			bounding_box[2]-bounding_box[3]+1;
+		const RECT *rect = extentObj->GetExtentRect(sliceX ? boom_pos.x : boom_pos.y);
+		boom_pos.z = rect->top+50;
+#endif
 	}
 
 	IBaseObject::MDATA mdata;

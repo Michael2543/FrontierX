@@ -5,6 +5,7 @@
 #include "vector.h"
 #include "GridVector.h"
 #include "RandomGen.h"
+#include "inv_sqrt.h"
 
 #include <cmath>
 #include <cstring>
@@ -28,6 +29,15 @@ bool vector_is(const frontierx::Vec3 &value, float x, float y, float z)
 
 int main()
 {
+	// The production launcher requires the Win32-sized IEEE float seed on LP64.
+	static_assert(sizeof(_flint) == sizeof(float));
+	ISQRT launcherSqrt;
+	for (float value : {0.25F, 1.0F, 2.0F, 9.0F, 65536.0F})
+		if (!close(launcherSqrt.Sqrt(value), std::sqrt(value),
+			std::sqrt(value) * 2.0e-6F)) return 31;
+	// Original ObjectControl::setPosition must accept an exact path endpoint.
+	if (frontierx::legacy_sqrt(0.0F) != 0.0F ||
+		frontierx::legacy_sqrt(-0.0F) != 0.0F) return 32;
 	RandomGen fieldRandom(42);
 	const U32 fieldValues[] = {667, 288, 870, 165, 162, 556};
 	for (U32 expected : fieldValues)

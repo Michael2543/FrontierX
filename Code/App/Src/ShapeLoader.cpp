@@ -11,17 +11,26 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppImage.h"
+#include <cstring>
+#include <cstdlib>
+#endif
 
 #include "IShapeLoader.h"
+#include "DrawAgent.h"
+#include <TManager.h>
 #include "Startup.h"
 #include "GenData.h"
 #include "CQTrace.h"
 #include "IImageReader.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 #include <HeapObj.h>
 #include <TSmartPointer.h>
@@ -34,6 +43,9 @@ struct SHPTYPE
 	PGENTYPE pArchetype;
 	const void * pImage;				
 	DA::FILETYPE fileType;
+#ifndef _WIN32
+    U32 imageBytes;
+#endif
 
 	SHPTYPE (void)
 	{
@@ -42,7 +54,14 @@ struct SHPTYPE
 	bool init (const char * filename)
 	{
 		// funky way to determine the file type
-		U32 file_type = ((U32 *)(filename + strlen(filename) - 4))[0] & ~0x20202000;
+		#ifdef _WIN32
+        U32 file_type = ((U32 *)(filename + strlen(filename) - 4))[0] & ~0x20202000;
+#else
+        if (!filename || strlen(filename) < 4 || !INTERFACEDIR) return false;
+        const auto *suffix = reinterpret_cast<const unsigned char *>(filename + strlen(filename) - 4);
+        const U32 file_type = (U32(suffix[0]) | (U32(suffix[1]) << 8) |
+            (U32(suffix[2]) << 16) | (U32(suffix[3]) << 24)) & ~0x20202000U;
+#endif
 
 		switch (file_type)
 		{
@@ -58,7 +77,7 @@ struct SHPTYPE
 
 		default:
 			CQBOMB0("Unknown file type");
-			break;
+            return false;
 		}
 
 		// now load the file
@@ -71,8 +90,12 @@ struct SHPTYPE
 			return false;
 		}
 		U32 size = parent->GetFileSize(hFile);
+#ifndef _WIN32
+        imageBytes = size;
+#endif
 		pImage = (const void *) malloc(size);
-		DWORD dwRead;
+		DWORD dwRead = 0;
+        if (!pImage) { parent->CloseHandle(hFile); return false; }
 		parent->ReadFile(hFile, (void *)pImage, size, &dwRead, 0);
 		parent->CloseHandle(hFile);
 		return (dwRead == size);
@@ -147,6 +170,13 @@ ShapeLoader::~ShapeLoader (void)
 //
 GENRESULT ShapeLoader::CreateDrawAgent (U32 subImage, struct IDrawAgent ** drawAgent, RECT * pRect)
 {
+#ifndef _WIN32
+    if (!drawAgent) return GR_INVALID_PARMS;
+    *drawAgent = nullptr;
+    COMPTR<IImageReader> imageReader;
+    if (CreateImageReader(subImage, imageReader) == GR_OK && imageReader)
+        ::CreateDrawAgent(imageReader, drawAgent, FALSE, pRect);
+#else
 	if (pShpType->fileType == DA::VFX)
 	{
 		GT_VFXSHAPE * data = (GT_VFXSHAPE *)(GENDATA->GetArchetypeData(pShpType->pArchetype));
@@ -163,6 +193,7 @@ GENRESULT ShapeLoader::CreateDrawAgent (U32 subImage, struct IDrawAgent ** drawA
 			::CreateDrawAgent(imageReader, drawAgent, FALSE/*bHiRes removed*/, pRect);
 	}
 
+#endif
 	return (*drawAgent!=0) ? GR_OK : GR_GENERIC;
 }
 //--------------------------------------------------------------------------//
@@ -170,6 +201,10 @@ GENRESULT ShapeLoader::CreateDrawAgent (U32 subImage, struct IDrawAgent ** drawA
 GENRESULT ShapeLoader::CreateImageReader (U32 subImage, struct IImageReader ** imageReader)
 {
 	int offset = 0;
+#ifndef _WIN32
+    if (!imageReader) return GR_INVALID_PARMS;
+    *imageReader = nullptr;
+#endif
 
 	switch (pShpType->fileType)
 	{
@@ -189,7 +224,13 @@ GENRESULT ShapeLoader::CreateImageReader (U32 subImage, struct IImageReader ** i
 
 	if (*imageReader)
 	{
-		GENRESULT result = (*imageReader)->LoadImage(((char*)(pShpType->pImage)) + offset, 0, subImage);
+		#ifdef _WIN32
+        GENRESULT result = (*imageReader)->LoadImage(((char*)(pShpType->pImage)) + offset, 0, subImage);
+#else
+        GENRESULT result = pShpType->imageBytes >= U32(offset) ?
+            (*imageReader)->LoadImage(static_cast<char *>(const_cast<void *>(pShpType->pImage)) + offset,
+                pShpType->imageBytes - U32(offset), subImage) : GR_GENERIC;
+#endif
 		if (result != GR_OK)
 		{
 			(*imageReader)->Release();
@@ -319,7 +360,11 @@ struct _vfxshapefactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<ShapeLoaderFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

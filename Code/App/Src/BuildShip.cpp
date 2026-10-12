@@ -11,8 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "TObjTrans.h"
 #include "TObjFControl.h"
@@ -20,28 +51,28 @@
 #include "IBuildShip.h"
 #include <DShipSave.h>
 #include "TObject.h"
-#include "Objlist.h"
-#include <DSpaceShip.h>
+#include "ObjList.h"
+#include <DSpaceship.h>
 #include "Startup.h"
 #include "Mission.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IAnim.h"
 #include "IExplosion.h"
 #include "IBlast.h"
 #include "anim2d.h"
-#include "archHolder.h"
+#include "ArchHolder.h"
 #include "Sector.h"
 #include "Camera.h"
 #include "UserDefaults.h"
 #include "MGlobals.h"
-#include "Fogofwar.h"
+#include "FogOfWar.h"
 #include "MeshExplode.h"
 #include "TObjRender.h"
 
 #include "CQLight.h"
 
 #include <IHardPoint.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TSmartPointer.h>
 #include <TComponent.h>
@@ -316,7 +347,11 @@ void BuildShip::Render (void)
 //		updateChildPositions();
 
 		TRANSFORM result;
+#if defined(_WIN32)
 		result.TRANSFORM::TRANSFORM(sparkHP.orientation, sparkHP.point);
+#else
+		result = TRANSFORM(sparkHP.orientation, sparkHP.point);
+#endif
 		result = ENGINE->get_transform(sparkHPIndex).multiply(result);
 		BATCH->set_render_state(D3DRS_ZWRITEENABLE,FALSE);
 		BATCH->set_render_state(D3DRS_ALPHABLENDENABLE,TRUE);
@@ -760,7 +795,11 @@ TRANSFORM BuildShip::getStartPos()
 	if(dockIndex != -1)
 	{
 		TRANSFORM result;
+#if defined(_WIN32)
 		result.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#else
+		result = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#endif
 		result = ENGINE->get_transform(dockIndex).multiply(result);
 		return result;
 	}

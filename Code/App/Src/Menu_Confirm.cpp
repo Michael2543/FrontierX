@@ -10,8 +10,23 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include "Include/NativeAppTextResources.h"
+#include "GenData.h"
+#include "Cursor.h"
+#include "resource.h"
+#include "EventPriority.h"
+#include <EventSys.h>
+#include <HeapObj.h>
+#include <cstring>
+#include <cwchar>
+#include <stdexcept>
+#endif
 #include <wchar.h>
 
 #include "Frame.h"
@@ -46,8 +61,13 @@ struct Menu_CQMessageBox : public DAComponent<Frame>
 	Menu_CQMessageBox (const GT_MESSAGEBOX * pData, wchar_t * _message, wchar_t * _title, U32 uType = MB_OK)
 	{
 		data = 	*pData;
+#if defined(_WIN32)
 		swprintf(szMessage, L"%s", _message);
 		swprintf(szTitle, L"%s", _title);
+#else
+		std::swprintf(szMessage, MAX_CHARS, L"%ls", _message);
+		std::swprintf(szTitle, MAX_CHARS, L"%ls", _title);
+#endif
 		type = uType;
 
 		eventPriority = EVENT_PRIORITY_CONFIRM_EXIT;
@@ -243,7 +263,11 @@ U32 __stdcall CQMessageBox (wchar_t * message, wchar_t * title, U32 uType, BaseH
 	
 	if (GENDATA==0 || (pData = ((const GT_MESSAGEBOX *) GENDATA->GetArchetypeData("CQMessageBox"))) == 0)
 	{
+#if defined(_WIN32)
 		return MessageBoxW(hMainWindow, message, title, uType);
+#else
+		throw std::runtime_error("Native original CQMessageBox resource unavailable");
+#endif
 	}
 	else
 	{

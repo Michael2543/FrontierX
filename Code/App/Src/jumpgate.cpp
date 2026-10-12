@@ -1315,7 +1315,19 @@ void Jumpgate::StashVertices(U32 mesh_id)
 		s_sort[v_pos].p = transform*(p_sort[v_cnt]+data->billboardMesh[mesh_id].offset);
 		s_sort[v_pos].params = params;
 	//	v_sort[v_pos] = (s_sort[v_cnt].p-cpos).magnitude();
+#if defined(_WIN32)
 		v_sort[v_pos] = -s_sort[v_cnt].p.y;
+#else
+        const float sortDepth = -s_sort[v_cnt].p.y;
+        if (!std::isfinite(sortDepth) || sortDepth < -2147483648.0F ||
+            sortDepth >= 2147483648.0F)
+        {
+            CQBOMB0("Native jumpgate depth sort coordinate out of range");
+            std::abort();
+        }
+        // Preserve the 32-bit signed-truncation/wrap key used by this sorter.
+        v_sort[v_pos] = static_cast<U32>(static_cast<S32>(sortDepth));
+#endif
 		v_pos++;
 	}
 }

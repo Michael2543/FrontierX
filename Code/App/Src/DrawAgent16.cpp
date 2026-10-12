@@ -13,13 +13,19 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppFont.h"
+#include <cstdlib>
+#endif
 
 #include "DrawAgent.h"
 #include "IImageReader.h"
 #include "CQTrace.h"
-#include "Resource.h"
+#include "resource.h"
 #include "Startup.h"
 #include "GenData.h"
 #include <DFonts.h>
@@ -28,11 +34,12 @@
 #include <TComponent.h>
 #include <HeapObj.h>
 #include <TSmartPointer.h>
-#include <FileSys.h>
+#include <Filesys.h>
 
 #include <malloc.h>
 #include <stdlib.h>
 
+#if defined(_WIN32)
 #define BITMAP_HEIGHT 64
 #define BITMAP_WIDTH  1024
 #define NUM_FONT_COLORS 2
@@ -752,26 +759,38 @@ void __stdcall CreateNumericFontDrawAgent (HFONT hFont, BOOL32 bOwnFont, COLORRE
 //---------------------------FontFactory class----------------------------------------------
 //------------------------------------------------------------------------------------------
 //
+#endif
 struct DACOM_NO_VTABLE FontFactory : public ICQFactory
 {
 	struct OBJTYPE
 	{
+#if defined(_WIN32)
 		HFONT hFont;
+#else
+		U32 resourceID;
+		bool notScaling;
+#endif
 		PGENTYPE pArchetype;
 		bool bMultiline:1;
 		bool bToolbarMoney:1;
 
-		InterfaceRes resolutionMode;//mode the this font was made for
+#if defined(_WIN32)
+		InterfaceRes resolutionMode;
+#endif//mode the this font was made for
 
 		OBJTYPE (void)
 		{
+#if defined(_WIN32)
 			hFont = 0;
+#endif
 		}
 
 		~OBJTYPE (void)
 		{
+#if defined(_WIN32)
 			if (hFont)
 				DeleteObject(hFont);
+#endif
 		}
 	};
 	//------------------------------------------------------------------------------------------
@@ -845,10 +864,17 @@ HANDLE FontFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objClass,
 		OBJTYPE * result = new OBJTYPE;
 
 		result->pArchetype = pArchetype;
+		#if defined(_WIN32)
 		result->hFont = CQCreateFont(data->font, data->bNotScaling);
+#else
+		result->resourceID = data->font;
+		result->notScaling = data->bNotScaling;
+#endif
 		result->bMultiline = data->bMultiline;
 		result->bToolbarMoney = data->bToolbarMoney;
+		#if defined(_WIN32)
 		result->resolutionMode = GetCurrentInterfaceRes();
+#endif
 		return result;
 	}
 
@@ -868,6 +894,7 @@ BOOL32 FontFactory::DestroyArchetype (HANDLE hArchetype)
 GENRESULT FontFactory::CreateInstance (HANDLE hArchetype, IDAComponent **pInstance)
 {
 	OBJTYPE * type = (OBJTYPE *) hArchetype;
+#if defined(_WIN32)
 	CQASSERT(type->hFont);
 
 //	if (type->resolutionMode != GetCurrentInterfaceRes())
@@ -899,6 +926,12 @@ GENRESULT FontFactory::CreateInstance (HANDLE hArchetype, IDAComponent **pInstan
 		*pInstance = result->getBase();
 	}
 
+#else
+    *pInstance = FrontierX::CreateNativeArchetypeFont(type->pArchetype, type->resourceID,
+        type->bToolbarMoney ? (RGB(0,255,255)|0xFF000000) : (RGB(255,255,255)|0xFF000000),
+        type->bMultiline, type->notScaling);
+    if (!*pInstance) return GR_GENERIC;
+#endif
 	return GR_OK;
 }
 //-----------------------------------------------------------------------------------------//
@@ -910,7 +943,11 @@ struct _fontfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<FontFactory>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&factory);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

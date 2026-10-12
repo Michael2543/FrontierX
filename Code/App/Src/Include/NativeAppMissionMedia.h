@@ -6,6 +6,7 @@ struct ITeletype;
 struct IUnitComm;
 struct IStringData;
 struct IFileSystem;
+struct IBaseObject;
 
 namespace FrontierX
 {
@@ -21,5 +22,8 @@ ISoundManager *CreateNativeMissionSoundManager(bool skipSpeech, bool skipAnimate
 ITeletype *CreateNativeMissionTeletype(bool skipVisuals);
 IUnitComm *CreateNativeDisabledUnitComm();
 IUnitComm *CreateNativeUnitComm(bool skipAlerts);
+bool CheckNativeUnitAlerts();
+void SubmitNativeMissionAlertSmoke(IBaseObject *object);
+std::uint64_t NativeUnitAlertDrawCount();
 IStringData *CreateNativeStringData(IFileSystem *source);
 }

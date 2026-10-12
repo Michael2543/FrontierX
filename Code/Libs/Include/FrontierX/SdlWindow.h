@@ -37,6 +37,9 @@ private:
 };
 
 std::string CurrentSdlVideoDriverName();
+
+// The process owner calls this after all SDL-backed components are released.
+void ShutdownSdlRuntime();
 }
 
 #endif

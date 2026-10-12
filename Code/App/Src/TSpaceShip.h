@@ -599,6 +599,10 @@ SPACESHIP_INIT<Base>::~SPACESHIP_INIT (void)
 	{
 		meshArch->Release();
 		meshArch = NULL;
+#if !defined(_WIN32)
+		// The mesh owner already releases its engine archetype reference.
+		archIndex = -1;
+#endif
 	}
 	if (animArchetype != -1)
 		ANIM->release_script_set_arch(animArchetype);

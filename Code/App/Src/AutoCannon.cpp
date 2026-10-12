@@ -13,13 +13,31 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -31,14 +49,14 @@
 #include "ArchHolder.h"
 #include "CQTrace.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <TComponent.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
 
 //--------------------------------------------------------------------------//
@@ -320,4 +338,3 @@ IBaseObject * CreateAutoCannon (PARCHETYPE pArchetype, S32 archeIndex, PARCHETYP
 
 	return autoCannon;
 }
-

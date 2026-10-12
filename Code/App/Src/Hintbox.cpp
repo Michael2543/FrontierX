@@ -13,18 +13,37 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppFont.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include <VFX.H>
+#include <cstdlib>
+#include <cwchar>
+#include <cstdint>
+#include <limits>
+static std::uint64_t hintDraws = 0;
+static U32 lastHintDrawResource = 0;
+#include <FrontierX/LegacyInput.h>
+#endif
 
 #include "resource.h"
 #include "TResource.h"
 #include "Hintbox.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "EventPriority.h"
 #include "DrawAgent.h"
 #include "Startup.h"
 #include "UserDefaults.h"
+#if defined(_WIN32)
 #include "VideoSurface.h"
+#endif
 
 #include <TComponent.h>
 #include <IConnection.h>
@@ -36,7 +55,9 @@
 #include <IConnection.h>
 
 
+#if defined(_WIN32)
 #include <commctrl.h>
+#endif
 
 #define CHARCOUNT(x) (sizeof(x)/sizeof(x[0]))
 
@@ -72,7 +93,9 @@ struct DACOM_NO_VTABLE HintResource : public Resource<HintResource,IHintResource
 	wchar_t szText[256];
 	BOOL32 bInMenuLoop;
 	U32 toolbarHeight;
+#if defined(_WIN32)
 	HFONT hFont;
+#endif
 
 #define MAX_HISTORY 2
 	struct HistoryNode
@@ -163,6 +186,7 @@ HintResource::HintResource (void)
 //
 HintResource::~HintResource (void)
 {
+	#if defined(_WIN32)
 	if (FULLSCREEN)
 	{
 		COMPTR<IDAConnectionPoint> connection;
@@ -170,17 +194,24 @@ HintResource::~HintResource (void)
 		if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Unadvise(handle);
 	}
+#endif
 
+#if defined(_WIN32)
 	if (hFont)
 	{
 		DeleteObject(hFont);
 		hFont = 0;
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void HintResource::redraw (void)
 {
+#if !defined(_WIN32)
+    if (CQFLAGS.bGameActive && !historyNode[0].font) reloadFonts(true);
+    const auto drawsBefore = FrontierX::NativeFontDrawCount();
+#endif
 	//
 	// NOTE:
 	// might not want to lock the surface during the menu loop because of WIN16 trouble,
@@ -195,9 +226,13 @@ void HintResource::redraw (void)
 		bool bFrameLocked=(CQFLAGS.bFrameLockEnabled!=0);
 		IFontDrawAgent * font;
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 			if (SURFACE->Lock() == false)
 				return;
+#else
+        CQASSERT(!bFrameLocked);
+#endif
 		
 		PANE pane;
 		pane.window = 0;
@@ -224,8 +259,14 @@ void HintResource::redraw (void)
 
 		historyNode[lastHistoryNode].dwTextID = dwTextID;
 
+#if !defined(_WIN32)
+        if (FrontierX::NativeFontDrawCount() > drawsBefore) lastHintDrawResource = dwTextID;
+        hintDraws += FrontierX::NativeFontDrawCount() - drawsBefore;
+#endif
+#if defined(_WIN32)
 		if (bFrameLocked)
 			SURFACE->Unlock();
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -257,9 +298,13 @@ void HintResource::unDraw (void)
 	{
 		bool bFrameLocked=(CQFLAGS.bFrameLockEnabled!=0);
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 			if (SURFACE->Lock() == false)
 				return;
+#else
+        CQASSERT(!bFrameLocked);
+#endif
 
 		{
 			int x0 = SCREENRESX-IDEAL2REALX(HINTBOX_WIDTH+HINTBOX_GAP);
@@ -271,8 +316,10 @@ void HintResource::unDraw (void)
 			DA::RectangleFill(0, x0, y0, x1, y1, 0);
 		}
 		
+#if defined(_WIN32)
 		if (bFrameLocked)
 			SURFACE->Unlock();
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -297,7 +344,9 @@ void HintResource::SetText (U32 dwResourceID)
 	{
 		unDraw();
 		redraw();
+#if defined(_WIN32)
 		InvalidateRect(hMainWindow, 0, 0);
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -333,28 +382,47 @@ GENRESULT HintResource::Notify (U32 message, void *param)
 
 	switch (message)
 	{
+#if !defined(_WIN32)
+    case CQE_MISSION_CLOSE:
+        GetOwnership(nullptr);
+        dwTextID = leadTime = trailTime = lastHistoryNode = 0;
+        szText[0] = 0;
+        for (auto &node : historyNode) node.dwTextID = 0;
+        break;
+#endif
 	case CQE_START3DMODE:
 		reloadFonts(true);
 		break;
 	case CQE_END3DMODE:
 		reloadFonts(false);
 		break;
+#if defined(_WIN32)
 	case WM_ENTERMENULOOP:
 		bInMenuLoop=1;
 		break;
 	case WM_EXITMENULOOP:
 		bInMenuLoop=0;
 		break;
+#endif
 	case CQE_ENDFRAME:
 		redraw();
 		break;
 
 	case CQE_UPDATE:
 		updateResource();
-		onUpdate(S32(param) >> 10);
+		#if defined(_WIN32)
+        onUpdate(S32(param) >> 10);
+#else
+        if (reinterpret_cast<std::uintptr_t>(param) > std::numeric_limits<U32>::max()) return GR_INVALID_PARMS;
+        onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 
+#if defined(_WIN32)
 	case WM_MOUSEMOVE:
+#else
+    case FrontierX::LegacyMessage::MouseMove:
+#endif
 		// if we are not in trailing mode, than set the lead timer to zero
 		if (leadTime < HB_LEADING_PAUSE)
 		{
@@ -403,10 +471,14 @@ void HintResource::reloadFonts (bool bLoad)
 		pen			= RGB(200,200,200)		   | 0xFF000000;		// white	(pen color)
 		background	= RGB(0,0,0);	   //| 0xFF000000;		// black	(background color)
 
+#if defined(_WIN32)
 		CQASSERT(hFont==0);
 		hFont = CQCreateFont(IDS_HINTBOX_FONT);
-
 		CreateMultilineFontDrawAgent(0,hFont, pen, background, historyNode[0].font);
+#else
+        *static_cast<IFontDrawAgent **>(historyNode[0].font) = FrontierX::CreateNativeFontDrawAgent(IDS_HINTBOX_FONT, pen, true);
+        CQASSERT(historyNode[0].font);
+#endif
 		for (i = 1; i < MAX_HISTORY; i++)
 			historyNode[0].font->CreateDuplicate(historyNode[i].font);
 	}
@@ -415,15 +487,18 @@ void HintResource::reloadFonts (bool bLoad)
 		for (i = 0; i < MAX_HISTORY; i++)
 			historyNode[i].font.free();
 
+#if defined(_WIN32)
 		if (hFont)
 		{
 			DeleteObject(hFont);
 			hFont = 0;
 		}
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 struct _hintbox : GlobalComponent
 {
 	HintResource * hint;
@@ -449,6 +524,49 @@ struct _hintbox : GlobalComponent
 };
 
 static _hintbox startup;
+#else
+namespace FrontierX
+{
+std::uint64_t NativeHintDrawCount() { return hintDraws; }
+U32 NativeHintDrawResource() { return lastHintDrawResource; }
+bool NativeSourceHintIdle()
+{
+    const auto *hint = static_cast<HintResource *>(HINTBOX);
+    return hint && !hint->owner && !hint->priority && !hint->dwTextID && !hint->szText[0] &&
+        !hint->leadTime && !hint->trailTime;
+}
+IHintResource *CreateNativeSourceHint()
+{
+    return new DAComponent<HintResource>;
+}
+// Protect source lead/trail timing and the two-font history before rendering.
+bool CheckNativeSourceHint()
+{
+    const unsigned fonts = NativeFontLiveCount();
+    auto *owner = new DAComponent<HintResource>;
+    owner->SetText(IDS_DISABLED);
+    owner->onUpdate(HB_LEADING_PAUSE-1);
+    bool valid = owner->leadTime == HB_LEADING_PAUSE-1;
+    owner->Notify(FrontierX::LegacyMessage::MouseMove);
+    valid = valid && owner->leadTime == 0;
+    owner->onUpdate(HB_LEADING_PAUSE);
+    owner->SetDefaultState();
+    owner->onUpdate(HB_TRAILING_PAUSE);
+    valid = valid && owner->leadTime == HB_LEADING_PAUSE && owner->trailTime == HB_TRAILING_PAUSE;
+    owner->onUpdate(0);
+    valid = valid && !owner->leadTime && !owner->GetText();
+    IHintResource *previous = HINTBOX;
+    HINTBOX = owner;
+    valid = valid && CheckNativeFieldHint();
+    HINTBOX = previous;
+    owner->reloadFonts(true);
+    valid = valid && NativeFontLiveCount() == fonts + MAX_HISTORY;
+    owner->Notify(CQE_END3DMODE);
+    owner->Release();
+    return valid && NativeFontLiveCount() == fonts;
+}
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //-----------------------------End Hintbox.cpp----------------------------//

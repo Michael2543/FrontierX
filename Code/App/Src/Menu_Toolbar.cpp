@@ -10,8 +10,18 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <algorithm>
+#define __min(a,b) (std::min)((a),(b))
+#define __max(a,b) (std::max)((a),(b))
+#include <IRenderPrimitive.h>
+#include <pixel.h>
+#include <cstdlib>
+#endif
 
 #include "Frame.h"
 #include "IHotButton.h"
@@ -32,7 +42,7 @@
 #include "MPart.h"
 #include "IIcon.h"
 #include "IQueueControl.h"
-#include "Sysmap.h"
+#include "SysMap.h"
 #include "ScrollingText.h"
 
 #include "Hotkeys.h"
@@ -52,6 +62,9 @@
 
 struct MenuBriefing;
 Frame * __stdcall CreateMenuBriefing (void);
+#ifndef _WIN32
+Frame *Frame::g_pFocusFrame = nullptr;
+#endif
 
 //--------------------------------------------------------------------------//
 //
@@ -340,15 +353,20 @@ struct Menu_context : public BaseHotRect, IToolbar
 
 		// send a mouse update
 		{
-			MSG msg;
+			#if defined(_WIN32)
+MSG msg;
 			S32 x, y;
 
 			WM->GetCursorPos(x, y);
-
-			msg.hwnd = hMainWindow;
-			msg.message = WM_MOUSEMOVE;
-			msg.wParam = 0;
-			msg.lParam = MAKELPARAM(x,y);
+            msg.hwnd = hMainWindow;
+            msg.message = WM_MOUSEMOVE;
+            msg.wParam = 0;
+            msg.lParam = MAKELPARAM(x,y);
+#else
+            S32 x, y;
+            WM->GetCursorPos(x,y);
+            FrontierX::LegacyWindowMessage msg{WM->GetWindowHandle(), WM_MOUSEMOVE, 0, MAKELPARAM(x,y)};
+#endif
 			Notify(WM_MOUSEMOVE, &msg);
 		}
 	}
@@ -382,13 +400,13 @@ struct Menu_context : public BaseHotRect, IToolbar
 		switch (message)
 		{
 		case CQE_LHOTBUTTON:
-			onLeftButtonEvent((U32)param);
+			onLeftButtonEvent(U32(reinterpret_cast<std::uintptr_t>(param)));
 			return GR_OK;
 		case CQE_RHOTBUTTON:
-			onRightButtonEvent((U32)param);
+			onRightButtonEvent(U32(reinterpret_cast<std::uintptr_t>(param)));
 			return GR_OK;
 		case CQE_LDBLHOTBUTTON:
-			onLeftDblButtonEvent((U32)param);
+			onLeftDblButtonEvent(U32(reinterpret_cast<std::uintptr_t>(param)));
 			return GR_OK;
 		case CQE_SET_FOCUS:
 			if (bInvisible)
@@ -1088,15 +1106,20 @@ struct Menu_tb : public Frame, IToolbar
 
 	void sendMouseUpdate (BaseHotRect * hotrect)
 	{
-		MSG msg;
+		#if defined(_WIN32)
+MSG msg;
 		S32 x, y;
 
 		WM->GetCursorPos(x, y);
-
-		msg.hwnd = hMainWindow;
-		msg.message = WM_MOUSEMOVE;
-		msg.wParam = 0;
-		msg.lParam = MAKELPARAM(x,y);
+            msg.hwnd = hMainWindow;
+            msg.message = WM_MOUSEMOVE;
+            msg.wParam = 0;
+            msg.lParam = MAKELPARAM(x,y);
+#else
+            S32 x, y;
+            WM->GetCursorPos(x,y);
+            FrontierX::LegacyWindowMessage msg{WM->GetWindowHandle(), WM_MOUSEMOVE, 0, MAKELPARAM(x,y)};
+#endif
 		hotrect->Notify(WM_MOUSEMOVE, &msg);
 	}
 	
@@ -1218,7 +1241,14 @@ Menu_tb::~Menu_tb (void)
 	TOOLBAR = 0;
 	flushControlList();
 	flushMenuList();
-	if (m_pPaddedData) { HeapFree(GetProcessHeap(), 0, m_pPaddedData); m_pPaddedData = 0; }
+	if (m_pPaddedData) {
+#if defined(_WIN32)
+        HeapFree(GetProcessHeap(), 0, m_pPaddedData);
+#else
+        std::free(m_pPaddedData);
+#endif
+        m_pPaddedData = 0;
+    }
 }
 //----------------------------------------------------------------------------------//
 //
@@ -1337,7 +1367,13 @@ bool Menu_tb::GetVisible (void)
 //
 GENRESULT Menu_tb::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	MessageFields *msg = &fields;
+#endif
 	GENRESULT result=GR_OK;
 
 	if (message == CQE_LOAD_TOOLBAR)
@@ -1371,7 +1407,7 @@ GENRESULT Menu_tb::Notify (U32 message, void *param)
 			break;
 		//debug!!!
 		case CQE_DEBUG_HOTKEY:
-			if (bInvisible==false && CQFLAGS.bGameActive && bHasFocus && U32(param) == IDH_NEXT_CONTEXTMENU)
+			if (bInvisible==false && CQFLAGS.bGameActive && bHasFocus && U32(reinterpret_cast<std::uintptr_t>(param)) == IDH_NEXT_CONTEXTMENU)
 				DEBUG_cycleContextMenus();
 			break;
 		
@@ -1443,14 +1479,15 @@ GENRESULT Menu_tb::Notify (U32 message, void *param)
 		case CQE_HOTKEY:
 			if (CQFLAGS.bGameActive && bHasFocus)
 			{
-				switch (U32(param))
+				switch (U32(reinterpret_cast<std::uintptr_t>(param)))
 				{
 				case IDH_TOGGLE_TOOLBAR:
 					if (CQFLAGS.bFullScreenMap==0)
 						SetVisible(CQFLAGS.bNoToolbar != 0);	// toggle the current value
 					return GR_OK;
 
-/*				case IDH_FULLSCREEN_MAP:
+#if !defined(_WIN32)
+				case IDH_FULLSCREEN_MAP:
 					{
 						static bool bOldVisible;
 
@@ -1473,18 +1510,19 @@ GENRESULT Menu_tb::Notify (U32 message, void *param)
 						}
 					}
 					break;
-*/				}
+#endif
+				}
 			}
 			break;
 
 		case CQE_LHOTBUTTON:
-			onLeftButtonEvent((U32)param);
+			onLeftButtonEvent(U32(reinterpret_cast<std::uintptr_t>(param)));
 			return GR_GENERIC;
 		case CQE_RHOTBUTTON:
-			onRightButtonEvent((U32)param);
+			onRightButtonEvent(U32(reinterpret_cast<std::uintptr_t>(param)));
 			return GR_GENERIC;
 		case CQE_LDBLHOTBUTTON:
-			onLeftDblButtonEvent((U32)param);
+			onLeftDblButtonEvent(U32(reinterpret_cast<std::uintptr_t>(param)));
 			return GR_GENERIC;
 		}
 
@@ -1689,7 +1727,13 @@ void Menu_tb::loadInterface (const enum M_RACE *pRace)
 	if (parser && ddesc.symbol) {
 		U32 parserSize = (U32)parser->GetTypeSize(ddesc.symbol);
 		if (dwDataSize < parserSize) {
-			pPaddedData = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, parserSize);
+			pPaddedData =
+#if defined(_WIN32)
+                HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, parserSize)
+#else
+                std::calloc(1, parserSize)
+#endif
+;
 			if (pPaddedData) memcpy(pPaddedData, pData, dwDataSize);
 		}
 	}
@@ -1712,7 +1756,14 @@ void Menu_tb::loadInterface (const enum M_RACE *pRace)
 	dataParser->Enumerate(&callback);
 	// Transfer ownership: free the previous padded block, keep the new one alive
 	// so that vfxShapeType/vfxBarShapeType/pContextRect (which point into it) remain valid.
-	if (m_pPaddedData) { HeapFree(GetProcessHeap(), 0, m_pPaddedData); m_pPaddedData = 0; }
+	if (m_pPaddedData) {
+#if defined(_WIN32)
+        HeapFree(GetProcessHeap(), 0, m_pPaddedData);
+#else
+        std::free(m_pPaddedData);
+#endif
+        m_pPaddedData = 0;
+    }
 	m_pPaddedData = pPaddedData;
 	pPaddedData = 0;
 	if (controlList || menuList)
@@ -1797,7 +1848,7 @@ void Menu_tb::loadInterface (const enum M_RACE *pRace)
 		}
 	}
 
-	RECT rect = { 0, 0, realWidth-1, realHeight-1};
+	RECT rect = { 0, 0, static_cast<LONG>(realWidth)-1, static_cast<LONG>(realHeight)-1};
 	
 	reader->GetImage(PF_COLOR_INDEX, map, &rect);
 	
@@ -1842,7 +1893,7 @@ void Menu_tb::loadInterface (const enum M_RACE *pRace)
 //
 void Menu_tb::unloadInterface (void)
 {
-	delete map;
+	delete [] map;
 	map = NULL;
 	shape.free();
 	topShape.free();
@@ -1852,7 +1903,14 @@ void Menu_tb::unloadInterface (void)
 	flushControlList();
 	flushMenuList();
 	removeViewer();
-	if (m_pPaddedData) { HeapFree(GetProcessHeap(), 0, m_pPaddedData); m_pPaddedData = 0; }
+	if (m_pPaddedData) {
+#if defined(_WIN32)
+        HeapFree(GetProcessHeap(), 0, m_pPaddedData);
+#else
+        std::free(m_pPaddedData);
+#endif
+        m_pPaddedData = 0;
+    }
 }
 //--------------------------------------------------------------------------//
 //
@@ -2003,15 +2061,17 @@ struct FullScreen : public BaseHotRect
 		else
 		{
 			S32 x, y;
-			MSG msg;
-
 			bHasFocus = 1;
-			WM->GetCursorPos(x, y);
-
-			msg.hwnd = hMainWindow;
-			msg.message = WM_MOUSEMOVE;
-			msg.wParam = 0;
-			msg.lParam = MAKELPARAM(x,y);
+            WM->GetCursorPos(x,y);
+#if defined(_WIN32)
+            MSG msg;
+            msg.hwnd = hMainWindow;
+            msg.message = WM_MOUSEMOVE;
+            msg.wParam = 0;
+            msg.lParam = MAKELPARAM(x,y);
+#else
+            FrontierX::LegacyWindowMessage msg{WM->GetWindowHandle(), WM_MOUSEMOVE, 0, MAKELPARAM(x,y)};
+#endif
 			Notify(WM_MOUSEMOVE, &msg);
 		}
 	}
@@ -2042,17 +2102,29 @@ struct _panels : GlobalComponent
 	virtual void Startup (void)
 	{
 		TOOLBAR  = menu = new DAComponent<Menu_tb>; 
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&TOOLBAR);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&TOOLBAR));
+#endif
 
 //		CreateAdmiralToolbar();
 
 		FULLSCREEN = fullScreen = new FullScreen(0);
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&FULLSCREEN);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&FULLSCREEN));
+#endif
 	}
 
 	virtual void Initialize (void)
 	{
-		fullScreen->lateInitialize(GS);
+		#ifdef _WIN32
+        fullScreen->lateInitialize(GS);
+#else
+        fullScreen->lateInitialize(EVENTSYS);
+#endif
 		fullScreen->screenRect.left = 0;
 		fullScreen->screenRect.top = 0;
 		fullScreen->screenRect.right = SCREENRESX;

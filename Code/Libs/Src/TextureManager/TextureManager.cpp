@@ -10,6 +10,7 @@
 #include "stdafx.h"
 #else
 #include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/GameTextureManager.h"
 #endif
 
 #include "TManager.h"
@@ -41,6 +42,7 @@ void COMAPI CreateVFXReader (struct IImageReader ** reader);
 ICOManager * DACOM = NULL;
 #else
 extern ICOManager * DACOM;
+namespace { bool nativeBaseLevelOnly = false; }
 #endif
 
 
@@ -386,7 +388,11 @@ U32 TManager::GetPrevTexture(U32 textureID)
 U32 TManager::CreateDrawAgentTexture (U32 resolution, bool bAlpha)
 {
 	U32 result=0;
-	PixelFormat desiredFormat(16, 5, 6-bAlpha, 5, bAlpha);		// GL_RGB5_A1
+	#ifdef _WIN32
+    PixelFormat desiredFormat(16, 5, 6-bAlpha, 5, bAlpha);
+#else
+    PixelFormat desiredFormat(PF_RGBA);
+#endif		// GL_RGB5_A1
 	//DANODE * pInUseList, * pJustFreedList, *pFreedList;
 	DANODE * pNode, *pPrev;
 	//
@@ -698,10 +704,21 @@ U32 TManager::createTextureFromMemory (void *pMemory, DA::FILETYPE type, const P
 	{
 	int minDim = std::min(width,height);
 	int numMipmapLevels = log((float)minDim)/log(2.0f) -1;
+#if !defined(_WIN32)
+    if (nativeBaseLevelOnly) numMipmapLevels = 1;
+#endif
 
 
 	if (!PIPE) { return 0; }
+#if defined(_WIN32)
 	PIPE->create_texture(width,height,format,numMipmapLevels,0,textureID);
+#else
+    if (PIPE->create_texture(width,height,format,numMipmapLevels,0,textureID) != GR_OK)
+    {
+        FDUMP(ErrorCode(ERR_GENERAL, SEV_ERROR), "ITManager texture creation failed: %s\n", name ? name : "");
+        goto Done;
+    }
+#endif
 
 	//
 	// if image is paletted, use the index version
@@ -954,6 +971,12 @@ BOOL APIENTRY DllMain( HINSTANCE hModule,
 #if !defined(_WIN32)
 namespace FrontierX
 {
+bool SetNativeGameTextureBaseLevelOnly(bool enabled)
+{
+    const bool previous = nativeBaseLevelOnly;
+    nativeBaseLevelOnly = enabled;
+    return previous;
+}
 bool RegisterNativeGameTextureManager(ICOManager *manager)
 {
 	if (!manager) return false;

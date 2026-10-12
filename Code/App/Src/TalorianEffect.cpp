@@ -13,23 +13,45 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "MyVertex.h"
+#include <algorithm>
+using std::min;
+using std::max;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "DEffect.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "ITalorianEffect.h"
-#include "Objlist.h"
-#include "CQlight.h"
+#include "ObjList.h"
+#include "CQLight.h"
 #include "Camera.h"
-#include "Objmap.h"
+#include "ObjMap.h"
 #include "TManager.h"
 
-#include <FileSys.h>
+#include <Filesys.h>
 
 struct TalorianEffectArchetype
 {

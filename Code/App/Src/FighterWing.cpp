@@ -11,8 +11,29 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#define __min(a, b) std::min((a), (b))
+#endif
 
 #include "FighterWing.h"
 
@@ -35,11 +56,11 @@
 #include "TerrainMap.h"
 
 
-#include <mesh.h>
-#include <Engine.h>
+#include <Mesh.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IAnim.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <IConnection.h>
 #include <IRenderPrimitive.h>
@@ -444,7 +465,11 @@ void FighterWing::calculateTransform (TRANSFORM & result) const
 	orientation = matrix * orientation;
 	*/
 
+#if defined(_WIN32)
 	result.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#else
+	result = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#endif
 	result = ENGINE->get_transform(bayDoorIndex).multiply(result);
 }
 //---------------------------------------------------------------------------

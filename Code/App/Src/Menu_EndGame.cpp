@@ -10,15 +10,30 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "GenData.h"
+#include "resource.h"
+#include <MGlobals.h>
+#include <VFX.H>
+#include <cstring>
+#include <cwchar>
+#include <cstdlib>
+using namespace FrontierX::NativeAppUi;
+#endif
 
 #include <DEndGame.h>
 #include <MGlobals.h>
 #include "Frame.h"
 #include "IButton2.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "ITabControl.h"
 
 #include "IShapeLoader.h"
@@ -265,7 +280,9 @@ void MenuEndGame::setStateInfo (void)
 	background->InitStatic(data.background, this);
 	staticMenu->InitStatic(data.staticMenu, this);
 	banner->InitStatic(data.banner, this);
-	list->InitListbox(data.list, this); 
+#if defined(_WIN32)
+	list->InitListbox(data.list, this);
+#endif
 
 	staticPlayer->InitStatic(data.staticPlayer, this);
 	for (i = 0; i < MAX_PLAYERS; i++)
@@ -404,7 +421,9 @@ void MenuEndGame::setStateInfo (void)
 	initScores();
 	initTime();
 
+#if defined(_WIN32)
 	list->SetVisible(false);
+#endif
 
 	tabControl->EnableKeyboardFocusing();
 	tabControl->SetCurrentTab(0);
@@ -434,7 +453,12 @@ void MenuEndGame::initTime (void)
 	seconds = rem / (U32(REALTIME_FRAMERATE*8));
 
 	wchar_t buffer[128];
+#if defined(_WIN32)
 	swprintf(buffer, _localLoadStringW(IDS_FORMAT_GAMETIME), hours, minutes, seconds);
+#else
+	std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]),
+		_localLoadStringW(IDS_FORMAT_GAMETIME), hours, minutes, seconds);
+#endif
 	staticTime->SetText(buffer);
 } 
 //--------------------------------------------------------------------------//
@@ -642,8 +666,10 @@ void MenuEndGame::init (void)
 	GENDATA->CreateInstance(data.banner.staticType, pComp);
 	pComp->QueryInterface("IStatic", banner);
 
+#if defined(_WIN32)
 	GENDATA->CreateInstance(data.list.listboxType, pComp);
 	pComp->QueryInterface("IListbox", list);
+#endif
 
 	GENDATA->CreateInstance(data.staticMenu.staticType, pComp);
 	pComp->QueryInterface("IStatic", staticMenu);
@@ -665,7 +691,11 @@ void MenuEndGame::init (void)
 	GENDATA->CreateInstance(data.tab.tabControlType, pComp);
 	pComp->QueryInterface("ITabControl", tabControl);
 
+#if defined(_WIN32)
 	for (i = 0; i < 5; i++)
+#else
+	for (i = 0; i < TITLES_O; i++)
+#endif
 	{
 		GENDATA->CreateInstance(data.overviewTab.staticOverviewTitles[i].staticType, pComp);
 		pComp->QueryInterface("IStatic", staticOverviewTitles[i]);

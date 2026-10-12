@@ -100,66 +100,75 @@ struct IUnitComm : IDAComponent
 // helper macros
 //------------------------------
 
+#ifndef _WIN32
+#include <cstddef>
+// The source index is a byte offset, not a dereference of a null object.
+#define UNITCOMM_SPEECH_INDEX(type, member) (offsetof(type, member) / sizeof(M_STRING))
+#else
+#define UNITCOMM_SPEECH_INDEX(type, member) \
+	(((size_t)((&(((type *)0)->member))+0)) / sizeof(M_STRING))
+#endif
+
 
 #define SHIPCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SPACESHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, message), subtitle,pInitData->displayName )
 
 #define SHIPCOMMDEATH(value) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SPACESHIP *)0)->death))+0)) / sizeof(M_STRING)), SUB_DEATH,pInitData->displayName, value ? COMMF_DEATH|COMMF_ALERT : COMMF_DEATH,value ? 0:ALERT_ADMIRAL_LOST)
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, death), SUB_DEATH,pInitData->displayName, value ? COMMF_DEATH|COMMF_ALERT : COMMF_DEATH,value ? 0:ALERT_ADMIRAL_LOST)
 
 #define SHIPCOMM2(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SPACESHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName )
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, message), subtitle,displayName )
 
 #define GUNBOATCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::GUNBOAT *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::GUNBOAT, message), subtitle,pInitData->displayName )
 
 #define GUNBOATCOMM2(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::GUNBOAT *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName )
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::GUNBOAT, message), subtitle,displayName )
 
 #define GUNBOATNOHILITECOMM(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::GUNBOAT *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName, COMMF_NOHILITE)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::GUNBOAT, message), subtitle,displayName, COMMF_NOHILITE)
 
 #define HARVESTERCOMM(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::HARVESTER *)0)->message))+0)) / sizeof(M_STRING)) , subtitle,displayName)
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::HARVESTER, message) , subtitle,displayName)
 
 #define FABRICATORCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::FABRICATOR *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FABRICATOR, message), subtitle,pInitData->displayName )
 
 #define FABRICATORCOMM2(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::FABRICATOR *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName )
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FABRICATOR, message), subtitle,displayName )
 
 #define MINELAYERCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::MINELAYER *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::MINELAYER, message), subtitle,pInitData->displayName )
 
 #define SUPPLYSHIPCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SUPPLYSHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SUPPLYSHIP, message), subtitle,pInitData->displayName )
 
 #define TROOPSHIPCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::TROOPSHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::TROOPSHIP, message), subtitle,pInitData->displayName )
 
 #define TROOPSHIPCOMM2(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::TROOPSHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName )
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::TROOPSHIP, message), subtitle,displayName )
 
 #define PLATFORMCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::PLATFORM *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::PLATFORM, message), subtitle,pInitData->displayName )
 
 #define PLATFORMCOMM2(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::PLATFORM *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName  )
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::PLATFORM, message), subtitle,displayName  )
 
 #define GENPLATFORMCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::GENPLATFORM *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName)
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::GENPLATFORM, message), subtitle,pInitData->displayName)
 
 #define FLAGSHIPCOMM(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::FLAGSHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FLAGSHIP, message), subtitle,pInitData->displayName )
 
 #define FLAGSHIPCOMM2(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::FLAGSHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName  )
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FLAGSHIP, message), subtitle,displayName  )
 
 #define FLAGSHIPALERT(message,subtitle) \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::FLAGSHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,pInitData->displayName, COMMF_ALERT,ALERT_ADMIRAL_MESSAGE )
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FLAGSHIP, message), subtitle,pInitData->displayName, COMMF_ALERT,ALERT_ADMIRAL_MESSAGE )
 
 #define FLAGSHIPSCUTTLE(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::FLAGSHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName, COMMF_ENEMY)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FLAGSHIP, message), subtitle,displayName, COMMF_ENEMY)
 
 #define FLEETSHIPCOMM(x)   \
 		if (admiralID)	   \
@@ -174,22 +183,22 @@ struct IUnitComm : IDAComponent
 			SHIPCOMM(x,subtitle)
 
 #define SUPPLYSHIPCOMM2(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SUPPLYSHIP *)0)->message))+0)) / sizeof(M_STRING)),subtitle,displayName )
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SUPPLYSHIP, message),subtitle,displayName )
 
 #define SHIPSELECT(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SPACESHIP *)0)->message))+0)) / sizeof(M_STRING)),subtitle,displayName, COMMF_SELECT|COMMF_NOHILITE)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, message),subtitle,displayName, COMMF_SELECT|COMMF_NOHILITE)
 
 #define SHIPNOHILITECOMM(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SPACESHIP *)0)->message))+0)) / sizeof(M_STRING)),subtitle,displayName, COMMF_NOHILITE)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, message),subtitle,displayName, COMMF_NOHILITE)
 
 #define PLATSELECT(obj, dwMissionID, message, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::PLATFORM *)0)->message))+0)) / sizeof(M_STRING)),subtitle,displayName, COMMF_SELECT|COMMF_NOHILITE)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::PLATFORM, message),subtitle,displayName, COMMF_SELECT|COMMF_NOHILITE)
 
 #define ENEMYSIGHTED(obj, dwMissionID, displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::PLATFORM *)0)->enemySighted))+0)) / sizeof(M_STRING)), SUB_ENEMYSIGHTED,displayName , COMMF_ALERT|COMMF_NOHILITE, ALERT_ENEMY_SIGHTED)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::PLATFORM, enemySighted), SUB_ENEMYSIGHTED,displayName , COMMF_ALERT|COMMF_NOHILITE, ALERT_ENEMY_SIGHTED)
 
 #define UNDERATTACK(obj, dwMissionID, displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::PLATFORM *)0)->underAttack))+0)) / sizeof(M_STRING)), SUB_UNDERATTACK,displayName , COMMF_ALERT|COMMF_NOHILITE, ALERT_UNDER_ATTACK)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::PLATFORM, underAttack), SUB_UNDERATTACK,displayName , COMMF_ALERT|COMMF_NOHILITE, ALERT_UNDER_ATTACK)
 
 #define FLEETSHIP_UNDERATTACK \
 		if (admiralID)	   \
@@ -204,19 +213,19 @@ struct IUnitComm : IDAComponent
 			UNDERATTACK(this, dwMissionID, pInitData->displayName)
 
 #define FLAGSHIP_NOSUPPLIES \
-	UNITCOMM->PlayCommMessage(this, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::FLAGSHIP *)0)->suppliesout))+0)) / sizeof(M_STRING)),SUB_NOSUPPLIES, pInitData->displayName, COMMF_ALERT, ALERT_OUT_SUPPLY)
+	UNITCOMM->PlayCommMessage(this, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FLAGSHIP, suppliesout),SUB_NOSUPPLIES, pInitData->displayName, COMMF_ALERT, ALERT_OUT_SUPPLY)
 
 #define GUNBOAT_ALERT(obj, dwMissionID, message, subtitle,displayName, alertType) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::GUNBOAT *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName, COMMF_ALERT, alertType)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::GUNBOAT, message), subtitle,displayName, COMMF_ALERT, alertType)
 
 #define GUNPLAT_ALERT(obj, dwMissionID, message, subtitle,displayName, alertType) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::GUNPLAT *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName, COMMF_ALERT, alertType)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::GUNPLAT, message), subtitle,displayName, COMMF_ALERT, alertType)
 
 #define PLATFORM_ALERT(obj, dwMissionID, message, subtitle,displayName, alertType) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::PLATFORM *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName, COMMF_ALERT, alertType)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::PLATFORM, message), subtitle,displayName, COMMF_ALERT, alertType)
 
 #define SPACESHIP_ALERT(obj, dwMissionID, message, subtitle,displayName, alertType) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SPACESHIP *)0)->message))+0)) / sizeof(M_STRING)), subtitle,displayName, COMMF_ALERT, alertType)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, message), subtitle,displayName, COMMF_ALERT, alertType)
 
 #define COMM_RESEARCH_COMPLETED(fileName, subtitle,displayName) \
 	UNITCOMM->PlayCommMessage(this, dwMissionID,fileName, subtitle,displayName,COMMF_ALERT, ALERT_RESEARCH_COMPLETE);
@@ -225,7 +234,7 @@ struct IUnitComm : IDAComponent
 	UNITCOMM->PlayCommMessage(this, dwMissionID,fileName, subtitle,displayName,COMMF_ALERT, ALERT_MUTATION_COMPLETE);
 
 #define COMM_ALLIED_ATTACK(obj, dwMissionID, subtitle,displayName) \
-	UNITCOMM->PlayCommMessage(obj, dwMissionID, (((size_t)((&(((UNITSOUNDS::SPEECH::SPACESHIP *)0)->alliedAttack))+0)) / sizeof(M_STRING)), subtitle,displayName, COMMF_ALERT, ALERT_ALLIED_ATTACK)
+	UNITCOMM->PlayCommMessage(obj, dwMissionID, UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, alliedAttack), subtitle,displayName, COMMF_ALERT, ALERT_ALLIED_ATTACK)
 
 #define COMM_MISSION_ALLERT(target,dwMissionID, fileName) \
 	UNITCOMM->PlayCommMessage(target, dwMissionID,fileName,0,0,COMMF_ALERT|COMMF_ENEMY, ALERT_MISSION);

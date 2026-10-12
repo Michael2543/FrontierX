@@ -14,13 +14,49 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "FrontierX/NativeTextureDC.h"
+#include "Include/CQTrace.h"
+#include <3dmath.h>
+#include <ICamera.h>
+#include <renderer.h>
+#include <HeapObj.h>
+#include <ENGINE.H>
+#include <FrontierX/PlatformTime.h>
+#include "Include/NativeAppUiInput.h"
+#include "MyVertex.h"
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdint>
+#define __min(a,b) (std::min)((a),(b))
+#define __max(a,b) (std::max)((a),(b))
+#define min(a,b) ((a)<(b)?(a):(b))
+#define max(a,b) ((a)>(b)?(a):(b))
+#define MK_CONTROL FrontierX::LegacyMouseMask::Control
+#define MK_SHIFT FrontierX::LegacyMouseMask::Shift
+#define CQE_SET_RALLY_POINT 0x1033
+#define CQE_MOVE_SELECTED_UNITS 0x102C
+#define CQE_QMOVE_SELECTED_UNITS 0x1036
+#define CQE_SQMOVE_SELECTED_UNITS 0x105a
+#define CQE_SMOVE_SELECTED_UNITS 0x105b
+using namespace FrontierX::TextureDC;
+using namespace FrontierX::NativeAppUi;
+constexpr U32 WM_MOUSEWHEEL = FrontierX::LegacyMessage::MouseWheel;
+#define CQE_UI_RALLYPOINT 0x104A
+#define GetRValue(c) ((c)&0xff)
+#define GetGValue(c) (((c)>>8)&0xff)
+#define GetBValue(c) (((c)>>16)&0xff)
+#endif
 
 #include "TDocClient.h"
 #include "SysMap.h"
 #include "Menu.h"
-#include "Resource.h"
+#include "resource.h"
 #include "Camera.h"
 #include "UserDefaults.h"
 #include "IObject.h"
@@ -34,8 +70,14 @@
 #include "DrawAgent.h"
 #include "Startup.h"
 #include "TResClient.h"
-#include "fogofwar.h"
-#include "DSysMap.h"
+#include "FogOfWar.h"
+#include "DSysmap.h"
+#if !defined(_WIN32)
+static_assert(sizeof(SYSMAP_DATA) == 1, "original system-map registry record");
+static_assert(sizeof(SECTOR_DATA) == 16, "original sector-map registry record");
+static_assert(offsetof(SECTOR_DATA, currentSizeY) == 12, "sector-map final field");
+static_assert(sizeof(GRIDVECTOR) == 2, "original map-animation grid record");
+#endif
 #include "Sector.h"
 #include "BaseHotRect.h"
 #include "IShapeLoader.h"
@@ -52,8 +94,8 @@
 #include "ObjMapIterator.h"
 #include "OpAgent.h"
 #include "ObjSet.h"
-#include "Anim2d.h"
-#include "IFabricator.h"
+#include "anim2d.h"
+#include "ifabricator.h"
 #include "IToolbar.h"
 #include <DSector.h>
 
@@ -66,14 +108,14 @@
 #include <HeapObj.h>
 #include <TSmartPointer.h>
 #include <IConnection.h>
-#include <Engine.h>
-#include <3DMath.h>
+#include <ENGINE.H>
+#include <3dmath.h>
 #include <Viewer.h>
 #include <ViewCnst.h>
 #include <Document.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <WindowManager.h>
-#include <RendPipeline.h>
+#include <rendpipeline.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
 
@@ -733,13 +775,19 @@ S32 SysMap::GetLastFrameTime ()
 //
 GENRESULT SysMap::Notify (U32 message, void *param)
 {
+	#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	MessageFields *msg = &fields;
+#endif
 
 	switch (message)
 	{
 	case CQE_SYSTEM_CHANGED:
-		InvalidateMap(U32(param));
-		updateTerrainMap(U32(param));
+		InvalidateMap(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)));
+		updateTerrainMap(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)));
 		break;
 	case CQE_LOAD_INTERFACE:
 		{
@@ -841,7 +889,7 @@ GENRESULT SysMap::Notify (U32 message, void *param)
 	case CQE_DEBUG_HOTKEY:
 		if (bHasFocus && CQFLAGS.bGameActive)
 		{
-			switch ((U32)param)
+			switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
 			{
 			case IDH_VIEWSECTOR:
 				if (viewer)
@@ -872,8 +920,12 @@ GENRESULT SysMap::Notify (U32 message, void *param)
 				updateCursorState(x, y);
 			}
 			U64 pretick,posttick;
+			#if defined(_WIN32)
 			QueryPerformanceCounter((LARGE_INTEGER *)&pretick);
-			lastFrameTime = S32(param);
+#else
+			pretick = FrontierX::Platform::MonotonicMicroseconds();
+#endif
+			lastFrameTime = static_cast<S32>(reinterpret_cast<std::intptr_t>(param));
 			if (bZoning)
 			{
 				zoneTime += lastFrameTime*zoneRate;
@@ -965,7 +1017,11 @@ GENRESULT SysMap::Notify (U32 message, void *param)
 			if (CQFLAGS.bNoToolbar==0)
 				drawNormalMap();
 			
+			#if defined(_WIN32)
 			QueryPerformanceCounter((LARGE_INTEGER *)&posttick);
+#else
+			posttick = FrontierX::Platform::MonotonicMicroseconds();
+#endif
 			lastMapTiming = posttick-pretick;
 		}
 		break;  // end case CQE_UPDATE
@@ -2565,6 +2621,9 @@ const Transform &SysMap::GetMapTrans ()
 //
 BOOL32 SysMap::createViewer (void)
 {
+#if !defined(_WIN32)
+	return 0;
+#else
 	if (CQFLAGS.bNoGDI)
 		return 1;
 
@@ -2597,6 +2656,7 @@ BOOL32 SysMap::createViewer (void)
 	}
 
 	return (viewer != 0);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -3460,14 +3520,21 @@ struct _sysmap : GlobalComponent
 
 	virtual void Startup (void)
 	{
+		#if !defined(_WIN32)
+		if (CQFLAGS.bNoGDI) return; // Explicit native --skip-sector-map.
+#endif
 		SYSMAP = sysmap = new DAComponent<SysMap>;
 		AddToGlobalCleanupList((IDAComponent **) &SYSMAP);
 	}
 
 	virtual void Initialize (void)
 	{
+#if !defined(_WIN32)
+		if (!sysmap) return;
+#endif
 		COMPTR<IDAConnectionPoint> connection;
 		COMPTR<IImageReader> reader;
+#if defined(_WIN32)
 		HMENU hMenu = MENU->GetSubMenu(MENUPOS_VIEW);
 		MENUITEMINFO minfo;
 
@@ -3485,6 +3552,7 @@ struct _sysmap : GlobalComponent
 		if (InsertMenuItem(hMenu, 0x7FFE, 1, &minfo))
 			sysmap->menuID = IDS_VIEWSYSMAP;
 
+#endif
 		if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Advise(SYSMAP, &sysmap->eventHandle);
 

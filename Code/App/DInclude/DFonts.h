@@ -16,7 +16,7 @@
 #include "DBaseData.h"
 #endif
 
-#include "..\Src\Resource.h"
+#include "../Src/resource.h"
 
 //---------------------------------------------------------------------------
 //

@@ -16,8 +16,19 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include <3dmath.h>
+#include <TSmartPointer.h>
+#include <HeapObj.h>
+#include <IConnection.h>
+#include <FrontierX/LegacyInput.h>
+#include <cstdlib>
+#endif
 
 #include "MScroll.h"
 #include "resource.h"
@@ -38,7 +49,9 @@
 #include <WindowManager.h>
 #include <HKEvent.h>
 
+#if defined(_WIN32)
 #include <commctrl.h>
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -60,6 +73,9 @@ struct DACOM_NO_VTABLE MScroll : public IMouseScroll, IEventCallback, ResourceCl
 	BOOL32 bActive:1;
 	BOOL32 bHasFocus:1;
 	U32 eventHandle;
+#if !defined(_WIN32)
+	bool hasMousePosition;
+#endif
 
 	RECT inner, outer;
 	S32 outerThirdX, outerThirdY;
@@ -106,6 +122,9 @@ MScroll::MScroll (void)
 	// nothing to init so far?
 	bHasFocus = 1;
 	resPriority = MSCROLL_PRIORITY;
+#if !defined(_WIN32)
+	hasMousePosition = false;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -113,7 +132,11 @@ MScroll::~MScroll (void)
 {
 	COMPTR<IDAConnectionPoint> connection;
 
+	#if defined(_WIN32)
 	if (GS && GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#else
+	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#endif
 		connection->Unadvise(eventHandle);
 }
 //--------------------------------------------------------------------------//
@@ -134,21 +157,21 @@ void MScroll::update (void)
 		bool bUp     = HOTKEY->GetHotkeyState(IDH_SCROLL_UP) || 
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_UPLEFT) || 
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_UPRIGHT)|| 
-					   DBHOTKEY->GetHotkeyState(IDH_SCROLL_UP_DB);
+					   (DBHOTKEY && DBHOTKEY->GetHotkeyState(IDH_SCROLL_UP_DB));
 		bool bDown   = HOTKEY->GetHotkeyState(IDH_SCROLL_DOWN) || 
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_DOWNLEFT) || 
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_DOWNRIGHT) || 
-					   DBHOTKEY->GetHotkeyState(IDH_SCROLL_DOWN_DB);
+					   (DBHOTKEY && DBHOTKEY->GetHotkeyState(IDH_SCROLL_DOWN_DB));
 
 		bool bLeft   = HOTKEY->GetHotkeyState(IDH_SCROLL_LEFT) ||
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_UPLEFT) ||
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_DOWNLEFT) ||
-					   DBHOTKEY->GetHotkeyState(IDH_SCROLL_LEFT_DB);
+					   (DBHOTKEY && DBHOTKEY->GetHotkeyState(IDH_SCROLL_LEFT_DB));
 
 		bool bRight  = HOTKEY->GetHotkeyState(IDH_SCROLL_RIGHT) ||
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_UPRIGHT) ||
 					   HOTKEY->GetHotkeyState(IDH_SCROLL_DOWNRIGHT) ||
-					   DBHOTKEY->GetHotkeyState(IDH_SCROLL_RIGHT_DB);
+					   (DBHOTKEY && DBHOTKEY->GetHotkeyState(IDH_SCROLL_RIGHT_DB));
 
 		if (bUp | bDown | bLeft | bRight)
 			goto OK;
@@ -358,6 +381,18 @@ GENRESULT MScroll::Notify (U32 message, void *param)
 
 	switch (message)
 	{
+#if !defined(_WIN32)
+	case FrontierX::LegacyMessage::MouseMove:
+        if (!param || static_cast<const FrontierX::LegacyWindowMessage *>(param)->message != message)
+            return GR_INVALID_PARMS;
+		hasMousePosition = true;
+		break;
+	case CQE_MISSION_CLOSE:
+		hasMousePosition = false;
+		desiredOwnedFlags = 0;
+		releaseResources();
+		break;
+#endif
 	case CQE_INTERFACE_RES_CHANGE:
 		{
 			RECT inner, outer;
@@ -382,7 +417,11 @@ GENRESULT MScroll::Notify (U32 message, void *param)
 		break;
 	
 	case CQE_UPDATE:
-		if (bHasFocus && CQFLAGS.bGameActive)
+		if (bHasFocus && CQFLAGS.bGameActive
+#if !defined(_WIN32)
+            && hasMousePosition
+#endif
+        )
 			update();
 		break;
 
@@ -401,6 +440,36 @@ GENRESULT MScroll::Notify (U32 message, void *param)
 }
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool CheckNativeMouseScroll()
+{
+    const auto active = CQFLAGS.bGameActive;
+    auto *owner = new DAComponent<MScroll>;
+    owner->SetActive(1);
+    CQFLAGS.bGameActive = -1;
+    owner->Notify(CQE_UPDATE, nullptr); // No SDL position: must not scroll at cached (0,0).
+    bool valid = !owner->hasMousePosition && !owner->actualOwnedFlags &&
+        !owner->desiredOwnedFlags && owner->resPriority == MSCROLL_PRIORITY;
+    FrontierX::LegacyWindowMessage motion{};
+    motion.message = FrontierX::LegacyMessage::MouseMove;
+    valid = valid && owner->Notify(motion.message, nullptr) == GR_INVALID_PARMS;
+    owner->Notify(motion.message, &motion);
+    valid = valid && owner->hasMousePosition;
+    owner->Notify(CQE_MISSION_CLOSE, nullptr);
+    valid = valid && !owner->hasMousePosition && owner->bActive &&
+        !owner->actualOwnedFlags && !owner->desiredOwnedFlags;
+    owner->Notify(CQE_UPDATE, nullptr); // Reload must still wait for fresh mouse input.
+    valid = valid && owner->bActive && !owner->actualOwnedFlags &&
+        !owner->desiredOwnedFlags;
+    CQFLAGS.bGameActive = active;
+    owner->Release();
+    return valid;
+}
+}
+#endif
+
 struct _mscroll : GlobalComponent
 {
 	MScroll * mscroll;
@@ -428,8 +497,14 @@ struct _mscroll : GlobalComponent
 
 		MSCROLL->SetArea(&inner, &outer);
 
+#if defined(_WIN32)
 		if (GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Advise(MSCROLL, &mscroll->eventHandle);
+#else
+		if (!EVENTSYS || EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+			connection->Advise(MSCROLL, &mscroll->eventHandle) != GR_OK)
+			std::abort();
+#endif
 
 		mscroll->initializeResources();
 	}

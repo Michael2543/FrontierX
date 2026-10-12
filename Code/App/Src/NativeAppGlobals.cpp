@@ -12,7 +12,47 @@
 #include "GenData.h"
 #include "IParticleManager.h"
 
+#include <inv_sqrt.h>
 #include <cstring>
+
+ISQRT SQRT;
+
+static InterfaceRes nativeInterfaceRes = IR_NO_RESOLUTION;
+
+InterfaceRes __stdcall GetCurrentInterfaceRes()
+{
+    return nativeInterfaceRes;
+}
+
+void __stdcall ChangeInterfaceRes(InterfaceRes resolution)
+{
+    if (nativeInterfaceRes == resolution) return;
+    switch (nativeInterfaceRes)
+    {
+    case IR_IN_GAME_RESOLUTION: EVENTSYS->Send(CQE_LEAVING_INGAMEMODE); break;
+    case IR_FRONT_END_RESOLUTION: EVENTSYS->Send(CQE_LEAVING_FRONTENDMODE); break;
+    default: break;
+    }
+    nativeInterfaceRes = resolution;
+    switch (resolution)
+    {
+    case IR_IN_GAME_RESOLUTION:
+        // Original System 3D entry restores the HUD after mission movie mode.
+        CQFLAGS.bNoToolbar = CQFLAGS.bMovieMode = 0;
+        SCREEN_WIDTH = 640;
+        SCREEN_HEIGHT = 480;
+        EVENTSYS->Send(CQE_ENTERING_INGAMEMODE);
+        break;
+    case IR_FRONT_END_RESOLUTION:
+        SCREEN_WIDTH = 800;
+        SCREEN_HEIGHT = 600;
+        EVENTSYS->Send(CQE_ENTERING_FRONTENDMODE);
+        break;
+    default: break;
+    }
+    EVENTSYS->Send(CQE_INTERFACE_RES_CHANGE);
+}
+
 
 // The selected training mission uses ASCII names. Reject other code pages
 // until their Windows CP_ACP mapping can be specified for native data paths.
@@ -46,6 +86,8 @@ int __stdcall _localWideToAnsi(const wchar_t *input, char *output, U32 bufferSiz
     return 0;
 }
 
+BaseHotRect *TOOLBAR = nullptr;
+BaseHotRect *FULLSCREEN = nullptr;
 SINGLE LODPERCENT = 0.0F;
 SINGLE ELAPSED_TIME = DEF_ELAPSED_TIME;
 SINGLE REALTIME_FRAMERATE = DEF_REALTIME_FRAMERATE;
@@ -114,6 +156,7 @@ ITManager *TMANAGER = nullptr;
 IMaterialManager *MATMAN = nullptr;
 IFileSystem *TEXTURESDIR = nullptr;
 IFileSystem *OBJECTDIR = nullptr;
+IFileSystem *INTERFACEDIR = nullptr;
 IFileSystem *SPMAPDIR = nullptr;
 IFileSystem *MATERIALDIR = nullptr;
 IFileSystem *PROFILEDIR = nullptr;
@@ -306,6 +349,10 @@ bool NativeAppGeneralDataBinding::Bind(IGeneralData * data)
 
 NativeAppDataSources::~NativeAppDataSources()
 {
+    if (TEXTURESDIR == textures_) TEXTURESDIR = nullptr;
+    if (textures_) textures_->Release();
+    if (INTERFACEDIR == interface_) INTERFACEDIR = nullptr;
+    if (interface_) interface_->Release();
     if (PROFILEDIR == profiles_) PROFILEDIR = nullptr;
     if (MATERIALDIR == materials_) MATERIALDIR = nullptr;
     if (SPMAPDIR == campaign_) SPMAPDIR = nullptr;
@@ -314,6 +361,22 @@ NativeAppDataSources::~NativeAppDataSources()
     if (profiles_) profiles_->Release();
     if (campaign_) campaign_->Release();
     if (objects_) objects_->Release();
+}
+
+bool NativeAppDataSources::BindInterface(IFileSystem * interfaceDirectory)
+{
+    if (!interfaceDirectory || interface_ || INTERFACEDIR) return false;
+    interfaceDirectory->AddRef();
+    interface_ = INTERFACEDIR = interfaceDirectory;
+    return true;
+}
+
+bool NativeAppDataSources::BindTextures(IFileSystem * textureDirectory)
+{
+    if (!textureDirectory || textures_ || TEXTURESDIR) return false;
+    textureDirectory->AddRef();
+    textures_ = TEXTURESDIR = textureDirectory;
+    return true;
 }
 
 bool NativeAppDataSources::Bind(IFileSystem * objects, IFileSystem * campaign,
@@ -417,3 +480,5 @@ bool NativeAppGameTypesBinding::Bind(IFileSystem * source)
 }
 }
 #endif
+
+struct IMenuResource *MENU = nullptr;

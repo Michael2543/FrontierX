@@ -13,9 +13,26 @@
 */
 //--------------------------------------------------------------------------//
 
- 
+
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include "Include/NativeAppUiInput.h"
+#include "CQTrace.h"
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+using namespace FrontierX::NativeAppUi;
+extern struct IMenuResource *MENU;
+[[noreturn]] static void NativeMenuUnavailable()
+{
+ std::fputs("Native Windows menu/editor or excluded dialog path is unavailable\n", stderr);
+ std::abort();
+}
+#endif
 #include <stdio.h>
 #define IGM_LOG(s) do{FILE*_igf=fopen("debug/ingame_diag.txt","a");if(_igf){fputs((s),_igf);fclose(_igf);}}while(0)
 
@@ -42,15 +59,17 @@
 #include <IConnection.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <WindowManager.h>
-#include <RendPipeline.h>
+#include <rendpipeline.h>
 #include <IMaterialManager.h>
 
 #include <stdio.h>
+#if defined(_WIN32)
 #include <commctrl.h>
 #include <ZMouse.h>
 #include <winres.h>
+#endif
 #ifndef ID_APP_EXIT
 #define ID_APP_EXIT 0xE141
 #endif
@@ -193,6 +212,8 @@ struct DACOM_NO_VTABLE MenuResource : public IMenuResource,
 
 	void sendPartNotification (void)
 	{
+#if defined(_WIN32)
+
 		HWND hList = GetDlgItem(hPartsDlg, IDC_LIST1);
 
 		S32 sel = SendMessage(hList, LB_GETCURSEL, 0, 0);
@@ -203,10 +224,16 @@ struct DACOM_NO_VTABLE MenuResource : public IMenuResource,
 			if (EVENTSYS)
 				EVENTSYS->Send(CQE_PART_SELECTION, (void*)id);
 		}
-	}
+
+#else
+	NativeMenuUnavailable();
+#endif
+}
 
 	void gotoPart (void)
 	{
+#if defined(_WIN32)
+
 		HWND hList = GetDlgItem(hPartsDlg, IDC_LIST1);
 
 		S32 sel = SendMessage(hList, LB_GETCURSEL, 0, 0);
@@ -217,16 +244,23 @@ struct DACOM_NO_VTABLE MenuResource : public IMenuResource,
 			if (EVENTSYS)
 				EVENTSYS->Send(CQE_GOTO_PART, (void*)id);
 		}
-	}
+
+#else
+	NativeMenuUnavailable();
+#endif
+}
 
 	void initPreferences (void);
 
 	void missingDirDialog (const char * name, bool bFatal, const char *prependName=0);
 
+#if defined(_WIN32)
 	static BOOL CALLBACK EditPathDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
 	static BOOL CALLBACK NetStressDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
 	static BOOL CALLBACK GameSpeedDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
 	static BOOL CALLBACK partDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+#endif
+
 };
 //--------------------------------------------------------------------------//
 //
@@ -246,12 +280,15 @@ MenuResource::~MenuResource (void)
 		connection->Unadvise(statusHandle);
 
 	pPauseDlg = 0;	// has deleted itself by this point
+#if defined(_WIN32)
 	SendMessage(hPartsDlg, WM_CLOSE, 0, -1);
 	DestroyWindow(hPartsDlg);
 	hPartsDlg = 0;
 	SetMenu(hMainWindow, 0);
 	DestroyMenu(hMenu);
 	hMenu = 0;
+#endif
+
 }
 //--------------------------------------------------------------------------//
 //
@@ -262,6 +299,8 @@ void MenuResource::Redraw (void)
 //
 void MenuResource::updateMenuVisibility (U32 dt)
 {
+#if defined(_WIN32)
+
 	if (CQFLAGS.bNoGDI == 0)
 	{
 		if (GetAsyncKeyState(VK_MENU) & 0x8000)
@@ -329,25 +368,47 @@ void MenuResource::updateMenuVisibility (U32 dt)
 			bVisible=0;
 		}
 	}
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 HMENU MenuResource::GetSubMenu (U32 nPos)
 {
+#if defined(_WIN32)
+
 	return ::GetSubMenu(hMenu, nPos);
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MenuResource::ForceDraw (void)
 {
+#if defined(_WIN32)
+
 	if (bVisible)
 		DrawMenuBar(hMainWindow);
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 BOOL32 MenuResource::EnableMenuItem (U32 nPos, U32 flags)
 {
+#if defined(_WIN32)
+
 	return ::EnableMenuItem(hMenu, nPos, flags);
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -359,17 +420,25 @@ HMENU MenuResource::GetMainMenu (void) const
 //
 void MenuResource::SetMainMenu (HMENU _hMenu)
 {
+#if defined(_WIN32)
+
 	hMenu = _hMenu;
 	if (bVisible)
 	{
 		SetMenu(hMainWindow, hMenu);
 		DrawMenuBar(hMainWindow);
 	}
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MenuResource::AddToPartMenu (const char *szPartName, U32 identifier)
 {
+#if defined(_WIN32)
+
 	HWND hList = GetDlgItem(hPartsDlg, IDC_LIST1);
 
 #ifdef _DEBUG
@@ -389,11 +458,17 @@ void MenuResource::AddToPartMenu (const char *szPartName, U32 identifier)
 		EnableWindow(GetDlgItem(hPartsDlg, IDC_BUTTON2), 1);
 		SendMessage(hList, LB_SETCURSEL, 0, 0);
 	}
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MenuResource::RemoveFromPartMenu (U32 identifier)
 {
+#if defined(_WIN32)
+
 	HWND hList = GetDlgItem(hPartsDlg, IDC_LIST1);
 	int count = SendMessage(hList, LB_GETCOUNT, 0, 0);
 	bool bSingleItem = (count==1);
@@ -413,20 +488,31 @@ void MenuResource::RemoveFromPartMenu (U32 identifier)
 			break;
 		}
 	}
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MenuResource::RemoveAllFromPartMenu (void)
 {
+#if defined(_WIN32)
+
 	SendMessage(GetDlgItem(hPartsDlg, IDC_LIST1), LB_RESETCONTENT, 0, 0);
 	EnableWindow(GetDlgItem(hPartsDlg, IDC_BUTTON1), 0);
 	EnableWindow(GetDlgItem(hPartsDlg, IDC_BUTTON2), 0);
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 // receive notifications from event system
 //
 GENRESULT MenuResource::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
 
 	if (message && message == wheelMsg)
@@ -434,10 +520,15 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 		msg->wParam = msg->wParam<<16;
 		EVENTSYS->Send(WM_MOUSEWHEEL, param);
 	}
+#endif
 
 	switch (message)
 	{
+#if defined(_WIN32)
 	case WM_SYSKEYUP:
+#else
+	case FrontierX::LegacyMessage::SystemKeyUp:
+#endif
 		delayCounter=0;
 		break;
 
@@ -450,7 +541,7 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 	case CQE_MISSION_ENDING:		// note: this assumes that we will be breaking the net connection
 		bMissionEnding = true;
 		CQFLAGS.bGamePaused = 0;
-		EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
+		EVENTSYS->Send(CQE_PAUSE_CHANGE, reinterpret_cast<void *>(static_cast<std::uintptr_t>(CQFLAGS.bGamePaused)));
 		bLocalPaused = 0;
 		deletePauseMenu();
 		break;
@@ -461,16 +552,22 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 
 	case CQE_ENTERING_INGAMEMODE:
 		IGM_LOG("menu: entered\n");
+#if defined(_WIN32)
 		if (DEFAULTS->GetDefaults()->bEditorMode)
 			SendMessage(hMainWindow, WM_COMMAND, IDM_EDITOR_MODE, 0);
 		if (DEFAULTS->GetDefaults()->bEditorMode)
 			CQBOMB0("Editor Mode must be off.");
 		DEFAULTS->GetDefaults()->bEditorMode = 0;
 		EnableMenuItem(MENUPOS_FILE, MF_ENABLED|MF_BYPOSITION);
+#endif
+
 		break;
 
 	case CQE_LEAVING_INGAMEMODE:
+#if defined(_WIN32)
 		EnableMenuItem(MENUPOS_FILE, MF_GRAYED|MF_BYPOSITION);
+#endif
+
 		break;
 
 	case CQE_PAUSE_WARNING:
@@ -482,19 +579,24 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 		
 	case CQE_NETPAUSED:
 		if (bMissionEnding==false)				// don't bring up pause menu while in that nebulas shutdown time
-			toggleNetPause(int(param));
+			toggleNetPause(static_cast<int>(reinterpret_cast<std::intptr_t>(param)));
 		break;
 	case CQE_NETSTARTUP:
+#if defined(_WIN32)
 		enableVolatileItems(false);
+#endif
 		break;
 	case CQE_NETSHUTDOWN:
 		bLocalPaused = 0;
+#if defined(_WIN32)
 		enableVolatileItems(true);
+#endif
 		break;
 
 	case CQE_HOTKEY:
-		switch ((U32) param)
+		switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
 		{
+#if defined(_WIN32)
 		case IDH_TOGGLE_SCREENMODE:
 			//if (CQFLAGS.bWindowModeAllowed)
 			if (true)
@@ -565,17 +667,28 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 			}
 			break;
 
+#endif
 		case IDH_LOAD_MENU:
 			if (bHasFocus && CQFLAGS.bGameActive && PLAYERID==0)
 			{
+
+#if defined(_WIN32)
 				CreateMenuLoadSave(true, MISSION->IsSinglePlayerGame());
+#else
+				NativeMenuUnavailable();
+#endif
 			}
 			break;
 
 		case IDH_SAVE_MENU:
 			if (bHasFocus && CQFLAGS.bGameActive && (PLAYERID==0 || CQFLAGS.bLimitMapSettings==0))
 			{
+
+#if defined(_WIN32)
 				CreateMenuLoadSave(false, MISSION->IsSinglePlayerGame());
+#else
+				NativeMenuUnavailable();
+#endif
 			}
 			break;
 		
@@ -600,6 +713,7 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 			{
 				if (bHasFocus && CQFLAGS.bGameActive)
 				{
+#if defined(_WIN32)
 					U32 igResult = CreateMenu_igoptions();
 					if (igResult)
 					{
@@ -609,15 +723,19 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 						else
 							EVENTSYS->Send(CQE_PLAYER_QUIT, 0);
 					}
+#else
+					NativeMenuUnavailable();
+#endif
 				}
 				break;
 			}
 		} // end switch (param)
 		break; // end case CQE_HOTKEY
-	
+
+#if defined(_WIN32)
 	case CQE_DEBUG_HOTKEY:
 		if (CQFLAGS.bNoGDI==0)
-		switch ((U32) param)
+		switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
 		{
 		case IDH_EDITOR_MODE:
 			SendMessage(hMainWindow, WM_COMMAND, IDM_EDITOR_MODE, 0);
@@ -634,9 +752,12 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 		} // end switch (param)
 		break; // end case CQE_DEBUG_HOTKEY
 
-		
+
+#endif
 	case CQE_UPDATE:
+#if defined(_WIN32)
 		updateMenuVisibility(U32(param)>>10);
+#endif
 		break;
 	
 	case WM_CLOSE:
@@ -649,6 +770,7 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 		}
 		break;
 
+#if defined(_WIN32)
 	case WM_MENUSELECT:
 		if (HIWORD(msg->wParam) == 0xFFFF)
 			STATUS->ReleaseOwnership(this);
@@ -800,6 +922,7 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 			break;
 		}
 		break;
+#endif
 
 	}
 
@@ -818,6 +941,8 @@ BOOL32 MenuResource::Notify (struct IResource *res, U32 message, void *parm)
 //
 void MenuResource::InitPreferences (void)
 {
+#if defined(_WIN32)
+
 	U32 flags;
 	USER_DEFAULTS *defaults = DEFAULTS->GetDefaults();
 
@@ -859,19 +984,31 @@ void MenuResource::InitPreferences (void)
 	CheckMenuItem(hMenu, IDM_SPECTATOR_MODE, flags); 
 
 	enableCheatItems(defaults->bCheatsEnabled != 0);
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MenuResource::initPreferences (void)
 {
+#if defined(_WIN32)
+
 	InitPreferences();
 	while (updateLoadPath() == 0)
 		;
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MenuResource::TogglePreferences (U32 id)
 {
+#if defined(_WIN32)
+
 	U32 flags;
 	USER_DEFAULTS *defaults = DEFAULTS->GetDefaults();
 
@@ -939,9 +1076,14 @@ void MenuResource::TogglePreferences (U32 id)
 		TogglePreferences(IDM_VISIBILITY_RULES_OFF);
 		break;
 	}
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //-------------------------------------------------------------------
 //
+#if defined(_WIN32)
 BOOL MenuResource::EditPathDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 {
 	BOOL result=0;
@@ -1163,8 +1305,11 @@ BOOL MenuResource::GameSpeedDlgProc (HWND hwnd, UINT message, UINT wParam, LONG 
 }
 //--------------------------------------------------------------------------//
 //
+#endif
 void MenuResource::enableVolatileItems (bool bEnable)
 {
+#if defined(_WIN32)
+
 	UINT flags = (bEnable) ? (MF_BYCOMMAND | MF_ENABLED) : (MF_BYCOMMAND | MF_GRAYED);
 
 	EnableMenuItem(IDM_VISIBILITY_RULES_OFF, flags); 		
@@ -1181,16 +1326,26 @@ void MenuResource::enableVolatileItems (bool bEnable)
 	::EnableMenuItem(GetSubMenu(MENUPOS_FILE), MENUPOS_MRU_MISSION, flags|MF_BYPOSITION);		// MF_BYCOMMAND==0
 	EnableMenuItem(MENUPOS_EDITOR, flags|MF_BYPOSITION);		// MF_BYCOMMAND==0
 	ForceDraw();
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void MenuResource::enableCheatItems (bool bEnable)
 {
+#if defined(_WIN32)
+
 	UINT flags = (bEnable) ? (MF_BYCOMMAND | MF_ENABLED) : (MF_BYCOMMAND | MF_GRAYED);
 
 	EnableMenuItem(IDM_NO_SUPPLIES, flags); 		
 	EnableMenuItem(IDM_NO_DAMAGE, flags); 		
 	EnableMenuItem(IDM_NOAUTOTARGET, flags); 		
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1211,6 +1366,8 @@ void MenuResource::quickSave()
 //
 void MenuResource::missingDirDialog (const char * name, bool bFatal, const char *prependName)
 {
+#if defined(_WIN32)
+
 	wchar_t appname[64];
 	wchar_t buffer[256];
 	U32 flags = MB_OK;
@@ -1231,11 +1388,17 @@ void MenuResource::missingDirDialog (const char * name, bool bFatal, const char 
 		if (WM)
 			WM->ServeMessageQueue();
 	}
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 bool MenuResource::updateLoadPath (void)
 {
+#if defined(_WIN32)
+
 	char buffer[MAX_PATH+4];
 	DAFILEDESC fdesc = buffer;
 	SEARCHPATHDESC sdesc;
@@ -1486,6 +1649,10 @@ bool MenuResource::updateLoadPath (void)
 Done:
 #endif //!FINAL_RELEASE
 	return result;
+
+#else
+	NativeMenuUnavailable();
+#endif
 }
 //-------------------------------------------------------------------------------------------------//
 //
@@ -1509,8 +1676,8 @@ void MenuResource::toggleLocalPause (void)
 			{
 				deletePauseMenu();
 			}
-			EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
-			EVENTSYS->Send(CQE_LOCALPAUSED, (void*)bLocalPaused);
+			EVENTSYS->Send(CQE_PAUSE_CHANGE, reinterpret_cast<void *>(static_cast<std::uintptr_t>(CQFLAGS.bGamePaused)));
+			EVENTSYS->Send(CQE_LOCALPAUSED, reinterpret_cast<void *>(static_cast<std::uintptr_t>(bLocalPaused)));
 		}
 	}
 }
@@ -1528,11 +1695,12 @@ void MenuResource::toggleNetPause (int bPause)
 	{
 		deletePauseMenu();
 	}
-	EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
+	EVENTSYS->Send(CQE_PAUSE_CHANGE, reinterpret_cast<void *>(static_cast<std::uintptr_t>(CQFLAGS.bGamePaused)));
 }
 //
 //----------------------------------------------------------------------------
 //
+#if defined(_WIN32)
 static LONG CALLBACK listControlProcedure(HWND hwnd, UINT message, UINT wParam, LONG lParam)
 {
  	WNDPROC oldProc = (WNDPROC) GetWindowLong(hwnd, GWL_USERDATA);
@@ -1649,12 +1817,14 @@ BOOL MenuResource::partDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lPara
 }
 //--------------------------------------------------------------------------//
 //
+#endif
 struct _menu : GlobalComponent
 {
 	MenuResource * menu;
 
 	virtual void Startup (void)
 	{
+#if defined(_WIN32)
 		HMENU hMenu = GetMenu(hMainWindow);
 		if (hMenu == 0)
 			hMenu = LoadMenu(hResource, MAKEINTRESOURCE(IDR_MENU1));
@@ -1664,10 +1834,12 @@ struct _menu : GlobalComponent
 
 		HMENU hPopup = ::GetSubMenu(hMenu, MENUPOS_VIEW);
 		::DeleteMenu(hPopup, ID_VIEW_EMPTY, MF_BYCOMMAND);
-		
+#endif
+
 		MENU = menu = new DAComponent<MenuResource>;
 		AddToGlobalCleanupList((IDAComponent **) &MENU);
 
+#if defined(_WIN32)
 		menu->hMenu = hMenu;
 		menu->dwMenuHeight = GetSystemMetrics(SM_CYMENU);
 
@@ -1689,6 +1861,7 @@ struct _menu : GlobalComponent
 		AddToGlobalCleanupList(&MOVIEDIR);
 		AddToGlobalCleanupList(&MSPEECHDIR);
 		AddToGlobalCleanupList(&MATERIALDIR);
+#endif
 	}
 
 	virtual void Initialize (void)

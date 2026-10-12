@@ -117,6 +117,7 @@ struct SdlGpuRenderer::Impl
     std::vector<FrameDraw> frameDraws;
     std::vector<PipelineSet> retiredPipelines;
     std::vector<SDL_GPUSampler *> retiredSamplers;
+    std::vector<SDL_GPUTexture *> retiredTextures;
 };
 
 namespace
@@ -572,9 +573,35 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
 GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView & submission)
 {
     if (submission.topology != PrimitiveTopology::TriangleList &&
-        submission.topology != PrimitiveTopology::LineList)
+        submission.topology != PrimitiveTopology::LineList &&
+        submission.topology != PrimitiveTopology::TriangleStrip)
         return GR_NOT_IMPLEMENTED;
     if (!submission.IsValid()) return GR_INVALID_PARMS;
+    if (submission.topology == PrimitiveTopology::TriangleStrip)
+    {
+        const std::size_t count = submission.indexCount ? submission.indexCount : submission.vertexCount;
+        const std::size_t triangles = count - 2U;
+        if (triangles > std::numeric_limits<Uint32>::max() /
+                (3U * sizeof(RenderVertexP3DiffuseT2))) return GR_INVALID_PARMS;
+        std::vector<RenderVertexP3DiffuseT2> vertices;
+        try
+        {
+            vertices.reserve(triangles * 3U);
+            const auto vertex = [&](std::size_t i) -> const RenderVertexP3DiffuseT2 & {
+                return submission.vertices[submission.indices ? submission.indices[i] : i];
+            };
+            for (std::size_t i = 0U; i < triangles; ++i)
+            {
+                // D3D strips reverse the first two vertices of every odd triangle.
+                vertices.push_back(vertex(i + (i & 1U)));
+                vertices.push_back(vertex(i + 1U - (i & 1U)));
+                vertices.push_back(vertex(i + 2U));
+            }
+        }
+        catch (const std::bad_alloc &) { return GR_OUT_OF_MEMORY; }
+        return SubmitBytes(vertices.data(), vertices.size(), sizeof(RenderVertexP3DiffuseT2),
+                           nullptr, 0U, 0U, PrimitiveTopology::TriangleList);
+    }
     return SubmitBytes(submission.vertices, submission.vertexCount,
                        sizeof(RenderVertexP3DiffuseT2), submission.indices,
                        submission.indexCount, 0U, submission.topology);
@@ -1123,16 +1150,25 @@ GENRESULT SdlGpuRenderer::ReplaceTexture(std::uint32_t handle,
         found->second.width != texture.width ||
         found->second.height != texture.height)
         return GR_INVALID_PARMS;
-    for (const auto & draw : impl_->frameDraws)
-        if (draw.boundTexture == found->second.texture) return GR_NOT_IMPLEMENTED;
+    const bool captured = std::any_of(impl_->frameDraws.begin(), impl_->frameDraws.end(),
+        [&](const auto &draw) { return draw.boundTexture == found->second.texture; });
+    if (captured)
+    {
+        try { impl_->retiredTextures.push_back(found->second.texture); }
+        catch (const std::bad_alloc &) { return GR_OUT_OF_MEMORY; }
+    }
     U32 candidateHandle = 0U;
     const GENRESULT result = RegisterTexture(texture, candidateHandle);
-    if (result != GR_OK) return result;
+    if (result != GR_OK)
+    {
+        if (captured) impl_->retiredTextures.pop_back();
+        return result;
+    }
     const auto candidate = impl_->registeredTextures.find(candidateHandle);
     SDL_GPUTexture * previous = found->second.texture;
     found->second.texture = candidate->second.texture;
     impl_->registeredTextures.erase(candidate);
-    SDL_ReleaseGPUTexture(impl_->device, previous);
+    if (!captured) SDL_ReleaseGPUTexture(impl_->device, previous);
     return GR_OK;
 }
 
@@ -1341,6 +1377,9 @@ bool SdlGpuRenderer::BeginFrame(std::string & error)
         for (SDL_GPUSampler * sampler : impl_->retiredSamplers)
             SDL_ReleaseGPUSampler(impl_->device, sampler);
         impl_->retiredSamplers.clear();
+        for (SDL_GPUTexture * texture : impl_->retiredTextures)
+            SDL_ReleaseGPUTexture(impl_->device, texture);
+        impl_->retiredTextures.clear();
     }
     else
     {
@@ -1770,6 +1809,8 @@ void SdlGpuRenderer::Shutdown()
         }
         for (SDL_GPUSampler * sampler : impl_->retiredSamplers)
             SDL_ReleaseGPUSampler(impl_->device, sampler);
+        for (SDL_GPUTexture * texture : impl_->retiredTextures)
+            SDL_ReleaseGPUTexture(impl_->device, texture);
         if (impl_->vertexShader) SDL_ReleaseGPUShader(impl_->device, impl_->vertexShader);
         if (impl_->extendedVertexShader)
             SDL_ReleaseGPUShader(impl_->device, impl_->extendedVertexShader);

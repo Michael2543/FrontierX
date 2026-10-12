@@ -1,4 +1,576 @@
+2026-10-12 native ObjectExtent/Explosion tree-association cleanup: all five
+affected Debug configurations build and pass49 non-GPU checks each,
+extent-tree-owner-current. Focused optional ASan view_parser/app_schema/
+game_material_manager/native_shell pass with leaks ON. No actual exploding
+object/late-close runtime pass yet: the user operates the separate earlier
+Clang continuation; visible repeats remain pending. A hidden mission request
+is explicitly rejected by existing GPU/start CLI requirements and is not
+execution evidence. Windows/retail/full resource gates remain open.
+
+2026-10-12 native mesh archetype ownership: all five affected Debug
+configurations build/pass49 non-GPU checks each, mesh-owner-release-current.
+Focused optional ASan native_shell/app_schema/view_parser pass with leaks ON.
+Actual retail-data F8/close LSan still FAILS52920B/359alloc after repair;
+platform channel roots disappear but MeshInfo/render buffers remain.
+Full resource cleanup, host GPU resize, Windows/retail gates stay open.
+
+2026-10-12 planet-slot/FogOfWar texture-lifetime corrections: all five
+affected Debug configurations build/pass49 non-GPU CTest checks each,
+label map-replacement-current (and earlier platform-orientation-current).
+Focused optional ASan/UBSan native_shell/app_schema/view_parser/render_pipeline
+pass with leak detection ON. Actual optional mission late F8/Solar/Kasse
+map/second F8/close0 passes with leaks OFF and external shared dependencies
+not instrumented. Existing host GPU CTest FAILS on resize after the new
+current/next-frame texture-lifetime readback portion passes; this is not a
+whole GPU pass. Windows/retail and full training/resource gates remain open.
+
+2026-10-12 native Rally resource86/RALLYPOINT translation: all five
+Debug configurations (default GCC/Clang, optional FreeType/shared decoder
+GCC/Clang and optional Clang ASan/UBSan) build and each passes49 non-GPU
+CTest checks, label rally-current. Explicit GPU tests are not part of this
+suite or claimed as passes. Focused optional ASan/UBSan native_shell,
+app_schema and math_core pass with leak detection enabled. Bounded real
+Clang normal Rally/production/movement executes separately; current
+actual mission leaks, full Clang training, Windows and retail gates remain
+open. See the focused singleplayer evidence for crash and reload regressions.
+
 # Windows build declarations and next portable slice
+
+2026-10-12 native HUD reentry: actual original victory/Continue/Start leaves
+movie/no-toolbar flags set, unlike initial0/0. Existing hot-rectangle lifecycle
+countercheck reproduces old native entry failure and passes original System3D
+flag reset at native ingame transition; repeated same-mode calls preserve user
+hidden state. Instrumented shell/native_shell CTest pass. All five affected
+Debug graphs/non-GPU suites pass. Actual no-debugger end/Continue/restart
+restores visible HUD/map; normal1/2/early F8/movement and normal close0 pass
+under ASan/UBSan with leaks OFF/media exclusions. Native-only runtime flags; no Windows/interface/persistent
+layout/simulation/RNG change. Full M2/mission leaks/Windows/ABI/retail open.
+
+2026-10-12 native Explosion extent-axis repair: read-only real Tiamat
+observations confirm X slices with min-1395.94/step279.289 while the caller
+randomly samples Z±1513.53. Native secondary-blast placement now follows
+existing Damage X/Y slices/Z surface height, retaining original RNG draws
+and order and other explosion physics. Original Windows branch, interfaces
+and persistent layouts remain unchanged. Focused instrumented shell builds;
+`explosion-axis-current` rebuilds all five affected Linux Debug graphs and
+passes their existing non-GPU CTest suites. Actual unchanged three-Tiamat combat/reloads reach21 without sanitizer
+report; bounded exit124 remains recorded. Separate genuine Cocoon F8 repeats
+visible end/Continue/restart and normal close0 with leaks OFF/media exclusions.
+Restart HUD defect is separate; no full M2 or leak/Windows/ABI/retail acceptance.
+
+2026-10-12 native AnimNugget watcher mask: actual ordinary combat F8 under
+UBSan reproduces negative left-shift in original U8-promoted complement.
+Native U32 expression preserves32-bit watcher mask and original callback order;
+no field/interface/schema/Windows change. Focused instrumented shell builds,
+leak-enabled app_schema/view_parser pass, and `nugget-watch-mask-current`
+rebuilds all five affected Debug trees with each49-check non-GPU suite passing.
+The unchanged actual combat replay now passes the former failure point,
+renders missiles and destroys two Tiamats with eight surviving Triremes;
+the integrated replay subsequently fails on Explosion extent index-1, exit1.
+Normal close is not accepted for this combat run. Leaks OFF/media exclusions/external
+libraries not instrumented in this bounded replay. Full M2/mission leaks and
+native Windows Debug/Final/ABI/retail remain open.
+
+2026-10-12 original SupplyShip/Stratum dependency:
+`stratum-qualified-current` rebuilds both default GCC/Clang, optional
+font/shared-decoder GCC/Clang and optional Clang ASan/UBSan Debug trees;
+each existing49-check non-GPU suite passes. The preceding `stratum-current`
+run fails GCC on a redundant in-class qualification, corrected without
+signature/ABI changes. Existing app_schema/view_parser also pass under
+ASan/UBSan with leaks ON. Native652-byte archetype,468-byte serialized save,
+parsed464-byte field extent and empty tail record correlation are protected.
+Separate actual normal ASan/UBSan production/in-progress F8 finishes visible
+Stratum350/2000, ready-state F8 restores original HUD/state, and normal close
+exits0 (leaks OFF/media exclusions). Subsequent bounded combat records passive
+mobile supply2000→1735 but fails in Explosion extent lookup;
+Windows Debug/Final/ABI/retail and full M2 remain open.
+
+2026-10-12 original Eutromil BuildShip/IShuttle dependency:
+`repairbot-typed-layout-current` rebuilds all five affected Linux Debug trees
+and passes each existing49-check non-GPU suite. Fresh optional Clang focused
+app_schema/view_parser/native_shell passes; instrumented app_schema/view_parser
+with leaks ON also pass. Existing schema check protects original192-byte
+builder data and offsets/correlation. Separate bounded normal external-data
+Eutromil F8/F7/second F8 renders platforms and records both original drone
+transforms through real repairShip save branches; normal close exits0 under
+ASan/UBSan (leaks OFF/media exclusions). Damaged-ship repair and exact
+individual-drone/retail image comparison remain unexecuted; full M2/mission leaks and native Windows
+Debug/Final/ABI/retail remain open.
+
+2026-10-12 native exact-zero square-root compatibility: existing ASan/UBSan
+math_core rejects the old zero result and passes the native adapter correction
+with leaks ON. `sqrt-zero-current` rebuilds all five affected Debug graphs and
+passes each existing49-check non-GPU suite, retaining the existing grid-distance
+hash and nonzero tests. Separate actual unchanged pending-build F8 under
+ASan/UBSan completes14/two ready own gate platforms and normal close0 (leaks
+OFF/media exclusions); latest optional GCC repeats14 and continues15/20.
+These are bounded gameplay results; Windows math/runtime/ABI comparison and full M2 remain open.
+
+2026-10-12 native Gunboat loaded automatic-target cache:
+`auto-target-cache-current` rebuilds all five affected Linux Debug trees and
+passes each existing49-check non-GPU suite. Instrumented app_schema/view_parser/
+native_shell checks pass; actual bounded unchanged gate-combat F8 resumes
+without reissue and destroys both linked hostile platforms, normal close0,
+ASan/UBSan (leaks OFF/media exclusions). Full independent GCC/Clang training,
+Windows/ABI/retail and full leak acceptance remain open.
+
+2026-10-12 native App MeshRender array/index-buffer ownership:
+`mesh-lookup-cleanup-current` rebuilds all five affected Debug graphs; each
+existing49-check non-GPU suite passes. Existing ASan/UBSan
+`portability.game_material_manager` also passes with leak checking ON after
+balancing its four held Engine archetype observations. Actual final bounded regular reload/close
+mission LSan fails (68,515 bytes/435 allocations); the targeted MeshRender
+list/index-buffer roots disappear, Channel/Anim and external roots remain. No persistent/shared-layout/vtable change; Windows execution open.
+
+2026-10-12 native CQ2 pointer-array cleanup: `cq2-material-array-current`
+rebuilds all five affected Linux Debug configurations and passes each existing
+49-check non-GPU suite. The existing instrumented state_material CTest also
+passes with leak checking ON after reproducing the missing8-byte array delete.
+Actual mission repeat/full leak and Windows/ABI/retail gates remain separate.
+
+2026-10-12 borrowed texture-ID ownership: `borrowed-texture-id-current`
+rebuilds all five affected Linux Debug default/optional/instrumented trees;
+each existing49-check non-GPU suite passes. Existing ASan/UBSan state_material
+countercheck rejects the old unowned addref and passes the documented borrowed
+lookup lifetime. Actual bounded mission reload/close passes with leaks OFF; Windows and
+full cleanup/leak acceptance remain open.
+
+2026-10-12 native unfocused-close pump: `inactive-close-current` rebuilds the
+five affected Linux Debug configurations; each existing non-GPU suite passes.
+Focused ASan/UBSan native_window_manager countercheck passes, retaining veto
+and queued-focus behavior. Private accepted-close latch adds the second-pump countercheck;
+`inactive-close-latch-current` passes all five affected builds/suites. Actual
+optional instrumented regular-entry/later-F8/P/background close exits0 without
+refocus; sanitizer exclusions and texture-reference limit remain documented
+in NATIVE_SINGLEPLAYER_SLICE.
+
+2026-10-12 selection projection boundary: `selection-projection-current`
+rebuilds all five existing Linux Debug configurations; each existing49-check
+non-GPU suite passes. Existing instrumented Engine/material regression reproduces
+the old RenderMgr float-to-int UBSan failure and passes after the native guard;
+app_schema/native_shell also pass. Bounded production repeat now exits0 after normal Helion completion10, original
+Frigate spawn, F7/F8/F7 and close; see the focused singleplayer evidence for
+actual sanitizer scope and remaining full-training/Windows gates.
+
+2026-10-12 original training Frigate Mimic dependency: `mimic-team-boundary-current`
+rebuilds all five existing Linux Debug trees (GCC/Clang default GPU, GCC/Clang
+optional FreeType/shared decoder, Clang ASan/UBSan optional). Each existing
+49-check non-GPU CTest suite passes. Focused optional Clang app_schema/native_shell
+pass, including unchanged eight-byte Mimic save correlation. These are compile
+and deterministic synthetic checks. Separate bounded production Mimic lifecycle
+now executes; full training and native Windows/ABI gates remain open.
+
+Latest 2026-10-12 counterchecks: `anim-random-current`,
+`talorian-free2-current` and `recon-free-current` rebuild all five existing
+Linux default/optional/instrumented trees and pass49 non-GPU CTests each.
+Real ready20 ASan/UBSan repeated normal F8/close now exits0 with documented
+exclusions and leaks OFF. Original GameProgress joins the existing mission
+object target; raw DOS save support extends the existing adapter/data_root
+check (focused instrumented data_root/native_shell pass);
+`game-progress-dos-current`, `destabilizer-current` and `end-menu-current`
+rebuild all five trees and pass49 non-GPU CTests each. Original Menu_campaign
+and GT_MENU1 layout checks also pass all five trees in campaign-entry-current
+and campaign-globals-current, including the native composition initialization.
+scroll-reload-current also rebuilds all five trees and passes49 non-GPU
+checks each after the native original MScroll activation correction.
+stance-current also rebuilds all five trees and passes49 non-GPU checks
+each, including native_shell real EventSystem stance-dispatch counterchecks.
+tractor-current rebuilds all five trees and passes49 non-GPU checks each,
+including the added original20-byte Tractor schema correlation.
+patrol-current rebuilds all five trees and passes49 non-GPU checks each,
+including the extended original HotButton/EventSystem dispatch countercheck.
+genplat-current rebuilds all five trees and passes49 non-GPU checks each
+with original CMenu_GenPlat in the existing toolbar target;
+genplat-format-current also rebuilds all five and passes49 non-GPU checks each.
+research-current also rebuilds all five and passes49 non-GPU checks each
+with the original research-panel owner.
+none-current also rebuilds all five and passes49 non-GPU checks each
+with the original empty-selection panel owner.
+modal-close-current rebuilds all five and passes49 non-GPU checks each,
+including optional/instrumented native_shell modal/nonmodal close ownership countercheck.
+nested-close-current also rebuilds all five and passes49 non-GPU checks each,
+including the existing native_shell full modal-stack close countercheck.
+briefing-bool-current also rebuilds all five and passes49 non-GPU checks each
+after the native original Sol_T presentation-flag initialization.
+end-title-bound-current also rebuilds all five and passes49 non-GPU checks each
+after the native original end-statistics overview-title array bound correction.
+tab-diagnostic-current also rebuilds all five and passes49 non-GPU checks each
+after the native end-menu TabButton diagnostic archetype-class guard.
+explosion-child-current also rebuilds all five and passes49 non-GPU checks each
+after the native original explosion child-index multiplication width correction.
+hotbutton-diagnostic-current also rebuilds all five and passes49 non-GPU checks
+each after the matching native HotButton diagnostic archetype-class guard.
+GPU resize still fails on this Wayland host. Full training and Windows/ABI/retail remain open.
+
+Latest enemy owner checkpoint, 2026-10-11: original FighterWing/Fighter/
+EngineTrail/Projectile/AutoCannon plus ReconLaunch/StatisBolt/RepellentCloud
+join the existing gunboat object target. `recon-stasis-repellent-current`
+rebuilds all five default/optional/instrumented Linux trees and passes49
+non-GPU CTests each, including extended original persistent schema correlation.
+The ASan optional tree now enables the existing external shared-LGPL decoder
+for real Sector supply-change comm; system SDL/FreeType/FFmpeg/GPU remain
+uninstrumented and leaks disabled. Actual normal gate repeats exposed missing
+real Recon children sequentially; `recon-all-current`, `fighter-vb-current`
+and `talorian-current` now rebuild/pass all five trees (49 non-GPU each).
+Original RepulsorWave and TalorianLauncher/Effect are linked; native shell
+now initializes/cleans the production VertexBufferManager for actual Fighter
+batching. Later real-state reload and Matrix construction execute under
+optional Clang; integrated new-owner sanitizers and full training remain open. Host GPU overall resize remains failed; full
+training, original owner lifecycle, native Windows Debug/Final/ABI and retail
+comparison remain unproven.
+
+Latest original Beam/supply-label checkpoint, 2026-10-11: existing native
+gunboat weapon/render graph executes original Polaris damage and beam blur
+in a bounded ordinary ASan/UBSan F8/F7/map/resupply/close run. SDL RPVERTEX
+strips expand to winding-preserving triangles; native optional object labels
+borrow the existing ObjectList/GenData Font!!ObjectType owner.
+`beam-strip-current` and `unit-labels-current` rebuild all five existing
+mission GCC/Clang, font/voice GCC/Clang and font ASan trees; each non-GPU
+CTest sequence passes49. Host strip image comparison passes, but the full
+GPU probe still needs a floating-window resize repeat. No host skip or
+synthetic draw is a full-training proof. Leak checking/media are excluded
+from the bounded mission run; native Windows Debug/Final/ABI remain open.
+
+Latest wormhole sanitizer checkpoint, 2026-10-11: actual field render after
+F8 exposed negative float-to-U32 conversion in Jumpgate billboard depth
+sorting. Native checked signed truncation/U32 wrap clears that first
+instrumented render. `gate-sort-current` rebuild/non-GPU sequence passes all
+five existing trees (49 each); integrated reload/close remains in progress.
+
+Latest sector-link checkpoint, 2026-10-11: NativeApp2DDraw now submits source
+PB_LINES through the existing native LineList boundary after actual
+Sector::DrawLinks aborted. Existing game_material_manager diagonal-line
+countercheck fails before the correction and passes afterward.
+`map-line-current` rebuild/non-GPU CTest sequence passes all five trees
+(49 checks each); integrated map execution and full training remain separate.
+
+Latest group HUD checkpoint, 2026-10-11: original CMenu_MulMix joins the
+existing toolbar object target. Focused optional Clang checks pass;
+`mulmix-current` rebuilds default GCC/Clang, optional font/shared-decoder
+GCC/Clang and font ASan/UBSan Clang, each passing all 49 non-GPU CTests.
+Leak detection is disabled; host-visible group execution and integrated
+new-owner sanitizers are separate open gates.
+
+Latest M2 weapon/platform boundary checkpoint, 2026-10-11: original beam.cpp
+and MassDisruptor.cpp join the existing weapon owner after actual Polaris
+production dependency failures. Their unchanged persistent records correlate
+in the existing app_schema check. The mass-current rebuild/non-GPU CTest
+repeat passes all five trees below (49 checks each), using the same commands.
+Actual optional Clang Polaris production and in-progress F7/F8 continue to
+six supplied ships/objective12, distinct from synthetic checks. Native HARCH
+lookup/enumeration now passes a failing-before existing Engine hardpoint
+countercheck; original RepairPlat compiles with persistent schema correlation
+and focused Clang checks. The repair-hardpoint-current affected rebuild/non-GPU CTest repeat passes
+all five trees below (49 checks each), including the extended Engine
+hardpoint and app_schema checks. Actual Eutromil-ready/13 and natural alerts execute under optional Clang. Full training/end, new-owner instrumented mission,
+GCC full repeat and native Windows Debug/Final/module ABI remain open.
+
+Latest industrial-platform HUD checkpoint, 2026-10-11: original CMenu_BuildInd
+joins the existing toolbar target and restores the selected Greater Pavilion
+production HUD on external data. Focused optional Clang checks pass; the
+buildind-current affected rebuild/non-GPU CTest repeat passes all five trees
+below (49 checks each). Original production packets and persistent schemas
+remain unchanged. Actual later ship production, new-menu integrated sanitizer
+lifetime, GCC full training and native Windows Debug/Final/ABI remain open.
+
+Latest M2 sanitizer-owner checkpoint, 2026-10-11: native zero-mask PixelFormat,
+packed Gunboat target sync, matching FancyLaunch/Arc archetype delete and
+objective-list memmove corrections compile in the existing closures. The
+objective countercheck reproduces ASan overlap before correction; existing
+native_shell now verifies original objective compaction/state/secondary/tail
+behavior. The objective-final rebuild and non-GPU CTest repeat pass all five
+trees listed below (49 checks each), using the same commands/exclusions. These
+are compilation and synthetic/automated process results. A subsequent separate visible instrumented normal
+ESP-ready/objective transition, F7/two F8/map/P/Escape/close repeat exits 0
+without ASan/UBSan diagnostics. Full training remains a separate gate; leak
+detection and speech are disabled, system SDL/FreeType/GPU code uninstrumented
+and texture reference warnings unresolved. No persistent or Windows layout
+change is introduced; native Windows Debug/Final/module ABI remain unexecuted.
+
+Latest actual ESP-owner checkpoint, 2026-10-11: GunPlat, FancyLaunch and Arc now
+compile in the existing platform/launcher closures. Existing app_schema verifies
+the actual 432-byte gun-platform record and nested target/agent flags against
+the generated source schema. The esp-final rebuild/non-GPU CTest repeat passes
+all five trees listed below, with the same 49 checks. Actual physical-output
+Clang ordinary construction completes ESP objective 11 and lists Citadel 16;
+GCC complete training, actual combat, integrated sanitizer execution of these
+owners and native Windows Debug/Final/ABI remain open.
+
+Latest M2 briefing/storage/initial-platform checkpoint, 2026-10-11: original
+Button2/Animate/MenuBriefing and JumpPlat compile in the existing owner graph;
+selected normal briefing/Start is visibly executed under GCC and Clang.
+The empty-program layout countercheck reproduces vtable/save overlap and the
+native runtime-byte fix passes focused GCC/Clang checks. Indexed briefing TGA,
+unaligned BMP, full-width ObjMap poison checks and saved PendingOps alignment
+are bounded native corrections at existing owners. Existing material and shell
+checks cover synthetic images/unaligned records. All five existing trees rebuilt
+and passed their 49 non-GPU CTests at the jumpplat-current checkpoint with
+`cmake --build BUILD -j4` and `ASAN_OPTIONS=detect_leaks=0
+UBSAN_OPTIONS=halt_on_error=1 ctest --test-dir BUILD --output-on-failure -E
+'^portability\.(sdl3_gpu|game_material_gpu)$'`.
+Trees: `/tmp/frontierx-mission-{gcc,clang}`, `/tmp/frontierx-voice-{gcc,clang}`,
+`/tmp/frontierx-voice-asan`. The subsequent JumpPlat schema-check extension also
+passes focused optional Clang and default GCC app_schema; the expanded JumpPlat and zero-target PendingOps checks are included in a
+subsequent m2-final-current rebuild/non-GPU CTest repeat: all five trees pass
+the same 49 checks. No GPU skip or
+CTest count accepts full gameplay. The leak-disabled integrated ASan/UBSan
+ordinary P/Escape/F8/map/repeated-F8/close repeat exits 0 on external data;
+FFmpeg/training speech/unit voice are disabled, system SDL/FreeType and GPU
+driver uninstrumented, texture reference warnings unresolved. Native Windows
+Debug/Final/module ABI and full training/end remain open.
+
+Latest M2 OpAgent callback checkpoint, 2026-10-11: native subscription and
+unsubscription now use the existing original FullScreen owner with
+EVENT_PRIORITY_MISSION when present, retaining the standalone EventSystem
+fallback. Windows branches and persistent/packet layouts are unchanged.
+The three focused optional Clang native_shell/legacy_input/native_window_manager
+checks pass. All five trees named below subsequently rebuilt (`cmake --build
+BUILD -j4`) and each passed 49 non-GPU CTests using the same exclusions and
+sanitizer environment. Actual read-only-parent ordinary-input 8–10 continuation
+still rejects all three Mantis paths with command-time gate flags zero; the
+hypothesis that callback ownership caused that rejection is falsified. These
+are bounded owner/build/runtime results, not full training or Windows/ABI
+acceptance.
+
+Latest M2 texture/program-owner checkpoint, 2026-10-11: original ITManager map
+textures now bind through the external TEXTURESDIR owner with scoped explicit
+base-level policy. The native pipeline preserves opaque/alpha class semantics;
+the original native-only fullscreen-map handler executes. Archive absolute
+virtual directory access restores original active-program loading, including
+closing its native enumeration handle. Existing material-manager/data-root
+checks cover these regressions; app_schema also checks inherited mission
+placement and nonzero saved move/jump agents and completion flags. All four
+Linux x86_64 Debug default/optional GCC/Clang trees and Clang ASan/UBSan rebuilt
+with `cmake --build BUILD -j4` and passed 49 non-GPU checks with
+`ctest --test-dir BUILD --output-on-failure -E
+'^portability\.(sdl3_gpu|game_material_gpu)$'`. Trees are
+`/tmp/frontierx-mission-{gcc,clang}`, `/tmp/frontierx-voice-{gcc,clang}` and
+`/tmp/frontierx-voice-asan`, each invoked separately. Sanitizer environment:
+`ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1`; external
+SDL3/FreeType are uninstrumented, FFmpeg is off. This is automated focused
+and graph execution, not integrated full-training sanitizer evidence. Actual
+physical-output Clang normal Insert open/return and map camera/move execute;
+read-only diagnosis observes restored Helion Attack. Full GCC/Clang training,
+Windows Debug/Final/module ABI and retail parity remain open.
+
+Latest M2 save-schema checkpoint, 2026-10-11: the existing app_schema
+countercheck reproduced lost move/attack with schema/native capability offsets
+72/70. The parser-only declaration now names the original byte-aligned record;
+existing checks cover complete inherited Taos/Forger/Galiot mission records,
+adjacent fields and fixed layout. External original-schema correlation passes.
+All four Linux x86_64 Debug default/optional GCC/Clang graphs and the Clang
+ASan/UBSan tree rebuilt with `cmake --build BUILD -j4` and passed 49 non-GPU
+CTest checks (`ctest --test-dir BUILD --output-on-failure -E
+'^portability\.(sdl3_gpu|game_material_gpu)$'`). Sanitizer checks used
+`ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1`; system SDL3/FreeType
+are uninstrumented and FFmpeg is disabled in that tree. This is automated
+execution, not an integrated full-training sanitizer run. Fresh physical-output
+Clang early P/Escape/F7/F8 and normal post-reload Taos map movement execute.
+Old native saves under the faulty schema do not prove preserved capabilities.
+Full M2, later state comparison and native Windows Debug/Final/ABI remain open.
+
+Latest M2 weapon dependency checkpoint, 2026-10-11: original Turret,
+GattlingBeam and PlasmaBolt join the existing Gunboat owner. All four Linux
+x86_64 Debug default/optional GCC/Clang graphs built with `cmake --build BUILD
+-j4` and passed 49 non-GPU CTests (`ctest --test-dir BUILD --output-on-failure
+-E '^portability\.(sdl3_gpu|game_material_gpu)$'`). First GCC compilation
+exposed a direct constructor extension; native assignment now preserves its
+original transform inputs. The six focused Clang ASan/UBSan math_core,
+legacy_input, native_window_manager, native_shell, render_pipeline and
+render_submission checks pass with leaks disabled; SDL3/FreeType remain
+uninstrumented and FFmpeg is off in that tree. Actual physical-output Clang
+normal construction reaches 1–10 across early/later F7/F8 UI reloads. A new
+launcher-enabled reload restores Helion state without the previously missing
+Taos/Frigate weapon providers. Full training, live weapon/damage behavior,
+integrated sanitizer continuation and native Windows/ABI remain open. See
+[the focused continuation](NATIVE_SINGLEPLAYER_SLICE.md#physical-output-pavilion--helion-continuation-2026-10-11).
+
+Latest M2 map dependency checkpoint, 2026-10-11: original SysMap now joins the
+existing toolbar owner, Sector's map paths use the native texture-DC adapter,
+and the existing native primitive expands the actual map's triangle fan.
+GCC/Clang default and optional FFmpeg/FreeType Linux x86_64 Debug graphs rebuilt
+with `cmake --build /tmp/frontierx-{mission-gcc,mission-clang,voice-gcc,voice-clang}
+-j4` (each tree separately), and each passed 49 non-GPU CTests with
+`ctest --test-dir BUILD --output-on-failure -E
+'^portability\.(sdl3_gpu|game_material_gpu)$'`. The excluded GPU CTests are not
+execution evidence. Clang ASan/UBSan shell/pipeline/submission targets and their
+three focused CTests pass with `ASAN_OPTIONS=detect_leaks=0
+UBSAN_OPTIONS=halt_on_error=1`; system SDL3/FreeType are uninstrumented and
+FFmpeg is disabled in that tree. Actual Clang external-data normal input repeats
+1–7 with visible map art on compositor FALLBACK; source Bunker completion and crew production execute. The subsequent BuildPlat and MenuResource/Menu_Pause additions also pass the four complete graphs and their 49 non-GPU CTests. Focused Clang legacy_input/native_window_manager/native_shell checks pass after the control-character fix. Physical-output Clang P/Escape and early UI F7/F8 execute; later construction acceptance remains in progress. Integrated sanitizer construction,
+full physical-output training, UI save/load and native Windows Debug/Final/ABI
+remain open. Earlier checkpoints below are historical.
+
+M2 owner integration, 2026-10-11 (in progress): `frontierx_app_toolbar_owner`
+now includes and links source Toolbar/FullScreen, Fabricator/individual-ship
+menus, required controls, ShapeLoader/FontFactory, image DrawAgent and
+InterfaceManager in GPU native shell builds. The existing texture-manager
+owner includes original VFXREADER with checked native SHP decoding; no new
+probe executable is introduced. Existing native-shell and material-manager
+CTest checks pass under optional GCC/Clang. The sanitizer material check
+with leaks enabled reports 1,409 bytes/29 original PolyMesh allocations;
+`ASAN_OPTIONS=detect_leaks=0` repeats pass memory access/UB checks only.
+Before the subsequent GroupObj integration, complete GCC/Clang default
+and optional FFmpeg/FreeType graphs built and their 49 non-GPU CTests
+passed (`cmake --build BUILD -j 6`; `ctest --test-dir BUILD -j 4
+--output-on-failure -E '^portability.(sdl3_gpu|game_material_gpu)$'`).
+The two omitted GPU entries are not execution evidence. Full mission
+sanitizers remain pending. Visible GCC/Clang source HUD/partial objectives
+and successful moved-state reload/close are separate runtime evidence;
+this graph is not full training, native Windows ABI or retail parity proof.
+See the current M2 ledger in `NATIVE_SINGLEPLAYER_SLICE.md`.
+
+Later M2 dependency checkpoint: original GroupObj and CMenu_FindButtons
+are linked; RefinePlat joins the existing build-support platform owner, and
+Banker's original toolbar subscription updates the real resource controls.
+The operation-storage check extends existing `portability.native_shell`,
+without a new executable. After these integrations, all four complete Debug
+trees `/tmp/frontierx-mission-{gcc,clang}` (default) and
+`/tmp/frontierx-voice-{gcc,clang}` (external shared-LGPL FFmpeg/FreeType)
+built and passed 49 non-GPU checks using `cmake --build TREE -j 4` and
+`ctest --test-dir TREE --output-on-failure -E
+'^portability\.(sdl3_gpu|game_material_gpu)$'`. A subsequent complete four-tree repeat after SolarianBuild, Engine OBJECTDIR
+binding, toolbar/HotButton destruction corrections and indexed palette texture
+support also passes the same 49 non-GPU checks. Existing render-pipeline and
+game-material-manager tests cover generated palette/alpha and actual TextureLibrary
+selection. Original CMenu_ResBuild now joins the existing toolbar owner; optional
+GCC/Clang and Clang ASan/UBSan native-shell builds and the two affected
+material-manager/native-shell checks pass. Complete default/optional GCC/Clang graph repeats after this menu
+addition also pass all 49 executing non-GPU checks with the same commands.
+The subsequent original HarvestShip registrar, native SpaceShip template
+instantiation and original MeshObj tank lifecycle build in the existing
+spaceship/mesh-render owners; all four complete trees again pass their 49
+executing non-GPU checks. The same two focused sanitizer checks pass with
+leaks disabled. Actual Galiot production and integrated owner lifecycles
+remain required. Leaks are disabled for sanitizer checks; known original
+PolyMesh leaks are unresolved, and system SDL3/FreeType internals are not instrumented.
+An integrated diagnostic reload uncovered corrected toolbar and HotButton
+allocation-family mismatches, but their final integrated ownership repeat remains
+pending. Visible normal GCC construction completes original objective 5 and lists 6;
+no late UI save or full training result is implied. The complete instrumented
+mission, normal UI save/load, Windows Debug/Final and module ABI remain open.
+
+
+Earlier M2 UI dependency checkpoint (2026-10-11; superseded by the connected
+owner record above, compilation/synthetic evidence at that time only):
+`frontierx_native_app_globals` now archives original System.cpp BaseHotRect
+lifecycle through `NativeAppHotRect.cpp`; the existing optional shell check
+executes its unattached-root input/focus/posted-message/destruction checks.
+`frontierx_app_toolbar_owner` compiles original `CMenu_Fabricator.cpp` and
+`Menu_Toolbar.cpp` with native BaseHotRect/Frame declaration paths under GCC
+and Clang. This object target is **not yet linked into mission startup**;
+shape/image/control factories and real UI/runtime ownership are pending.
+Focused Clang ASan/UBSan repeats pass after fixing the actual Engine-heap
+allocation/deallocation mismatch; leak checking is disabled and system
+SDL3/FreeType are uninstrumented. No full mission, complete default graph,
+Windows/ABI or full-training acceptance is implied by this checkpoint. See
+[the M2 ledger](NATIVE_SINGLEPLAYER_SLICE.md#full-sol_train-acceptance-ledger-m2-2026-10-11-in-progress).
+
+## Original gameplay Hintbox graph, M1 (2026-10-11)
+
+Original `MScroll.cpp` joins the existing `frontierx_app_camera_owner` object
+target; no new parallel UI target is introduced. The existing native
+SystemMap owner adds the source in-game camera scroll calculation and frame
+callback. The existing `frontierx_data_root_probe` links
+`frontierx_native_user_defaults` for that real dependency. Serialized layouts
+and shared interface declarations are unchanged by this checkpoint.
+
+**Compilation and automated execution.** Linux x86_64 Debug Ninja,
+GCC 16.2.1 and Clang 22.1.8: complete default
+`/tmp/frontierx-mission-{gcc,clang}` and optional external shared-LGPL
+FFmpeg/FreeType `/tmp/frontierx-voice-{gcc,clang}` graphs built with
+`cmake --build <tree> -j4`. The initial complete builds exposed a missing
+UserDefaults link in the data-root probe; after linking the production owner,
+all four complete graphs passed. Each passed 49 executing CPU/process checks
+with `ctest --test-dir <tree>
+-E '^portability.(sdl3_gpu|game_material_gpu)$' --output-on-failure -j4`.
+No skip is counted as execution. Those two GPU CTests remain excluded;
+separate real mission runs provide the visible Wayland/Vulkan evidence.
+Final shell rebuilds after resetting the second modal observer's quit state
+passed `ctest --test-dir <tree> -R '^portability.native_shell$'
+--output-on-failure` in all four configurations.
+
+**Focused synthetic sanitizer execution.** Clang 22.1.8 Debug
+`/tmp/frontierx-voice-asan` also built its complete graph. The existing
+font-enabled shell process check passed with
+`ASAN_OPTIONS=detect_leaks=0 ctest --test-dir <tree>
+-R '^portability.native_shell$' --output-on-failure`; compilation uses
+`-fsanitize=address,undefined -fno-omit-frame-pointer`.
+It executes original Hintbox/FieldManager acquire, resource-ID switch,
+loss, close/re-entry and font release, and MScroll cold-position/payload/
+close handling, alongside existing source text lifecycles. Generated
+resources and the external FreeType face are inputs. LeakSanitizer, the
+system FreeType library's internals, visible SDL/GPU gameplay, full mission
+simulation/decoder and native Windows are outside this sanitizer result.
+
+**Native runtime, ABI and next gate.** Separate visible GCC/Clang external
+retail-data Sol_Train runs with `--mission-hint-check` passed original field
+hover, target switch, removal, renewed hover after source moved-state reload
+and actual mission close; both exited zero. Captures were visually inspected,
+not inferred from counters. Existing Linux layout/schema/module-process
+checks passed. No native Windows executor/VS2022/dumpbin is available here;
+Windows Debug/Final and cross-module ABI execution remain explicitly open.
+Windows font/render comparison, full mission sanitizers, cross-compiler
+simulation determinism and retail parity are unperformed. See
+[the focused evidence and reproduction](NATIVE_SINGLEPLAYER_SLICE.md#original-gameplay-hintbox-checkpoint-m1-2026-10-11).
+Older records below are historical.
+
+Native UnitComm alert graph, 2026-10-11: alert fonts and traversal execute
+within the existing mission-media owner; no target or dependency was added.
+GCC 16.2.1 and Clang 22.1.8 Linux x86_64 Debug Ninja complete default
+`/tmp/frontierx-mission-{gcc,clang}` and optional FFmpeg/FreeType
+`/tmp/frontierx-voice-{gcc,clang}` graphs built with `cmake --build <tree> -j6`.
+Each passed 49 executing CPU/process checks using `ctest --test-dir <tree>
+-E '^portability.(sdl3_gpu|game_material_gpu)$' --output-on-failure -j6`;
+the two GPU CTests remain explicitly excluded because of the earlier desktop
+resize issue, and no skip is counted as execution. Final GCC/Clang shell
+rebuilds passed focused `portability.native_shell` checks. The alert/font
+lifecycle CTest passed in Clang Debug ASan/UBSan with leak checking disabled.
+Visible Wayland/Vulkan controlled source-alert mission runs under both
+compilers passed normal input, objectives and moved-state source save/reload.
+Natural combat, visible gameplay hints, full mission sanitizers, Windows/ABI
+and retail parity remain unperformed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-unitcomm-alert-rendering-checkpoint-2026-10-11).
+Older records below are historical.
+
+Native source status/scrolling graph, 2026-10-11: original StatusBar,
+Hintbox and ScrollingText join `frontierx_native_mission_media_owner`.
+The existing text-resource binding selects these source owners for a
+font-enabled mission; diagnostic terminal substitutes remain available.
+Linux x86_64 Debug Ninja GCC 16.2.1 and Clang 22.1.8 complete default
+`/tmp/frontierx-mission-{gcc,clang}` and optional FFmpeg/FreeType
+`/tmp/frontierx-voice-{gcc,clang}` graphs built with
+`cmake --build <tree> -j6`. Each of the four trees passed all 49 executing
+CPU/process checks with `ctest --test-dir <tree>
+-E '^portability.(sdl3_gpu|game_material_gpu)$' --output-on-failure -j6`.
+No check skipped in these runs. The two GPU CTests were explicitly excluded;
+the prior desktop resize failure is not reclassified as success. Separate
+visible external-data mission runs under both compilers passed source text,
+voices, normal movement and save/reload. The extended existing shell font
+lifecycle CTest also passed under Clang ASan/UBSan with leak checking disabled.
+A final Windows-only guard cleanup in ScrollingText was followed by shell
+rebuilds and the focused shell CTest under both compilers. Windows/ABI,
+full mission sanitizers and retail parity remain unperformed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-status-and-unit-scrolling-text-checkpoint-2026-10-11).
+Older records below are historical.
+
+Native source subtitle graph, 2026-10-11: original Subtitle joins the
+existing mission-media object target and uses the optional multiline font
+adapter. GCC 16.2.1 / Clang 22.1.8 Linux x86_64 Debug Ninja complete default
+`/tmp/frontierx-mission-{gcc,clang}` and optional FFmpeg/font
+`/tmp/frontierx-voice-{gcc,clang}` graphs built with
+`cmake --build <tree> -j6`. CPU/process runs used
+`ctest --test-dir <tree> -E '^portability.(sdl3_gpu|game_material_gpu)$'
+--output-on-failure -j6` for defaults and
+`-E 'portability.(sdl3_gpu|game_material_gpu|native_cursor)'` for optional trees.
+Each passed 48 executing checks; `portability.app_cursor` skipped. Both
+GPU CTests were excluded rather than treated as passes. Separate visible
+Wayland/Vulkan mission speech/subtitle runs passed movement and source
+save/reload. The focused optional font lifecycle shell CTest passed under
+both compilers and Clang ASan/UBSan with leak checking disabled. No full
+mission sanitizer, native Windows/ABI, font/audio comparison or retail parity
+ran. See [the focused subtitle record](NATIVE_SINGLEPLAYER_SLICE.md#original-mission-speech-subtitles-checkpoint-2026-10-11).
+Older records below are historical.
 
 Native source Teletype graph, 2026-10-10: original Teletype and the optional
 native FreeType adapter join the existing mission-media object owner; the
@@ -1760,3 +2332,64 @@ repository-owned synthetic vertices. GCC and Clang built and ran that path,
 and a focused Clang ASan/UBSan execution passed. The broader vertex-buffer
 manager and App-side ZBatcher objects remain outside the native graph; the
 focused document records the exact commands and open branches.
+
+2026-10-12 admiral-availability-current: all five existing Debug trees (mission-gcc, mission-clang, voice-gcc, voice-clang, voice-asan) rebuild and pass49 existing non-GPU CTests each. Focused ASan native_shell/app_schema/view_parser pass with leaks ON/UBSan halt. This compiles the native-only original ResearchButton availability gate; visible retail-data input is documented separately. Actual late-F8/close LSan still exits1/3156B/7 allocations despite removal of prior MeshInfo roots; no whole sanitizer success. Prior host GPU resize failure and unavailable native Windows gates remain unchanged.
+
+
+2026-10-12 technical-current revalidation (after successful user Clang end):
+all five existing Debug trees rebuild and pass49 existing non-GPU CTests
+each. Focused Clang ASan/UBSan layout/view_parser/app_schema/legacy_input/
+native_window_manager/native_shell pass6/6 with detect_leaks=1 and
+halt_on_error=1. Full non-GPU ASan suite uses detect_leaks=0; this is not
+whole-process leak evidence. Raw command/result files remain external under
+/tmp/frontierx-m2-runtime/technical-current-* and technical-focused-leaks-on.log.
+
+Registered visible GPU checks execute separately. Normal Wayland voice-clang
+material passes; sdl3_gpu fails unchanged1236x1390 size despite the texture
+retirement subcheck passing. X11 with external compositor floating setup and
+one-second SDL event-pumped initial mapping delay passes both registered GPU
+checks in mission-gcc/mission-clang/voice-gcc/voice-clang. No probe check,
+resize request, shader or production renderer is replaced: real Vulkan
+swapchain changes641x360 to800x450, depth recreation and repeated scene/
+readback assertions execute. This is host-conditioned runtime, not a repaired
+Wayland default CTest. See focused singleplayer ledger for exact harness
+commands. No desktop configuration or source code is changed.
+
+Leak-enabled voice-asan GPU functional assertions execute but whole CTests
+FAIL: initial X11 run64413B/924 allocations (material) and84369B/939 (sdl3_gpu);
+map-attribution repeat64456B/924 and84417B/939. Shared SDL/X11/DBus/NVIDIA and
+remaining unknown-module stacks dominate; X11 caller mapping is confirmed,
+other unknown roots are not fully symbolized. No ASan invalid access/UBSan
+report occurs in these observed GPU paths, but no leak-clean GPU success is
+claimed. Instrumented native retail-data Tiamat death/F8/close again fails
+whole LSan3156B/7 external DBus/NVIDIA allocations while prior App MeshInfo
+roots remain absent. Native Windows Debug/Final/ABI cannot execute here.
+
+Actual technical-end-restart-asan additionally reaches visible original victory,
+Continue, fresh1/2, early F8/continued movement and normal close without
+ASan invalid-memory/UBSan diagnostics; whole LSan remains3156B/7 exit1.
+Pre-close mapping confirms residual DBus callers include PipeWire/rt/spa
+as well as NVIDIA. No prior App MeshInfo roots reappear. All raw evidence
+remains external; no current native Windows build/ABI success is available.
+
+2026-10-12 global-quit-current: all five existing Debug trees rebuild and
+pass49 non-GPU CTests each after native launcher final SDL cleanup integration.
+Focused sdl3_window/legacy_input/native_window_manager/native_shell pass4/4
+with detect_leaks=1/UBSan halt. Actual patched late F8/close and pre-mission
+selector close still exit1/3156B/7; no whole mission leak success. Standalone
+shared-SDL-only combined GPU/audio lifecycle also leaks3204B/6, with and
+without diagnostic DBus shutdown; audio-only exits0. This isolates an external
+leak class, not all driver roots; no new repo probe/CTest, dependency update
+or source suppression. Windows rebuild/ABI/retail remains unavailable.
+
+2026-10-12 m2-regular-close-final: all five affected Debug trees build and
+pass49 non-GPU CTests each. Focused leak-enabled native_shell/app_schema/
+view_parser/layout/native_window_manager pass5/5. Actual current optional
+GCC/Clang and ASan original final-save victory/Continue/restart/early F8/
+normal-close repeats check mission streams0 and original hint owners idle on
+six closes. GCC/Clang exit0; ASan no invalid-memory/UBSan report, whole LSan
+still FAIL3156B/7 external mapped NVIDIA/PipeWire/DBus roots. No whole-process
+sanitizer success or new every-step run is claimed. GPU conditional X11
+results/Wayland failures remain as documented. User moves Windows/module ABI/
+retail/determinism comparison to M3; M2 Linux gameplay acceptance is in the
+focused ledger and does not erase these measured host validation failures.

@@ -395,7 +395,11 @@ void AnimInstance::retrieve_frame_ext (const AnimFrame **frame1,const AnimFrame 
 
 void AnimInstance::Randomize()
 {
+	#if defined(_WIN32)
 	rate = archetype->capture_rate - (SINGLE)(rand()*4)/RAND_MAX;
+#else
+	rate = archetype->capture_rate - (SINGLE)(S64(rand())*4)/RAND_MAX;
+#endif
 
 	delay = archetype->delay;
 	totalAnimTime = archetype->frame_cnt/rate+delay;
@@ -407,6 +411,33 @@ void AnimInstance::Randomize()
 	cosA = cos(angle);
 	sinA = sin(angle);
 }
+
+#if !defined(_WIN32)
+bool NativeAppCheckAnimRandomization()
+{
+    std::srand(1);
+    const int rateRandom = std::rand();
+    const int timeRandom = std::rand();
+    std::rand();
+    const int followingRandom = std::rand();
+    if (rateRandom <= 0x1fffffff) return false;
+    AnimArchetype archetype;
+    archetype.tex = nullptr;
+    archetype.texCnt = 0;
+    archetype.capture_rate = 10;
+    archetype.frame_cnt = 4;
+    archetype.delay = 0.5f;
+    AnimInstance instance{};
+    instance.archetype = &archetype;
+    std::srand(1);
+    instance.Randomize();
+    const SINGLE expectedRate = archetype.capture_rate - SINGLE(S64(rateRandom)*4)/RAND_MAX;
+    const SINGLE expectedTotal = archetype.frame_cnt/expectedRate+archetype.delay;
+    const SINGLE expectedTime = (timeRandom%100)*expectedTotal*0.01;
+    return instance.rate == expectedRate && instance.totalAnimTime == expectedTotal &&
+        instance.t == expectedTime && std::rand() == followingRandom;
+}
+#endif
 
 /*void Anim2D::SetRate(ANIM_INDEX index,SINGLE rate)
 {

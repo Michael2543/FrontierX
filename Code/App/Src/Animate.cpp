@@ -11,8 +11,24 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "NativeAppImage.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#endif
 
 #include <DAnimate.h>
 
@@ -25,7 +41,7 @@
 #include "TManager.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 #define TIMER_FOR_30FPS		33
@@ -297,7 +313,11 @@ GENRESULT Animate::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
+		#if defined(_WIN32)
 		update((bPaused)? 0 : (U32(param) >> 10));
+#else
+		update((bPaused)? 0 : (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10));
+#endif
 		break;
 	}
 
@@ -560,7 +580,11 @@ struct _AnimateFactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<AnimateFactory>;
+#if defined(_WIN32)
 		AddToGlobalCleanupList(&factory);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

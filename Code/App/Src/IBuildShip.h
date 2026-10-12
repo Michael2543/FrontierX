@@ -45,9 +45,15 @@ struct _NO_VTABLE IBuildShip : IObject
 	virtual void SetPosition (const Vector & pos)=0;
 
 	// updates position, rotation of root object. "dt" is in seconds
+#if defined(_WIN32)
 	virtual void PhysicalUpdate (SINGLE dt);
 
 	virtual void Render (void);
+#else
+	virtual void PhysicalUpdate (SINGLE dt) = 0;
+
+	virtual void Render (void) = 0;
+#endif
 
 	virtual void SetStartHardpoint (HardpointInfo  _hardpointinfo, INSTANCE_INDEX _dockIndex) = 0;
 };

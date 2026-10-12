@@ -429,8 +429,16 @@ void ObjectSelection< Base >::DrawHighlighted (void)
 			{
 				SINGLE diff = (0.5F - hull) / (0.5F - 0.25F);
 				U8 r, g, b;
+				#if defined(_WIN32)
 				r = (U8) ((224 - 227) * diff) + 227;
+#else
+				r = static_cast<U8>(static_cast<S32>((224 - 227) * diff) + 227);
+#endif
+				#if defined(_WIN32)
 				g = (U8) ((51 - 227) * diff) + 227;
+#else
+				g = static_cast<U8>(static_cast<S32>((51 - 227) * diff) + 227);
+#endif
 				b = (U8) ((37 - 34) * diff) + 34;
 				color = RGB(r,g,b);
 			}

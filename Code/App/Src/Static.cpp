@@ -11,8 +11,29 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include <algorithm>
+#define __min(a,b) (std::min)((a),(b))
+#define __max(a,b) (std::max)((a),(b))
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "NativeAppImage.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#define _wcsdup DuplicateWide
+#define _ltow DecimalToWide
+#include <TManager.h>
+#endif
 
 #include <DStatic.h>
 #include <wchar.h>
@@ -22,11 +43,11 @@
 #include "BaseHotRect.h"
 #include "GenData.h"
 #include "DrawAgent.h"
-#include "Sfx.h"
+#include "SFX.h"
 #include "IButton2.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 #define BEGIN_MAPPING(parent, name) \
@@ -456,7 +477,13 @@ void Static::SetTextColor (COLORREF color)
 //
 GENRESULT Static::Notify (U32 message, void *param)
 {
-//	MSG *msg = (MSG *) param;
+#ifdef _WIN32
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==false)
 	switch (message)
@@ -468,7 +495,7 @@ GENRESULT Static::Notify (U32 message, void *param)
 	case CQE_UPDATE:
 		if (rollupValue)
 		{
-			update(U32(param) >> 10);
+			update(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
 		}
 		break;
 
@@ -591,11 +618,19 @@ void Static::update (U32 dt)
 	// okay, we have the value.  Translate it into a string
 	if (bNegative)
 	{
-		swprintf(szDisplay, L"-%u", valueDisplay);
+		#ifdef _WIN32
+        swprintf(szDisplay, L"-%u", valueDisplay);
+#else
+        std::swprintf(szDisplay, sizeof(szDisplay)/sizeof(szDisplay[0]), L"-%u", valueDisplay);
+#endif
 	}
 	else
 	{
-		swprintf(szDisplay, L"%u", valueDisplay);
+		#ifdef _WIN32
+        swprintf(szDisplay, L"%u", valueDisplay);
+#else
+        std::swprintf(szDisplay, sizeof(szDisplay)/sizeof(szDisplay[0]), L"%u", valueDisplay);
+#endif
 	}
 	SetText(szDisplay);
 }
@@ -810,7 +845,11 @@ struct _StaticFactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<StaticFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

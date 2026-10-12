@@ -14,6 +14,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppArchetypeBytes.h"
 #endif
 
 #include "GenData.h"
@@ -572,7 +573,7 @@ static void load_bytes (IFileSystem * file, ARCHDATA * archData, U32 & checkSum)
 #ifndef _WIN32
 // Validate the production archive traversal before exposing its archetypes.
 static bool load_bytes_native (IFileSystem * file, ARCHDATA * archData,
-	U32 maxFiles, U32 maxBytes, U32 & bytesUsed, U32 & checkSum)
+	U32 maxFiles, U32 maxBytes, U32 & bytesUsed, std::size_t & paddingUsed, U32 & checkSum)
 {
 	WIN32_FIND_DATA data;
 	HANDLE search = file->FindFirstFile("*.*", &data);
@@ -588,7 +589,7 @@ static bool load_bytes_native (IFileSystem * file, ARCHDATA * archData,
 			if (strcmp(data.cFileName, "Parsed Files") == 0)
 				continue;
 			valid = file->SetCurrentDirectory(data.cFileName) &&
-				load_bytes_native(file, archData, maxFiles, maxBytes, bytesUsed, checkSum);
+				load_bytes_native(file, archData, maxFiles, maxBytes, bytesUsed, paddingUsed, checkSum);
 			valid = file->SetCurrentDirectory("..") && valid;
 			continue;
 		}
@@ -607,7 +608,10 @@ static bool load_bytes_native (IFileSystem * file, ARCHDATA * archData,
 		}
 		const U32 size = file->GetFileSize(child);
 		U32 read = 0;
-		U8 * target = (U8 *)archData->type[0].objData + bytesUsed;
+		U8 * target = (U8 *)archData->type[0].objData + bytesUsed + paddingUsed;
+		const std::size_t padding = NativeArchetypeBytePadding(target);
+		target += padding;
+		paddingUsed += padding;
 		valid = size == data.nFileSizeLow &&
 			file->ReadFile(child, target, size, &read, 0) && read == size;
 		valid = file->CloseHandle(child) && valid;
@@ -634,15 +638,19 @@ BOOL32 GenData::loadTypesData (IFileSystem * nativeSource)
 		dataSize > 64U * 1024U * 1024U)
 		return 0;
 	const size_t allocationSize = sizeof(ARCHDATA) +
-		size_t(sizeof(ARCHDATATYPE)) * numFiles + dataSize;
+		size_t(sizeof(ARCHDATATYPE)) * numFiles + dataSize +
+		(static_cast<std::size_t>(numFiles) + 1) * (NativeArchetypeStorageAlignment - 1);
 	archData = (ARCHDATA *) calloc(allocationSize, 1);
 	if (!archData) return 0;
-	archData->type[0].objData = (GENBASE_DATA *)
-		(((U8 *)archData) + sizeof(ARCHDATA) + sizeof(ARCHDATATYPE) * numFiles);
+	U8 *payload = ((U8 *)archData) + sizeof(ARCHDATA) + sizeof(ARCHDATATYPE) * numFiles;
+	// The first entry remains the aligned base used throughout traversal.
+	archData->type[0].objData = reinterpret_cast<GENBASE_DATA *>(
+		payload + NativeArchetypeBytePadding(payload));
 	U32 checkSum = 0;
 	U32 bytesUsed = 0;
+	std::size_t paddingUsed = 0;
 	const bool loaded = load_bytes_native(nativeSource, archData,
-		numFiles, dataSize, bytesUsed, checkSum);
+		numFiles, dataSize, bytesUsed, paddingUsed, checkSum);
 	U32 globalSize = 0;
 	const bool complete = loaded && bytesUsed == dataSize &&
 		archData->numArchetypes == numFiles &&

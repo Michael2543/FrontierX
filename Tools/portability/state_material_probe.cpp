@@ -252,6 +252,22 @@ int main(int argc, char ** argv)
                     textureCount == 0U,
                 "production texture library default state and reference lifetime"))
         return 1;
+    // ITextureLibrary documents this lookup as borrowed. TexInfo::set_texture
+    // uses it for the name and retains only its texture-ref owner.
+    ITL_TEXTURE_ID lookupTexture = ITL_INVALID_ID;
+    ITL_TEXTURE_ID borrowedTexture = ITL_INVALID_ID;
+    ITL_TEXTURE_REF_ID lookupRef = ITL_INVALID_REF_ID;
+    if (!Expect(textures->get_texture_id("borrowed-lookup", &lookupTexture) == GR_OK &&
+                    textures->add_ref_texture_id(lookupTexture, &lookupRef) == GR_OK &&
+                    textures->get_texture_ref_texture_id(lookupRef, &borrowedTexture) == GR_OK &&
+                    borrowedTexture == lookupTexture &&
+                    textures->get_texture_ref_texture_id(lookupRef, &borrowedTexture) == GR_OK &&
+                    borrowedTexture == lookupTexture &&
+                    textures->release_texture_ref(lookupRef) == GR_OK &&
+                    textures->release_texture_id(lookupTexture) == GR_OK &&
+                    textures->has_texture_id("borrowed-lookup") != GR_OK,
+                "texture-ref ID lookup preserves the documented borrowed lifetime"))
+        return 1;
     AGGDESC libraryDescriptor("MaterialLibrary");
     libraryDescriptor.outer = &services;
     IDAComponent * libraryInner = nullptr;

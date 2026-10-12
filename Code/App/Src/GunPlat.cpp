@@ -10,8 +10,38 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TPlatform.h"
 #include "Startup.h"
@@ -28,9 +58,9 @@
 
 #include <DGunPlat.h>
 
-#include <Physics.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <physics.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <HeapObj.h>
@@ -310,7 +340,11 @@ struct _NO_VTABLE Gunplat : Platform<GUNPLAT_SAVELOAD, GUNPLAT_INIT>,
 				U32 dummy;
 				U8 hisPlayerID=0;
 				
+				#if defined(_WIN32)
 				VOLPTR(IExtent) extentObj = target;
+				#else
+				VOLPTR(IExtent) extentObj = static_cast<IBaseObject *>(target);
+				#endif
 				
 				if (extentObj)
 				{
@@ -720,7 +754,11 @@ BOOL32 Gunplat::updateTargeting (void)
 	{
 		CQASSERT(attackAgentID);
 
+		#if defined(_WIN32)
 		MPart part = target;
+		#else
+		MPart part = static_cast<IBaseObject *>(target);
+		#endif
 		if (part.isValid()==0 || part->hullPoints==0)
 			cancelAttack();
 		else
@@ -2409,7 +2447,9 @@ BOOL32 GunplatFactory::DestroyArchetype (HANDLE hArchetype)
 //	GUNPLAT_INIT * objtype = (GUNPLAT_INIT *)hArchetype;
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+	#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+	#endif
 	delete objtype;
 
 	return 1;
@@ -2429,7 +2469,14 @@ void GunplatFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO
 {
 //	GUNPLAT_INIT * objtype = (GUNPLAT_INIT *)hArchetype;
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+	#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+	#else
+	(void)objtype;
+	(void)info;
+	std::fputs("Native GunPlat editor insertion is unavailable\n", stderr);
+	std::abort();
+	#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

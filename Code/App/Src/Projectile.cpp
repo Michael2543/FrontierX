@@ -13,13 +13,38 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <type_traits>
+#include "MyVertex.h"
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+struct IDrawAgent;
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -37,21 +62,21 @@
 #include "MPart.h"
 #include "ObjMap.h"
 #include "CQExtent.h"
-#include "Userdefaults.h"
-#include "Sysmap.h"
+#include "UserDefaults.h"
+#include "SysMap.h"
 #include "TObjRender.h"
 
 #include <TComponent.h>
 #include <lightman.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <ITextureLibrary.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Pixel.h>
+#include <pixel.h>
 #include <IParticleSystem.h>
 #include <IAnim.h>
 //--------------------------------------------------------------------------//

@@ -73,11 +73,36 @@ bool IsRgba8(const PixelFormat & format)
         value.dwRGBAlphaBitMask == 0xFF000000U;
 }
 
+PixelFormat OpaqueRgbx8()
+{
+    DDPIXELFORMAT value = PixelFormat(PF_RGBA8).ddpf;
+    value.dwFlags = DDPF_RGB;
+    value.dwRGBAlphaBitMask = 0U;
+    return PixelFormat(value);
+}
+
+bool IsRgbx8(const PixelFormat & format)
+{
+    const DDPIXELFORMAT & value = format.ddpf;
+    return value.dwSize == sizeof(DDPIXELFORMAT) && value.dwFlags == DDPF_RGB &&
+        value.dwRGBBitCount == 32U && value.dwRBitMask == 0x000000FFU &&
+        value.dwGBitMask == 0x0000FF00U && value.dwBBitMask == 0x00FF0000U &&
+        value.dwRGBAlphaBitMask == 0U;
+}
+
+bool IsOpaqueClass(const PixelFormat & format)
+{
+    return format.ddpf.dwFlags == DDPF_FOURCC &&
+        format.ddpf.dwFourCC == static_cast<U32>(PF_4CC_DAOT);
+}
+
 bool IsRgba8Class(const PixelFormat & format)
 {
     const DDPIXELFORMAT & value = format.ddpf;
     return value.dwFlags == DDPF_FOURCC &&
-        value.dwFourCC == static_cast<U32>(PF_4CC_DAA8);
+        (value.dwFourCC == static_cast<U32>(PF_4CC_DAA8) ||
+         value.dwFourCC == static_cast<U32>(PF_4CC_DAA1) ||
+         value.dwFourCC == static_cast<U32>(PF_4CC_DAA4));
 }
 
 GENRESULT StatusResult(LegacySubmissionStatus status)
@@ -596,7 +621,7 @@ GENRESULT NativeRenderPipeline::create_texture(int width, int height,
 {
     handle = 0U;
     if (!textures_.create || !textures_.destroy) return GR_NOT_IMPLEMENTED;
-    if ((!IsRgba8(format) && !IsRgba8Class(format)) ||
+    if ((!IsRgba8(format) && !IsRgbx8(format) && !IsRgba8Class(format) && !IsOpaqueClass(format)) ||
         lodCount < 0 || lodCount > 1 || flags != 0U)
         return GR_NOT_IMPLEMENTED;
     if (width <= 0 || height <= 0 ||
@@ -605,6 +630,7 @@ GENRESULT NativeRenderPipeline::create_texture(int width, int height,
             std::numeric_limits<U32>::max() / (static_cast<U32>(width) * 4U))
         return GR_INVALID_PARMS;
     OwnedTexture owned;
+    owned.opaque = IsOpaqueClass(format) || IsRgbx8(format);
     owned.width = static_cast<U32>(width);
     owned.height = static_cast<U32>(height);
     try
@@ -650,6 +676,39 @@ GENRESULT NativeRenderPipeline::destroy_texture(U32 handle)
     return result;
 }
 
+GENRESULT NativeRenderPipeline::get_texture_dc(U32 handle, HDC *dc)
+{
+    if (!dc) return GR_INVALID_PARMS;
+    *dc = nullptr;
+    const auto found = ownedTextures_.find(handle);
+    if (found == ownedTextures_.end() || found->second.locked ||
+        found->second.width > static_cast<U32>(std::numeric_limits<int>::max() / 4) ||
+        found->second.height > static_cast<U32>(std::numeric_limits<int>::max())) return GR_INVALID_PARMS;
+    auto context = std::unique_ptr<TextureDC::Context>(new (std::nothrow) TextureDC::Context);
+    if (!context) return GR_OUT_OF_MEMORY;
+    RPLOCKDATA lock{};
+    const GENRESULT result = lock_texture(handle, 0, &lock);
+    if (result != GR_OK) return result;
+    context->pixels = static_cast<unsigned char *>(lock.pixels);
+    context->width = static_cast<int>(lock.width);
+    context->height = static_cast<int>(lock.height);
+    context->pitch = static_cast<int>(lock.pitch);
+    found->second.dc = std::move(context);
+    *dc = found->second.dc.get();
+    return GR_OK;
+}
+
+GENRESULT NativeRenderPipeline::release_texture_dc(U32 handle, HDC dc)
+{
+    const auto found = ownedTextures_.find(handle);
+    if (found == ownedTextures_.end() || !dc || found->second.dc.get() != dc)
+        return GR_INVALID_PARMS;
+    auto context = std::move(found->second.dc);
+    const GENRESULT result = unlock_texture(handle, 0);
+    if (result != GR_OK) found->second.dc = std::move(context);
+    return result;
+}
+
 GENRESULT NativeRenderPipeline::lock_texture(U32 handle, int level, RPLOCKDATA * lockData)
 {
     if (!lockData) return GR_INVALID_PARMS;
@@ -661,7 +720,7 @@ GENRESULT NativeRenderPipeline::lock_texture(U32 handle, int level, RPLOCKDATA *
     lockData->height = texture.height;
     lockData->pitch = texture.width * 4U;
     lockData->pixels = texture.pixels.data();
-    lockData->pf = PixelFormat(PF_RGBA8);
+    lockData->pf = texture.opaque ? OpaqueRgbx8() : PixelFormat(PF_RGBA8);
     texture.locked = true;
     return GR_OK;
 }
@@ -669,9 +728,12 @@ GENRESULT NativeRenderPipeline::lock_texture(U32 handle, int level, RPLOCKDATA *
 GENRESULT NativeRenderPipeline::unlock_texture(U32 handle, int level)
 {
     const auto found = ownedTextures_.find(handle);
-    if (found == ownedTextures_.end() || level != 0 || !found->second.locked)
+    if (found == ownedTextures_.end() || level != 0 || !found->second.locked || found->second.dc)
         return GR_INVALID_PARMS;
     OwnedTexture & texture = found->second;
+    if (texture.opaque)
+        for (std::size_t index = 3U; index < texture.pixels.size(); index += 4U)
+            texture.pixels[index] = 255U;
     const GENRESULT result = textures_.upload(textures_.context, handle,
         texture.pixels.data(), texture.width, texture.height, texture.pixels.size());
     if (result == GR_OK) texture.locked = false;
@@ -690,13 +752,15 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
         static_cast<U32>(height) != found->second.height || found->second.locked ||
         !pixels || width > std::numeric_limits<int>::max() / 4)
         return GR_NOT_IMPLEMENTED;
-    const bool rgba8 = IsRgba8(format);
+    const bool rgba8 = IsRgba8(format) || IsRgbx8(format);
+    const bool indexed8 = format.is_indexed() && format.ddpf.dwRGBBitCount == 8;
     const bool rgb565 = format.ddpf.dwRGBBitCount == 16 &&
         format.ddpf.dwRBitMask == 0xf800U &&
         format.ddpf.dwGBitMask == 0x07e0U &&
         format.ddpf.dwBBitMask == 0x001fU;
-    if ((!rgba8 && !rgb565) || (palette && !rgb565) ||
-        stride < width * (rgba8 ? 4 : 2))
+    if ((!rgba8 && !rgb565 && !indexed8) ||
+        (indexed8 && !palette) || (palette && !rgb565 && !indexed8) ||
+        stride < width * (rgba8 ? 4 : indexed8 ? 1 : 2))
         return GR_NOT_IMPLEMENTED;
     const std::size_t rowBytes = static_cast<std::size_t>(width) * 4U;
     const std::size_t byteCount = rowBytes * static_cast<std::size_t>(height);
@@ -717,6 +781,18 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
         const auto * sourceRow = source +
             static_cast<std::size_t>(row) * static_cast<std::size_t>(stride);
         if (rgba8) std::memcpy(destination, sourceRow, rowBytes);
+        else if (indexed8)
+        {
+            for (int column = 0; column < width; ++column)
+            {
+                const RGB &color = palette[sourceRow[column]];
+                const std::size_t target = static_cast<std::size_t>(column) * 4U;
+                destination[target] = color.r;
+                destination[target + 1U] = color.g;
+                destination[target + 2U] = color.b;
+                destination[target + 3U] = 255U;
+            }
+        }
         else
         {
             for (int column = 0; column < width; ++column)
@@ -741,6 +817,8 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
                     alphaSource[static_cast<std::size_t>(row) * width + column];
         }
     }
+    if (found->second.opaque || IsRgbx8(format))
+        for (std::size_t index = 3U; index < rgba.size(); index += 4U) rgba[index] = 255U;
     const GENRESULT result = textures_.upload(textures_.context, handle, rgba.data(),
         static_cast<U32>(width), static_cast<U32>(height), byteCount);
     if (result == GR_OK) found->second.pixels.swap(rgba);
@@ -761,28 +839,37 @@ GENRESULT NativeRenderPipeline::blit_texture(U32 destination, U32 destinationLev
 
     const OwnedTexture & from = sourceIt->second;
     OwnedTexture & to = destinationIt->second;
-    // The native owner currently supports only complete, equal-size RGBA8 copies.
-    if (destinationRect.left != 0 || destinationRect.top != 0 ||
-        sourceRect.left != 0 || sourceRect.top != 0 ||
-        destinationRect.right != static_cast<long>(to.width) ||
-        destinationRect.bottom != static_cast<long>(to.height) ||
-        sourceRect.right != static_cast<long>(from.width) ||
-        sourceRect.bottom != static_cast<long>(from.height) ||
-        to.width != from.width || to.height != from.height)
-        return GR_NOT_IMPLEMENTED;
-    if (destination == source) return GR_OK;
-
+    const auto validRect = [](RECT rect, const OwnedTexture &texture) {
+        return rect.left >= 0 && rect.top >= 0 && rect.right > rect.left &&
+            rect.bottom > rect.top && static_cast<U32>(rect.right) <= texture.width &&
+            static_cast<U32>(rect.bottom) <= texture.height;
+    };
+    if (!validRect(destinationRect, to) || !validRect(sourceRect, from))
+        return GR_INVALID_PARMS;
     std::vector<std::uint8_t> copy;
     try
     {
-        copy = from.pixels;
+        copy = to.pixels;
+        const auto dw = destinationRect.right - destinationRect.left;
+        const auto dh = destinationRect.bottom - destinationRect.top;
+        const auto sw = sourceRect.right - sourceRect.left;
+        const auto sh = sourceRect.bottom - sourceRect.top;
+        for (int y = destinationRect.top; y < destinationRect.bottom; ++y)
+            for (int x = destinationRect.left; x < destinationRect.right; ++x)
+            {
+                const auto sx = sourceRect.left + static_cast<std::int64_t>(x - destinationRect.left) * sw / dw;
+                const auto sy = sourceRect.top + static_cast<std::int64_t>(y - destinationRect.top) * sh / dh;
+                const std::size_t fromOffset = (static_cast<std::size_t>(sy) * from.width + sx) * 4;
+                const std::size_t toOffset = (static_cast<std::size_t>(y) * to.width + x) * 4;
+                std::copy_n(from.pixels.data() + fromOffset, 4, copy.data() + toOffset);
+            }
     }
     catch (const std::bad_alloc &)
     {
         return GR_OUT_OF_MEMORY;
     }
     const GENRESULT result = textures_.upload(textures_.context, destination,
-        copy.data(), from.width, from.height, copy.size());
+        copy.data(), to.width, to.height, copy.size());
     if (result == GR_OK) to.pixels.swap(copy);
     return result;
 }
@@ -791,7 +878,7 @@ GENRESULT NativeRenderPipeline::get_texture_format(U32 handle, PixelFormat * for
 {
     if (!format) return GR_INVALID_PARMS;
     if (ownedTextures_.find(handle) == ownedTextures_.end()) return GR_INVALID_PARMS;
-    *format = PixelFormat(PF_RGBA8);
+    *format = ownedTextures_.find(handle)->second.opaque ? OpaqueRgbx8() : PixelFormat(PF_RGBA8);
     return GR_OK;
 }
 

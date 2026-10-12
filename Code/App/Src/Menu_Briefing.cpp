@@ -10,8 +10,25 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "NativeAppImage.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <WindowManager.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#endif
 
 #include "Frame.h"
 #include "IButton2.h"
@@ -211,7 +228,11 @@ const bool MenuBriefing::IsAnimationPlaying (const U32 slotID)
 U32 MenuBriefing::PlayAnimatedMessage (const CQBRIEFINGITEM & item)
 {
 	// HACK alert!
+	#if defined(_WIN32)
 	if (stricmp(item.szFileName, "empty.wav") == 0)
+#else
+	if (EqualAsciiInsensitive(item.szFileName, "empty.wav"))
+#endif
 	{
 		// what they really want is a animation.
 		return PlayAnimation(item);
@@ -455,8 +476,14 @@ void MenuBriefing::enableLowLatencyStreaming (bool bEnable)
 		{
 			STREAMERDESC desc;
 
+			#if defined(_WIN32)
 			desc.hMainWindow = hMainWindow;
+#else
+			desc.hMainWindow = WM->GetWindowHandle();
+#endif
+			#if defined(_WIN32)
 			desc.lpDSound = DSOUND;
+#endif
 			desc.uMsg = CQE_STREAMER;
 			desc.readBufferTime =  4;		// in seconds, 0 = default setting (4.0 is a reasonable value)
 			desc.soundBufferTime = 0.25;	// in seconds, 0 = default setting (0.25 is a reasonable value)
@@ -467,8 +494,14 @@ void MenuBriefing::enableLowLatencyStreaming (bool bEnable)
 		{
 			STREAMERDESC desc;
 
+			#if defined(_WIN32)
 			desc.hMainWindow = hMainWindow;
+#else
+			desc.hMainWindow = WM->GetWindowHandle();
+#endif
+			#if defined(_WIN32)
 			desc.lpDSound = DSOUND;
+#endif
 			desc.uMsg = CQE_STREAMER;
 			desc.readBufferTime =  4;		// in seconds, 0 = default setting (4.0 is a reasonable value)
 			desc.soundBufferTime = 1.0;		// in seconds, 0 = default setting (0.25 is a reasonable value)

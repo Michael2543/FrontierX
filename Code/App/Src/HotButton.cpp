@@ -11,8 +11,27 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include <SYSTEM.H>
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#define _wcsdup DuplicateWide
+#define _ltow DecimalToWide
+#include <TManager.h>
+#endif
 
 #include "IHotButton.h"
 #include "Startup.h"
@@ -21,13 +40,104 @@
 #include <DHotButton.h>
 #include "DrawAgent.h"
 #include "IShapeLoader.h"
-#include "Sfx.h"
+#include "SFX.h"
 #include "IInterfaceManager.h"
 #include <DSounds.h>
 
+#include <cstdint>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
+
+#if !defined(_WIN32)
+namespace
+{
+U32 nativeCommandHotkey(U32 resourceHotkey, HBTNTXT::BUTTON_TEXT text)
+{
+    // Resolve only source-confirmed retail resource/semantic pairs.
+    switch (text)
+    {
+    case HBTNTXT::PATROL:
+        if (resourceHotkey == 81) return IDH_PATROL;
+        break;
+    case HBTNTXT::RALLYPOINT:
+        if (resourceHotkey == 86) return IDH_RALLY_POINT;
+        break;
+    case HBTNTXT::STANCE_ATTACK:
+        if (resourceHotkey == 134) return IDH_STANCE_ATTACK;
+        break;
+    case HBTNTXT::STANCE_DEFEND:
+        if (resourceHotkey == 135) return IDH_STANCE_DEFENSIVE;
+        break;
+    case HBTNTXT::STANCE_STANDGROUND:
+        if (resourceHotkey == 137) return IDH_STANCE_STANDGROUND;
+        break;
+    case HBTNTXT::STANCE_IDLE:
+        if (resourceHotkey == 136) return IDH_STANCE_IDLE;
+        break;
+    default:
+        break;
+    }
+    return resourceHotkey;
+}
+
+GENRESULT postNativeCommand(IEventSystem *events, U32 resourceHotkey, HBTNTXT::BUTTON_TEXT text)
+{
+    return events->Post(CQE_HOTKEY, reinterpret_cast<void *>(
+        static_cast<std::uintptr_t>(nativeCommandHotkey(resourceHotkey, text))));
+}
+}
+
+namespace FrontierX
+{
+bool CheckNativeHotButtonCommands()
+{
+    AGGDESC descriptor("IEventSystem", "EventSystem");
+    COMPTR<IAggregateComponent> aggregate;
+    COMPTR<IEventSystem> events;
+    COMPTR<ISystemComponent> eventOwner;
+    if (!DACOM || DACOM->CreateInstance(&descriptor, aggregate) != GR_OK ||
+        aggregate->QueryInterface(IID_IEventSystem, events) != GR_OK ||
+        aggregate->QueryInterface(IID_ISystemComponent, eventOwner) != GR_OK ||
+        aggregate->Initialize() != GR_OK || events->Initialize(0) != GR_OK)
+    {
+        std::fprintf(stderr, "Native hot-button isolated event owner unavailable\n");
+        return false;
+    }
+    struct Command { U32 resource; HBTNTXT::BUTTON_TEXT text; U32 expected; };
+    const Command commands[] = {
+        {134, HBTNTXT::STANCE_ATTACK, IDH_STANCE_ATTACK},
+        {135, HBTNTXT::STANCE_DEFEND, IDH_STANCE_DEFENSIVE},
+        {137, HBTNTXT::STANCE_STANDGROUND, IDH_STANCE_STANDGROUND},
+        {136, HBTNTXT::STANCE_IDLE, IDH_STANCE_IDLE},
+        {81, HBTNTXT::PATROL, IDH_PATROL},
+        {86, HBTNTXT::RALLYPOINT, IDH_RALLY_POINT},
+        {86, HBTNTXT::NOTEXT, 86},
+        {IDH_RALLY_POINT, HBTNTXT::RALLYPOINT, IDH_RALLY_POINT},
+        {81, HBTNTXT::NOTEXT, 81},
+        {IDH_PATROL, HBTNTXT::PATROL, IDH_PATROL},
+        {134, HBTNTXT::NOTEXT, 134},
+        {IDH_STANCE_ATTACK, HBTNTXT::STANCE_ATTACK, IDH_STANCE_ATTACK}
+    };
+    for (const auto &command : commands)
+        if (postNativeCommand(events, command.resource, command.text) != GR_OK) return false;
+    eventOwner->Update();
+    for (U32 index = 0; index < sizeof(commands)/sizeof(commands[0]); ++index)
+    {
+        U32 message = 0;
+        void *parameter = nullptr;
+        if (events->Peek(index, &message, &parameter) != GR_OK ||
+            message != CQE_HOTKEY || reinterpret_cast<std::uintptr_t>(parameter) != commands[index].expected)
+        {
+            std::fprintf(stderr, "Native hot-button command %u: expected %u, received %zu (message %u)\n",
+                index, commands[index].expected, reinterpret_cast<std::uintptr_t>(parameter), message);
+            return false;
+        }
+    }
+    return true;
+}
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //
@@ -168,7 +278,13 @@ struct DACOM_NO_VTABLE HotButton : BaseHotRect, IHotButton
 		if (bPostMessageBlocked==false)
 		{
 			if (hotkeyID != 0)
-				EVENTSYS->Post(CQE_HOTKEY, (void *)hotkeyID);
+				{
+#if defined(_WIN32)
+                EVENTSYS->Post(CQE_HOTKEY, (void *)hotkeyID);
+#else
+                postNativeCommand(EVENTSYS, hotkeyID, buttonText);
+#endif
+            }
 			parent->PostMessage(CQE_LHOTBUTTON, (void*)controlID);
 			SFXMANAGER->Play(hSound);
 			bPostMessageBlocked = true;
@@ -194,7 +310,7 @@ struct DACOM_NO_VTABLE HotButton : BaseHotRect, IHotButton
 HotButton::~HotButton (void)
 {
 	GENDATA->Release(pArchetype);
-	delete szButtonText;
+	::free(szButtonText);
 }
 //--------------------------------------------------------------------------//
 //
@@ -323,7 +439,7 @@ void HotButton::SetTextID (U32 textID)
 //	wcsncpy(szButtonText, _localLoadStringW(buttonText), sizeof(szButtonText)/sizeof(wchar_t));
 	if (szButtonText)
 	{
-		delete szButtonText;
+		::free(szButtonText);
 	}
 	szButtonText = _wcsdup(_localLoadStringW(buttonText));
 }
@@ -335,7 +451,7 @@ void HotButton::SetTextString (const wchar_t * szString)
 //	wcsncpy(szButtonText, szString, sizeof(szButtonText)/sizeof(wchar_t));
 	if (szButtonText)
 	{
-		delete szButtonText;
+		::free(szButtonText);
 		szButtonText = 0;
 	}
 	if (szString && szString[0])
@@ -381,7 +497,13 @@ S32 HotButton::GetNumericValue (void)
 //
 GENRESULT HotButton::Notify (U32 message, void *param)
 {
-//	MSG *msg = (MSG *) param;
+#ifdef _WIN32
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==0)
 	switch (message)
@@ -482,7 +604,11 @@ void HotButton::draw (void)
 	BATCH->set_state(RPR_BATCH,FALSE);
 	U32 state;
 
-	bool bFlash = INTERMAN->RenderHotkeyFlashing(hotkeyID);
+	#if defined(_WIN32)
+    bool bFlash = INTERMAN->RenderHotkeyFlashing(hotkeyID);
+#else
+    bool bFlash = INTERMAN->RenderHotkeyFlashing(nativeCommandHotkey(hotkeyID, buttonText));
+#endif
 	
 	if(bFlash)
 	{
@@ -527,8 +653,18 @@ void HotButton::setStatus (void)
 			int i;
 
 			wcscpy(ext, ptr+1);		// copy everything after the mark
-			len = HOTKEY->GetHotkeyText(hotkeyID, keytext, sizeof(keytext));
+			#if defined(_WIN32)
+            len = HOTKEY->GetHotkeyText(hotkeyID, keytext, sizeof(keytext));
+#else
+            len = HOTKEY->GetHotkeyText(nativeCommandHotkey(hotkeyID, buttonText), keytext, sizeof(keytext));
+#endif
+			#ifdef _WIN32
+
 			i = MultiByteToWideChar(CP_ACP, 0, keytext, len, ptr, sizeof(buffer)/sizeof(buffer[0]));
+#else
+
+			i = ConvertHotkeyToWide(keytext, len, ptr, sizeof(buffer)/sizeof(buffer[0]));
+#endif
 			ptr += i;
 			wcscpy(ptr, ext);
 			CQASSERT(wcslen(buffer) < sizeof(buffer)/sizeof(buffer[0]));
@@ -637,7 +773,11 @@ HANDLE HotButtonFactory::CreateArchetype (PGENTYPE _pArchetype, GENBASE_TYPE obj
 {
 	{
 		const char* _n = GENDATA->GetArchName(_pArchetype);
+		#if defined(_WIN32)
 		if (_n && strstr(_n, "Tab"))
+#else
+		if (objClass == GBT_HOTBUTTON && _n && strstr(_n, "Tab"))
+#endif
 		{
 			GT_HOTBUTTON * _d = (GT_HOTBUTTON *) _data;
 			FILE* _dbgf = fopen("debug/factory_debug.txt", "a");
@@ -668,7 +808,7 @@ HANDLE HotButtonFactory::CreateArchetype (PGENTYPE _pArchetype, GENBASE_TYPE obj
 //
 BOOL32 HotButtonFactory::DestroyArchetype (HANDLE hArchetype)
 {
-	CQASSERT((U32)hArchetype == 1 && pArchetype != 0);
+	CQASSERT(reinterpret_cast<std::uintptr_t>(hArchetype) == 1 && pArchetype != 0);
 
 	pArchetype = 0;
 	SFXMANAGER->CloseHandle(hSound);
@@ -679,7 +819,7 @@ BOOL32 HotButtonFactory::DestroyArchetype (HANDLE hArchetype)
 //
 GENRESULT HotButtonFactory::CreateInstance (HANDLE hArchetype, IDAComponent ** pInstance)
 {
-	CQASSERT((U32)hArchetype == 1 && pArchetype != 0);
+	CQASSERT(reinterpret_cast<std::uintptr_t>(hArchetype) == 1 && pArchetype != 0);
 	HotButton * result = new DAComponent<HotButton>;
 
 	result->init(pArchetype, hSound);
@@ -695,7 +835,11 @@ struct _hotbuttonfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<HotButtonFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

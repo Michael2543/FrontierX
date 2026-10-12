@@ -18,6 +18,8 @@ bool OpenNativeWritableUtfArchive(const std::filesystem::path & path,
                                   IFileSystem ** output, std::string & error);
 // Opens an existing save directory. CREATE_ALWAYS UTF children use the
 // writable archive owner; OPEN_EXISTING children use the production reader.
+// Explicit DOS children preserve raw records such as GameProgress's player.gpf.
+// DOS writes publish their bytes through WriteFile without UTF wrapping.
 bool OpenNativeSaveDirectory(const std::filesystem::path & path,
                              IFileSystem ** output, std::string & error);
 }

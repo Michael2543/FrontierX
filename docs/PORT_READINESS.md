@@ -1,5 +1,482 @@
 # Linux Port Readiness Plan
 
+## Current milestone (2026-10-12)
+
+**M2 Linux Sol_Train gameplay is complete in the agreed scope.** Original
+entry, all23 training goals, required HUD/commands/map, pause/resume, early
+and later normal F7/F8, actual victory/Continue and repeated entry/load/close
+execute with lawful external data under GCC and Clang. Full GCC fresh-run
+and compiler-own Clang early-save/user-completion evidence is retained;
+latest bounded GCC/Clang/ASan end/restart/reload repeats additionally check
+original hint owners idle and active mission sound streams0 on both closes.
+GCC/Clang exit0; ASan has no invalid-memory/UBSan report but whole LSan still
+fails3156B/7 host NVIDIA/PipeWire/DBus allocations. This is mission-owner
+acceptance, not a suppressed whole-process leak pass or retail parity.
+
+All affected default/optional builds and focused checks pass. Complete GPU
+assertions pass under documented floating X11 conditions; ordinary Wayland
+probe resize and instrumented host/GPU leak reports remain open technical
+limitations. Explicit media exclusions and unavailable optional Admiral/
+nontraining providers remain documented; no required training owner is stubbed.
+No source/simulation/save-format change is made to ease the training.
+
+**Next milestone: M3 comparison and determinism.** The user explicitly
+assigns native Windows/module ABI and comparative retail validation to M3;
+no such result is claimed for M2. Keep external dependency leaks/Wayland probe
+behavior in the technical backlog with their reproducers. M3 work has not
+started. Exact acceptance, commands, evidence provenance and limits:
+[NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12).
+
+## Historical validation snapshots (superseded by the current status above)
+
+2026-10-12 latest leak follow-up: native launcher now calls the documented
+final SDL_Quit through its platform boundary after all Run-owned components
+unwind; individual subsystem refcount cleanup remains unchanged. All affected
+builds/non-GPU suites and four focused leak-enabled checks pass. Actual
+patched late F8/normal close still fails3156B/7, as does closing from the
+selector before gameplay with diagnostic DBus shutdown enabled. A standalone
+SDL-only combined Wayland/Vulkan/PipeWire lifecycle reproduces3204B/6 DBus
+allocations with no FrontierX/retail input; audio-only closes leak-free.
+The lifecycle omission is fixed, but residual leaks are not closed. Next:
+resolve/revalidate the independent combined SDL dependency/driver repro,
+then repeat real mission leak-enabled closes. No suppression or system driver
+upgrade. Wayland resize, native Windows/ABI/retail and M2 qualifications stay
+open; exact evidence: NATIVE_SINGLEPLAYER_SLICE.md.
+
+2026-10-12 latest technical revalidation after successful user Clang end:
+all affected default/optional GCC/Clang and ASan Debug builds/non-GPU checks
+pass; focused layout/schema/input/lifecycle checks also pass with leaks ON.
+Actual instrumented two-Tiamat death/reload/close and separate Cocoon/victory/
+Continue/restart/early F8/continued movement/close have no invalid-memory or
+UBSan report and no prior App MeshInfo leak roots. Whole LSan still FAILS
+3156B/7 allocations: map-confirmed NVIDIA plus PipeWire/DBus callers.
+Complete registered GPU tests pass in all four GCC/Clang configurations with
+explicit floating X11/mapping setup; normal Wayland resize remains FAIL.
+Instrumented X11 GPU functional assertions execute but leak-enabled whole
+checks fail on larger host-library and unresolved-module roots. No suppression,
+production workaround, new source edit or simulation/save-format change.
+Native Windows tools remain unavailable. M2 is not fully accepted. Next:
+repeat the exact external genuine checkpoints/GPU commands on a host with
+resolved dependency lifetime/Wayland resize, and run native Windows Debug/
+Final/module-ABI and retail comparison; retain the latest-single-build flow
+qualification. Details and exact commands: NATIVE_SINGLEPLAYER_SLICE.md.
+
+2026-10-12 latest Clang completion (19:14): the user finishes the remaining
+normal combat in the current Admiral-gated optional Clang Debug continuation.
+Runtime confirms every original goal1–18,20–24 complete, final21,
+MISSION_END_WON2, original mission close, end-menu Continue1 and regular
+process exit0. Final display is user-observed, without an agent final capture.
+This completes the compiler-own chain from its genuine early Clang save;
+it is not a latest empty-root single-build replay. Early production and late
+supply-escort F7/F8 precede this successful continuation. Last F7 remains
+18:54/pre-final-combat; no saved victory is claimed. Original Rally,
+planet-slot F8 basis and FogOfWar texture fixes retain bounded visible
+GCC/Clang/ASan evidence; optional Admiral remains visibly unavailable.
+M2 remains unaccepted: latest-build flow/restart qualifications, bounded
+instrumented Tiamat tree-split repeat, whole-LSan external3156B/7alloc failure,
+host GPU resize, native Windows Debug/Final/ABI and retail comparison remain.
+Next: focused instrumented actual late combat/end/restart using a genuine
+checkpoint, then remaining latest-build flow qualifications. Detailed
+commands and evidence are in NATIVE_SINGLEPLAYER_SLICE.md.
+
+2026-10-12 latest user-reported regression repairs: original Rally resource
+86/RALLYPOINT now reaches114/production owner; native platform F8 preserves
+planet-slot basis and rally/translation; native captured-texture retirement
+allows original post-draw FogOfWar uploads. Bounded visible GCC/Clang and
+actual ASan/UBSan regular-entry/late-F8/map/second-reload/close0 repeats pass.
+All affected Debug/non-GPU suites and focused leak-enabled checks pass.
+Whole GPU CTest still fails host resize after texture subcheck passes.
+The prior full GCC flow remains documented; full independent Clang is
+unaccepted after optional Admiral missing FSHIP!!S_Blanus crashes. Next:
+finish required Clang training, diagnose full-close remaining owners and
+retain external Windows/retail gates. Details: NATIVE_SINGLEPLAYER_SLICE.md.
+
+## Earlier ordered plan and validation notes
+
+2026-10-12 current M2 verification: corrected original Explosion X/Y slice/Z
+height placement passes all five affected Debug graphs/non-GPU suites and
+actual three-Tiamat combat/reloads under ASan/UBSan. First bounded run reaches21
+but expires during user interruption (exit124); separate genuine Cocoon F8
+reaches visible You Win/Continue and normally closes0 after restart. That
+restart initializes1 but hides HUD: read-only original toolbar loads retain
+movie/no-toolbar flags after victory. Native ingame transition now performs
+original System3D's default flag reset. Existing lifecycle check fails old
+behavior and passes the correction; all five affected builds/non-GPU suites
+pass. Actual no-debugger ASan end/Continue/restart restores visible HUD/map,
+normal1/2/early F8/movement work, and normal close exits0 (leaks OFF/media
+exclusions). The genuine GCC chain now
+finishes normal combat21/visible Mission Successful/You Win/Continue/Back and
+exits0, across documented integration binaries. Next: independent latest
+single-build full GCC/Clang training with all original steps and early/late
+reloads; the empty-root latest GCC run completes all original steps through21,
+visible Mission Successful/You Win/Continue, restart1/2 with HUD/early F8
+and normal close0. Full shutdown reports remaining texture references;
+resource criterion9 is still open. The independent fresh Clang user continuation crashes at optional Admiral
+research completion (missing FSHIP!!S_Blanus -> AddObject(null)); no full
+Clang pass is claimed. Next: verify reported Rally/minimap/platform reload
+regressions, diagnose the full-close owner references, and complete the
+required Clang training path. M2 remains unaccepted;
+mission leaks, Windows Debug/Final/ABI and retail comparison remain open.
+
+2026-10-12 latest resolved original production blocker: regular Acropolis
+Stratum production previously crashed after missing SUPSHIP!!S_Stratum, confirmed in the
+actual GCC core at ObjectList::AddObject(null). Original SupplyShipFactory now
+joins the existing spaceship target, with its original SpaceShip template.
+Focused Clang schema/view_parser/native_shell checks pass; the empty terminal
+SUP_SAVELOAD intentionally gives parsed464/native468 extents, both protected
+without changing any persistent format. GCC redundant in-class qualification
+is corrected; all five affected Debug builds/non-GPU suites pass. Actual
+normal ASan production/in-progress F8 finishes a visible350/2000 Stratum;
+ready-state F8 restores original HUD/state and normal close exits0 (leaks OFF).
+Actual GCC normal Defend/Trireme target now records moving supply escort
+mode1/working15423/escort61233; bounded ASan combat records passive supply2000→1735, but subsequently fails in Explosion extent lookup. Next: complete stable actual combat/end, gather gas
+and build enough original combat reinforcements through normal UI, then finish
+original21/end and independent latest full GCC/Clang training. Previous
+four-Trireme reinforcement also died; nine Mantis ships/platforms remain.
+Separate full-audio GCC now finishes real Stratum350/2000 and Kasse Prime
+Oxidator1100; gas harvesting and two ready Triremes execute. Additional
+Solar4 gas refinery and original eight-Trireme production execute; active
+escort reload, mobile transfer and combat21/end remain pending. M2 is not accepted. Windows/ABI/retail and mission leak gates
+remain open.
+
+2026-10-12 current original Eutromil repair-drone dependency: external data
+identifies S_RepairBot as original SSC_BUILDSHIP. BuildShip/IShuttle now joins
+the existing platform support target; fresh focused schema checks and all five
+affected Linux Debug builds/non-GPU suites pass. Separate normal ASan/UBSan
+selector/briefing/F8 loads the genuine later Kasse Eutromil/Matrix state;
+second F8/F7 and normal close exit0 without ASan/UBSan error (leaks OFF).
+Both genuine drone transforms are written by real repairShip saves; damaged
+ship repair/individual drone visual parity remain unexecuted. Original combat21/end and fresh
+independent GCC/Clang training remain pending. M2 is not accepted.
+
+2026-10-12 latest genuine GCC continuation now reaches Kasse15 through normal
+jump; moving Matrix/ship queue F7/F8 without reissue completes20/lists21,
+ready-state F8 visibly restores the original shield ring and group1. Four
+Triremes and two Monoliths finish normally. Actual Kasse combat loses the initial
+Polaris/Taos force; the first capital reinforcement also dies after reducing enemies to twelve.
+Four further Triremes are queued normally; local Eutromil supply and final
+hostile cleanup/original victory remain pending. This saved fresh chain spans earlier binaries;
+independent latest full GCC/Clang acceptance and mission leaks/Windows/ABI remain
+open. M2 is not accepted. Next: continue original21/end, then latest repeats.
+
+2026-10-12 latest pending Jumpgate14 countercheck: native exact-zero square-root
+adapter repair makes the existing math_core check pass after reproducing NaN
+at goal0; original thresholds/nonzero math/RNG/order and Windows remain intact.
+Actual unchanged normal pending-build F8 under ASan/UBSan now completes14,
+lists15, renders two ready own gate platforms and original Kasse teaching text;
+normal close exits0 (leaks OFF/media exclusions). Separate current visible GCC
+full-audio continuation also completes14 and records both ready own gate
+platforms, then reaches15 and Matrix20 through normal input. Next: normal fleet resupply, Kasse15→original end, latest Clang state
+repeat and independent latest full GCC/Clang runs. Full cleanup/Windows/ABI
+remain open. M2 is not accepted.
+
+2026-10-12 previous combat blocker: normal GCC gate combat F7/F8
+retains saved target/Attack but stops automatic fire. Read-only actual Gunboat
+resolve finds the target and zero attackAgent (saved automatic fire during
+movement), then clears launchers while the loaded target cache remains equal.
+Native transient-cache invalidation uses existing general sync. The unchanged
+439-hull save resumes visible fire under ASan/UBSan without reissue, destroys
+both linked hostile gate platforms, clears targets and normally closes0 (leaks
+OFF/media exclusions). Five affected Debug build/non-GPU suites pass. Separate
+latest GCC/Clang state repeats and complete original training remain required. M2 remains unaccepted; do not count Stop/reissue
+or a synthetic pass as restored combat-command evidence.
+
+2026-10-12 latest cleanup countercheck: actual intermediate bounded leak-enabled
+native reload/close exits1 (68,515 bytes/435 allocations). Native App MeshRender
+cleanup removes index-buffer/fallback-list roots; Channel/Anim and external
+leak roots remain. Existing focused LSan game_material_manager passes
+with four test-only held-archetype observations balanced per ENGINE.H. Five
+Linux Debug build/non-GPU suites pass; actual full cleanup still fails.
+Fresh GCC Eutromil13 finishes after normal in-progress F7/F8 without reissue;
+14 is listed, original Mission Alert/STMG24/frame inspected. Normal F7/P/close
+exits0; regular current GCC entry/F8 continues the same genuine sequence.
+Full mission cleanup and M2 remain unaccepted. Next: continue original Jumpgate14
+→ end, actual cleanup repeat, then independent latest GCC/Clang full runs.
+
+Current full Sol_Train milestone, M2, 2026-10-12: **in progress, not accepted**.
+Authoritative latest continuation: the fresh ordinary-input GCC chain reaches
+Greater18/Annex17/Anvil22/Dock23/Xeno24; normal Pavilion six-Polaris queue/F7/F8
+continues to six185-hull/130-supply ships and ready12;13 is listed. This live process predates newer corrections; latest
+independent full GCC/Clang repeats remain mandatory. Borrowed texture-ID
+contract fix passes all affected builds and actual bounded instrumented
+regular-entry/two-F8/close, without former TextureLibrary dangling reports.
+Leaks OFF in that actual run. A separate8-byte CQ2 pointer-array leak is fixed;
+existing synthetic state_material passes LSan ON, all affected builds pass.
+Full mission leaks/media cleanup and native Windows/ABI/retail remain open.
+Next: finish six supplied Polaris12, Eutromil13, Jumpgate14, Kasse15 and original
+combat/Matrix20/victory/return; then latest independent complete GCC/Clang and
+repeat lifecycle. Older checkpoint paragraphs below retain their historical
+pending observations; use the latest dated focused ledger for current evidence.
+
+Newest later-state checkpoint: actual Matrix20 ready → objective21 listed,
+original ring/label visually inspected after repeated ordinary F8. Matching
+native archetype calloc/free and animation multiplication corrections now
+permit the same genuine later-state ASan/UBSan F7/P/Escape/two F8/normal close,
+exit0. Leaks OFF/external libraries uninstrumented; texture dangling references
+remain open. Original GameProgress now joins the native mission startup;
+existing data_root checks raw twelve-byte DOS player.gpf, with no synthetic
+mission setters. Real progress-enabled ASan/UBSan startup reads completed0/seen0 and
+creates original12-byte player.gpf; normal ready20 F8 and close exit0.
+Original Destabilizer now closes normal Greater Pavilion Trireme production;
+four regular ships reach600 hull/350 supply. Later Clang P/F7/wait/F7 keeps
+updateCount209087 and ship/gate facts unchanged; Escape/F7 advances209376.
+Original success dialog/end-statistics controls now execute through actual later
+GCC/Clang victory/OK/Continue return; the bounded sanitizer end repeat also exits0. Fresh complete GCC/Clang runs
+remain required. Original Mimic now participates in actual Helion10 Frigate
+spawn and F7/F8/F7/close under ASan/UBSan (leaks OFF). The same normal run
+passes the previously failing native RenderMgr selection projection after its
+range guard; active Mimic ability and texture-reference cleanup remain open.
+Fresh GCC now constructs ready ESP11 through an alternate normal free-space
+placement and completes Prime Citadel16. Ordinary Solar3 Greater placement
+creates the actual building after read-only hover diagnosis identifies three
+free adjacent slots; ready18, Annex17 and Anvil22 now complete in the same fresh chain. Dock23
+now completes; Xeno24 requires three adjacent slots and Solar4 navigation,
+with later fresh continuation still pending.
+Native unfocused
+close now returns to the modal owner; focused sanitizer/all affected build checks
+pass; actual regular-entry/later-F8/P/background close exits0 without refocus
+or sanitizer report. Texture cleanup and full training remain open.
+Native MScroll now retains original activation while releasing cached input/cursor
+ownership at close; visible Clang ordinary F8/held-arrow fullscreen pan works.
+Original native HotButton now resolves the four exact retail stance-resource/
+semantic-tooltip pairs to source commands; real normal Attack click/F7 records
+US_ATTACK1 and visible StatusBar/47% low-supply label. Original Tractor now
+closes normal Monolith production: visible optional Clang HUD800/800 and
+500/500, with genuine F7. Ordinary finished-Monolith F8 and integrated ASan/UBSan F7/P/Escape/two F8/
+normal close exit0 execute; Leaks OFF/external libraries uninstrumented, active
+ability and texture-reference cleanup remain open.
+Original CMenu_GenPlat now correctly shows Eutromil/Location Solar/Hull600/600
+under visible optional Clang after normal selection; original CMenu_Research
+now visibly renders Xeno Chamber/Location Solar/Hull400/400 and original
+research controls, releasing the previous platform panel. Original CMenu_None
+now visibly clears empty selection. Integrated ASan/UBSan Eutromil/Xeno/empty
+selection, F7/P/Escape/two F8/normal close exits0; leak/media exclusions and
+texture dangling references remain explicit. Research queue and other required
+platform panels remain to execute.
+Actual optional Clang later F8 now resumes original attacks without reissue,
+eliminates all Mantis units, plays STMG38, completes21 and visibly reaches
+original Mission Successful. Normal OK displays You Win/end statistics; Continue
+returns to the original Solar selector without crash. Blank player-name row/
+statistics retail comparison remain open.
+Separate optional GCC late F8 also reaches success/OK/You Win/Continue/selector
+and normal close exits0. Initial Clang close after return crashed; native Frame
+modal ownership guard passes focused checks/selector close. Nested briefing
+close exposed outer modal waiting; native modal-stack unwind is under validation.
+Latest real ASan end counter: regular entry and genuine later F8 reach victory,
+but ordinary OK exposes overview-title4 outside original TITLES_O=4. Native
+array-bound correction and focused/affected checks pass; visible instrumented
+statistics/return/close repeat remains pending.
+A subsequent real repeat also exposes Explosion rand()*child-count signed
+overflow before victory. Native intermediate widening preserves RNG draws/order;
+instrumented combat/end repeat remains required.
+Original end OK then exposes name-only diagnostic casts in TabButtonFactory
+and HotButtonFactory. Native logging class guards now preserve production
+dispatch and layouts; focused checks pass, actual instrumented end/close is
+being repeated. No full training or leak acceptance follows from these fixes.
+Actual instrumented regular entry/unchanged late F8/victory/OK/You Win/Continue
+returns to the source selector; same-process normal Start reaches objective1
+and ordinary close exits0 without ASan/UBSan diagnostics. Early restart HUD
+capture and texture-reference cleanup remain unaccepted; leaks/media excluded.
+Next: fresh independent every-step GCC/Clang runs with early
+and late normal save/reload-to-victory. Pending moving-build reload, owner/media
+cleanup, failed host GPU resize and native Windows Debug/Final/ABI remain open.
+Newest entry/save-owner checkpoint: original selected-mission briefing now
+runs through normal Start/Replay/Cancel and source Mission::Reload in separate
+visible GCC/Clang runs. Original Solar campaign selector now visibly enters briefing/Start/objective1 under optional Clang with an empty external save root and separately under optional GCC before ordinary later-state F8. Actual winning end-return and full independent training remain open.
+A real GCC F8 crash exposed empty-script save storage overlapping the vtable;
+the existing countercheck and repeated ordinary visible GCC reload now pass.
+Integrated sanitizer loading has exposed BMP, full-width pointer-poison and
+saved-operation alignment boundaries; focused fixes/checks pass, with the
+integrated repeat still required.
+The fresh physical-output Clang run now completes normal 1–10 after the original
+JumpPlat integration. All three source frigates jump into Solar and move with
+actual agents; natural player sight lists objective 11 and displays the ESP
+instruction. Ordinary F7 captures this later state. Original GunPlat/FancyLaunch/Arc now build the actual ESP through normal input;
+source 11 completes; normal Solar Prime Citadel construction completes 16 and
+lists Greater Pavilion 18. The subsequent normal three-slot Greater Pavilion
+build, in-progress F7/F8 and completion now complete 18 and list Annex 17.
+Original CMenu_BuildInd restores the selected Pavilion production HUD; Annex
+itself is in the existing Forger advanced tab; normal Annex build/ready now
+completes 17, removes 16 and lists Anvil 22. The visible continuation now
+completes original Anvil 22 and Turbine Dock 23, lists Xeno 24 and renders
+STMG33 subtitles. User placement builds Xeno on Solar 4; actual ready
+completes24 and starts six-Polaris production. The first
+normal Polaris production action now exposed missing Beam/Mass Disruptor
+providers in actual cores; both original owners now load. Normal production
+and an in-progress F7/F8 finish six supplied Polaris: 12 complete, 13 listed.
+Eutromil placement exposes missing PLATREPAIR; original RepairPlat now
+constructs the actual Eutromil, completes13 and naturally shows the original
+AlertMessage/teletype/STMG24 with unit alerts enabled. Next: actual Jumpgate14
+placement, original multiple-selection HUD/commands, Kasse entry and victory.
+CMenu_MulMix now visibly renders Group/Polaris silhouettes and executes
+normal Attack Stance; actual discovered-gate map links exposed and cleared
+a missing native diagonal-line adapter, with failing-before existing test.
+Jumpgate14 construction is rejected by existing Mantis gate ownership;
+actual normal combat/ownership compatibility remains open. First original Polaris damage now executes, followed by an absent debug-hotkey supply-label crash. Honoring the existing explicit unit-label exclusion clears that access; the next actual blocker is original Beam TriangleStrip rendering in the SDL submission adapter. The corrected strip adapter now visibly draws original beams under ASan/UBSan; ordinary saves show paired hostile gate hull800→305 and normal Eutromil area resupply restores actual Polaris supplies. A bounded close exits0. ObjectList/GenData unit labels now run through the real native font adapter, with first visible Forger hover; low-supply percentage/reload verification is underway. Natural lethal damage now executes after a native unsigned watcher-mask correction: both hostile JumpPlat instances disappear and normal F7 shows owner0 at both gates. Forger J/field click starts original STMG25 construction. The instrumented decoder-disabled configuration then aborts on existing IAC Sector supply-change comm C9990.wav; the same existing optional decoder is being enabled for an unchanged F7/F8 repeat. Decoder-enabled ordinary continuation now completes actual Jumpgate14, lists15 and preserves ready14/two player1 gate platforms through normal F7/P/Escape/F8. Earlier saved moving-build order stalled and required normal Stop/reissue; that reload regression remains open. Next: original Kasse15/waves/Matrix20/combat21/end, pending-command reload repair and fresh full GCC/Clang repetition. Ordinary ASan Forger warp reaches15 complete/20 listed, but missing original enemy Wing/Trail/Stasis owners make combat incomplete. Wing/Fighter/Trail now join the existing graph; their normal unchanged14 repeat reaches real Fighter creation and exposes missing WPN_BOLT projectile. Original ProjectileManager/AutoCannon pass all affected Linux builds/checks; the visible normal repeat reaches15 complete/20 listed but still lacks real Recon launchers. Original ReconLaunch compiles; normal unchanged14 repeat now explicitly aborts on STBOLT!!M_Stasis. StatisBolt and RepellentCloud now pass all affected builds/checks; normal repeat exposes RW!!M_RepulsorWave. Original RepulsorWave and all affected builds/schema checks pass. The visible normal jump reaches15 complete/20 listed and STMG34, then actual Fighter batching aborts on an uninitialized production VertexBufferManager. Native startup now pairs real initialization/cleanup; all affected builds/checks pass, and normal Kasse render/map/pause/F7/return/close clears the assertion. Normal Matrix placement exposes TL!!S_Talorian; original TalorianLauncher/Effect pass all affected builds/checks. Actual later Kasse15 F8 resumes Fighter damage; normal Forger return/map/T/free-slot placement reaches Matrix FAB_BUILDING with real buildee. In-progress normal F7/F8 continues to Matrix ready, source20 complete/21 listed, with inspected original shield ring. Finished-state normal Matrix F8 also visibly recreates protection and close exits0. First integrated ASan later F8 fails on native rand()*4 overflow in original AnimInstance::Randomize from StasisBolt association restore. Existing native_shell countercheck fails before/pass after native S64 multiplication with unchanged three RNG calls. Next: same integrated repeat, actual combat21/end, then full independent GCC/Clang and pending-command reload. Next: complete original waves/combat and Matrix/end, pending-command reload and full independent GCC/Clang. Matrix20, combat21/end, pending-command reload, full independent GCC/Clang and Windows/retail remain open. Full training remains unaccepted. The external
+input helper now moves to requested click coordinates; earlier unsupported
+coordinate traces require isolated repetition. Native HARCH
+conversion also corrects false hardpoint misses; the old helper fails the
+extended existing Engine countercheck, corrected focused Clang checks pass. An isolated
+fresh repeat of the latest placement actions is still required. The actual nearer
+instrumented ESP retry reached ready but aborted in original objective-list
+compaction (overlapping memcpy). The existing countercheck reproduces this;
+native overlap-safe shifts and focused/full affected checks pass. The subsequent separate visible instrumented repeat now completes actual ESP
+ready/11, ordinary F7/two F8/map/P/Escape/close with exit 0 and no ASan/UBSan
+diagnostics. Leak checking and speech are disabled; full training and texture
+reference cleanup remain open. GCC full
+repetition, reload-to-victory and Windows ABI remain open.
+
+Earlier bounded checkpoint: fresh physical-output Clang completes original 1–10
+across early and Bunker-state F7/F8 after the capability-schema correction.
+Post-Helion continuation exposed a second real reload gap: MScript's absolute
+virtual `\Script\Programs` CreateInstance was rejected by NativeUtfFileSystem,
+silently losing active programs. The existing data-root countercheck fails
+before the archive-only path correction and passes after it; read-only F8
+diagnosis now observes saved Helion Attack with a valid frigate reference.
+Original map textures now bind through TEXTURESDIR/ITManager, including opaque
+and original alpha classes under explicit base-level policy. Normal Clang map
+orders move a visibly selected Taos. Complete map navigation, actual attacker
+visibility/ESP, subsequent training, full entry/end and full GCC repetition
+remain unaccepted. The native-only original fullscreen-map hotkey handler now executes normal
+Insert open/return on the physical-output Clang run. The first blocked
+continuation is the real Mantis cross-system order before attacker visibility;
+no full-training success is claimed.
+Original MenuResource/Menu_Pause now own normal P/Escape and F7/F8; physical-output
+Clang shows pause/resume and loads an early ordinary UI save with original 1–4
+completed/5 incomplete and then continues through 5–10 with a second later UI reload. Full saved-state comparison/end continuation and GCC
+repetition remain open. Existing SDL input now supplies Frame control-character
+messages; focused checks pass. Windows menus/editor and not-yet-ported game
+options/save dialogs fail explicitly. The original selected briefing entry now executes; the campaign selector and
+actual end-return owner still need integration. Older checkpoints below remain
+bounded/historical.
+The focused source-derived ledger records every original trigger, production,
+supply/combat condition and actual victory/transition. Separate visible
+GCC/Clang runs reached objective 3 and listed 4 before HUD integration.
+Original toolbar/controls, Fabricator and individual-ship command menus,
+ShapeLoader/FontFactory and image resources now link into native GPU mission
+startup. Visible GCC/Clang frames show the source Forger panel and resource art;
+normal field input reaches 1–3, with diagnostic moved-state reload/close
+exiting 0 in both. TextureLibrary dangling-reference warnings remain open. Full map panes, construction, later
+training and regular entry/pause/UI Save/Load/victory paths are still missing
+or unexecuted. The first startup/resource and teardown failures are recorded,
+with the original global cleanup chain now integrated. The first normal
+scout command with multiple selected ships aborts at missing Group!!Default;
+original GroupObj now connects, and separate visible GCC/Clang grouped
+movement completes 4 and lists 5 (STMG07).
+Focused GCC/Clang checks pass. ASan/UBSan's material check found original
+PolyMesh leaks (1,409 bytes/29 allocations); leak-disabled repeats pass only
+memory-access/UB scope. No full mission sanitizer or complete training run
+is claimed. Integrated sanitizer starts exposed invalid bool interpretation of archive
+text and PolyMesh random pre-sort overflow. Bounded byte reading and a wider
+product retain archive bytes/order and source RNG draw count. Further integrated
+attempts identified archetype/GenData alignment, unused FogOfWar null-pointer
+arithmetic, a timer sentinel row, unaligned Platform/SpaceShip sync access,
+UnitComm null-member index calculation and packed capability/user-packet
+accesses. Native byte copies/aligned storage retain layouts and operation order;
+focused leak-disabled checks pass. Further native operation storage preserves
+operand lengths and aligns ObjSet without changing saved packet layouts;
+the existing shell CTest checks actual creation/duplication/saved-header load.
+Integrated sanitizer execution reaches 1–3/grouped movement and diagnostic
+Save, then identifies toolbar array and HotButton CRT-text destruction
+mismatches during Reload. Both owner corrections are implemented; a later instrumented parent-GDB
+bounded 1–3/moved checkpoint/reload/close exits normally, with leaks and media
+explicitly excluded. An earlier normal instrumented run aborted at a legacy
+ObjMap pointer heuristic; its actual pointer diagnosis remains open. A subsequent regular bounded
+1–3/source moved Save/Reload/close also passes with exit 0 and the same sanitizer
+exclusions; its failure-only pointer diagnostic does not trigger. Neither run establishes full training or UI save/load. Original CMenu_FindButtons now
+executes normal Forger selection/centering and Acropolis selection. Visible
+GCC shows original build hints/buttons, Banker counters and planet slots.
+RefinePlat links, but actual preview reaches a compound-root null dereference
+after failed smoke parts. Source review exposed the missing original Engine
+OBJECTDIR search binding; it and original SolarianBuild now compile, and the
+real GCC placement now reserves 500 ore, builds a selectable Oxidator,
+completes original objective 5 and lists 6 (SOX3652/STMG09). Normal close exits 0;
+no late save was performed. Indexed particle palette textures now reach the
+existing native pipeline; deterministic palette/alpha and TextureLibrary checks
+pass. Original CMenu_ResBuild now compiles in the existing toolbar owner under
+GCC/Clang/ASan, with both affected checks passing; visible Clang construction 5, panel and normal Galiot command now execute.
+The latter fails at absent HARVEST!!S_Galiot (exit 139), with a core-proven null
+AddObject from RefinePlat production. Original HarvestShip/SpaceShip instantiation
+and MeshObj dependencies now compile under GCC/Clang/ASan and focused checks pass;
+Separate normal-input GCC/Clang Galiot production now completes original
+objective 6 and lists 7, with normal close exit 0 in both.
+Physical outputs disappeared during this run; continuation and normal close
+(exit 0) used compositor FALLBACK. Original FireBall/ParticleObj providers now
+compile/link with focused checks; actual effect spawn/render remains open.
+Original SysMap/Sector map drawing/input owners and native texture-DC/fan adapters
+now compile, with GCC/Clang focused checks passing. The first enabled-map Clang
+SDL surface visibly draws source map art and ordinary input repeats 1–7. Normal
+map camera clicks/orders reach Solar 3 (Earth); original Bunker button/slot builds
+a completed crew-producing platform, completes 7 and lists 8. Sentinel, map
+reload/close and GCC visible repetition remain pending.
+An ASan normal Oxidator attempt finds a negative float-to-U8 render-color UB;
+native-only signed conversions are implemented but construction re-execution
+is required. Next: original Sentinel control/owner, map/menu lifecycle
+and the actual complete training path. Integrated sanitizer ownership,
+map/menu/later production and actual training completion remain required.
+All four default/optional GCC/Clang graphs and 49 non-GPU checks pass at the
+HarvestShip/MeshObj checkpoint. Integrated mission sanitizers and later
+production integration remain required. Native Windows
+Debug/Final/ABI and retail comparison remain unperformed. See
+[the M2 ledger](NATIVE_SINGLEPLAYER_SLICE.md#full-sol_train-acceptance-ledger-m2-2026-10-11-in-progress).
+Older entries below are historical.
+
+Current original gameplay Hintbox checkpoint, M1, 2026-10-11: normal SDL
+mouse hover now reaches original FieldManager/HintResource in Sol_Train.
+Separate visible GCC/Clang runs show Cygnus and medium asteroid hints from
+original resources, target switching/removal, new hover after source reload,
+and clear text/timers/ownership on actual mission close. Original edge-scroll
+camera access is enabled without toolbar/hot-rectangle UI. Selection,
+movement, training objectives, source text/voices and moved-state save/reload
+remain demonstrated. Existing focused lifecycle and Clang ASan/UBSan checks
+passed; sanitizer scope excludes full mission execution and leak checking.
+M1's selected Linux gameplay acceptance is demonstrated; native Windows
+Debug/Final and module-ABI execution are an external open gate, not a success.
+Next: execute that gate on the supported host, then M2's original controls
+for the next Sol_Train multiple-selection/control-group/command objective.
+No full UI, cross-compiler determinism or retail parity is claimed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-gameplay-hintbox-checkpoint-m1-2026-10-11).
+Older entries below are historical.
+
+Current UnitComm alert checkpoint, 2026-10-11: original alert history,
+colors and expiry now reach the optional native font/render adapter. Explicit
+`--mission-alert-smoke` invokes original `MScript::AlertMessage` on the
+selected external-data Forger; visible GCC/Clang runs drew its cyan warning
+and red Teletype, retained normal movement/objectives and passed source
+save/reload. This controlled source call is not a naturally triggered combat
+alert. Focused lifecycle and Clang ASan/UBSan checks passed with leak checking
+disabled. Map pings remain explicitly excluded by `--skip-sector-map`.
+Gameplay Hintbox hover remains unverified (zero draws); next is its real
+caller/resource ownership and the needed original UI closure. Windows/ABI,
+full mission sanitizers and retail parity remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-unitcomm-alert-rendering-checkpoint-2026-10-11).
+Older entries below are historical.
+
+Current status and unit-text checkpoint, 2026-10-11: original StatusBar and
+ScrollingText now draw through the optional FreeType adapter during the
+selected native mission. UnitComm selection/movement text and voices run
+alongside original training speech subtitles. Separate visible GCC/Clang
+Wayland/Vulkan runs passed normal input, objectives and moved-state source
+save/reload; a GCC capture shows status, unit text and speech together.
+Original Hintbox passed synthetic timing/font lifecycle checks, but no
+visible gameplay hint executed. Focused Clang ASan/UBSan passed with leak
+checking disabled. Next: UnitComm alerts and real gameplay hint callers.
+Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
+remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-status-and-unit-scrolling-text-checkpoint-2026-10-11).
+Older entries below are historical.
+
+Current mission subtitle checkpoint, 2026-10-11: original `Subtitle.cpp`
+now owns selected training speech subtitles through EventSystem and the
+optional FreeType font/render adapter. Separate visible GCC/Clang
+Wayland/Vulkan runs passed multiline subtitle draws, normal selection/movement
+and source moved-state save/reload. Training speech is enabled; portraits
+and UnitComm voice/text remain explicitly excluded in this combination.
+Focused source lifecycle and Clang ASan/UBSan checks passed with leak checking
+disabled. Next: original status/hint/scrolling text, including UnitComm text.
+Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
+remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-mission-speech-subtitles-checkpoint-2026-10-11).
+Older entries below are historical.
+
 Current in-window teletype checkpoint, 2026-10-10: original `Teletype.cpp`
 now owns selected training objective text, reveal/caret and expiry through
 EventSystem and the existing native App render boundary. An optional

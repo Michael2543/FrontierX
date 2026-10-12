@@ -16,6 +16,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppArchetypeBytes.h"
 #include "CQTrace.h"
 #include <FrontierX/PlatformTime.h>
 #include <FrontierX/LegacyInput.h>
@@ -47,12 +48,15 @@ struct MeshChain;
 #include "Startup.h"
 #include "MGlobals.h"
 #include <DBaseData.h>
+#if !defined(_WIN32)
+static_assert(offsetof(BASIC_DATA, bEditDropable) == NativeArchetypeEditorFlagOffset,
+    "retail editor-flag offset");
+static_assert(sizeof(bool) == 1, "retail editor-flag width");
+#endif
 #include <DMBaseData.h>
 #include "FogOfWar.h"
 #include "Sector.h"
-#if defined(_WIN32)
 #include "BaseHotRect.h"
-#endif
 #include "DrawAgent.h"
 #include "IBlast.h"
 #include "IGroup.h"
@@ -572,7 +576,7 @@ struct TimingStruct
 		render_flush[currentFrame] = 
 		update_total[currentFrame] = 0;
 		
-		int i = TIMING_END;
+		int i = TIMING_END - 1;
 		do
 		{
 			timer_array[i][currentFrame] = 0;
@@ -1073,8 +1077,10 @@ ObjectList::~ObjectList (void)
 	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
 #else
-	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
-		connection->Unadvise(eventHandle);
+	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+        connection->Unadvise(eventHandle);
+    else if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+        connection->Unadvise(eventHandle);
 #endif
 
 	// destroy the object list, archetype list ?
@@ -1414,8 +1420,7 @@ void ObjectList::Render (void)
 #if defined(_WIN32)
 	bCheckRect = (bHasFocus && (bPointRect==false || TOOLBAR->bAlert==0));
 #else
-	// The native slice has no toolbar hit region to exclude from selection.
-	bCheckRect = bHasFocus;
+	bCheckRect = (bHasFocus && (bPointRect==false || !TOOLBAR || TOOLBAR->bAlert==0));
 #endif
 	//clearHighlightBits(highlightedList);
 	FlushHighlightedList();
@@ -4273,12 +4278,24 @@ static void load_bytes (IFileSystem * file, ARCHDATA * archData, U32 & checkSum)
 						if (i != 0)
 							archData->type[i].objData = (BASIC_DATA *) (((U8 *)archData->type[i-1].objData) + archData->type[i-1].dataSize);
 
+#if !defined(_WIN32)
+						// Archive leaves have arbitrary lengths. Runtime typed views need
+						// alignment; padding is not part of dataSize or the checksum.
+						archData->type[i].objData = reinterpret_cast<BASIC_DATA *>(
+							reinterpret_cast<U8 *>(archData->type[i].objData) +
+							NativeArchetypeBytePadding(archData->type[i].objData));
+#endif
 						strncpy(archData->type[i].name, data.cFileName, sizeof(archData->type[i].name)-1);
 						archData->type[i].dataSize = file->GetFileSize(hFile);
 						file->ReadFile(hFile, archData->type[i].objData, archData->type[i].dataSize, &dwRead, 0);
 						file->CloseHandle(hFile);
 						checkSum = calcCheckSum((U8 *)archData->type[i].objData, dwRead, checkSum);
-						archData->type[i].editDropable = archData->type[i].objData->bEditDropable;
+#if defined(_WIN32)
+							archData->type[i].editDropable = archData->type[i].objData->bEditDropable;
+#else
+							archData->type[i].editDropable = NativeArchetypeEditorFlag(
+								archData->type[i].objData, dwRead);
+#endif
 					}
 				}
 			}
@@ -4319,7 +4336,13 @@ BOOL32 ObjectList::loadTypesData (void)
 	get_total_bytes(file, dataSize, numFiles);
 	
 	::free(archData);
+#if defined(_WIN32)
 	archData = (ARCHDATA *) calloc(sizeof(ARCHDATA)+(sizeof(ARCHDATATYPE)*numFiles)+dataSize, 1);
+#else
+	archData = static_cast<ARCHDATA *>(calloc(sizeof(ARCHDATA) +
+		sizeof(ARCHDATATYPE) * static_cast<std::size_t>(numFiles) + dataSize +
+		static_cast<std::size_t>(numFiles) * (NativeArchetypeStorageAlignment - 1), 1));
+#endif
 
 	archData->type[0].objData = (BASIC_DATA *) (((U8 *)archData) + sizeof(ARCHDATA)+(sizeof(ARCHDATATYPE)*numFiles)); // mark beginning of data
 	load_bytes(file, archData, checkSum);
@@ -4734,7 +4757,7 @@ void ObjectList::getLassoRect (RECT & rect) const
 #if defined(_WIN32)
 	rect.bottom = __min(rect.bottom, pane->y1 - IDEAL2REALY(10));	// adjust for toolbar slop area
 #else
-	rect.bottom = __min(rect.bottom, pane->y1);	// no native toolbar hit region
+	rect.bottom = __min(rect.bottom, pane->y1 - (TOOLBAR ? IDEAL2REALY(10) : 0));
 #endif
 }
 //--------------------------------------------------------------------------//
@@ -5395,10 +5418,17 @@ struct _olist : GlobalComponent
 			FULLSCREEN->SetCallbackPriority(list, EVENT_PRIORITY_OBJLIST);
 		}
 		#else
-		if (!EVENTSYS ||
-			EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
-			connection->Advise(OBJLIST, &list->eventHandle) != GR_OK)
-			CQBOMB0("ObjectList requires the native EventSystem callback point.");
+        if (FULLSCREEN)
+        {
+            if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+                connection->Advise(OBJLIST, &list->eventHandle) != GR_OK)
+                CQBOMB0("ObjectList requires the original FullScreen callback point.");
+            FULLSCREEN->SetCallbackPriority(list, EVENT_PRIORITY_OBJLIST);
+        }
+        else if (!EVENTSYS ||
+            EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+            connection->Advise(OBJLIST, &list->eventHandle) != GR_OK)
+            CQBOMB0("ObjectList requires the native EventSystem callback point.");
 		#endif
 
 		list->initializeResources();

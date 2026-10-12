@@ -20,6 +20,8 @@
 #include "FrontierX/LegacyInput.h"
 #include "UserDefaults.h"
 #include <cstring>
+#include <cstddef>
+#include <cstdint>
 #include <3dmath.h>
 #include <ICamera.h>
 #include <ENGINE.H>
@@ -33,9 +35,7 @@ static U32 GetTickCount()
 #include <MGlobals.h>
 #include "Startup.h"
 #include "CQTrace.h"
-#if defined(_WIN32)
 #include "BaseHotRect.h"
-#endif
 #include "ObjSet.h"
 #include "ObjList.h"
 #include "CommPacket.h"
@@ -490,6 +490,10 @@ struct SUPERBASE_PACKET
 	bool					  bStalled;				// op waiting for target creation
 	bool					  bLongTerm;			// process that will be around awhile
 
+#ifndef _WIN32
+	// Runtime-only byte extent; alignment padding must never become operands.
+	U32 nativeOperandSize;
+#endif
 	// begin regular packet data here
 	DWORD					  dwSize;
 	DPID					  fromID;
@@ -780,7 +784,11 @@ struct SUPERBASE_PACKET
 
 	U32 getOperandSize (void) const
 	{
+#ifndef _WIN32
+		return nativeOperandSize;
+#else
 		return ((U8 *)pSet) - ((U8 *)castBasePacket()) - sizeof(BASE_PACKET);
+#endif
 	}
 
 	void *getOperands (void) const
@@ -895,6 +903,19 @@ private:
 };
 //--------------------------------------------------------------------------//
 //
+#ifndef _WIN32
+static_assert(sizeof(BASE_PACKET) == 16, "Original base packet byte layout");
+static_assert(offsetof(SUPERBASE_PACKET, dwSize) + sizeof(BASE_PACKET) ==
+    sizeof(SUPERBASE_PACKET), "Native runtime header ends at operand storage");
+static_assert(alignof(ObjSet) == 4 && offsetof(ObjSet, objectIDs) == 4 &&
+    sizeof(ObjSet) == (MAX_SELECTED_UNITS + 1) * sizeof(U32), "Original object-set layout");
+static U32 NativeSuperPacketSetOffset(U32 offset)
+{
+    constexpr U32 alignment = alignof(ObjSet);
+    return (offset + alignment - 1) & ~(alignment - 1);
+}
+#endif
+
 struct RandomIDGenerator
 {
 	U32 *randomIndex;			// randomIndex[numRandomEntries]
@@ -1177,9 +1198,17 @@ struct DACOM_NO_VTABLE OpAgent : public IOpAgent, IEventCallback
 		return lastOpID;
 	}
 
+#if defined(_WIN32)
 	SUPERBASE_PACKET * createSuperPacket (const BASE_PACKET & packet, U32 baseSize, const U32 objectID[MAX_SELECTED_UNITS]);
+#else
+	SUPERBASE_PACKET * createSuperPacket (const BASE_PACKET & packet, U32 baseSize, const void * packetObjectID);
+#endif
 
+#if defined(_WIN32)
 	static SUPERBASE_PACKET * createSuperPacket (const struct RWPACKET_HEADER * header);
+#else
+	static SUPERBASE_PACKET * createSuperPacket (const void * rawHeader);
+#endif
 
 	U32 findPendingBirth (U32 dwMissionID);		// returns opID of birth 
 
@@ -1555,7 +1584,9 @@ OpAgent::~OpAgent (void)
 	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
 #else
-	if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+	if (FULLSCREEN && FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+		connection->Unadvise(eventHandle);
+	else if (EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Unadvise(eventHandle);
 #endif
 
@@ -2441,6 +2472,11 @@ struct RWPACKET_HEADER		// used in host packet
 };
 //--------------------------------------------------------------------------//
 //
+#ifndef _WIN32
+static_assert(sizeof(RWPACKET_HEADER) == 24 && offsetof(RWPACKET_HEADER, objects) == 20 &&
+    offsetof(RWPACKET_HEADER, objects) + sizeof(U32) == sizeof(RWPACKET_HEADER),
+    "Original saved operation header byte layout");
+#endif
 struct RWTERMINATION_NODE
 {
 	U32 victimID;
@@ -2503,18 +2539,44 @@ struct RWRECALCPARENT_NODE
 };
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 SUPERBASE_PACKET * OpAgent::createSuperPacket (const RWPACKET_HEADER * header)
+#else
+SUPERBASE_PACKET * OpAgent::createSuperPacket (const void * rawHeader)
+#endif
 {
+#if !defined(_WIN32)
+	RWPACKET_HEADER prefix;
+	std::memcpy(&prefix, rawHeader, offsetof(RWPACKET_HEADER, objects));
+	if (prefix.numObjects > MAX_SELECTED_UNITS ||
+		prefix.size < offsetof(RWPACKET_HEADER, objects) + prefix.numObjects*sizeof(U32))
+	{
+		std::fputs("Native saved operation header is invalid\n", stderr);
+		std::abort();
+	}
+	alignas(RWPACKET_HEADER) U8 alignedBytes[256] = {};
+	std::memcpy(alignedBytes, rawHeader, prefix.size);
+	const auto *header = reinterpret_cast<const RWPACKET_HEADER *>(alignedBytes);
+#endif
 	SUPERBASE_PACKET * result;
 	// size = sizeof superpacket + objset + sizeof operands
+#ifndef _WIN32
+	const U32 opsize = header->size - offsetof(RWPACKET_HEADER, objects) - header->numObjects*sizeof(U32);
+	const U32 setOffset = NativeSuperPacketSetOffset(sizeof(SUPERBASE_PACKET) + opsize);
+	U32 size = setOffset + sizeof(ObjSet);
+#else
 	U32 opsize = header->size - sizeof(RWPACKET_HEADER) - ((header->numObjects-1)*sizeof(U32));
 	U32 size = sizeof(SUPERBASE_PACKET) + sizeof(ObjSet) + opsize;
+#endif
 
 	result = (SUPERBASE_PACKET *) calloc(size, 1);
 
 	// copy the "additional materials"
 	memcpy(result->castBasePacket()+1, ((U8*)header)+header->size-opsize, opsize);
 	result->pSet = (ObjSet *) ( ((U8 *)result) + size - sizeof(ObjSet));
+#ifndef _WIN32
+	result->nativeOperandSize = opsize;
+#endif
 
 	result->getSet().numObjects = header->numObjects;
 	memcpy(result->getSet().objectIDs, header->objects, header->numObjects*sizeof(U32));
@@ -2789,6 +2851,20 @@ BOOL32 OpAgent::Load (struct IFileSystem * inFile)
 		dwOffset=0;
 		while (dwOffset < dwBufferSize)
 		{
+#if !defined(_WIN32)
+			if (dwBufferSize-dwOffset < offsetof(RWPACKET_HEADER, objects))
+			{
+				std::fputs("Native saved operation header is truncated\n", stderr);
+				std::abort();
+			}
+			RWPACKET_HEADER prefix;
+			std::memcpy(&prefix, buffer+dwOffset, offsetof(RWPACKET_HEADER, objects));
+			if (prefix.size > dwBufferSize-dwOffset)
+			{
+				std::fputs("Native saved operation record is truncated\n", stderr);
+				std::abort();
+			}
+#endif
 			const RWPACKET_HEADER * header = (const RWPACKET_HEADER	*) (buffer+dwOffset);
 			node = createSuperPacket(header);
 
@@ -2798,7 +2874,11 @@ BOOL32 OpAgent::Load (struct IFileSystem * inFile)
 				pOpList = node;
 
 			prev = node;
+#if defined(_WIN32)
 			dwOffset += header->size;
+#else
+			dwOffset += prefix.size;
+#endif
 		}
 	}
 
@@ -3004,18 +3084,37 @@ void OpAgent::ResetSyncItems (void)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 SUPERBASE_PACKET * OpAgent::createSuperPacket (const BASE_PACKET & packet, U32 baseSize, const U32 objectID[MAX_SELECTED_UNITS])
+#else
+SUPERBASE_PACKET * OpAgent::createSuperPacket (const BASE_PACKET & packet, U32 baseSize, const void * packetObjectID)
+#endif
 {
 	SUPERBASE_PACKET * result;
+#ifndef _WIN32
+	const U32 setOffset = NativeSuperPacketSetOffset(baseSize + SUPERBASE_OVERHEAD);
+	U32 size = setOffset + sizeof(ObjSet);
+#else
 	U32 size = baseSize + sizeof(ObjSet) + SUPERBASE_OVERHEAD;
+#endif
 
 	result = (SUPERBASE_PACKET *) calloc(size, 1);
 
 	memcpy(result->castBasePacket(), &packet, baseSize);
+#ifndef _WIN32
+	result->pSet = reinterpret_cast<ObjSet *>(reinterpret_cast<U8 *>(result) + setOffset);
+	result->nativeOperandSize = baseSize - sizeof(BASE_PACKET);
+#else
 	result->pSet = (ObjSet *) ( ((U8 *)result) + baseSize + SUPERBASE_OVERHEAD);
+#endif
 	
 	U32 numObjects = (result->dwSize - baseSize) / sizeof(U32);
 	CQASSERT2(numObjects > 0 && numObjects <= MAX_SELECTED_UNITS, "numObjects=%d, type=%d", numObjects, packet.type);
+#ifndef _WIN32
+	U32 alignedObjectID[MAX_SELECTED_UNITS];
+	std::memcpy(alignedObjectID, packetObjectID, numObjects * sizeof(U32));
+	const U32 * const objectID = alignedObjectID;
+#endif
 	
 	if (numObjects==1 && MGlobals::GetPlayerFromPartID(objectID[0]) == MGlobals::GetGroupID())
 	{
@@ -3044,7 +3143,12 @@ SUPERBASE_PACKET * OpAgent::duplicatePacket (SUPERBASE_PACKET *packet)
 
 	memcpy(result, packet, size);
 	result->pNext = 0;
+#ifndef _WIN32
+	result->pSet = reinterpret_cast<ObjSet *>(reinterpret_cast<U8 *>(result) +
+		(reinterpret_cast<U8 *>(packet->pSet) - reinterpret_cast<U8 *>(packet)));
+#else
 	result->pSet = (ObjSet *) (((U8 *)(result+1))+packet->getOperandSize());
+#endif
 
 	return result;
 }
@@ -3053,15 +3157,70 @@ SUPERBASE_PACKET * OpAgent::duplicatePacket (SUPERBASE_PACKET *packet)
 SUPERBASE_PACKET * OpAgent::createPacket (HOSTCMD cmd, U32 operandSize)
 {
 	SUPERBASE_PACKET * result;
+#ifndef _WIN32
+	const U32 setOffset = NativeSuperPacketSetOffset(sizeof(SUPERBASE_PACKET) + operandSize);
+	U32 size = setOffset + sizeof(ObjSet);
+#else
 	U32 size = sizeof(SUPERBASE_PACKET) + operandSize + sizeof(ObjSet);
+#endif
 		
 	result = (SUPERBASE_PACKET *) calloc(size, 1);
 
+#ifndef _WIN32
+	result->pSet = reinterpret_cast<ObjSet *>(reinterpret_cast<U8 *>(result) + setOffset);
+	result->nativeOperandSize = operandSize;
+#else
 	result->pSet = (ObjSet *) (((U8 *)(result+1))+operandSize);
+#endif
 	result->hostCmd = cmd;
 
 	return result;
 }
+#ifndef _WIN32
+// Existing shell CTest: exercise the production storage functions on generated
+// operands. This does not submit a command or touch mission/object state.
+bool NativeAppCheckOperationStorage()
+{
+    const U32 ids[2] = {0x1001, 0x2001};
+    const U8 operands[8] = {1, 3, 5, 7, 9, 11, 13, 15};
+    for (U32 numObjects : {0U, 2U})
+    for (U32 count = 0; count < sizeof(operands); ++count)
+    {
+        SUPERBASE_PACKET *packet = OpAgent::createPacket(PROCESS, count);
+        packet->getSet().numObjects = numObjects;
+        std::memcpy(packet->getSet().objectIDs, ids, sizeof(ids));
+        std::memcpy(packet->getOperands(), operands, count);
+        SUPERBASE_PACKET *copy = OpAgent::duplicatePacket(packet);
+
+        alignas(RWPACKET_HEADER) U8 bytes[256] = {};
+        auto *header = reinterpret_cast<RWPACKET_HEADER *>(bytes);
+        header->size = offsetof(RWPACKET_HEADER, objects) + numObjects*sizeof(U32) + count;
+        header->cmd = PROCESS;
+        header->opID = 17;
+        header->numObjects = numObjects;
+        std::memcpy(bytes + offsetof(RWPACKET_HEADER, objects), ids, numObjects*sizeof(U32));
+        std::memcpy(bytes + offsetof(RWPACKET_HEADER, objects) + numObjects*sizeof(U32), operands, count);
+        U8 unalignedBytes[257] = {};
+        std::memcpy(unalignedBytes+1, bytes, header->size);
+        SUPERBASE_PACKET *loaded = OpAgent::createSuperPacket(unalignedBytes+1);
+
+        bool valid = copy->pSet != packet->pSet && loaded->opID == 17;
+        for (const SUPERBASE_PACKET *candidate : {packet, copy, loaded})
+        {
+            valid = valid && reinterpret_cast<std::uintptr_t>(candidate->pSet) % alignof(ObjSet) == 0 &&
+                candidate->getOperandSize() == count && candidate->getSet().numObjects == numObjects &&
+                std::memcmp(candidate->getSet().objectIDs, ids, numObjects*sizeof(U32)) == 0 &&
+                std::memcmp(candidate->getOperands(), operands, count) == 0;
+        }
+        std::free(loaded);
+        std::free(copy);
+        std::free(packet);
+        if (!valid) return false;
+    }
+    return true;
+}
+#endif
+
 //--------------------------------------------------------------------------//
 // add packet to the command list
 //
@@ -8324,7 +8483,14 @@ struct _opagent : GlobalComponent
 			FULLSCREEN->SetCallbackPriority(agent, EVENT_PRIORITY_MISSION);
 		}
 #else
-		if (!EVENTSYS ||
+		if (FULLSCREEN)
+		{
+			if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
+				connection->Advise(agent->getBase(), &agent->eventHandle) != GR_OK ||
+				FULLSCREEN->SetCallbackPriority(agent, EVENT_PRIORITY_MISSION) != GR_OK)
+				CQBOMB0("OpAgent requires the original FullScreen callback point.");
+		}
+		else if (!EVENTSYS ||
 			EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) != GR_OK ||
 			connection->Advise(agent->getBase(), &agent->eventHandle) != GR_OK)
 			CQBOMB0("OpAgent requires the native EventSystem callback point.");

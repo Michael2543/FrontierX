@@ -3854,7 +3854,7 @@ void MGlobals::RemoveFromObjectiveList (U32 stringID)
 		}
 	}
 
-	// memcpy things around so that we don't have holes in the data...
+	// Compact the objective lists without leaving holes.
 	int last = MAX_MISSION_OBJECTIVES - 1;
 
 	if (removeIndex != -1)
@@ -3866,13 +3866,25 @@ void MGlobals::RemoveFromObjectiveList (U32 stringID)
 			int num  = (MAX_MISSION_OBJECTIVES - head);
 
 			U32 copySize =  num * sizeof(U32);
+			#if defined(_WIN32)
 			memcpy(&globalData.objectives.objective_stringID[del], &globalData.objectives.objective_stringID[head], copySize);
+#else
+			memmove(&globalData.objectives.objective_stringID[del], &globalData.objectives.objective_stringID[head], copySize);
+#endif
 
 			copySize = num * sizeof(globalData.objectives.state[del]);
+			#if defined(_WIN32)
 			memcpy(&globalData.objectives.state[del], &globalData.objectives.state[head], copySize);
+#else
+			memmove(&globalData.objectives.state[del], &globalData.objectives.state[head], copySize);
+#endif
 			
 			copySize = num * sizeof(bool);
+			#if defined(_WIN32)
 			memcpy(&globalData.objectives.bObjectiveSecondary[del], &globalData.objectives.bObjectiveSecondary[head], copySize);
+#else
+			memmove(&globalData.objectives.bObjectiveSecondary[del], &globalData.objectives.bObjectiveSecondary[head], copySize);
+#endif
 			
 			// zero out the last one
 			globalData.objectives.objective_stringID[last] = 0;
@@ -3890,6 +3902,47 @@ void MGlobals::RemoveFromObjectiveList (U32 stringID)
 		EVENTSYS->Send(CQE_OBJECTIVES_CHANGE, 0);
 	}
 }
+#if !defined(_WIN32)
+bool NativeAppCheckObjectiveStorage()
+{
+	const auto saved = globalData.objectives;
+	globalData.objectives = {};
+	for (int i = 0; i < MAX_MISSION_OBJECTIVES; ++i)
+	{
+		MGlobals::AddToObjectiveList(1000U + i, (i & 1) != 0);
+		if ((i % 3) == 0)
+			MGlobals::MarkObjectiveCompleted(1000U + i);
+	}
+	const int removed = MAX_MISSION_OBJECTIVES / 2;
+	MGlobals::RemoveFromObjectiveList(1000U + removed);
+	bool valid = !MGlobals::IsObjectiveInList(1000U + removed);
+	for (int i = 0; i < MAX_MISSION_OBJECTIVES - 1; ++i)
+	{
+		const int original = i < removed ? i : i + 1;
+		valid = valid && globalData.objectives.objective_stringID[i] == 1000U + original &&
+			MGlobals::IsObjectiveCompleted(1000U + original) == ((original % 3) == 0) &&
+			MGlobals::IsObjectiveSecondary(1000U + original) == ((original & 1) != 0);
+	}
+	const int last = MAX_MISSION_OBJECTIVES - 1;
+	valid = valid && globalData.objectives.objective_stringID[last] == 0 &&
+		globalData.objectives.state[last] == MT_GlobalData::OBJECTIVES::Pending &&
+		!globalData.objectives.bObjectiveSecondary[last];
+	MGlobals::AddToObjectiveList(2000U, true);
+	MGlobals::MarkObjectiveCompleted(2000U);
+	MGlobals::RemoveFromObjectiveList(2000U);
+	valid = valid && globalData.objectives.objective_stringID[last] == 0 &&
+		globalData.objectives.state[last] == MT_GlobalData::OBJECTIVES::Pending &&
+		!globalData.objectives.bObjectiveSecondary[last];
+	const auto compacted = globalData.objectives;
+	MGlobals::RemoveFromObjectiveList(3000U);
+	for (int i = 0; i < MAX_MISSION_OBJECTIVES; ++i)
+		valid = valid && globalData.objectives.objective_stringID[i] == compacted.objective_stringID[i] &&
+			globalData.objectives.state[i] == compacted.state[i] &&
+			globalData.objectives.bObjectiveSecondary[i] == compacted.bObjectiveSecondary[i];
+	globalData.objectives = saved;
+	return valid;
+}
+#endif
 //----------------------------------------------------------------------------------------------
 //
 void MGlobals::MarkObjectiveCompleted (U32 stringID)

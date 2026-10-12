@@ -200,10 +200,17 @@ struct PixelFormat
 				}
 			}
 
+#if defined(_WIN32)
 			rr = 8 - rwidth;
 			gr = 8 - gwidth;
 			br = 8 - bwidth;
 			ar = 8 - awidth;
+#else
+			rr = rmask ? 8 - rwidth : 0;
+			gr = gmask ? 8 - gwidth : 0;
+			br = bmask ? 8 - bwidth : 0;
+			ar = amask ? 8 - awidth : 0;
+#endif
 
 			if( !rmask ) {
 				rl = rr = rwidth = 0;

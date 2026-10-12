@@ -11,8 +11,28 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+using std::min;
+using std::max;
+#endif
 
 #include <MGlobals.h>
 #include "Sector.h"
@@ -25,7 +45,7 @@
 #include <DFighter.h>
 #include <DWeapon.h>
 #include "TObject.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "Startup.h"
 #include "Mission.h"
 #include "TerrainMap.h"
@@ -41,21 +61,21 @@
 #include "GridVector.h"
 #include "ObjMap.h"
 #include "CQExtent.h"
-#include "Sysmap.h"
+#include "SysMap.h"
 #include "IAdmiral.h"
 #include "TObjRender.h"
 #include "EventScheduler.h"
 
 //material stuff
-#include <Renderer.h>
+#include <renderer.h>
 //--------------------
 
-#include <FileSys.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TSmartPointer.h>
 #include <TComponent.h>
 #include <IRenderPrimitive.h>
-#include <BaseCam.h>
+#include <BASECAM.H>
 
 
 #define WINGX  100.0

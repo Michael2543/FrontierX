@@ -12,6 +12,7 @@ class Transform;
 #include "StringData.h"
 #include "NativeAppMissionMedia.h"
 #include "NativeAppGlobals.h"
+#include "NativeAppArchetypeBytes.h"
 
 #include <array>
 #include <algorithm>
@@ -27,6 +28,7 @@ class Transform;
 
 namespace
 {
+
 
 bool HasStatus(
 	const std::vector<FrontierX::Platform::DataRootEntry> &entries,
@@ -298,6 +300,43 @@ int RunSelfTest()
 			return 1;
 		}
 		DAFILEDESC save("saved.mission");
+		// GameProgress opens a raw twelve-byte DOS record, not a UTF archive.
+		DAFILEDESC progress("player.gpf");
+		progress.lpImplementation = "DOS";
+		progress.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+		progress.dwCreationDistribution = CREATE_ALWAYS;
+		const U32 progressWords[3] = {1, 0, 1};
+		IFileSystem * progressFile = nullptr;
+		DWORD progressBytes = 0;
+		const auto rawCreateResult = saveDirectory->CreateInstance(&progress,
+			reinterpret_cast<void **>(&progressFile));
+		bool rawSaved = rawCreateResult == GR_OK && progressFile &&
+			progressFile->WriteFile(nullptr, progressWords, sizeof(progressWords),
+				&progressBytes, nullptr) && progressBytes == sizeof(progressWords);
+		if (progressFile) progressFile->Release();
+		progressFile = nullptr;
+		progress.dwDesiredAccess = GENERIC_READ;
+		progress.dwCreationDistribution = OPEN_EXISTING;
+		U32 loadedWords[3] = {};
+		const bool rawWritten = rawSaved;
+		const auto rawReadResult = saveDirectory->CreateInstance(&progress,
+			reinterpret_cast<void **>(&progressFile));
+		rawSaved = rawSaved && rawReadResult == GR_OK && progressFile &&
+			progressFile->ReadFile(nullptr, loadedWords, sizeof(loadedWords),
+				&progressBytes, nullptr) && progressBytes == sizeof(loadedWords) &&
+			std::equal(std::begin(progressWords), std::end(progressWords),
+				std::begin(loadedWords)) &&
+			std::filesystem::file_size(root / "player.gpf") == sizeof(progressWords);
+		if (progressFile) progressFile->Release();
+		if (!rawSaved)
+		{
+			std::cerr << "Native GameProgress DOS save-directory round trip failed; create="
+				<< rawCreateResult << " written=" << rawWritten << " reopen=" << rawReadResult
+				<< " read-bytes=" << progressBytes << '\n';
+			saveDirectory->Release();
+			std::filesystem::remove_all(root, error);
+			return 1;
+		}
 		save.lpImplementation = "UTF";
 		save.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
 		save.dwCreationDistribution = CREATE_ALWAYS;
@@ -350,6 +389,17 @@ int RunSelfTest()
 					&nestedWritten, nullptr) && nestedWritten == sizeof(value);
 			if (nestedRecord) nestedRecord->Release();
 			if (instanceDirectory) instanceDirectory->Release();
+			// MScript saves active programs, then reloads this absolute virtual directory.
+			DAFILEDESC program("0-SolTrain_HelionFinished");
+			program.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+			program.dwCreationDistribution = CREATE_ALWAYS;
+			saved = saved && archive->CreateDirectory("\\Script") &&
+				archive->CreateDirectory("\\Script\\Programs") &&
+				archive->SetCurrentDirectory("\\Script\\Programs");
+			const HANDLE programHandle = saved ? archive->OpenChild(&program) : INVALID_HANDLE_VALUE;
+			saved = saved && programHandle != INVALID_HANDLE_VALUE &&
+				archive->WriteFile(programHandle, value, sizeof(value), &written, nullptr) &&
+				written == sizeof(value) && archive->CloseHandle(programHandle);
 			// Mission::Save uses the source's unversioned interface name.
 			saved = saved && archive->QueryInterface("IUTFWriter",
 					reinterpret_cast<void **>(&flush)) == GR_OK && flush;
@@ -379,6 +429,35 @@ int RunSelfTest()
 				reader->CloseHandle(savedHandle) &&
 				std::equal(std::begin(throughReader), std::end(throughReader),
 					std::begin(value));
+			IFileSystem * programs = nullptr;
+			DAFILEDESC programDirectory("\\Script\\Programs");
+			loadedFromInterface = loadedFromInterface &&
+				reader->SetCurrentDirectory("\\ObjectList") &&
+				reader->CreateInstance(&programDirectory,
+					reinterpret_cast<void **>(&programs)) == GR_OK && programs;
+			if (programs)
+			{
+				WIN32_FIND_DATA found = {};
+				const HANDLE search = programs->FindFirstFile("?*-*", &found);
+				DAFILEDESC program(found.cFileName);
+				const HANDLE file = search == INVALID_HANDLE_VALUE ? INVALID_HANDLE_VALUE :
+					programs->OpenChild(&program);
+				loadedFromInterface = loadedFromInterface && search != INVALID_HANDLE_VALUE &&
+					std::strcmp(found.cFileName, "0-SolTrain_HelionFinished") == 0 &&
+					file != INVALID_HANDLE_VALUE &&
+					programs->ReadFile(file, throughReader, sizeof(throughReader), &bytesRead, nullptr) &&
+					bytesRead == sizeof(value) &&
+					std::equal(std::begin(throughReader), std::end(throughReader), std::begin(value));
+				if (file != INVALID_HANDLE_VALUE) programs->CloseHandle(file);
+				if (search != INVALID_HANDLE_VALUE) programs->FindClose(search);
+				DAFILEDESC traversal("\\Script\\..\\Programs");
+				IFileSystem * rejected = nullptr;
+				loadedFromInterface = loadedFromInterface &&
+					reader->CreateInstance(&traversal, reinterpret_cast<void **>(&rejected)) != GR_OK &&
+					!rejected;
+				if (rejected) rejected->Release();
+				programs->Release();
+			}
 		}
 		if (reopenedParent) reopenedParent->Release();
 		if (reader) reader->Release();
@@ -869,6 +948,33 @@ int InspectMissionFilesystem(const std::filesystem::path &root, const std::strin
 
 int main(int argc, char **argv)
 {
+    // ObjectList also collects text leaves such as gametypes.h. Those bytes
+    // must not be loaded through BASIC_DATA's bool lvalue (UBSan regression).
+    std::array<unsigned char, 8> editorBytes{};
+    if (NativeArchetypeEditorFlag(editorBytes.data(), editorBytes.size())) return 1;
+    for (unsigned char flag : {1, 13, 255})
+    {
+        editorBytes[4] = flag;
+        if (!NativeArchetypeEditorFlag(editorBytes.data(), editorBytes.size()) ||
+            editorBytes[4] != flag) return 1;
+    }
+    for (std::size_t size = 0; size <= 4; ++size)
+        if (NativeArchetypeEditorFlag(editorBytes.data(), size)) return 1;
+    if (NativeArchetypeEditorFlag(nullptr, 8)) return 1;
+    alignas(std::max_align_t) std::array<unsigned char,
+        3 * NativeArchetypeStorageAlignment> oddLeaves{};
+    for (std::size_t offset = 0; offset < NativeArchetypeStorageAlignment; ++offset)
+    {
+        unsigned char *raw = oddLeaves.data() + offset;
+        const std::size_t padding = NativeArchetypeBytePadding(raw);
+        if (padding >= NativeArchetypeStorageAlignment ||
+            reinterpret_cast<std::uintptr_t>(raw + padding) %
+                NativeArchetypeStorageAlignment != 0) return 1;
+        // Payload length remains odd; the following typed view needs padding.
+        if (NativeArchetypeBytePadding(raw + padding + 5) == 0) return 1;
+    }
+
+
 	if (argc == 2 && std::string(argv[1]) == "--self-test")
 		return RunSelfTest();
 	if (argc == 4 && std::string(argv[1]) == "--mission-filesystem")

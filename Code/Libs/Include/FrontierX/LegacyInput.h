@@ -35,6 +35,8 @@ constexpr std::uint32_t MouseWheel = 0x020a;
 constexpr std::uint32_t UnicodeCharacter = 0x1019;
 }
 
+bool NativeShiftPressed();
+
 namespace LegacyMouseMask
 {
 constexpr std::uintptr_t Left = 0x0001;

@@ -183,22 +183,34 @@ GENRESULT TGAREADER::LoadImage (void *fileImage, U32 fileSize, U32 imageNumber)
 		return GR_INVALID_PARMS;
 
 #if !defined(_WIN32)
-	// The mapped native file path supplies its length. This reader currently
-	// bounds the uncompressed true-color form used by the game-material gate.
+	// Bound the original uncompressed true-color and briefing palette paths.
 	if (fileSize)
 	{
 		const U8 *bytes = static_cast<const U8 *>(fileImage);
-		if (fileSize < sizeof(TGAHEADER) || bytes[1] != 0 || bytes[2] != 2 ||
-			(bytes[16] != 24 && bytes[16] != 32))
+		if (fileSize < sizeof(TGAHEADER))
 			return GR_GENERIC;
+		const bool indexed = bytes[1] == 1 && bytes[2] == 1 && bytes[16] == 8;
+		const bool trueColor = bytes[1] == 0 && bytes[2] == 2 &&
+			(bytes[16] == 24 || bytes[16] == 32);
+		if (!indexed && !trueColor) return GR_GENERIC;
 		const U32 width = static_cast<U32>(bytes[12]) | (static_cast<U32>(bytes[13]) << 8);
 		const U32 height = static_cast<U32>(bytes[14]) | (static_cast<U32>(bytes[15]) << 8);
-		const U32 offset = static_cast<U32>(sizeof(TGAHEADER)) + bytes[0];
+		U32 offset = static_cast<U32>(sizeof(TGAHEADER)) + bytes[0];
+		const U32 paletteLength = static_cast<U32>(bytes[5]) | (static_cast<U32>(bytes[6]) << 8);
+		if (indexed)
+		{
+			if (bytes[3] || bytes[4] || !paletteLength || paletteLength > 256 || bytes[7] != 24)
+				return GR_GENERIC;
+			offset += paletteLength * 3;
+		}
 		const U32 bytesPerPixel = bytes[16] / 8;
 		if (!width || !height || width > 2048U || height > 2048U ||
 			bytes[8] || bytes[9] || bytes[10] || bytes[11] ||
 			offset > fileSize || width > (fileSize - offset) / bytesPerPixel / height)
 			return GR_GENERIC;
+		if (indexed)
+			for (U32 i = 0; i < width * height; ++i)
+				if (bytes[offset+i] >= paletteLength) return GR_GENERIC;
 	}
 #endif
 

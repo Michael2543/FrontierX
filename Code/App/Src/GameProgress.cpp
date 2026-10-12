@@ -11,14 +11,23 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <TComponent.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#endif
 
 #include "IGameProgress.h"
 #include "Startup.h"
 #include "UserDefaults.h"
 
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
 
 #define NAME_REG_KEY	"CQPlayerName"
@@ -33,6 +42,9 @@ struct PROGRESS_DATA
 	U32 moviesSeen;
 	U32 missionsSeen;
 };
+#if !defined(_WIN32)
+static_assert(sizeof(PROGRESS_DATA) == 12, "Original progress file layout");
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -121,6 +133,10 @@ void GameProgress::init (void)
 //
 bool GameProgress::setFileSystem (void)
 {
+#if !defined(_WIN32)
+	fileSystem = SAVEDIR;
+	return static_cast<IFileSystem *>(fileSystem) != nullptr;
+#else
 	char buffer[128];
 
 	U32 res = DEFAULTS->GetStringFromRegistry(NAME_REG_KEY, szPlayerName, sizeof(szPlayerName));
@@ -142,6 +158,7 @@ bool GameProgress::setFileSystem (void)
 	}
 
 	return true;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -162,7 +179,11 @@ bool GameProgress::loadGameProgress (void)
 	
 		DWORD dwRead;
 
+#if defined(_WIN32)
 		wsprintf(szFile, GPF_FILE);
+#else
+		std::snprintf(szFile, sizeof(szFile), "%s", GPF_FILE);
+#endif
 		fdesc.lpFileName = szFile;
 		fdesc.lpImplementation = "DOS";
 		fdesc.dwDesiredAccess = GENERIC_READ;
@@ -198,7 +219,11 @@ bool GameProgress::saveGameProgress (void)
 	
 		DWORD dwWritten;
 
+#if defined(_WIN32)
 		wsprintf(szFile, GPF_FILE);
+#else
+		std::snprintf(szFile, sizeof(szFile), "%s", GPF_FILE);
+#endif
 		fdesc.lpFileName = szFile;
 		fdesc.lpImplementation = "DOS";
 		fdesc.dwDesiredAccess = GENERIC_READ|GENERIC_WRITE;

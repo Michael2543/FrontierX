@@ -198,8 +198,17 @@ enum CURSOR_MODE
 inline MISSION_DATA::M_CAPS & MISSION_DATA::M_CAPS::operator |= (const MISSION_DATA::M_CAPS & other)
 {
 	CQASSERT(sizeof(*this) == sizeof(U32));
+#ifndef _WIN32
+	static_assert(sizeof(MISSION_DATA::M_CAPS) == sizeof(U32), "Capability byte layout");
+	U32 value, otherValue;
+	std::memcpy(&value, this, sizeof(value));
+	std::memcpy(&otherValue, &other, sizeof(otherValue));
+	value |= otherValue;
+	std::memcpy(this, &value, sizeof(value));
+#else
 	U32 * ptr = (U32 *) this;
 	*ptr |= *((U32 *) &other);
+#endif
 
 	return *this;
 }
@@ -208,8 +217,16 @@ inline MISSION_DATA::M_CAPS & MISSION_DATA::M_CAPS::operator |= (const MISSION_D
 inline MISSION_DATA::M_CAPS & MISSION_DATA::M_CAPS::operator &= (const MISSION_DATA::M_CAPS & other)
 {
 	CQASSERT(sizeof(*this) == sizeof(U32));
+#ifndef _WIN32
+	U32 value, otherValue;
+	std::memcpy(&value, this, sizeof(value));
+	std::memcpy(&otherValue, &other, sizeof(otherValue));
+	value &= otherValue;
+	std::memcpy(this, &value, sizeof(value));
+#else
 	U32 * ptr = (U32 *) this;
 	*ptr &= *((U32 *) &other);
+#endif
 
 	return *this;
 }
@@ -627,7 +644,11 @@ struct DACOM_NO_VTABLE ObjectComm : public IEventCallback, ResourceClient<>
 
 	static bool allSameType (IBaseObject * selected);
 
+#if defined(_WIN32)
 	void insertSortObj (U32 objectID[MAX_SELECTED_UNITS], int i, MPart & part);
+#else
+	void insertSortObj (void * packetObjectID, int i, MPart & part);
+#endif
 
 	bool isSameCursorModeAction (CURSOR_MODE mode)
 	{
@@ -928,8 +949,18 @@ ObjectComm::~ObjectComm (void)
 }
 //-------------------------------------------------------------------
 //
+#if defined(_WIN32)
 void ObjectComm::insertSortObj (U32 objectID[MAX_SELECTED_UNITS], int size, MPart & part)
+#else
+void ObjectComm::insertSortObj (void * packetObjectID, int size, MPart & part)
+#endif
 {
+#ifndef _WIN32
+	// The original array resides in a byte-packed user packet.
+	U32 alignedObjectID[MAX_SELECTED_UNITS];
+	std::memcpy(alignedObjectID, packetObjectID, sizeof(alignedObjectID));
+	U32 * const objectID = alignedObjectID;
+#endif
 	int i;
 	MPart cmpObj;
 	bool bCmpAdmiral, bPartAdmiral;
@@ -964,6 +995,9 @@ void ObjectComm::insertSortObj (U32 objectID[MAX_SELECTED_UNITS], int size, MPar
 			break;
 		}
 	}
+#ifndef _WIN32
+	std::memcpy(packetObjectID, alignedObjectID, sizeof(alignedObjectID));
+#endif
 }
 //-------------------------------------------------------------------
 //

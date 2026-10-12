@@ -17,6 +17,8 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "Include/CQTrace.h"
+#include <FrontierX/PlatformTime.h>
+#include <cwchar>
 #include "CQImage.h"
 #include <ICamera.h>
 #include <renderer.h>
@@ -37,6 +39,16 @@ using std::max;
 #define GAS_MULTIPLIER 25
 #define METAL_MULTIPLIER 25
 #define CREW_MULTIPLIER 10
+static U32 GetTickCount()
+{
+	return FrontierX::Platform::MonotonicMilliseconds();
+}
+// Bound the source fixed-array formatting without changing its text.
+template <std::size_t N, class... Args>
+static int swprintf(wchar_t (&buffer)[N], const wchar_t *format, Args... args)
+{
+	return std::swprintf(buffer, N, format, args...);
+}
 #endif
 
 #include "Startup.h"
@@ -45,9 +57,7 @@ using std::max;
 #include "IStatic.h"
 #include "IProgressStatic.h"
 #include "MGlobals.h"
-#if defined(_WIN32)
 #include "BaseHotRect.h"
-#endif
 #include "IToolbar.h"
 #include "OpAgent.h"
 #include "SoundManager.h"
@@ -95,18 +105,12 @@ struct stalledNode
 	}
 };
 
-#if defined(_WIN32)
 struct DACOM_NO_VTABLE Banker : public IBanker, IEventCallback, IHotControlEvent
-#else
-struct DACOM_NO_VTABLE Banker : public IBanker, IEventCallback
-#endif
 {
 	BEGIN_DACOM_MAP_INBOUND(Banker)
 	DACOM_INTERFACE_ENTRY(IBanker)
 	DACOM_INTERFACE_ENTRY(IEventCallback)
-#if defined(_WIN32)
 	DACOM_INTERFACE_ENTRY(IHotControlEvent)
-#endif
 	END_DACOM_MAP()
 
     void * operator new (size_t size)
@@ -234,7 +238,6 @@ Banker::~Banker()
 {
 	reset();
 
-#if defined(_WIN32)
 	if (TOOLBAR)
 	{
 		COMPTR<IDAConnectionPoint> connection;
@@ -242,7 +245,6 @@ Banker::~Banker()
 		if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Unadvise(eventHandle);
 	}
-#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -634,7 +636,6 @@ S32 getDiff(U32 trueVal,U32 displayVal)
 //
 void Banker::onUpdate()
 {
-#if defined(_WIN32)
 	if (--trueDisplayTimer <= 0)
 	{
 		trueDisplayTimer = 4;
@@ -715,7 +716,6 @@ void Banker::onUpdate()
 				commandPtArea->SetTextColor(0,255,255);
 		}
 	}
-#endif
 
 	//see if I can unstall any stalled processes
 	if(THEMATRIX->IsMaster())
@@ -765,13 +765,6 @@ void Banker::onUpdate()
 //
 void Banker::enableMenu (bool bEnable)
 {
-#if !defined(_WIN32)
-	if (bEnable)
-	{
-		ICQImage::Bomb("native Banker resource HUD unavailable");
-		abort();
-	}
-#else
 	if(bEnable)
 	{
 		COMPTR<IDAComponent> pComp;
@@ -823,18 +816,15 @@ void Banker::enableMenu (bool bEnable)
 		crewArea.free();
 		commandPtArea.free();
 	}
-#endif
 	
 }
 //--------------------------------------------------------------------------//
 //
 void Banker::init()
 {
-#if defined(_WIN32)
 	COMPTR<IDAConnectionPoint> connection;
-	if (TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+	if (TOOLBAR && TOOLBAR->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 		connection->Advise(getBase(), &eventHandle);
-#endif
 	for(U32 playerID = 1; playerID <= MAX_PLAYERS; ++playerID)
 	{
 		stallLists[playerID] = NULL;

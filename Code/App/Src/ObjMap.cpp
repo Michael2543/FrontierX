@@ -18,6 +18,7 @@
 #include <DMBaseData.h>
 #include <TComponent.h>
 #include <algorithm>
+#include <cstdio>
 using std::min;
 using std::max;
 #endif
@@ -38,6 +39,15 @@ using std::max;
 #include "IExplosion.h"
 #include "ILauncher.h"
 #include "CQTrace.h"
+
+#if !defined(_WIN32)
+static bool IsPoisonedObjectLink(const IBaseObject *link)
+{
+	const auto value = reinterpret_cast<std::uintptr_t>(link);
+	constexpr auto topByte = std::uintptr_t(0xFF) << ((sizeof(std::uintptr_t)-1)*8);
+	return (value & topByte) == topByte || value == 0xFFFFFFFFU;
+}
+#endif
 
 
 #if defined(_WIN32)
@@ -137,7 +147,11 @@ ObjMapNode * ObjMap::AddObjectToMap(IBaseObject *obj,U32 systemID,int square_id,
 		return NULL;
 	CQASSERT(systemID != 0);
 	CQASSERT(square_id < maps[systemID-1].square_cnt);
+#if defined(_WIN32)
 	CQASSERT((reinterpret_cast<std::uintptr_t>(obj->next) & 0xff000000) != 0xff000000);
+#else
+	CQASSERT(!IsPoisonedObjectLink(obj->next));
+#endif
 
 	// exclude child nuggets, and explosion
 /*#ifndef FINAL_RELEASE
@@ -189,7 +203,11 @@ void ObjMap::RemoveObjectFromMap(IBaseObject *obj,U32 systemID,int square_id)
 				ObjMapNode *deadguy;
 				while (pos->next && pos->next->obj != obj)
 				{
+#if defined(_WIN32)
 					CQASSERT1((reinterpret_cast<std::uintptr_t>(pos->next->obj->next) & 0xff000000) != 0xff000000, "Dead unit 0x%X found in OBJMAP", pos->next->dwMissionID);
+#else
+					CQASSERT1(!IsPoisonedObjectLink(pos->next->obj->next), "Dead unit 0x%X found in OBJMAP", pos->next->dwMissionID);
+#endif
 					pos = pos->next;
 				}
 

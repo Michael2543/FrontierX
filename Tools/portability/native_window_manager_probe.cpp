@@ -357,11 +357,28 @@ int main()
         Require(close_callback.calls == 1 && messages.size() == before_close,
             "close veto did not suppress the window callback");
 
-        close_callback.veto = false;
+        // A normal background-window close must return to the modal owner,
+        // without waiting for or consuming a later focus event.
+        event.window.type = SDL_EVENT_WINDOW_FOCUS_LOST;
         Push(event);
         window->ServeMessageQueue(WMF_BACKGROUND);
-        Require(close_callback.calls == 2 && messages.size() == before_close + 1 &&
-            messages.back().message == FrontierX::LegacyMessage::Close,
+        Require(window->AppIsActive() == FALSE, "close countercheck did not lose focus");
+        const std::size_t inactive_before_close = messages.size();
+        close_callback.veto = false;
+        event.window.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+        Push(event);
+        event.window.type = SDL_EVENT_WINDOW_FOCUS_GAINED;
+        Push(event);
+        window->ServeMessageQueue(0);
+        Require(window->AppIsActive() == FALSE,
+            "inactive accepted close waited for a later focus event");
+        window->ServeMessageQueue(0);
+        Require(window->AppIsActive() == FALSE,
+            "a second pump waited for focus after accepted close");
+        window->ServeMessageQueue(WMF_BACKGROUND);
+        Require(window->AppIsActive() == TRUE, "queued focus event was lost");
+        Require(close_callback.calls == 2 &&
+            messages[inactive_before_close].message == FrontierX::LegacyMessage::Close,
             "accepted close did not reach the window callback");
 
         event = {};

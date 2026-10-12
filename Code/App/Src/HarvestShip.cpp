@@ -11,28 +11,57 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <DEffectOpts.h>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#endif
+
 //#define _DEBUG_HARVEST  //uncomment this to see the orbit code in action
 
 #include "TObjTrans.h"
 #include "TObjControl.h"
 #include "TObjFrame.h"
 #include "TSpaceShip.h"
-#include <DSpaceShip.h>
+#include <DSpaceship.h>
 #include "TObject.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "Startup.h"
 #include "Mission.h"
 #include "IPlanet.h"
-#include "IHardpoint.h" 
+#include "IHardPoint.h"
 #include "IHarvest.h"
 #include "MPart.h"
 #include "Sector.h"
 #include "CommPacket.h"
 #include "INugget.h"
 #include "UnitComm.h"
-#include "Objset.h"
+#include "ObjSet.h"
 #include "FogOfWar.h"
 #include "ObjMapIterator.h"
 #include "IRecoverShip.h"
@@ -629,8 +658,16 @@ void HarvestShip::DrawHighlighted()
 		{
 			SINGLE diff = (0.5F - hull) / (0.5F - 0.25F);
 			U8 r, g, b;
-			r = (U8) ((224 - 227) * diff) + 227;
-			g = (U8) ((51 - 227) * diff) + 227;
+			#if defined(_WIN32)
+				r = (U8) ((224 - 227) * diff) + 227;
+#else
+				r = static_cast<U8>(static_cast<S32>((224 - 227) * diff) + 227);
+#endif
+			#if defined(_WIN32)
+				g = (U8) ((51 - 227) * diff) + 227;
+#else
+				g = static_cast<U8>(static_cast<S32>((51 - 227) * diff) + 227);
+#endif
 			b = (U8) ((37 - 34) * diff) + 34;
 			color = RGB(r,g,b);
 		}
@@ -3581,7 +3618,9 @@ BOOL32 HarvestShipFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -3598,7 +3637,13 @@ IBaseObject * HarvestShipFactory::CreateInstance (HANDLE hArchetype)
 void HarvestShipFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

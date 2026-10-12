@@ -18,8 +18,22 @@
 */
 //--------------------------------------------------------------------------//
  
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include "NativeAppImage.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <xform.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
+#include <vector>
+#endif
 
 #include "DrawAgent.h"
 #include "IImageReader.h"
@@ -32,8 +46,8 @@
 
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <FileSys.h>
-#include <RendPipeline.h>
+#include <Filesys.h>
+#include <rendpipeline.h>
 //#include <RPUL\PrimitiveBuilder.h>
 
 #include <malloc.h>
@@ -220,6 +234,7 @@ void DrawAgent::Draw (PANE *pane, S32 x, S32 y)
 	// if locking the frame buffer is supported
 	if (CQFLAGS.bFrameLockEnabled)
 	{
+#ifdef _WIN32
 		if (pane == 0)
 			pane = const_cast<PANE *>(&SURFACE->GetPane());
 		else
@@ -228,7 +243,10 @@ void DrawAgent::Draw (PANE *pane, S32 x, S32 y)
 
 		if (vfxShape == nullptr)
 			return;
-		VFX_shape_draw(pane, vfxShape, 0, x, y);
+        VFX_shape_draw(pane, vfxShape, 0, x, y);
+#else
+        std::abort();
+#endif
 	}
 	else	// use 3D rendering system
 	{
@@ -326,6 +344,7 @@ void DrawAgent::Draw (PANE *src, PANE *dst)
 	// if locking the frame buffer is supported
 	if (CQFLAGS.bFrameLockEnabled)
 	{
+#ifdef _WIN32
 		if (src == 0)
 			src = const_cast<PANE *>(&SURFACE->GetPane());
 		else
@@ -334,7 +353,10 @@ void DrawAgent::Draw (PANE *src, PANE *dst)
 
 		if (vfxShape == nullptr)
 			return;
-		VFX_shape_draw(src, vfxShape, 0, dst->x0, dst->y0);
+        VFX_shape_draw(src, vfxShape, 0, dst->x0, dst->y0);
+#else
+        std::abort();
+#endif
 	}
 	else	// use 3D rendering system
 	{
@@ -447,6 +469,9 @@ void DrawAgent::loadTexture (U32 block, const BLOCKRECT & rect, struct IImageRea
 	{
 		makeSquare(width, height);
 		textureID[block] = TMANAGER->CreateDrawAgentTexture(width, (bTransparentMode!=0));
+#ifndef _WIN32
+        if (!textureID[block]) std::abort();
+#endif
 		blockRect[block].right  = width + rect.left - 1;
 		blockRect[block].bottom = height + rect.top - 1;
 		// actual image height over texture height
@@ -459,7 +484,8 @@ void DrawAgent::loadTexture (U32 block, const BLOCKRECT & rect, struct IImageRea
 	//PIPE->set_texture_render_state(textureID[block], D3DRS_TEXTUREADDRESSU, D3DTADDRESS_CLAMP);
 	//PIPE->set_texture_render_state(textureID[block], D3DRS_TEXTUREADDRESSV, D3DTADDRESS_CLAMP);
 
-	if (bTransparentMode==0)	// palettized, has no transparency
+	#ifdef _WIN32
+    if (bTransparentMode==0)	// palettized, has no transparency
 	{
 		U8 * buffer = (U8 *) calloc(width * height*sizeof(*buffer), 1);
 		RECT rect = blockRect[block];
@@ -479,6 +505,7 @@ void DrawAgent::loadTexture (U32 block, const BLOCKRECT & rect, struct IImageRea
 		::free(buffer);
 	}
 	else	// palettized, but transparency in the palette
+#endif
 	{
 		COLORREF * buffer = (COLORREF *) calloc(width * height*sizeof(*buffer), 1);
 		RECT rect = blockRect[block];
@@ -491,10 +518,17 @@ void DrawAgent::loadTexture (U32 block, const BLOCKRECT & rect, struct IImageRea
 			rect.bottom += pRect->top;
 		}
 
-		reader->GetImage(PF_RGBA, buffer, &rect);
-		PIPE->set_texture_level_data(textureID[block], 0, width, height, width*sizeof(*buffer), 
-			PixelFormat(PF_RGBA), 
-			buffer, 0, 0);
+		#ifdef _WIN32
+        reader->GetImage(PF_RGBA, buffer, &rect);
+#else
+        if (!buffer || reader->GetImage(PF_RGBA, buffer, &rect) != GR_OK)
+        { std::free(buffer); std::abort(); }
+#endif
+		GENRESULT uploaded = PIPE->set_texture_level_data(textureID[block], 0, width, height, width*sizeof(*buffer),
+            PixelFormat(PF_RGBA), buffer, 0, 0);
+#ifndef _WIN32
+        if (uploaded != GR_OK) { std::free(buffer); std::abort(); }
+#endif
 		::free(buffer);
 	}
 
@@ -547,6 +581,12 @@ void DrawAgent::loadTexture (U32 block, const BLOCKRECT & rect, struct IImageRea
 //
 U32 DrawAgent::nearestPower (S32 number)
 {
+#ifndef _WIN32
+    if (number <= 0 || number > 4096) return 0;
+    U32 power = 1;
+    while (power < U32(number)) power <<= 1;
+    return power;
+#else
 	int i = 31;
 
 	while (number > 0)
@@ -559,6 +599,7 @@ U32 DrawAgent::nearestPower (S32 number)
 		i++;	// round up
 
 	return (1 << i);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -572,7 +613,15 @@ BOOL32 DrawAgent::init (struct IImageReader * reader, BOOL32 bScaleData, BOOL32 
 	RGB rgbData[256];
 	BOOL32 bTransparentMode;
 
-	bHiRes = (_bHiRes != 0);
+#ifndef _WIN32
+    if (!reader || !PIPE || !BATCH || !TMANAGER || !CQFLAGS.b3DEnabled || CQFLAGS.bFrameLockEnabled)
+        return false;
+    const S64 checkedWidth = pRect ? S64(pRect->right) - pRect->left + 1 : reader->GetWidth();
+    const S64 checkedHeight = pRect ? S64(pRect->bottom) - pRect->top + 1 : reader->GetHeight();
+    if (checkedWidth < 1 || checkedHeight < 1 || checkedWidth > 4096 || checkedHeight > 4096)
+        return false;
+#endif
+    bHiRes = (_bHiRes != 0);
 
 	if (pRect)
 	{
@@ -608,12 +657,19 @@ BOOL32 DrawAgent::init (struct IImageReader * reader, BOOL32 bScaleData, BOOL32 
 
 	U32 maxWidth, maxHeight, maxSize;
 
+#ifdef _WIN32
 	PIPE->query_device_ability(RP_A_TEXTURE_MAX_WIDTH, &maxWidth);
 	PIPE->query_device_ability(RP_A_TEXTURE_MAX_HEIGHT, &maxHeight);
 
 	maxSize = __min(maxWidth, maxHeight);
 	CQASSERT(maxSize == nearestPower(maxSize));
 	const int TMAX = __min(maxSize, nearestPower(__min(width, height)));
+
+#else
+    // Software tile size for this UI adapter, not a reported hardware capability.
+    maxWidth = maxHeight = maxSize = 256;
+    const int TMAX = std::min(maxSize, nearestPower(std::min(width, height)));
+#endif
 
 	{
 		FILE* _df = fopen("debug/drawagent_init_diag.txt", "a");
@@ -633,7 +689,7 @@ BOOL32 DrawAgent::init (struct IImageReader * reader, BOOL32 bScaleData, BOOL32 
 		goto Done;
 	}
 
-	textureID = new U32[numTextures];
+	textureID = new U32[numTextures]();
 	hintID = new U32[numTextures];
 	memset(hintID,0xff,sizeof(U32)*numTextures);
 	blockRect = new BLOCKRECT[numTextures];
@@ -776,6 +832,7 @@ BOOL32 DrawAgent::constructShape (struct IImageReader * reader, COLORREF palette
 	if (CQFLAGS.bFrameLockEnabled==0)		// don't bother constructing the shape
 		goto Done;
 
+#ifdef _WIN32
 	window.buffer = buffer;
 	window.x_max = imageWidth - 1;
 	window.y_max = imageHeight - 1;
@@ -815,6 +872,10 @@ BOOL32 DrawAgent::constructShape (struct IImageReader * reader, COLORREF palette
 	((U32 *)(((U8 *)vfxShape)+shapeSize))[0] = 256;		// number of palette entries
 	memcpy(((U8 *)vfxShape)+shapeSize+sizeof(U32), vfx_palette, sizeof(vfx_palette));
 
+#else
+    std::abort(); // Framebuffer locking is outside the native image path.
+#endif
+
 Done:
 	free(buffer);
 	return result;
@@ -850,6 +911,7 @@ void __stdcall CreateDrawAgentForFonts (struct IImageReader * reader, struct IDr
 }
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 void __stdcall CreateDrawAgent (const char * filename, IComponentFactory *parentFile,
 								DA::FILETYPE type, U32 subImage, struct IDrawAgent ** drawAgent, BOOL32 bHiRes)
 {
@@ -931,9 +993,52 @@ void __stdcall CreateDrawAgent (const VFX_SHAPETABLE * vfxShape, U32 subImage, s
 		*drawAgent = 0;
 }
 //--------------------------------------------------------------------------//
+#else
+void __stdcall CreateDrawAgent(const char *filename, IComponentFactory *parent,
+    DA::FILETYPE type, U32 subImage, IDrawAgent **agent, BOOL32 hiRes)
+{
+    if (!agent) return;
+    *agent = nullptr;
+    if (!parent || !filename || std::strlen(filename) < 4) return;
+    if (type == DA::UNKTYPE)
+    {
+        const char *extension = filename + std::strlen(filename) - 4;
+        char lower[5];
+        for (unsigned i=0;i<4;++i) lower[i] = extension[i] | 0x20;
+        lower[4] = 0;
+        if (!std::strcmp(lower, ".shp")) type = DA::VFX;
+        else if (!std::strcmp(lower, ".bmp")) type = DA::BMP;
+        else if (!std::strcmp(lower, ".tga")) type = DA::TGA;
+        else return;
+    }
+    COMPTR<IFileSystem> file;
+    DAFILEDESC descriptor = filename;
+    if (parent->CreateInstance(&descriptor, file) != GR_OK || !file)
+    { std::fprintf(stderr, "Native UI image file unavailable: %s\n", filename); return; }
+    const U32 size = file->GetFileSize();
+    if (!size || size > 64*1024*1024) return;
+    std::vector<U8> bytes(size);
+    DWORD read = 0;
+    if (!file->ReadFile(0, bytes.data(), size, &read, 0) || read != size) return;
+    COMPTR<IImageReader> reader;
+    U32 offset = 0;
+    switch (type)
+    {
+    case DA::VFX: CreateVFXReader(reader); break;
+    case DA::BMP: CreateBMPReader(reader); offset=14; break;
+    case DA::TGA: CreateTGAReader(reader); break;
+    default: return;
+    }
+    if (reader && size >= offset &&
+        reader->LoadImage(bytes.data()+offset, size-offset, subImage) == GR_OK)
+        CreateDrawAgent(reader, agent, hiRes, nullptr);
+    if (!*agent) std::fprintf(stderr, "Native UI image rejected: %s image=%u bytes=%u\n", filename, subImage, size);
+}
+#endif // source Win32 file/raw-table constructors
 //--------------------------FontDrawAgent class-----------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 struct TEXCOORD
 {
 	float x0, y0;
@@ -1552,3 +1657,5 @@ void DA::DrawTexture (const PANE *pane, S32 x0, S32 y0, S32 x1, S32 y1, U32 text
 }//--------------------------------------------------------------------------//
 //------------------------------End DrawAgent.cpp---------------------------//
 //--------------------------------------------------------------------------//
+
+#endif // Win32 bitmap font and drawing helpers

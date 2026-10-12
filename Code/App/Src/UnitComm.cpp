@@ -16,6 +16,10 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "Include/NativeAppMissionMedia.h"
+#include "Include/NativeAppTextResources.h"
+#include "Include/NativeAppFont.h"
+#include "Include/MPartRef.h"
+#include <VFX.H>
 #include "IObject.h"
 #include <ICamera.h>
 #include <cstdint>
@@ -33,6 +37,13 @@
 #include "MPart.h"
 #include <MGlobals.h>
 #include <DBaseData.h>
+#ifndef _WIN32
+static_assert(UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, selected) == 3 &&
+	UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::SPACESHIP, move) == 5 &&
+	UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::GUNBOAT, attacking) == 9 &&
+	UNITCOMM_SPEECH_INDEX(UNITSOUNDS::SPEECH::FABRICATOR, constructStarted) == 14,
+	"Original selection, movement, combat and construction speech indices");
+#endif
 #include "DrawAgent.h"
 #include "Hotkeys.h"
 #include "ObjList.h"
@@ -42,9 +53,7 @@
 #include "UserDefaults.h"
 #include "MScript.h"
 #include "GenData.h"
-#if defined(_WIN32)
 #include "ScrollingText.h"
-#endif
 #include <stdio.h>
 #include <cstdio>
 #include <algorithm>
@@ -119,11 +128,11 @@ struct DACOM_NO_VTABLE UnitComm : public IUnitComm, IEventCallback
 	//--------------------------------
 	// data items go here
 	//--------------------------------
-	#if defined(_WIN32)
 	COMPTR<IFontDrawAgent> pFont[MAX_ALERT_FONTS];
 
 	COLORREF fontColor[NUM_ALERT_STRINGS];
 	wchar_t alertStrings[NUM_ALERT_STRINGS][ALERT_STRING_LENGTH];
+#if defined(_WIN32)
 	HFONT hFont;
 #else
 	bool skipAlerts = false;
@@ -342,12 +351,24 @@ Done:
 #define ALERT_YPOS IDEAL2REALY(70)
 #define ALERT_SPACING IDEAL2REALY(20)
 
+#if !defined(_WIN32)
+static std::uint64_t alertDraws = 0;
+#endif
 void UnitComm::drawAlerts()
 {
-#if defined(_WIN32)
+#if !defined(_WIN32)
+    if (skipAlerts) return;
+    const auto drawsBefore = FrontierX::NativeFontDrawCount();
+#endif
 	CommNode * node = findActiveAlert();
 	if (node)
 	{
+#if !defined(_WIN32)
+        if (!pFont[0]) on3DEnable(true);
+        for (auto *alert = node; alert; alert = alert->pNext)
+            if (alert->bAlert && alert->gotoDecay > 0 && alert->param >= NUM_ALERT_STRINGS)
+            { std::fputs("Native UnitComm alert ID rejected\n", stderr); std::abort(); }
+#endif
 		U32 fontUsed = 0;
 
 		pFont[fontUsed]->SetFontColor(fontColor[node->param],0);
@@ -365,12 +386,8 @@ void UnitComm::drawAlerts()
 			node = node->pNext;
 		}
 	}
-#else
-	if (!skipAlerts)
-	{
-		std::fputs("Native UnitComm alert text requires a font owner\n", stderr);
-		std::abort();
-	}
+#if !defined(_WIN32)
+    alertDraws += FrontierX::NativeFontDrawCount() - drawsBefore;
 #endif
 }
 //-------------------------------------------------------------------
@@ -851,7 +868,12 @@ void UnitComm::update (U32 dt)	// milliseconds
 					bSoundIsSelection = true;
 			}
 
-			if (node->bAlert && node->systemID && node->systemID<=MAX_SYSTEMS)
+			if (node->bAlert && node->systemID && node->systemID<=MAX_SYSTEMS
+#if !defined(_WIN32)
+                // The shell's explicit --skip-sector-map omits map-only pings.
+                && !CQFLAGS.bNoGDI
+#endif
+            )
 			{
 				if (node->systemID != SECTOR->GetCurrentSystem())
 					SECTOR->ZoneOn(node->systemID);
@@ -859,14 +881,22 @@ void UnitComm::update (U32 dt)	// milliseconds
 					SYSMAP->ZoneOn(node->pos);
 			}
 
-#if defined(_WIN32)
-			if(DEFAULTS->GetDefaults()->bSubtitles && node->subtitle && node->unitNameID)
+			if(DEFAULTS->GetDefaults()->bSubtitles && node->subtitle && node->unitNameID
+#if !defined(_WIN32)
+                && !NATIVE_SKIP_SUBTITLES
+#endif
+            )
 			{
 				CQASSERT(node->subtitle >= SUB_FIRST && node->subtitle <= SUB_LAST);//happens to be ok ok check because strings are sequential in table
 				wchar_t name[128];
 				wchar_t * ptr;
 
+#if defined(_WIN32)
 				wcscpy(name, _localLoadStringW(node->unitNameID));
+#else
+                std::wcsncpy(name, _localLoadStringW(node->unitNameID), 127);
+                name[127] = 0;
+#endif
 				if ((ptr = wcschr(name, '#')) != 0)
 					*ptr = 0;
 				if ((ptr = wcschr(name, '(')) != 0)
@@ -881,16 +911,14 @@ void UnitComm::update (U32 dt)	// milliseconds
 					ptr = name;
 		
 				wchar_t buffer[256];
+#if defined(_WIN32)
 				swprintf(buffer,_localLoadStringW(node->subtitle),ptr);
+#else
+                if (!FrontierX::FormatNativeUnitSubtitle(node->subtitle, ptr, buffer, 256))
+                { std::fputs("Native unit subtitle format rejected\n", stderr); std::abort(); }
+#endif
 				SCROLLTEXT->SetTextString(buffer);
 			}
-#else
-            if (DEFAULTS->GetDefaults()->bSubtitles && node->subtitle && node->unitNameID)
-            {
-                std::fputs("Native UnitComm subtitles require a text owner\n", stderr);
-                std::abort();
-            }
-#endif
 
 			queuedList = node->pNext;
 			node->pNext = 0;
@@ -906,17 +934,26 @@ void UnitComm::update (U32 dt)	// milliseconds
 //
 void UnitComm::on3DEnable (bool bEnable)
 {
-#if defined(_WIN32)
+#if !defined(_WIN32)
+    if (skipAlerts || (bEnable && pFont[0])) return;
+#endif
 	if (bEnable)
 	{
 		COLORREF pen, background;
 		pen			= RGB(255,255,255) | 0xFF000000;		
 		background	= RGB(0,0,0);
+#if defined(_WIN32)
 		hFont = CQCreateFont(IDS_CONTEXTWINDOW);
+#endif
 
 		for(U32 index = 0; index < MAX_ALERT_FONTS;++index)
 		{
+#if defined(_WIN32)
 			CreateFontDrawAgent(hFont, 0, pen, background, pFont[index]);
+#else
+            *static_cast<IFontDrawAgent **>(pFont[index]) = FrontierX::CreateNativeFontDrawAgent(IDS_CONTEXTWINDOW, pen);
+            CQASSERT(pFont[index]);
+#endif
 		}
 
 		wcsncpy(alertStrings[ALERT_UNKNOWN], _localLoadStringW(IDS_ALERT_UNKNOWN),ALERT_STRING_LENGTH);
@@ -975,6 +1012,9 @@ void UnitComm::on3DEnable (bool bEnable)
 
 		wcsncpy(alertStrings[NOVA_WARNING_5], _localLoadStringW(IDS_NOVA_WARNING_5),ALERT_STRING_LENGTH);
 		fontColor[NOVA_WARNING_5] = RGB(255,64,64)| 0xFF000000;
+#if !defined(_WIN32)
+        for (auto &text : alertStrings) text[ALERT_STRING_LENGTH-1] = 0;
+#endif
 	}
 	else
 	{
@@ -983,16 +1023,14 @@ void UnitComm::on3DEnable (bool bEnable)
 			pFont[index].free();
 		}
 
+#if defined(_WIN32)
 		if (hFont)
 		{
 			DeleteObject(hFont);
 			hFont = 0;
 		}
-	}
-#else
-    (void)bEnable;
-    if (!skipAlerts) drawAlerts();
 #endif
+	}
 }
 //--------------------------------------------------------------------------//
 //
@@ -1062,9 +1100,41 @@ static _unitcomm UnitComm;
 #else
 namespace FrontierX
 {
+void SubmitNativeMissionAlertSmoke(IBaseObject *object)
+{
+    // UnitComm retains the filename until its queued message is played.
+    static char speech[] = "SFO3053.wav";
+    MScript::AlertMessage(MScript::GetPartByID(object->GetPartID()), speech);
+}
+std::uint64_t NativeUnitAlertDrawCount() { return alertDraws; }
+// Source history expiry and font ownership were unreachable behind skipAlerts.
+// The real MScript::AlertMessage caller uses COMM_MISSION_ALLERT in UnitComm.h.
+bool CheckNativeUnitAlerts()
+{
+    const auto fonts = NativeFontLiveCount();
+    auto *comm = new DAComponent<UnitComm>;
+    comm->on3DEnable(true);
+    comm->on3DEnable(true); // Lazy creation followed by a mode notification.
+    bool valid = NativeFontLiveCount() == fonts + MAX_ALERT_FONTS &&
+        comm->fontColor[ALERT_UNDER_ATTACK] == (RGB(255,0,0)|0xFF000000) &&
+        comm->fontColor[ALERT_MISSION] == (RGB(0,255,255)|0xFF000000) &&
+        comm->alertStrings[ALERT_MISSION][0];
+    auto *node = new CommNode;
+    node->bAlert = true; node->param = ALERT_MISSION;
+    node->gotoDecay = GOTO_DECAY; node->decayTime = ALERT_DECAY;
+    comm->historyList = node;
+    valid = valid && comm->findActiveAlert() == node;
+    comm->update(GOTO_DECAY);
+    valid = valid && !comm->findActiveAlert() && comm->historyList == node;
+    comm->update(ALERT_DECAY-GOTO_DECAY);
+    valid = valid && !comm->historyList;
+    comm->on3DEnable(false);
+    comm->Release();
+    return valid && NativeFontLiveCount() == fonts;
+}
 IUnitComm *CreateNativeUnitComm(bool skipAlerts)
 {
-    if (!skipAlerts || !EVENTSYS || !STRINGDATA || !SOUNDMANAGER || !OBJLIST || !DEFAULTS)
+    if (!EVENTSYS || !STRINGDATA || !SOUNDMANAGER || !OBJLIST || !DEFAULTS)
         return nullptr;
     auto *comm = new DAComponent<UnitComm>;
     comm->skipAlerts = skipAlerts;

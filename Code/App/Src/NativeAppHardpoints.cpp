@@ -6,6 +6,7 @@
 #include <ENGINE.H>
 #include <IHardPoint.h>
 #include "HPEnum.h"
+#include "ArchHolder.h"
 #include "CQImage.h"
 
 #include <cctype>
@@ -67,6 +68,7 @@ struct EnumState
 {
     const char *pattern;
     S32 instance;
+    S32 archetype;
     IHPEnumerator *callback;
     bool done;
 };
@@ -76,7 +78,7 @@ void HardpointCallback(const char *name, void *context)
     auto &state = *static_cast<EnumState *>(context);
     if (state.done || !name || !MatchPattern(name, state.pattern)) return;
     HPENUMINFO info{};
-    if (!HARDPOINT->retrieve_hardpoint_info(state.instance, name,
+    if (!HARDPOINT->retrieve_hardpoint_info(state.archetype, name,
                                              info.hardpointinfo)) return;
     info.index = state.instance;
     info.name = name;
@@ -85,8 +87,9 @@ void HardpointCallback(const char *name, void *context)
 
 bool EnumerateTree(S32 parent, const char *pattern, IHPEnumerator *callback)
 {
-    EnumState state{pattern, parent, callback, false};
-    HARDPOINT->enumerate_hardpoints(HardpointCallback, parent, &state);
+    HARCH archetype = parent;
+    EnumState state{pattern, parent, archetype, callback, false};
+    HARDPOINT->enumerate_hardpoints(HardpointCallback, archetype, &state);
     if (state.done) return false;
     S32 child = INVALID_INSTANCE_INDEX;
     while ((child = ENGINE->get_instance_child_next(parent,
@@ -94,6 +97,13 @@ bool EnumerateTree(S32 parent, const char *pattern, IHPEnumerator *callback)
         if (!EnumerateTree(child, pattern, callback)) return false;
     return true;
 }
+}
+
+S32 __stdcall FindChild(const char *pathname, S32 parent)
+{
+    RequireHardpointServices();
+    if (!pathname) return INVALID_INSTANCE_INDEX;
+    return FindChildPath(pathname, parent);
 }
 
 void __stdcall EnumerateHardpoints(S32 parent, const char *pathName,
@@ -131,7 +141,8 @@ BOOL32 __stdcall FindHardpoint(const char *pathName, S32 &index,
     if (separator == std::string::npos) return FALSE;
     index = separator ? FindChildPath(path.substr(0, separator), parent) : parent;
     if (index == INVALID_INSTANCE_INDEX) return FALSE;
-    if (HARDPOINT->retrieve_hardpoint_info(index, path.c_str() + separator + 1,
+    HARCH archetype = index;
+    if (HARDPOINT->retrieve_hardpoint_info(archetype, path.c_str() + separator + 1,
                                             info)) return TRUE;
     index = INVALID_INSTANCE_INDEX;
     return FALSE;

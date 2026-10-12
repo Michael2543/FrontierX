@@ -14,18 +14,36 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppFont.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include <VFX.H>
+#include <cstdlib>
+#include <cwchar>
+#include <cstdint>
+#include <limits>
+static std::uint64_t statusDraws = 0;
+#define RGB_GOLD RGB(216,201,20)
+#endif
 
 #include "resource.h"
 #include "TResource.h"
 #include "StatusBar.h"
+#if defined(_WIN32)
 #include "BaseHotRect.h"
+#endif
 #include "EventPriority.h"
 #include "DrawAgent.h"
 #include "Startup.h"
 #include "UserDefaults.h"
+#if defined(_WIN32)
 #include "VideoSurface.h"
+#endif
 
 #include <TComponent.h>
 #include <IConnection.h>
@@ -37,7 +55,9 @@
 #include <IConnection.h>
 
 
+#if defined(_WIN32)
 #include <commctrl.h>
+#endif
 
 #define CHARCOUNT(x) (sizeof(x)/sizeof(x[0]))
 
@@ -143,6 +163,7 @@ StatusBarResource::StatusBarResource (void)
 //
 StatusBarResource::~StatusBarResource (void)
 {
+	#if defined(_WIN32)
 	if (FULLSCREEN)
 	{
 		COMPTR<IDAConnectionPoint> connection;
@@ -150,11 +171,16 @@ StatusBarResource::~StatusBarResource (void)
 		if (FULLSCREEN->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
 			connection->Unadvise(handle);
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void StatusBarResource::redraw (void)
 {
+#if !defined(_WIN32)
+    if (CQFLAGS.bGameActive && !font) reloadFonts(true);
+    const auto drawsBefore = FrontierX::NativeFontDrawCount();
+#endif
 #ifndef USE_WINDOWS_CTRL
 
 	//
@@ -174,9 +200,13 @@ void StatusBarResource::redraw (void)
 
 		bool bFrameLocked=(CQFLAGS.bFrameLockEnabled!=0);
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 			if (SURFACE->Lock() == false)
 				return;
+#else
+        CQASSERT(!bFrameLocked);
+#endif
 
 		U32 color;
 		switch (mode)
@@ -228,8 +258,13 @@ void StatusBarResource::redraw (void)
 		if (szText[0])
 			font->StringDraw(0, x0+IDEAL2REALX(2), y0, szText);
 
+#if !defined(_WIN32)
+        statusDraws += FrontierX::NativeFontDrawCount() - drawsBefore;
+#endif
+#if defined(_WIN32)
 		if (bFrameLocked)
 			SURFACE->Unlock();
+#endif
 	}
 
 #endif
@@ -244,9 +279,13 @@ void StatusBarResource::unDraw (void)
 		const S32 y0 = 	SCREENRESY-toolbarHeight-font_height-IDEAL2REALY(4);
 		bool bFrameLocked=(CQFLAGS.bFrameLockEnabled!=0);
 
+#if defined(_WIN32)
 		if (bFrameLocked)
 			if (SURFACE->Lock() == false)
 				return;
+#else
+        CQASSERT(!bFrameLocked);
+#endif
 
 		{
 			S32 x0;
@@ -257,8 +296,10 @@ void StatusBarResource::unDraw (void)
 			DA::RectangleFill(0, x0, y0, x1, y0+font_height, 0);
 		}
 		
+#if defined(_WIN32)
 		if (bFrameLocked)
 			SURFACE->Unlock();
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -284,7 +325,9 @@ GENRESULT StatusBarResource::SetText (U32 dwResourceID, STATUSTEXTMODE _mode)
 	{
 		unDraw();
 		redraw();
+#if defined(_WIN32)
 		InvalidateRect(hMainWindow, 0, 0);
+#endif
 	}
 	
 	return GR_OK;
@@ -354,12 +397,14 @@ GENRESULT StatusBarResource::Notify (U32 message, void *param)
 	case CQE_END3DMODE:
 		reloadFonts(false);
 		break;
+#if defined(_WIN32)
 	case WM_ENTERMENULOOP:
 		bInMenuLoop=1;
 		break;
 	case WM_EXITMENULOOP:
 		bInMenuLoop=0;
 		break;
+#endif
 #endif
 	case CQE_ENDFRAME:
 		redraw();
@@ -403,14 +448,20 @@ void StatusBarResource::reloadFonts (bool bLoad)
 {
 	if (bLoad)
 	{
+#if defined(_WIN32)
 		HFONT hFont;
+#endif
 		COLORREF pen, background;
 
 		pen			= RGB_GOLD		   | 0xFF000000;		// white	(pen color)
 		background	= RGB(0,0,0);	   //| 0xFF000000;		// black	(background color)
+#if defined(_WIN32)
 		hFont = CQCreateFont(IDS_STATUSBAR_FONT);
-
 		CreateFontDrawAgent(hFont, 1, pen, background, font);
+#else
+        *static_cast<IFontDrawAgent **>(font) = FrontierX::CreateNativeFontDrawAgent(IDS_STATUSBAR_FONT, pen);
+        CQASSERT(font);
+#endif
 		font->CreateDuplicate(shadowFont);
 
 		font->CreateDuplicate(shadowFontName);
@@ -426,6 +477,7 @@ void StatusBarResource::reloadFonts (bool bLoad)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 struct _status : GlobalComponent
 {
 	StatusBarResource * SBAR;
@@ -466,6 +518,34 @@ struct _status : GlobalComponent
 };
 
 static _status startup;
+#else
+namespace FrontierX
+{
+std::uint64_t NativeStatusDrawCount() { return statusDraws; }
+IStatusBarResource *CreateNativeSourceStatus()
+{
+    return new DAComponent<StatusBarResource>;
+}
+// The terminal substitute could not exercise the original modes/font ownership.
+bool CheckNativeSourceStatus()
+{
+    const unsigned fonts = NativeFontLiveCount();
+    auto *owner = new DAComponent<StatusBarResource>;
+    owner->SetText(IDS_DISABLED, STM_BUILD_DENIED);
+    bool valid = owner->GetText() == IDS_DISABLED && owner->mode == STM_BUILD_DENIED;
+    owner->SetTextString2(L"Forger", L"Status");
+    valid = valid && owner->mode == STM_DEFAULT_NAME && !owner->GetText() &&
+        std::wcscmp(owner->szName, L"Forger") == 0 && std::wcscmp(owner->szText, L"Status") == 0;
+    owner->SetDefaultState();
+    valid = valid && !owner->GetText() && !owner->szText[0] && owner->mode == STM_DEFAULT;
+    owner->reloadFonts(true);
+    valid = valid && NativeFontLiveCount() == fonts + 4;
+    owner->Notify(CQE_END3DMODE);
+    owner->Release();
+    return valid && NativeFontLiveCount() == fonts;
+}
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //-----------------------------End StatusBar.cpp----------------------------//

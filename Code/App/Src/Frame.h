@@ -12,12 +12,19 @@
 */
 //--------------------------------------------------------------------------//
 
+#include <cstdint>
 #include "TDocClient.h"
 #include "BaseHotRect.h"
-#include "Resource.h"
+#include "resource.h"
 #include "CQTrace.h"
 #include "GenData.h"
+#if defined(_WIN32)
 #include "Menu.h"
+#else
+#include "Include/NativeAppUiInput.h"
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#endif
 #include "VideoSurface.h"
 #include "RandomNum.h"
 
@@ -36,7 +43,9 @@
 //--------------------------------------------------------------------------//
 //
 #undef FRAMEEXTERN
-#ifdef BUILD_TRIM
+#if !defined(_WIN32)
+#define FRAMEEXTERN
+#elif defined(BUILD_TRIM)
 #define FRAMEEXTERN __declspec(dllexport)
 #else
 #define FRAMEEXTERN __declspec(dllimport)
@@ -122,12 +131,14 @@ struct DACOM_NO_VTABLE Frame : public BaseHotRect, DocumentClient, ISystemEventC
 	
 	virtual ~Frame (void)
 	{
+#if defined(_WIN32)
 		if (MENU && menuID)
 		{
 			HMENU hMenu = MENU->GetSubMenu(MENUPOS_VIEW);
 			RemoveMenu(hMenu, menuID, MF_BYCOMMAND);
 			menuID = 0;
 		}
+#endif
 
 
 		if (parentFrame)
@@ -263,7 +274,11 @@ struct DACOM_NO_VTABLE Frame : public BaseHotRect, DocumentClient, ISystemEventC
 	void endDialog (U32 exitCode)
 	{
 		// post message to prevent message from going to wrong modal loop
+		#if defined(_WIN32)
 		parent->PostMessage(CQE_DLG_RESULT, (void*) exitCode);
+#else
+		parent->PostMessage(CQE_DLG_RESULT, reinterpret_cast<void *>(static_cast<std::uintptr_t>(exitCode)));
+#endif
 		bExitCodeSet = true;
 	}
 
@@ -442,6 +457,7 @@ struct DACOM_NO_VTABLE Frame : public BaseHotRect, DocumentClient, ISystemEventC
 
 		// send a mouse update
 		{
+#if defined(_WIN32)
 			MSG msg;
 			S32 x, y;
 
@@ -452,6 +468,12 @@ struct DACOM_NO_VTABLE Frame : public BaseHotRect, DocumentClient, ISystemEventC
 			msg.wParam = 0;
 			msg.lParam = MAKELPARAM(x,y);
 			Notify(WM_MOUSEMOVE, &msg);
+#else
+			S32 x, y;
+			WM->GetCursorPos(x, y);
+			FrontierX::LegacyWindowMessage msg{WM->GetWindowHandle(), WM_MOUSEMOVE, 0, MAKELPARAM(x,y)};
+			Notify(WM_MOUSEMOVE, &msg);
+#endif
 		}
 	}
 };
@@ -459,6 +481,7 @@ struct DACOM_NO_VTABLE Frame : public BaseHotRect, DocumentClient, ISystemEventC
 //
 inline BOOL32 Frame::createViewer (const char *szInstanceName, const char *szClassName, U32 _menuID)
 {
+#if defined(_WIN32)
 	if (viewer==0 && CQFLAGS.bNoGDI==0)
 	{
 		HMENU hMenu = MENU->GetSubMenu(MENUPOS_VIEW);
@@ -480,6 +503,7 @@ inline BOOL32 Frame::createViewer (const char *szInstanceName, const char *szCla
 			menuID = _menuID;	
 	}
 
+#endif
 	setStateInfo();
 
 	return (viewer != 0);
@@ -488,6 +512,7 @@ inline BOOL32 Frame::createViewer (const char *szInstanceName, const char *szCla
 //
 inline void Frame::actuallyCreateViewer (void)
 {
+#if defined(_WIN32)
 	if (CQFLAGS.bNoGDI)
 		return;
 
@@ -520,17 +545,22 @@ inline void Frame::actuallyCreateViewer (void)
 			MakeConnection(doc);
 		}
 	}
+#else
+	std::fputs("Native document editor viewer is unsupported\n", stderr);
+#endif
 }
 //----------------------------------------------------------------------------------//
 //
 inline void Frame::removeViewer (void)
 {
+#if defined(_WIN32)
 	if (MENU && menuID)
 	{
 		HMENU hMenu = MENU->GetSubMenu(MENUPOS_VIEW);
 		RemoveMenu(hMenu, menuID, MF_BYCOMMAND);
 		menuID = 0;
 	}
+#endif
 
 	if (doc!=0)
 	{
@@ -543,7 +573,13 @@ inline void Frame::removeViewer (void)
 //
 inline GENRESULT Frame::Notify (U32 message, void *param)
 {
+#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	MessageFields *msg = &fields;
+#endif
 
 	switch (message)
 	{
@@ -575,7 +611,7 @@ inline GENRESULT Frame::Notify (U32 message, void *param)
 			if (BaseHotRect::Notify(message, param) != GR_OK)		// give children a chance first
 				return GR_GENERIC;
 			else
-			switch (TCHAR(msg->wParam))
+			switch (static_cast<U32>(msg->wParam))
 			{
 			case 27:
 				if (onEscPressed())
@@ -584,7 +620,11 @@ inline GENRESULT Frame::Notify (U32 message, void *param)
 
 			case '\t':
 				// was shift pressed as well?
+				#if defined(_WIN32)
 				if (GetAsyncKeyState(VK_SHIFT) >> 1)
+#else
+				if (FrontierX::NativeShiftPressed())
+#endif
 				{
 					if (onShiftTabPressed())
 						return GR_GENERIC;
@@ -598,6 +638,11 @@ inline GENRESULT Frame::Notify (U32 message, void *param)
 		break; // end switch WM_CHAR
 
 	case WM_CLOSE:
+#if !defined(_WIN32)
+		// The caller of CQDoModal owns frames in the modal focus chain.
+		if (this == g_pFocusFrame || pPrevFocusFrame || pNextFocusFrame)
+			break;
+#endif
 		if (parentFrame==0)
 			parent->PostMessage(CQE_DELETE_HOTRECT, static_cast<BaseHotRect *>(this));
 		break;
@@ -613,7 +658,7 @@ inline GENRESULT Frame::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
-		onUpdate(U32(param) >> 10);
+		onUpdate(U32(reinterpret_cast<std::intptr_t>(param)) >> 10);
 		break;
 
 	case CQE_ENDFRAME:
@@ -621,20 +666,20 @@ inline GENRESULT Frame::Notify (U32 message, void *param)
 		break;
 
 	case CQE_HOTKEY:
-		if (onHotkeyEvent(U32(param)))
+		if (onHotkeyEvent(U32(reinterpret_cast<std::intptr_t>(param))))
 			return GR_GENERIC;
 		break;
 
 	case CQE_BUTTON:
-		onButtonPressed(U32(param));
+		onButtonPressed(U32(reinterpret_cast<std::intptr_t>(param)));
 		return GR_OK;
 
 	case CQE_SLIDER:
-		onSliderPressed(U32(param));
+		onSliderPressed(U32(reinterpret_cast<std::intptr_t>(param)));
 		return GR_OK;
 
 	case CQE_EDIT_CHANGED:
-		onEditChanged(U32(param));
+		onEditChanged(U32(reinterpret_cast<std::intptr_t>(param)));
 		return GR_OK;
 
 	case CQE_KEYBOARD_FOCUS:
@@ -642,11 +687,11 @@ inline GENRESULT Frame::Notify (U32 message, void *param)
 		return GR_OK;
 
 	case CQE_LIST_SELECTION:
-		onListSelection(S32(param));
+		onListSelection(S32(reinterpret_cast<std::intptr_t>(param)));
 		return GR_OK;
 
 	case CQE_LIST_CARET_MOVED:
-		onListCaretMove(S32(param));
+		onListCaretMove(S32(reinterpret_cast<std::intptr_t>(param)));
 		return GR_OK;
 
 	case CQE_SET_FOCUS:
@@ -694,7 +739,7 @@ inline void Frame::setFocus (struct IDAComponent * component)
 		CQASSERT(res!=0);
 	}
 
-	if (focusControl != res)
+	if (focusControl.ptr != res.ptr)
 	{
 		if (focusControl!=0)
 		{

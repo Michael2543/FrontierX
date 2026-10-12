@@ -22,6 +22,7 @@
 #include <ENGINE.H>
 #include "CQTrace.h"
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -3668,11 +3669,19 @@ void FieldManager::loadTextures (bool bLoad)
 FieldManager::~FieldManager()
 {
 	COMPTR<IDAConnectionPoint> connection;
+	#if defined(_WIN32)
 	if (GS)
+#else
+	if (OBJLIST)
+#endif
 	{
 		
 		
+		#if defined(_WIN32)
 		if (GS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#else
+		if (OBJLIST->QueryOutgoingInterface("IEventCallback", connection) == GR_OK)
+#endif
 			connection->Unadvise(eventHandle);
 	}
 	if (OBJLIST)
@@ -4300,6 +4309,12 @@ GENRESULT FieldManager::Notify (U32 message, void *param)
 
 	switch (message)
 	{
+#if !defined(_WIN32)
+	case CQE_MISSION_CLOSE:
+		hintboxID = desiredOwnedFlags = 0;
+		releaseResources();
+		break;
+#endif
 	case CQE_LEAVING_INGAMEMODE:
 		loadTextures(false);
 		break;
@@ -4685,6 +4700,57 @@ void FieldManager::EditorCreateInstance(HANDLE hArchetype, const MISSION_INFO & 
 
 //----------------------------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool NativeFieldHintIdle()
+{
+    const auto *owner = static_cast<FieldManager *>(FIELDMGR);
+    return !owner || (!owner->hintboxID && !owner->desiredOwnedFlags && !owner->actualOwnedFlags);
+}
+// Synthetic resource lifecycle; gameplay acceptance must use real TestHighlight.
+bool CheckNativeFieldHint()
+{
+    if (!HINTBOX || FIELDMGR) { std::fputs("Field hint check missing isolated resource owners\n", stderr); return false; }
+    auto *owner = new DAComponent<FieldManager>;
+    COMPTR<IDAConnectionPoint> clients;
+    if (HINTBOX->QueryOutgoingInterface("IResourceClient", clients) != GR_OK ||
+        clients->Advise(static_cast<IResourceClient *>(owner), &owner->hintboxHandle) != GR_OK)
+    { owner->Release(); return false; }
+    IEventCallback *hint = nullptr;
+    bool valid = HINTBOX->QueryInterface("IEventCallback", reinterpret_cast<void **>(&hint)) == GR_OK && hint;
+    if (valid)
+    {
+        owner->hintboxID = IDS_HINT_FIELD_CYGNUS;
+        owner->Update();
+        valid = owner->resPriority == RES_PRIORITY_MEDIUM && owner->actualOwnedFlags == RF_HINTBOX &&
+            HINTBOX->GetText() == IDS_HINT_FIELD_CYGNUS;
+        owner->hintboxID = IDS_HINT_FIELD_ION;
+        owner->Update();
+        valid = valid && HINTBOX->GetText() == IDS_HINT_FIELD_ION;
+        owner->Update(); // No new highlight: original resource release.
+        hint->Notify(CQE_UPDATE, nullptr);
+        valid = valid && !owner->actualOwnedFlags && !owner->desiredOwnedFlags && !HINTBOX->GetText();
+        owner->hintboxID = IDS_HINT_FIELD_CYGNUS;
+        owner->Update();
+        owner->Notify(CQE_MISSION_CLOSE, nullptr);
+        hint->Notify(CQE_MISSION_CLOSE, nullptr);
+        valid = valid && !owner->actualOwnedFlags && !owner->desiredOwnedFlags && !owner->hintboxID &&
+            NativeSourceHintIdle();
+        // Same owner re-enters a mission without an old desired resource.
+        owner->hintboxID = IDS_HINT_FIELD_ION;
+        owner->Update();
+        valid = valid && HINTBOX->GetText() == IDS_HINT_FIELD_ION && owner->actualOwnedFlags == RF_HINTBOX;
+        owner->Notify(CQE_MISSION_CLOSE, nullptr);
+        hint->Notify(CQE_MISSION_CLOSE, nullptr);
+        hint->Release();
+    }
+    owner->Release();
+    return valid && NativeSourceHintIdle();
+}
+}
+#endif
+
 struct _cloud : GlobalComponent
 {
 	struct FieldManager *fieldMgr;

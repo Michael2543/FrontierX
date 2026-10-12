@@ -150,7 +150,7 @@ public:
             }
         }
         if (!file->lpFileName || !*file->lpFileName ||
-            file->lpFileName[0] == '/' || file->lpFileName[0] == '\\' ||
+            (physical_ && (file->lpFileName[0] == '/' || file->lpFileName[0] == '\\')) ||
             file->dwDesiredAccess != GENERIC_READ)
             return GR_INVALID_PARMS;
         try

@@ -305,6 +305,11 @@ float inverse_sqrt(float value)
 	return seed;
 }
 
-float legacy_sqrt(float value) { return value * inverse_sqrt(value); }
+float legacy_sqrt(float value)
+{
+	// Zero has no inverse root; multiplying the overflowing seed yields NaN.
+	if (value == 0.0F) return value;
+	return value * inverse_sqrt(value);
+}
 
 } // namespace frontierx

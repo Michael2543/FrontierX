@@ -11,8 +11,28 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include <algorithm>
+#define __min(a,b) (std::min)((a),(b))
+#define __max(a,b) (std::max)((a),(b))
+#include "NativeAppUiInput.h"
+#include "NativeAppTextResources.h"
+#include "MyVertex.h"
+#include <IRenderPrimitive.h>
+#include <VFX.H>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+using namespace FrontierX::NativeAppUi;
+#define _wcsdup DuplicateWide
+#define _ltow DecimalToWide
+#include <TManager.h>
+#endif
 
 #include "IEdit2.h"
 #include "Startup.h"
@@ -22,10 +42,14 @@
 #include <DFonts.h>
 #include "DrawAgent.h"
 
-#include <hkevent.h>
+#include <HKEvent.h>
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
+#ifdef _WIN32
 #include <imm.h>
+#else
+#include "NativeAppImage.h"
+#endif
 
 #define BEGIN_MAPPING(parent, name) \
 	{								\
@@ -50,7 +74,9 @@ struct EDITTYPE
 	PGENTYPE pArchetype;
 	PGENTYPE pFontType;
 	COMPTR<IDrawAgent> shapes[GTESHP_MAX_SHAPES];
-	LOGFONT logFont;
+	#ifdef _WIN32
+    LOGFONT logFont;
+#endif
 	U16 width, height, justify;
 	U32 blinkOffTime;
 	U32 blinkOnTime;
@@ -550,7 +576,7 @@ void Edit2::InitEdit (const EDIT_DATA & data, BaseHotRect * _parent)
 	height = pEditType->height;
 
 	// are we using an art file for the dimension data?
-	bUseShapeFile = (pEditType->shapes[0] != NULL);
+	bUseShapeFile = (pEditType->shapes[0].ptr != nullptr);
 
 	//
 	// calculate text offset (left justify)
@@ -559,7 +585,7 @@ void Edit2::InitEdit (const EDIT_DATA & data, BaseHotRect * _parent)
 	yText = S32(pEditType->height - pFont->GetFontHeight()) / 2;
 	xText = IDEAL2REALX(2 + pEditType->justify);
 	emptyTextWidth = pFont->GetCharWidth(' ') * 3;
-	emptyTextWidth = __min(emptyTextWidth, S32(pEditType->width)-xText-xText);
+	emptyTextWidth = __min(S32(emptyTextWidth), S32(pEditType->width)-xText-xText);
 
 	if (controlID == 0)
 		controlID = editText;
@@ -610,6 +636,7 @@ bool Edit2::SetKeyboardFocus (bool bEnable)
 				desiredOwnedFlags = RF_CURSOR | RF_STATUS;
 				grabAllResources();
 			}
+#ifdef _WIN32
 			if (CQFLAGS.b3DEnabled==0)
 			{
 				//
@@ -630,13 +657,16 @@ bool Edit2::SetKeyboardFocus (bool bEnable)
 					ImmSetCompositionWindow(hIMC, &form);
 				}
 			}
+#endif
 		}
 		else
 		{
+#ifdef _WIN32
 			if (CQFLAGS.b3DEnabled==0)
 			{
 				ImmAssociateContext(hMainWindow, 0);
 			}
+#endif
 			if (bToolbarControl)
 			{
 				EVENTSYS->Send(CQE_SET_FOCUS, static_cast<BaseHotRect *>(this));
@@ -660,7 +690,13 @@ U32 Edit2::GetControlID (void)
 //
 GENRESULT Edit2::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+#ifdef _WIN32
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==false)
 	switch (message)
@@ -668,7 +704,7 @@ GENRESULT Edit2::Notify (U32 message, void *param)
 	case CQE_UPDATE:
 		bPostMessageBlocked = false;
 		bPostEditMessageBlocked = false;
-		onUpdate(U32(param)>>10);
+		onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param))>>10);
 		break;
 
 	case CQE_ENDFRAME:
@@ -719,7 +755,7 @@ GENRESULT Edit2::Notify (U32 message, void *param)
 		if (bKeyboardFocus && !bDisableInput && bHasFocus)
 		{
 			// eat the message when you're done with it
-			onCharPressed(U16(param));
+			onCharPressed(static_cast<U16>(reinterpret_cast<std::uintptr_t>(param)));
 			return GR_GENERIC;
 		}
 		break;
@@ -932,7 +968,7 @@ bool Edit2::addChar (const wchar_t letter)
 
 	if (bOverwriteMode == false)
 	{
-		memcpy(szEditText+caretChar, text+caretChar-1, sizeof(text)-((caretChar+1)*2));
+		memcpy(szEditText+caretChar, text+caretChar-1, sizeof(text)-((caretChar+1)*sizeof(szEditText[0])));
 		memcpy(charWidths+caretChar, widths+caretChar-1, sizeof(widths)-(caretChar+1));
 	}
 	onEditChange();
@@ -950,13 +986,13 @@ void Edit2::flushHighlight (void)
 
 	if (num >= 0)
 	{
-		memcpy(szEditText+firstChar, szEditText+lastChar+1, sizeof(szEditText)-((lastChar+1)*2));
+		memcpy(szEditText+firstChar, szEditText+lastChar+1, sizeof(szEditText)-((lastChar+1)*sizeof(szEditText[0])));
 		memcpy(charWidths+firstChar, charWidths+lastChar+1, sizeof(charWidths)-(lastChar+1));
 		caretChar = firstChar;
 	}
 	else	// num < 0
 	{
-		memcpy(szEditText+lastChar, szEditText+firstChar+1, sizeof(szEditText)-((firstChar+1)*2));
+		memcpy(szEditText+lastChar, szEditText+firstChar+1, sizeof(szEditText)-((firstChar+1)*sizeof(szEditText[0])));
 		memcpy(charWidths+lastChar, charWidths+firstChar+1, sizeof(charWidths)-(firstChar+1));
 		caretChar = lastChar;
 	}
@@ -1377,7 +1413,9 @@ HANDLE EditFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objClass,
 		// get logFont info
 		//
  		GT_FONT * pFont = (GT_FONT *) GENDATA->GetArchetypeData(result->pFontType);
-		CQCreateLogFont(pFont->font, result->logFont, pFont->bNotScaling);
+		#ifdef _WIN32
+        CQCreateLogFont(pFont->font, result->logFont, pFont->bNotScaling);
+#endif
 
 		result->colors[GTETXT_DISABLED] = data->disabledText;
 		result->colors[GTETXT_HIGHLIGHT] = data->highlightText;
@@ -1390,11 +1428,18 @@ HANDLE EditFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objClass,
 		//
 		if (data->shapeFile[0])
 		{
+#ifdef _WIN32
 			BEGIN_MAPPING(INTERFACEDIR, data->shapeFile);
 				int i;
 				for (i = 0; i < GTESHP_MAX_SHAPES; i++)
 					CreateDrawAgent((VFX_SHAPETABLE *) pImage, i, result->shapes[i]);
 			END_MAPPING(INTERFACEDIR);
+#else
+            for (int i=0; i<GTESHP_MAX_SHAPES; ++i)
+                CreateDrawAgent(data->shapeFile, INTERFACEDIR, DA::VFX, i, result->shapes[i]);
+            if (!result->shapes[0]) { delete result; return nullptr; }
+#endif
+
 
 			result->shapes[0]->GetDimensions(result->width, result->height);
 		}
@@ -1405,7 +1450,12 @@ HANDLE EditFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objClass,
 		}
 
 		result->justify = data->justify;
-		result->blinkOnTime = result->blinkOffTime = GetCaretBlinkTime();
+		#ifdef _WIN32
+        result->blinkOnTime = result->blinkOffTime = GetCaretBlinkTime();
+#else
+        // Linux has no system-wide Win32 caret preference; retain the default 500 ms.
+        result->blinkOnTime = result->blinkOffTime = 500;
+#endif
 		
 		return result;
 	}
@@ -1441,7 +1491,11 @@ struct _editfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<EditFactory>;
-		AddToGlobalCleanupList(&factory);
+		#ifdef _WIN32
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

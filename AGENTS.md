@@ -61,14 +61,33 @@ Read the smallest relevant authoritative document before changing code:
   the selected training slice.
   Original UnitComm and StringData now run selection/movement voices through
   the native sound adapter and IStreamer on the selected mission under both
-  compilers with the optional external shared-LGPL decoder. Unit alert text,
-  subtitles and mission spatial SFX remain explicitly excluded. See
-  `docs/NATIVE_SINGLEPLAYER_SLICE.md` for bounded runtime evidence; the next
-  media/UI gate is status/hint/scrolling text and subtitles. Original Teletype
+  compilers with the optional external shared-LGPL decoder. Unit alert text
+  now reaches the native font adapter through a controlled original MScript
+  alert smoke under both compilers; naturally triggered combat alerts remain
+  unverified. Map pings and mission spatial SFX remain explicitly excluded. See
+  `docs/NATIVE_SINGLEPLAYER_SLICE.md` for bounded runtime evidence. Original Teletype
   now draws objective text through an optional FreeType IFontDrawAgent and an
   explicitly external font face; GCC/Clang visible mission and focused source
   lifecycle checks pass. Default builds remain FreeType-free; family/weight,
   Unicode and Windows font parity remain bounded or unverified.
+  Original Subtitle now draws selected training speech through that optional
+  font/render adapter with source-derived multiline wrapping under GCC/Clang;
+  the selected mission now runs it alongside UnitComm voices and source
+  ScrollingText selection/movement text, plus original StatusBar. Portraits
+  remain explicitly excluded. Original FieldManager/Hintbox now shows Cygnus
+  and medium asteroid hints through normal SDL hover under GCC/Clang, with
+  source edge-scroll camera access, target switch/removal, renewed hover after
+  source reload and clear text/timer/resource ownership on close. Optional
+  `--mission-hint-check` requires a font-enabled mission and adds a second
+  normal-hover interval after reload; it injects no gameplay text/input.
+  Native Windows Debug/Final and module ABI remain an external open gate.
+  M2 now integrates original HUD/construction/map and pause/F7/F8 owners,
+  with bounded construction evidence and a corrected native save capability
+  schema. M2 Linux training now completes through original victory/return,
+  normal early/later reload and repeated close in the documented optional
+  runtime scope. External host leak/resize limits remain explicit; native
+  Windows/module ABI and comparative determinism/retail work are M3 by user
+  instruction. Use the focused current acceptance and next-step ledger.
   Generated PCM playback works; an explicit external shared-LGPL FFmpeg
   configuration also decodes and plays the selected training speech. See `docs/NATIVE_AUDIO_STREAMER.md`.
   The native shell enters the selected retail-data mission with explicit
@@ -420,3 +439,10 @@ their individual requirements remain conditional on the action being performed.
 | `.github/instructions/legal-release.instructions.md` | All paths; action-specific legal/release rules |
 
 Keep this table synchronized when scoped instruction files are added, removed or renamed.
+
+Native training entry (2026-10-12): --mission-campaign uses the original
+training selector/briefing with --mission-start and Sol_Train.dmission.
+M2 Linux training is accepted in its documented scope; M3 comparison/
+determinism includes the deferred Windows/module ABI/retail checks.
+Commands and explicit host/media limits:
+[native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).

@@ -108,6 +108,9 @@ struct _NO_VTABLE ObjectExtent : public Base, IWeaponTarget, IExplosionOwner, IE
 	ObjectExtent (void) : initNode(this, InitProc(&ObjectExtent::initExtents)),
 		postRenderNode(this,RenderProc(&ObjectExtent::postRenderExtent))
 	{
+#if !defined(_WIN32)
+		mesh_info = 0;
+#endif
 	}
 
 	~ObjectExtent();
@@ -218,7 +221,17 @@ ObjectExtent< Base >::~ObjectExtent()
 	}
 
 	ExtentDummy();
-
+#if !defined(_WIN32)
+	if (mesh_info)
+	{
+		// ObjectTransform owns the root engine instance, including split children.
+		for (int i=0;i<mc.numChildren;i++)
+			mc.mi[i]->bOwnsInstance = false;
+		DestroyMeshInfoTree(mesh_info);
+		mesh_info = 0;
+		mc.numChildren = 0;
+	}
+#endif
 }
 //----------------------------------------------------------------------------------
 //

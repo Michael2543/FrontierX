@@ -11,8 +11,16 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include <cwchar>
+#include <cstdlib>
+#include <cstdint>
+#endif
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -24,7 +32,7 @@
 #include "IStatic.h"
 #include "IHotButton.h"
 #include "IActiveButton.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "MGlobals.h"
 #include "DMTechNode.h"
 #include "CommPacket.h"
@@ -292,12 +300,24 @@ GENRESULT CMenu_Fabricator::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
+		#if defined(_WIN32)
 		onUpdate(U32(param) >> 10);
+#else
+		onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 
 	case CQE_HOTKEY:
 		if (bHasFocus || ( (TOOLBAR != 0) && (TOOLBAR->bInvisible) && (TOOLBAR->bHasFocus) ) )
+			#if defined(_WIN32)
 			handleHotkey((S32) param);
+#else
+		{
+			const auto id = reinterpret_cast<std::intptr_t>(param);
+			if (id < INT32_MIN || id > INT32_MAX) return GR_INVALID_PARMS;
+			handleHotkey(static_cast<S32>(id));
+		}
+#endif
 		break;
 	}
 
@@ -423,11 +443,21 @@ void CMenu_Fabricator::onUpdate (U32 dt)
 
 				if(!(fabricator->bShowPartName))
 				{
+					#if defined(_WIN32)
 					swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), namePtr);
+#else
+					if (!FrontierX::FormatNativeUnitSubtitle(IDS_IND_SHIPCLASS, namePtr, buffer, 256))
+						std::abort();
+#endif
 					namearea->SetText(buffer);
 				}
 
-				swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), namePtr);
+				#if defined(_WIN32)
+					swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), namePtr);
+#else
+					if (!FrontierX::FormatNativeUnitSubtitle(IDS_IND_SHIPCLASS, namePtr, buffer, 256))
+						std::abort();
+#endif
 				shipclass->SetText(buffer);
 
 				OBJPTR<IBuildQueue> fab;
@@ -464,7 +494,13 @@ void CMenu_Fabricator::onUpdate (U32 dt)
 				}
 
 			}
+			#if defined(_WIN32)
 			swprintf(buffer, _localLoadStringW(IDS_IND_HULL), (actor) ? actor->GetDisplayHullPoints() : fabricator->hullPoints, fabricator->hullPointsMax);
+#else
+			if (std::swprintf(buffer, 256, _localLoadStringW(IDS_IND_HULL),
+				static_cast<int>((actor) ? actor->GetDisplayHullPoints() : fabricator->hullPoints),
+				static_cast<int>(fabricator->hullPointsMax)) < 0) std::abort();
+#endif
 			hull->SetText(buffer);
 
 			TECHNODE newNode = MGlobals::GetCurrentTechLevel(MGlobals::GetThisPlayer());
@@ -680,7 +716,11 @@ struct _cmenu_fabricator: GlobalComponent
 	virtual void Startup (void)
 	{
 		menu = new DAComponent<CMenu_Fabricator>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&menu);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

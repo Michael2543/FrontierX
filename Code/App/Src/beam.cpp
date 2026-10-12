@@ -13,13 +13,28 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "TObjFrame.h"
+#include "MyVertex.h"
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -37,16 +52,16 @@
 
 #include <TComponent.h>
 #include <lightman.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Physics.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <physics.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Collision.h>
-#include <Pixel.h>
+#include <collision.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//

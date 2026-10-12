@@ -76,6 +76,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <cwchar>
 #include <cstdlib>
 #include <type_traits>
 using std::min;
@@ -1233,19 +1234,35 @@ void Gunboat::CastVisibleArea (void)
 //
 void Gunboat::DrawFleetMoniker (bool bAllShips)
 {
+#if !defined(_WIN32)
+	// The optional debug-font supply label shares the unit-label boundary.
+	if (!NATIVE_SKIP_UNIT_LABELS)
+#endif
 	if (bVisible && (dwMissionID & PLAYERID_MASK) == MGlobals::GetThisPlayer())
 	{
-		if (suppliesDisplayDecay > 0 && bHighlight==0 && supplyPointsMax && DBHOTKEY->GetHotkeyState(IDH_HIGHLIGHT_ALL)==0)
+		if (suppliesDisplayDecay > 0 && bHighlight==0 && supplyPointsMax &&
+#if !defined(_WIN32)
+			(!DBHOTKEY || DBHOTKEY->GetHotkeyState(IDH_HIGHLIGHT_ALL)==0))
+#else
+			DBHOTKEY->GetHotkeyState(IDH_HIGHLIGHT_ALL)==0)
+#endif
 		{
 			U32 percent = (supplies * 100) / supplyPointsMax;
 
 			if (percent <= 50)
 			{
 				Vector point;
+#if defined(_WIN32)
 				COMPTR<IDebugFontDrawAgent> pFont = DEBUGFONT;
+#else
+				COMPTR<IFontDrawAgent> pFont;
+#endif
 				S32 x, y;
 
 //				if (OBJLIST->GetUnitFont(pFont) == GR_OK)
+#if !defined(_WIN32)
+				if (OBJLIST->GetUnitFont(pFont) == GR_OK)
+#endif
 				{
 					point.x = 0;
 					point.y = H2+250.0;
@@ -1256,9 +1273,16 @@ void Gunboat::DrawFleetMoniker (bool bAllShips)
 					
 
 //					pFont->SetFontColor(RGB(0,128,255) | 0xFF000000, 0);
+#if defined(_WIN32)
 					char temp[M_MAX_STRING];
 					sprintf(temp, "%d%%", percent);
 					pFont->StringDraw(pane, x-20, y+10, temp, RGB(0,128,255) | 0xFF000000);	
+#else
+					wchar_t temp[16];
+					std::swprintf(temp, 16, L"%u%%", percent);
+					pFont->SetFontColor(RGB(0,128,255) | 0xFF000000, 0);
+					pFont->StringDraw(pane, x-20, y+10, temp);
+#endif
 				}
 			}
 		}
@@ -2201,8 +2225,12 @@ U32 Gunboat::getSyncTarget (void * _buffer)
 		return 0;
 	else
 	{
+		#if defined(_WIN32)
 		U32 * buffer = (U32 *) _buffer;
 		*buffer = dwTargetID;
+		#else
+		std::memcpy(_buffer, &dwTargetID, sizeof(dwTargetID));
+		#endif
 		netTargetID = dwTargetID;
 		setAttackTarget(target);
 		return sizeof(U32);
@@ -2213,9 +2241,14 @@ U32 Gunboat::getSyncTarget (void * _buffer)
 void Gunboat::putSyncTarget (void * _buffer, U32 bufferSize, bool bLateDelivery)
 {
 	CQASSERT(bufferSize == sizeof(U32));
+	#if defined(_WIN32)
 	U32 * buffer = (U32 *) _buffer;
 
 	netTargetID = dwTargetID = *buffer;
+	#else
+	std::memcpy(&dwTargetID, _buffer, sizeof(dwTargetID));
+	netTargetID = dwTargetID;
+	#endif
 	OBJLIST->FindObject(dwTargetID, playerID, target, IBaseObjectID);
 	setAttackTarget(target);
 }
@@ -2468,7 +2501,14 @@ void Gunboat::resolve (void)
 	if (target && attackAgentID && (!bSpecialAttack) && (!bArtifactUse))
 		setAttackTarget(target);		// make sure launchers turn off
 	else
+	{
 		setAttackTarget(NULL);		// make sure launchers turn off
+#if !defined(_WIN32)
+		// Rebind a loaded automatic target through the existing general sync.
+		if (target && !attackAgentID && !bSpecialAttack && !bArtifactUse)
+			netTargetID = 0;
+#endif
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -3280,4 +3320,3 @@ static _gunship __ship;
 //---------------------------------------------------------------------------
 //----------------------------End Gunboat.cpp--------------------------------
 //---------------------------------------------------------------------------
-

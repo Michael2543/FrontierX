@@ -141,6 +141,14 @@ public:
           parent_(parent)
     { if (parent_) parent_->AddRef(); }
 
+    WritableArchive(std::filesystem::path path, IFileSystem * parent, bool rawFile)
+        : path_(std::move(path)), state_(std::make_shared<ArchiveState>()),
+          fileView_(true), rawFile_(rawFile), parent_(parent)
+    {
+        state_->entries[""] = Entry{false, {}};
+        if (parent_) parent_->AddRef();
+    }
+
     GENRESULT QueryInterface(const C8 * name, void ** instance) override
     {
         if (!instance) return GR_INVALID_PARMS;
@@ -185,6 +193,35 @@ public:
                 std::strcmp(file->lpFileName, "..") == 0)
                 return GR_INVALID_PARMS;
             const auto childPath = path_ / file->lpFileName;
+            if (file->lpImplementation && std::strcmp(file->lpImplementation, "DOS") == 0)
+            {
+                if (file->dwCreationDistribution == OPEN_EXISTING &&
+                    file->dwDesiredAccess == GENERIC_READ)
+                {
+                    std::string error;
+                    IFileSystem * directory = nullptr;
+                    if (!OpenNativeDirectoryFileSystem(path_, &directory, error))
+                        return GR_DATA_NOT_FOUND;
+                    const auto result = directory->CreateInstance(descriptor, instance);
+                    directory->Release();
+                    return result;
+                }
+                if (file->dwCreationDistribution != CREATE_ALWAYS ||
+                    file->dwDesiredAccess != (GENERIC_READ | GENERIC_WRITE))
+                    return GR_NOT_IMPLEMENTED;
+                std::error_code status;
+                const auto kind = std::filesystem::symlink_status(childPath, status).type();
+                if (status == std::errc::no_such_file_or_directory) status.clear();
+                if (status || (kind != std::filesystem::file_type::not_found &&
+                    kind != std::filesystem::file_type::regular)) return GR_GENERIC;
+                std::ofstream output(childPath, std::ios::binary | std::ios::trunc);
+                output.close();
+                if (!output) return GR_GENERIC;
+                try { *instance = static_cast<IFileSystem *>(
+                    new WritableArchive(childPath, this, true)); }
+                catch (const std::bad_alloc &) { return GR_OUT_OF_MEMORY; }
+                return GR_OK;
+            }
             if (file->lpImplementation &&
                 std::strcmp(file->lpImplementation, "UTF") != 0)
                 return GR_NOT_IMPLEMENTED;
@@ -294,6 +331,16 @@ public:
             open->position = end;
             state_->dirty = true;
             state_->flushed = false;
+            if (rawFile_)
+            {
+                std::ofstream output(path_, std::ios::binary | std::ios::trunc);
+                if (!output || !output.write(
+                    reinterpret_cast<const char *>(entry->second.bytes.data()),
+                    static_cast<std::streamsize>(entry->second.bytes.size())) ||
+                    !output.flush()) return FALSE;
+                output.close();
+                if (!output) return FALSE;
+            }
             if (written) *written = count;
             return TRUE;
         }
@@ -687,6 +734,7 @@ private:
     std::string directory_;
     std::string filePath_;
     bool fileView_ = false;
+    bool rawFile_ = false;
     bool directoryView_ = false;
     bool saveDirectory_ = false;
     IFileSystem * parent_ = nullptr;

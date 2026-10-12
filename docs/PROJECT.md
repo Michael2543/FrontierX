@@ -1,5 +1,83 @@
 # FrontierX Project Charter
 
+Current Sol_Train milestone, M2, 2026-10-12: **Linux gameplay complete in
+the agreed scope**. Original selector/briefing, all23 training goals, required
+HUD/commands/map, pause, early/later F7/F8, actual victory/Continue and repeated
+entry/load/close execute under GCC/Clang on lawful external data. GCC full
+fresh gameplay and Clang's own early-save continuation/user completion are
+separate from latest bounded lifecycle repeats. Current GCC/Clang/ASan end/
+restart/reload closes check original hints idle and live mission streams0.
+ASan reports no invalid-memory/UBSan error in the observed path; whole LSan
+still fails on3156B/7 host NVIDIA/PipeWire/DBus allocations. Explicit media
+exclusions, unavailable optional nontraining providers and ordinary Wayland
+probe resize remain documented limitations, not success placeholders.
+
+The active composition uses original App/Engine/event/resource/gameplay owners,
+the existing native render/font/audio adapters and original command processing.
+No replacement training, altered objectives, simulation/RNG order or save
+format is introduced. Default font/decoder-free builds compile/check; full
+visible M2 uses the optional external font/shared decoder configuration.
+The next milestone is M3 comparison/determinism. Windows/module ABI and actual
+retail comparison are explicitly assigned there by the user; no current
+Windows or parity pass is inferred. Details: [final M2 evidence](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12)
+and [current next step](PORT_READINESS.md).
+
+Current original gameplay Hintbox checkpoint, M1, 2026-10-11: normal SDL
+mouse hover now reaches original FieldManager/HintResource in Sol_Train.
+Separate visible GCC/Clang runs show Cygnus and medium asteroid hints from
+original resources, target switching/removal, new hover after source reload,
+and clear text/timers/ownership on actual mission close. Original edge-scroll
+camera access is enabled without toolbar/hot-rectangle UI. Selection,
+movement, training objectives, source text/voices and moved-state save/reload
+remain demonstrated. Existing focused lifecycle and Clang ASan/UBSan checks
+passed; sanitizer scope excludes full mission execution and leak checking.
+M1's selected Linux gameplay acceptance is demonstrated; native Windows
+Debug/Final and module-ABI execution are an external open gate, not a success.
+Next: execute that gate on the supported host, then M2's original controls
+for the next Sol_Train multiple-selection/control-group/command objective.
+No full UI, cross-compiler determinism or retail parity is claimed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-gameplay-hintbox-checkpoint-m1-2026-10-11).
+Older entries below are historical.
+
+Current UnitComm alert checkpoint, 2026-10-11: original alert history,
+colors and expiry now reach the optional native font/render adapter. Explicit
+`--mission-alert-smoke` invokes original `MScript::AlertMessage` on the
+selected external-data Forger; visible GCC/Clang runs drew its cyan warning
+and red Teletype, retained normal movement/objectives and passed source
+save/reload. This controlled source call is not a naturally triggered combat
+alert. Focused lifecycle and Clang ASan/UBSan checks passed with leak checking
+disabled. Map pings remain explicitly excluded by `--skip-sector-map`.
+Gameplay Hintbox hover remains unverified (zero draws); next is its real
+caller/resource ownership and the needed original UI closure. Windows/ABI,
+full mission sanitizers and retail parity remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-unitcomm-alert-rendering-checkpoint-2026-10-11).
+Older entries below are historical.
+
+Current status and unit-text checkpoint, 2026-10-11: original StatusBar and
+ScrollingText now draw through the optional FreeType adapter during the
+selected native mission. UnitComm selection/movement text and voices run
+alongside original training speech subtitles. Separate visible GCC/Clang
+Wayland/Vulkan runs passed normal input, objectives and moved-state source
+save/reload; a GCC capture shows status, unit text and speech together.
+Original Hintbox passed synthetic timing/font lifecycle checks, but no
+visible gameplay hint executed. Focused Clang ASan/UBSan passed with leak
+checking disabled. Next: UnitComm alerts and real gameplay hint callers.
+Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
+remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-status-and-unit-scrolling-text-checkpoint-2026-10-11).
+Older entries below are historical.
+
+Current mission subtitle checkpoint, 2026-10-11: original `Subtitle.cpp`
+now owns selected training speech subtitles through EventSystem and the
+optional FreeType font/render adapter. Separate visible GCC/Clang
+Wayland/Vulkan runs passed multiline subtitle draws, normal selection/movement
+and source moved-state save/reload. Training speech is enabled; portraits
+and UnitComm voice/text remain explicitly excluded in this combination.
+Focused source lifecycle and Clang ASan/UBSan checks passed with leak checking
+disabled. Next: original status/hint/scrolling text, including UnitComm text.
+Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
+remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-mission-speech-subtitles-checkpoint-2026-10-11).
+Older entries below are historical.
+
 Current in-window teletype checkpoint, 2026-10-10: original `Teletype.cpp`
 now owns selected training objective text, reveal/caret and expiry through
 EventSystem and the existing native App render boundary. An optional
@@ -600,3 +678,9 @@ portable ray-geometry boundary instead of aliasing them as D3DX vectors. GCC and
 the documented box and triangle contract; the full matrices contain sixteen tests. This removes
 two D3DX helper functions from one real engine path, but Windows boundary-tolerance comparison and
 the remaining renderer replacements are open. See [D3DX9_PORT.md](D3DX9_PORT.md).
+
+Native training entry (2026-10-12): --mission-campaign with --mission-start
+and Sol_Train.dmission uses the original selector/briefing. M2 Linux training
+and winning return are accepted in the documented optional runtime scope;
+other campaigns, host leak/resize limits and M3 comparisons remain outside
+that acceptance. Commands and limits: [native singleplayer evidence](NATIVE_SINGLEPLAYER_SLICE.md).

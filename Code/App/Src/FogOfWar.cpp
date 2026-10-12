@@ -1905,7 +1905,6 @@ void FogOfWar::UpdateFog (int sys)
 		int top_pos_i=(*step/pix),top_pos_j=0;
 		int pix_i = (top_pos_i+1)*pix,pix_j=pix;
 		
-		BOOL *gridPos;
 	//	low = base;
 		lowx = basex+(*step)*iStep;
 		lowy = basey;
@@ -1924,8 +1923,6 @@ void FogOfWar::UpdateFog (int sys)
 			pix_j = pix;
 			top_pos_j = 0;
 			
-			//pos in main grid
-			gridPos = mapGrid+i*mapY;
 			
 			//cx = floor(BLACKFOG_RES*(sysMapRect.left+mwidth*(i+0.5)/mapX)/(SINGLE)sysRect.right);
 			//SINGLE base_cy = BLACKFOG_RES*(sysMapRect.bottom+mheight*(0.5)/mapY)/(SINGLE)sysRect.top;
@@ -2056,7 +2053,6 @@ void FogOfWar::UpdateFog (int sys)
 			//		bits[j*mapX+i] = RGB(120,18,15) | fogData.mapHardFog.a<<24;
 
 				lowy += jStep;
-				gridPos++;
 			}
 			lowx = basex + (i+1)*iStep;
 			lowy = basey;

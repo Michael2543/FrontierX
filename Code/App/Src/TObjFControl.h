@@ -26,11 +26,11 @@
 #endif
 
 #ifndef ENGINE_H
-#include <Engine.h>
+#include <ENGINE.H>
 #endif
 
 #ifndef _3DMATH_H
-#include <3DMath.h>
+#include <3dmath.h>
 #endif
 
 #ifndef _INC_STDLIB
@@ -44,11 +44,24 @@
 template <class Base> 
 struct _NO_VTABLE ObjectFControl : public Base
 {
+#if defined(_WIN32)
 	struct UpdateNode       updateNode;
 	struct InitNode			initNode;
 	struct PhysUpdateNode	physUpdateNode;
 
 	typename typedef Base::INITINFO CONTROLINITINFO;
+
+#else
+	typename Base::UpdateNode updateNode;
+	typename Base::InitNode initNode;
+	typename Base::PhysUpdateNode physUpdateNode;
+	typedef typename Base::INITINFO CONTROLINITINFO;
+	using typename Base::UpdateProc;
+	using typename Base::InitProc;
+	using typename Base::PhysUpdateProc;
+	using Base::transform;
+	using Base::velocity;
+#endif
 
 	SINGLE MAX_FORWARD_VELOCITY;
 

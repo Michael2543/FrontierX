@@ -16,6 +16,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include <cstring>
 #endif
 
 #include "TComponent.h"
@@ -104,8 +105,17 @@ struct NUGGET_INIT
 inline MISSION_DATA::M_CAPS & MISSION_DATA::M_CAPS::operator |= (const MISSION_DATA::M_CAPS & other)
 {
 	CQASSERT(sizeof(*this) == 4);
+#ifndef _WIN32
+	static_assert(sizeof(MISSION_DATA::M_CAPS) == sizeof(U32), "Capability byte layout");
+	U32 value, otherValue;
+	std::memcpy(&value, this, sizeof(value));
+	std::memcpy(&otherValue, &other, sizeof(otherValue));
+	value |= otherValue;
+	std::memcpy(this, &value, sizeof(value));
+#else
 	U32 * ptr = (U32 *) this;
 	*ptr |= *((U32 *) &other);
+#endif
 
 	return *this;
 }
@@ -352,7 +362,13 @@ BOOL32 AnimNugget::Update (void)
 	}
 	if(supplies == 0 && THEMATRIX->IsMaster() && (!harvestCount) && !bUnregistered)
 	{
+#if defined(_WIN32)
 		UnregisterWatchersForObjectForPlayerMask(this,((~shadowVisibilityFlags) << 1)|(0x01 << SYSVOLATILEPTR));
+#else
+		const U32 playerMask = ((~static_cast<U32>(shadowVisibilityFlags)) << 1) |
+			(U32(1) << SYSVOLATILEPTR);
+		UnregisterWatchersForObjectForPlayerMask(this, playerMask);
+#endif
 		bUnregistered = true;
 	}
 

@@ -5,6 +5,7 @@
 #include "Hintbox.h"
 #include "ScrollingText.h"
 #include "TResource.h"
+#include "resource.h"
 #include "EventSys.h"
 #include "TConnContainer.h"
 
@@ -223,6 +224,38 @@ struct NativeScrollingText : IScrollingText
 
 namespace FrontierX
 {
+bool FormatNativeUnitSubtitle(U32 id, const wchar_t *name, wchar_t *output, std::size_t capacity)
+{
+    if (!name || !output || !capacity) return false;
+    const wchar_t *format = _localLoadStringW(id);
+    const wchar_t *slot = format ? std::wcsstr(format, L"%s") : nullptr;
+    if (!slot || std::wcschr(slot + 2, L'%')) return false;
+    for (auto *cursor = format; cursor < slot; ++cursor)
+        if (*cursor == L'%') return false;
+    std::wstring value(format, slot);
+    value += name;
+    value += slot + 2;
+    if (value.size() >= capacity) return false;
+    std::wmemcpy(output, value.c_str(), value.size() + 1);
+    return true;
+}
+#if defined(FRONTIERX_NATIVE_SOURCE_TEXT)
+bool CheckNativeSourceTextResources()
+{
+    wchar_t buffer[256];
+    wchar_t unchanged[2] = {L'X', 0};
+    const bool status = CheckNativeSourceStatus();
+    const bool hint = CheckNativeSourceHint();
+    const bool scrolling = CheckNativeSourceScrollingText();
+    const bool formatting = FormatNativeUnitSubtitle(IDS_SUB_MOVE, L"Forger", buffer, 256) &&
+        std::wcscmp(buffer, L"Forger: Yes Sir.") == 0 &&
+        !FormatNativeUnitSubtitle(IDS_SUB_MOVE, L"Forger", unchanged, 2) && unchanged[0] == L'X';
+    if (!status || !hint || !scrolling || !formatting)
+        std::fprintf(stderr, "Native text lifecycle: status=%d hint=%d scrolling=%d formatting=%d\n",
+            status, hint, scrolling, formatting);
+    return status && hint && scrolling && formatting;
+}
+#endif
 NativeAppTextBinding::~NativeAppTextBinding()
 {
     const bool ownScroll = SCROLLTEXT == scroll_;
@@ -246,24 +279,52 @@ bool NativeAppTextBinding::BindScrollingText(bool skipNotificationCue)
 {
     if (SCROLLTEXT || scroll_ || !status_ || !hint_)
         return false;
-    auto *scroll = new DAComponent<NativeScrollingText>;
-    scroll->cueSkipped = skipNotificationCue;
-    scroll_ = scroll;
+#if defined(FRONTIERX_NATIVE_SOURCE_TEXT)
+    if (sourceOwners_) scroll_ = CreateNativeSourceScrollingText(skipNotificationCue);
+    else
+#endif
+    {
+        auto *scroll = new DAComponent<NativeScrollingText>;
+        scroll->cueSkipped = skipNotificationCue;
+        scroll_ = scroll;
+    }
+    if (!scroll_) return false;
     SCROLLTEXT = scroll_;
     return true;
 }
 
-bool NativeAppTextBinding::Bind(IEventSystem *events)
+bool NativeAppTextBinding::Bind(IEventSystem *events, bool sourceOwners)
 {
     if (!events || STATUS || HINTBOX || status_ || hint_) return false;
-    auto *status = new DAComponent<NativeStatus>;
-    auto *hint = new DAComponent<NativeHint>;
+    IStatusBarResource *status = nullptr;
+    IHintResource *hint = nullptr;
+#if defined(FRONTIERX_NATIVE_SOURCE_TEXT)
+    if (sourceOwners)
+    {
+        status = CreateNativeSourceStatus();
+        hint = CreateNativeSourceHint();
+    }
+    else
+#else
+    if (sourceOwners) return false;
+#endif
+    {
+        status = new DAComponent<NativeStatus>;
+        hint = new DAComponent<NativeHint>;
+    }
+    IEventCallback *statusCallback = nullptr;
+    IEventCallback *hintCallback = nullptr;
     IDAConnectionPoint *point = nullptr;
     U32 statusToken = 0;
     U32 hintToken = 0;
     const bool okay = events->QueryOutgoingInterface("IEventCallback", &point) == GR_OK &&
-        point && point->Advise(static_cast<IEventCallback *>(status), &statusToken) == GR_OK && statusToken &&
-        point->Advise(static_cast<IEventCallback *>(hint), &hintToken) == GR_OK && hintToken;
+        point && status && hint &&
+        status->QueryInterface("IEventCallback", reinterpret_cast<void **>(&statusCallback)) == GR_OK && statusCallback &&
+        hint->QueryInterface("IEventCallback", reinterpret_cast<void **>(&hintCallback)) == GR_OK && hintCallback &&
+        point->Advise(statusCallback, &statusToken) == GR_OK && statusToken &&
+        point->Advise(hintCallback, &hintToken) == GR_OK && hintToken;
+    if (statusCallback) statusCallback->Release();
+    if (hintCallback) hintCallback->Release();
     if (!okay)
     {
         if (point)
@@ -272,10 +333,11 @@ bool NativeAppTextBinding::Bind(IEventSystem *events)
             if (statusToken) point->Unadvise(statusToken);
             point->Release();
         }
-        hint->Release();
-        status->Release();
+        if (hint) hint->Release();
+        if (status) status->Release();
         return false;
     }
+    sourceOwners_ = sourceOwners;
     status_ = status;
     hint_ = hint;
     events_ = point;

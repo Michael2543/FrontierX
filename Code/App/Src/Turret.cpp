@@ -11,13 +11,46 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
+
+#include <IRenderPrimitive.h>
+#include "MyVertex.h"
 #include "TObject.h"
 #include <DTurret.h>
 
-#include <3DMath.h>
+#include <3dmath.h>
 #include <IHardPoint.h>
 #include "ILauncher.h"
 #include "IWeapon.h"
@@ -43,14 +76,43 @@
 #include "TManager.h"
 #include "EventScheduler.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IAnim.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <IConnection.h>
 
 #include <stdlib.h>
+
+static_assert(sizeof(BT_TURRET) == 300);
+static_assert(offsetof(BT_TURRET, warmUpBlast) == 264);
+static_assert(offsetof(BT_TURRET, warmUpBlast) + sizeof(BT_TURRET::WarmUpBlast) == sizeof(BT_TURRET));
+static_assert(sizeof(BASE_TURRET_SAVELOAD) == 40);
+static_assert(offsetof(BASE_TURRET_SAVELOAD, offsetVector) == 28);
+static_assert(sizeof(TURRET_SAVELOAD) == 52);
+
+namespace
+{
+SINGLE SightYaw(const TRANSFORM & transform)
+{
+#if defined(_WIN32)
+    return transform.get_yaw();
+#else
+    // The native legacy Engine hardpoint frame is -Z forward.
+    return transform.get_yaw_zbased();
+#endif
+}
+
+SINGLE SightPitch(const TRANSFORM & transform)
+{
+#if defined(_WIN32)
+    return transform.get_pitch();
+#else
+    return transform.get_pitch_zbased();
+#endif
+}
+}
 
 struct TurretArchetype 
 {
@@ -769,12 +831,16 @@ void Turret::getSighting (TRANSFORM & result) const
 	orientation = matrix * orientation;
 	*/
 
+#if defined(_WIN32)
 	result.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#else
+	result = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+#endif
 	result = ENGINE->get_transform(barrelIndex).multiply(result);
 
 	if (turretIndex == -1)	// if 360 degree turret
 	{
-		SINGLE angle = TRANSFORM::get_yaw(targetPos - result.translation) - result.get_yaw();
+		SINGLE angle = TRANSFORM::get_yaw(targetPos - result.translation) - SightYaw(result);
 		if (angle < -PI)
 			angle += PI*2;
 		else
@@ -783,7 +849,7 @@ void Turret::getSighting (TRANSFORM & result) const
 
 		if (MAX_ANG_DEFLECTION<0 || fabs(angle) <= MAX_ANG_DEFLECTION)
 		{
-			SINGLE pitch = result.get_pitch();		// preserve pitch
+			SINGLE pitch = SightPitch(result);		// preserve pitch
 			Vector pos = result.get_position();
 			Vector distance = targetPos - pos;
 
@@ -805,7 +871,7 @@ void Turret::swivelToTarget (const Vector & targetPos)
 	SINGLE rot;
 	TRANSFORM transform = ENGINE->get_transform(turretIndex);
 	Vector pos = transform.get_position();
-	SINGLE yaw = transform.get_yaw();
+	SINGLE yaw = SightYaw(transform);
 	Vector goal = targetPos - pos;
 	ENGINE->get_joint_state(turretIndex, IE_JST_BASIC, &rot);
 	goal.z = 0;
@@ -1165,7 +1231,7 @@ bool Turret::checkLOS (void)	// with targetPos
 {
 	if (turretIndex == -1 && MAX_ANG_DEFLECTION >= 0)	// no joint, check against max angle
 	{
-		SINGLE angle = TRANSFORM::get_yaw(targetPos - hardpointTransform.translation) - hardpointTransform.get_yaw();
+		SINGLE angle = TRANSFORM::get_yaw(targetPos - hardpointTransform.translation) - SightYaw(hardpointTransform);
 		if (angle < -PI)
 			angle += PI*2;
 		else

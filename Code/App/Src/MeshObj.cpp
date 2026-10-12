@@ -9,8 +9,22 @@
     $Header: /Conquest/App/Src/MeshObj.cpp 3     10/08/00 9:45p Rmarr $
 */			    
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <DEffectOpts.h>
+#include <VFX.H>
+#include <cmath>
+#include <algorithm>
+#endif
 
 #include "TObjRender.h"
 #include "MeshRender.h"

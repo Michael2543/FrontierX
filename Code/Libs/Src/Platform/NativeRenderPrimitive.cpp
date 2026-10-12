@@ -585,6 +585,33 @@ private:
             return GR_INVALID_PARMS;
         }
 
+        if (primitiveType == D3DPT_TRIANGLEFAN)
+        {
+            const int count = indices ? indexCount : vertexCount;
+            if (!vertices || count < 3 || count > (std::numeric_limits<int>::max() / 3) || vertexCount > 65536 ||
+                (indices == nullptr && indexCount != 0)) return GR_INVALID_PARMS;
+            for (int i = 0; indices && i < count; ++i)
+                if (indices[i] >= vertexCount) return GR_INVALID_PARMS;
+            try
+            {
+                fanIndices_.resize(static_cast<std::size_t>(count - 2) * 3);
+            }
+            catch (const std::bad_alloc &)
+            {
+                return GR_OUT_OF_MEMORY;
+            }
+            for (int i = 1; i + 1 < count; ++i)
+            {
+                const std::size_t offset = static_cast<std::size_t>(i - 1) * 3;
+                fanIndices_[offset] = indices ? indices[0] : 0;
+                fanIndices_[offset + 1] = indices ? indices[i] : static_cast<U16>(i);
+                fanIndices_[offset + 2] = indices ? indices[i + 1] : static_cast<U16>(i + 1);
+            }
+            primitiveType = D3DPT_TRIANGLELIST;
+            indices = fanIndices_.data();
+            indexCount = static_cast<int>(fanIndices_.size());
+        }
+
         const LegacySubmissionInput input{
             static_cast<std::uint32_t>(primitiveType),
             vertexFormat,
@@ -695,6 +722,7 @@ private:
     TextureStageSnapshot textureStage_{};
     SamplerStateSnapshot samplerState_{};
     U32 textureHandle_ = 0U;
+    std::vector<U16> fanIndices_;
     std::vector<RenderVertexP3DiffuseT2> converted_;
     std::vector<RenderVertexP3DiffuseT4> converted2_;
     std::vector<RenderVertexP3DiffuseSpecularT4> converted3_;

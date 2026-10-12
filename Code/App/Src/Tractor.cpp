@@ -10,13 +10,35 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "MyVertex.h"
+#include <algorithm>
+using std::min;
+using std::max;
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -29,7 +51,7 @@
 #include "Mission.h"
 #include "MGlobals.h"
 #include "IMissionActor.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "UserDefaults.h"
 #include "IBlast.h"
 #include "MPart.h"
@@ -37,14 +59,14 @@
 
 #include <TComponent.h>
 #include <lightman.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Pixel.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//

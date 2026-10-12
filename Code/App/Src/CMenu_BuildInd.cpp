@@ -11,8 +11,28 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include "resource.h"
+#include <renderer.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <cwchar>
+#include <cstdlib>
+#include <cstring>
+#include <cstdint>
+template <std::size_t N, class... Args>
+static int swprintf(wchar_t (&buffer)[N], const wchar_t *format, Args... args)
+{
+    const int result = std::swprintf(buffer, N, format, args...);
+    if (result < 0) std::abort();
+    return result;
+}
+#endif
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -25,7 +45,7 @@
 #include "IHotButton.h"
 #include "IActiveButton.h"
 #include "CommPacket.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IQueueControl.h"
 #include "MGlobals.h"
 #include "DHotButtonText.h"
@@ -214,7 +234,11 @@ GENRESULT CMenu_BuildInd::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
+		#if defined(_WIN32)
 		onUpdate(U32(param) >> 10);
+#else
+		onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 
 	case CQE_KILL_FOCUS:
@@ -227,7 +251,11 @@ GENRESULT CMenu_BuildInd::Notify (U32 message, void *param)
 
 	case CQE_HOTKEY:
 		if (bHasFocus || ( (TOOLBAR != 0) && (TOOLBAR->bInvisible) && (TOOLBAR->bHasFocus) ) )
-			handleHotkey((S32) param);
+			#if defined(_WIN32)
+		handleHotkey((S32) param);
+#else
+		handleHotkey(static_cast<S32>(reinterpret_cast<std::intptr_t>(param)));
+#endif
 		break;
 
 	case CQE_BUILDQUEUE_REMOVE:
@@ -246,7 +274,11 @@ GENRESULT CMenu_BuildInd::Notify (U32 message, void *param)
 					{
 						USR_PACKET<USRBUILD> packet;
 						packet.cmd = USRBUILD::REMOVE;
-						packet.dwArchetypeID = ((U32)param);
+						#if defined(_WIN32)
+		packet.dwArchetypeID = ((U32)param);
+#else
+		packet.dwArchetypeID = static_cast<U32>(reinterpret_cast<std::uintptr_t>(param));
+#endif
 						packet.objectID[0] = obj->GetPartID();
 						packet.init(1, false);
 						NETPACKET->Send(HOSTID,0,&packet);
@@ -438,7 +470,11 @@ void CMenu_BuildInd::onUpdate (U32 dt)
 				else
 					namePtr = name;
 
-				swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), namePtr);
+				#if defined(_WIN32)
+			swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), namePtr);
+#else
+			if (!FrontierX::FormatNativeUnitSubtitle(IDS_IND_SHIPCLASS, namePtr, buffer, 256)) std::abort();
+#endif
 				shipClass->SetText(buffer);
 			}
 			swprintf(buffer, _localLoadStringW(IDS_IND_HULL), (actor) ? actor->GetDisplayHullPoints() : platform->hullPoints, platform->hullPointsMax);
@@ -501,7 +537,11 @@ void CMenu_BuildInd::onUpdate (U32 dt)
 			{
 				SECTOR->GetSystemName(nameBuff,sizeof(nameBuff),systemID);
 			}
+			#if defined(_WIN32)
 			swprintf(buffer,_localLoadStringW(IDS_CONTEXT_LOCATION),nameBuff);
+#else
+			if (!FrontierX::FormatNativeUnitSubtitle(IDS_CONTEXT_LOCATION, nameBuff, buffer, 256)) std::abort();
+#endif
 			location->SetText(buffer);
 
 			//update technode infomation
@@ -697,7 +737,11 @@ struct _cmenu_buildind: GlobalComponent
 	virtual void Startup (void)
 	{
 		menu = new DAComponent<CMenu_BuildInd>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&menu);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

@@ -7,20 +7,26 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
  
+#ifdef _WIN32
 #include "pch.h"
 #include <globals.h>
+#else
+#include "NativeAppGlobals.h"
+#include <cstdint>
+#include <cstdlib>
+#endif
 
 #include "IInterfaceManager.h"
 #include "BaseHotRect.h"
 #include "EventPriority.h"
 #include "Startup.h"
-#include "ObjWatch.h"
+#include "Objwatch.h"
 #include "IObject.h"
 #include "ObjList.h"
 
-#include "frame.h"
-#include "hotkeys.h"
-#include "Sfx.h"
+#include "Frame.h"
+#include "Hotkeys.h"
+#include "SFX.h"
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -192,7 +198,7 @@ GENRESULT InterfaceManager::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
-		onUpdate(S32(param) >> 10);
+		onUpdate(static_cast<S32>(reinterpret_cast<std::intptr_t>(param)) >> 10);
 		break;
 	}
 

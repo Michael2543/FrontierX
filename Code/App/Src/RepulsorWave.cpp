@@ -13,14 +13,36 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#include "MyVertex.h"
+#include <algorithm>
+using std::min;
+using std::max;
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -30,7 +52,7 @@
 #include "TObjFrame.h"
 #include "Mesh.h"
 #include "ArchHolder.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "FogOfWar.h"
 #include "UserDefaults.h"
 #include "Mission.h"
@@ -50,17 +72,17 @@
 #include <stdio.h>
 #include <DEffectOpts.h>
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <TComponent.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 //#include <ITextureLibrary.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Pixel.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
 
@@ -1147,6 +1169,13 @@ struct DACOM_NO_VTABLE RepulsorWaveFactory : public IObjectFactory
 		{
 			return calloc(size,1);
 		}
+
+#if !defined(_WIN32)
+		void operator delete (void *ptr)
+		{
+			::free(ptr);
+		}
+#endif
 		
 		OBJTYPE (void)
 		{
