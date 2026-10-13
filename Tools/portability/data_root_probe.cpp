@@ -159,28 +159,39 @@ int RunSelfTest()
 		!FrontierX::ReadUtfEntry(encoded, "MT_GlobalData/Globals", loaded, utfError) ||
 		loaded != saveItems[0].bytes ||
 		!FrontierX::ListUtfDirectory(encoded, "", listed, utfError) ||
-		listed.size() != 2 || listed[0].name != "Empty" ||
-		listed[1].name != "MT_GlobalData")
+		listed.size() != 2 || listed[0].name != "MT_GlobalData" ||
+		listed[1].name != "Empty")
 	{
 		std::cerr << "Native UTF writer/production reader round trip failed: " << utfError << '\n';
 		return 1;
 	}
-	std::reverse(saveItems.begin(), saveItems.end());
 	std::vector<unsigned char> reordered;
 	if (!FrontierX::EncodeUtfArchive(saveItems, reordered, utfError) || reordered != encoded)
 	{
-		std::cerr << "Native UTF writer changed bytes with input order\n";
+		std::cerr << "Native UTF writer changed bytes with identical ordered input\n";
 		return 1;
 	}
+	// Original DirectoryManager::addChildEntry appends siblings; original
+	// UTF::FindNextFile follows those links. Lexical canonicalization loses
+	// an input that the real ObjectList loader/physics consumer observes.
+	std::reverse(saveItems.begin(), saveItems.end());
+	if (!FrontierX::EncodeUtfArchive(saveItems, reordered, utfError) || reordered == encoded ||
+		!FrontierX::ListUtfDirectory(reordered, "", listed, utfError) ||
+		listed.size() != 2 || listed[0].name != "Empty" || listed[1].name != "MT_GlobalData")
+	{
+		std::cerr << "Native UTF writer lost original sibling creation order\n";
+		return 1;
+	}
+	const auto lastValid = reordered;
 	saveItems.push_back(saveItems.back());
-	if (FrontierX::EncodeUtfArchive(saveItems, reordered, utfError) || reordered != encoded)
+	if (FrontierX::EncodeUtfArchive(saveItems, reordered, utfError) || reordered != lastValid)
 	{
 		std::cerr << "Native UTF writer accepted duplicate path or changed output on failure\n";
 		return 1;
 	}
 	saveItems.pop_back();
 	saveItems.push_back({"../escaped", false, {9}});
-	if (FrontierX::EncodeUtfArchive(saveItems, reordered, utfError) || reordered != encoded)
+	if (FrontierX::EncodeUtfArchive(saveItems, reordered, utfError) || reordered != lastValid)
 	{
 		std::cerr << "Native UTF writer accepted traversal or changed output on failure\n";
 		return 1;
@@ -271,7 +282,19 @@ int RunSelfTest()
 		DWORD written = 0;
 		IUTFWriter * flush = nullptr;
 		const unsigned char value[4] = {9, 8, 7, 6};
-		const bool saved = writable->CreateInstance(&descriptor,
+		WIN32_FIND_DATA sibling{};
+		const bool siblingCreated = writable->CreateDirectory("z-order") &&
+			writable->CreateDirectory("a-order");
+		const HANDLE siblingSearch = siblingCreated
+			? writable->FindFirstFile("*-order", &sibling) : INVALID_HANDLE_VALUE;
+		const bool siblingOrder = siblingSearch != INVALID_HANDLE_VALUE &&
+			std::strcmp(sibling.cFileName, "z-order") == 0 &&
+			writable->FindNextFile(siblingSearch, &sibling) &&
+			std::strcmp(sibling.cFileName, "a-order") == 0 &&
+			!writable->FindNextFile(siblingSearch, &sibling);
+		const bool siblingClosed = siblingSearch == INVALID_HANDLE_VALUE ||
+			writable->FindClose(siblingSearch);
+		const bool saved = siblingOrder && siblingClosed && writable->CreateInstance(&descriptor,
 			reinterpret_cast<void **>(&child)) == GR_OK && child &&
 			child->WriteFile(nullptr, value, sizeof(value), &written, nullptr) &&
 			written == sizeof(value) &&
@@ -284,7 +307,10 @@ int RunSelfTest()
 		std::vector<unsigned char> persisted;
 		if (!saved || !FrontierX::ReadUtfEntry(writerPath,
 			"MT_GlobalData/Globals", persisted, utfError) ||
-			persisted != std::vector<unsigned char>(std::begin(value), std::end(value)))
+			persisted != std::vector<unsigned char>(std::begin(value), std::end(value)) ||
+			!FrontierX::ListUtfDirectory(writerPath, "MT_GlobalData", listed, utfError) ||
+			listed.size() != 3 || listed[0].name != "z-order" ||
+			listed[1].name != "a-order" || listed[2].name != "Globals")
 		{
 			std::cerr << "Writable UTF IFileSystem/Flush round trip failed: " << utfError << '\n';
 			std::filesystem::remove_all(root, error);

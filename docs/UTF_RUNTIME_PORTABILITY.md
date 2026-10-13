@@ -63,3 +63,24 @@ coverage includes child and find handle allocation beyond the first four-slot gr
 zero handles, root and child mappings, overlapped and positioned reads/writes, size/time calls,
 enumeration, move/attribute operations, sharing failures, and handle exhaustion. Retail runtime
 claims still require lawful retail data and the acceptance matrix.
+
+## Native write-order correction (2026-10-13)
+
+Original DOSFile DirectoryManager::addChildEntry appends siblings and original
+UTF::FindNextFile follows dwNext. Native writer/archive lexical sorting differed
+from that contract. M3 original Save/Load exposes master-list reorder; source
+ObjectList::engine_update follows that list for PhysicalUpdate, so enumeration
+order cannot be normalized away. The native writer retains ordered child links;
+the writable archive retains private creation ordinals across enumeration,
+truncation and Flush. Persistent layouts and public interfaces are unchanged.
+Existing data_root CTest now requires original append semantics, same ordered
+input byte determinism, nonlexical live/serialized directory order and unchanged
+output after invalid inputs. Its extended check fails pre-fix native libraries
+and passes corrected Clang owners; all six affected local GCC/Clang/default/
+optional/sanitized build and non-GPU sequences pass. A local Clang256 checkpoint executes after this correction: identity sets and
+per-identity observed fields remain equal except Forger selection, while
+AddObject's original prepend still reverses instance traversal. The latest trial continues through1024 and fails the unchanged voice diagnostic;
+new-revision CI remains pending; see
+[M3 evidence](M3_SIMULATION_COMPARISON.md). Selection and other load differences
+remain separate open checks. No gameplay assertion or comparison tolerance is
+weakened to hide them.

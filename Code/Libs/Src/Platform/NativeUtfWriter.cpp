@@ -24,6 +24,7 @@ struct Node
     bool explicitItem = false;
     const std::vector<unsigned char> * payload = nullptr;
     std::map<std::string, std::unique_ptr<Node>> children;
+    std::vector<Node *> childOrder;
     std::uint32_t index = 0;
     std::uint32_t nameOffset = 0;
     std::uint32_t dataOffset = 0;
@@ -46,7 +47,7 @@ void Flatten(Node & node, std::vector<Node *> & ordered)
 {
     node.index = static_cast<std::uint32_t>(ordered.size());
     ordered.push_back(&node);
-    for (auto & child : node.children) Flatten(*child.second, ordered);
+    for (Node *child : node.childOrder) Flatten(*child, ordered);
 }
 }
 
@@ -75,6 +76,9 @@ bool EncodeUtfArchive(const std::vector<UtfArchiveItem> & items,
                 {
                     slot = std::make_unique<Node>();
                     slot->name = part;
+                    // Original DOSFile DirectoryManager::addChildEntry appends
+                    // siblings. Their stored order drives source enumeration.
+                    parent->childOrder.push_back(slot.get());
                 }
                 Node * current = slot.get();
                 if (end == std::string::npos)
@@ -133,16 +137,14 @@ bool EncodeUtfArchive(const std::vector<UtfArchiveItem> & items,
             PutWord(encoded, at + 8, node.directory ? 0x10U : 0x80U);
             if (node.directory)
             {
-                if (!node.children.empty())
+                if (!node.childOrder.empty())
                     PutWord(encoded, at + 16,
-                        node.children.begin()->second->index * static_cast<std::uint32_t>(EntryBytes));
-                for (auto child = node.children.begin(); child != node.children.end(); ++child)
+                        node.childOrder.front()->index * static_cast<std::uint32_t>(EntryBytes));
+                for (std::size_t child = 0; child < node.childOrder.size(); ++child)
                 {
-                    auto next = child;
-                    ++next;
-                    if (next != node.children.end())
-                        PutWord(encoded, HeaderBytes + child->second->index * EntryBytes,
-                            next->second->index * static_cast<std::uint32_t>(EntryBytes));
+                    if (child + 1 < node.childOrder.size())
+                        PutWord(encoded, HeaderBytes + node.childOrder[child]->index * EntryBytes,
+                            node.childOrder[child + 1]->index * static_cast<std::uint32_t>(EntryBytes));
                 }
             }
             else

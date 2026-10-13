@@ -32,6 +32,7 @@ struct Entry
 {
     bool directory = true;
     std::vector<unsigned char> bytes;
+    std::uint64_t creationOrder = 0;
 };
 
 struct OpenFile
@@ -50,6 +51,7 @@ struct ArchiveState
 {
     std::mutex mutex;
     std::map<std::string, Entry> entries{{"", {true, {}}}};
+    std::uint64_t nextCreationOrder = 1;
     bool dirty = false;
     bool flushed = false;
 };
@@ -275,7 +277,10 @@ public:
                     new WritableArchive(path_, state_, resolved));
                 return GR_OK;
             }
-            state_->entries[resolved] = {false, {}};
+            if (found == state_->entries.end())
+                state_->entries.emplace(resolved, Entry{false, {}, state_->nextCreationOrder++});
+            else
+                found->second.bytes.clear();
             state_->dirty = true;
             state_->flushed = false;
             *instance = static_cast<IFileSystem *>(
@@ -439,6 +444,9 @@ public:
             if (DirectChild(directory_, entry.first, name) && Matches(pattern, name))
                 search.names.push_back(entry.first);
         }
+        std::sort(search.names.begin(), search.names.end(), [&](const auto &a, const auto &b) {
+            return state_->entries.at(a).creationOrder < state_->entries.at(b).creationOrder;
+        });
         if (search.names.empty())
         { lastError_ = ERROR_FILE_NOT_FOUND; return INVALID_HANDLE_VALUE; }
         const auto token = nextSearchToken_;
@@ -481,7 +489,7 @@ public:
         if (!ResolvePath(directory_, name, false, resolved)) return FALSE;
         std::lock_guard<std::mutex> lock(state_->mutex);
         if (!HasParentDirectory(resolved) || state_->entries.count(resolved)) return FALSE;
-        state_->entries.emplace(resolved, Entry{true, {}});
+        state_->entries.emplace(resolved, Entry{true, {}, state_->nextCreationOrder++});
         state_->dirty = true;
         state_->flushed = false;
         return TRUE;
@@ -565,7 +573,10 @@ public:
             auto existing = state_->entries.find(resolved);
             if (existing != state_->entries.end() && existing->second.directory)
                 return INVALID_HANDLE_VALUE;
-            state_->entries[resolved] = {false, {}};
+            if (existing == state_->entries.end())
+                state_->entries.emplace(resolved, Entry{false, {}, state_->nextCreationOrder++});
+            else
+                existing->second.bytes.clear();
             state_->dirty = true;
             state_->flushed = false;
         }
@@ -623,9 +634,14 @@ public:
         std::vector<UtfArchiveItem> items;
         {
             std::lock_guard<std::mutex> lock(state_->mutex);
-            for (const auto & entry : state_->entries)
-                if (!entry.first.empty())
-                    items.push_back({entry.first, entry.second.directory, entry.second.bytes});
+            std::vector<const std::pair<const std::string, Entry> *> ordered;
+            for (const auto &entry : state_->entries)
+                if (!entry.first.empty()) ordered.push_back(&entry);
+            std::sort(ordered.begin(), ordered.end(), [](const auto *a, const auto *b) {
+                return a->second.creationOrder < b->second.creationOrder;
+            });
+            for (const auto *entry : ordered)
+                items.push_back({entry->first, entry->second.directory, entry->second.bytes});
         }
         std::vector<unsigned char> encoded;
         std::string error;
