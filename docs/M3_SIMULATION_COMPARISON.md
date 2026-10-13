@@ -1,16 +1,23 @@
 # M3 simulation, save and compatibility comparison
 
-Status: **2026-10-13, NOT ACCEPTED**. The latest completed CI run is
-[38386971218](https://github.com/Michael2543/frontierX/actions/runs/38386971218)
-at `d089a1537e01446a12f7c1b11873bb470a571b0b`; it fails overall. All six
-Linux CPU build scopes and the native Windows rebuild/ABI job pass. GPU,
-mission, mission-sanitizer, repeatability and comparison gates fail. Run
-38384161068 at118efae was cancelled; its partial observations are historical,
-not a completed acceptance result. The following Linux owner corrections and
-expanded observers are working-tree changes pending new CI execution.
-The restored Windows executable is an implementation under test, not an
-unqualified retail oracle. The user's mission-conversation failure remains
-open; no Linux behavior is changed to imitate it.
+Latest M3 evidence (2026-10-13): **NOT ACCEPTED**. Completed protected CI
+[run38426508626](https://github.com/Michael2543/frontierX/actions/runs/38426508626)
+at `b24115686c0f733f3d22a7ee852f638dd26cd205` fails overall. Its six Linux
+CPU scopes and both explicit GPU jobs pass; native observer export, mission,
+sanitizer and comparison gates fail. Follow-up
+[run38439947717](https://github.com/Michael2543/frontierX/actions/runs/38439947717)
+at `b6ca3dd2051703764cbf0144516bce22b6442f16` is still running. Both GPU jobs
+pass; native Debug/Final rebuilds and ABI execute successfully, but the job
+fails afterward in the launch-helper regression. Windows mission is skipped.
+GCC measured mission sanitizers expose an unaligned Planetoid sync store after
+the preceding OpAgent correction. Working-tree follow-up is supplementary,
+not executed CI proof. The user confirms the separate Steam executable is
+unmodified retail; its runtime has not yet been compared. Retail behavior is
+the preferred corroborating reference, rather than the restored conversation
+failure. Full state/RNG, repeatability and Save/Reload continuation remain open.
+See the current follow-up section below.
+
+Earlier updates below are dated historical snapshots.
 
 ## Baseline audit and source provenance
 
@@ -1118,3 +1125,66 @@ focused rebuild/replay of that routing and native Final/ABI are in progress.
 The private SSH host key/connection configuration is retained outside source
 with restricted permissions; no runner re-registration or credential transfer
 is required for this comparison integration. This prepares execution, not proof.
+
+## Retail reference and next sync boundary (2026-10-13)
+
+The user confirms the external Steam `Conquest.exe` is unchanged from Steam.
+Read-only Windows metadata identifies version `01.07.10.1802`, SHA256
+`ed8741c0cb727a43b7de7be0e73566b04fbc1cbd58b54a62d538e3f39dcb3f52`.
+This establishes user-reported input provenance, not a runtime result or proof
+that the source snapshot matches retail. No original installation is modified.
+Retail speech/visible/audible execution remains open. Further restored Windows
+product repairs remain outside the requested Linux scope.
+
+Completed b241156 CI has all six CPU scopes and both GPU jobs passing. Native
+build failure is the introduced Mission observer export, corrected in b6ca3dd;
+Windows mission/CRT jobs are skipped and acceptance fails. b6ca3dd CI remains
+in progress: native Debug/Final rebuild and ABI pass within their job, but its
+launch-helper stage fails before DACOM/RNG stages. An independent SSH recheck
+of that exact helper passes twice, including strict mode; this does not erase
+the CI failure or establish its cause. The next driver retains the exception
+privately and publishes only a fixed stage name. No exception paths or private
+runtime outputs are uploaded.
+
+GCC measured mission sanitizers in b6ca3dd stop at
+`Planetoid::getSyncData`, line2342. Original
+`ObjectFrame::FRAME_getGeneralSyncData` deliberately calls each owner at
+`buffer+1`, after its one-byte node header. The typed PlanetSync store is thus
+not guaranteed aligned. The Linux follow-up copies the same sizeof(PlanetSync)
+bytes for both get/put; all bitfields, resource deltas, thresholds and update
+order remain unchanged. Windows product code remains unchanged. The actual
+mission sanitizer execution, rather than a parallel packet model, checks it.
+
+Observer schema7 adds exact engine angular-velocity bits through the original
+`ENGINE::get_angular_velocity` for each nonnegative original object index.
+Objects without an engine index report null, not invented zero. This observes
+engine-instance state (e.g. a FighterWing index identifies its bay door), and
+does not claim complete object angular/control/physics state. Comparator CTest
+checks null versus zero, signed-zero bits and malformed vectors; old schemas
+retain their own exact contracts. Full RNG/physics coverage is still partial.
+
+The completed supplemental b6ca3dd-source fixed Clang six-case run exits0 in
+all six game processes and records1025 ticks each. The driver correctly fails.
+Same-build first divergence remains tick185, script field
+`displayObjectiveHandlerParams_teletypeHandle`. New full global observation
+also identifies `lastStreamID` and `lastTeletypeID` changing from0 to5/1 during
+the original Save, in both256 cases. `MScript::Save` refreshes these caches from
+SOUNDMANAGER/TELETYPE after writing program data; this is source-owner cache
+behavior, not yet evidence of a port defect. No field is dropped or normalized
+in this follow-up. Existing reload object order/selection differences remain
+open separately; whole-save byte equality remains unestablished.
+
+Validation: Linux Clang22.1.8 optional ASan/UBSan build and51 non-GPU/non-mission
+CTests pass after the Planetoid/schema7 edits; generated comparator regressions
+pass. All six affected GCC16.2.1/Clang22.1.8 default/optional/sanitizer local
+builds and non-GPU suites pass. Actual Clang optional sanitizer mission reaches
+all1025 schema7 records without an ASan access or UBSan report, then exits1
+on whole LSan; the partial-coverage driver fails as required. GCC actual
+mission sanitizer follow-up is still running. These are dirty local supplements; new native
+rebuild/ABI and corrected CI execution remain pending. No M3 acceptance claim.
+
+The prepared Windows host job requires an explicit output emitted only after
+both native rebuilds and ABI checks pass. It may then execute independently
+of a later helper failure; that failure still blocks mandatory overall
+acceptance. The host job rebuilds Final itself and retains private source/run
+provenance. No failed rebuild, skipped ABI check or missing output admits it.

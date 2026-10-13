@@ -2339,7 +2339,12 @@ U32 Planetoid::getSyncData (void * buffer)
 	}
 	if(bSync)
 	{
+#if defined(_WIN32)
 		*((PlanetSync *)buffer) = sync;
+#else
+		// General-sync records can start at an unaligned byte offset.
+		std::memcpy(buffer, &sync, sizeof(sync));
+#endif
 		return sizeof(PlanetSync);
 	}
 	return 0;
@@ -2349,7 +2354,12 @@ U32 Planetoid::getSyncData (void * buffer)
 void Planetoid::putSyncData (void * buffer, U32 bufferSize, bool bLateDelivery)
 {
 	CQASSERT(bLateDelivery==false);
+#if defined(_WIN32)
 	PlanetSync sync = *((PlanetSync *)buffer);
+#else
+	PlanetSync sync;
+	std::memcpy(&sync, buffer, sizeof(sync));
+#endif
 	gas += sync.gasDiff;
 	lastGas = gas;
 	metal += sync.metalDiff;

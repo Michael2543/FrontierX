@@ -56,7 +56,7 @@ def read_ticks(path):
         validate_tick(record, tick)
     if any(record.get('schema') != records[0]['schema'] for record in records):
         raise InvalidTrace('mixed observation schemas')
-    if records[0]['schema'] in (4, 5, 6) and any(
+    if records[0]['schema'] in (4, 5, 6, 7) and any(
             record['boundary'] != records[1]['boundary'] for record in records[1:]):
         raise InvalidTrace('mixed logic/physical observation boundaries')
     return records
@@ -64,34 +64,34 @@ def read_ticks(path):
 
 def validate_tick(record, tick):
     fields = {'schema', 'coverage', 'tick', 'units', 'objectives', 'agents', 'resources'}
-    if isinstance(record, dict) and record.get('schema') in (2, 3, 4, 5, 6):
+    if isinstance(record, dict) and record.get('schema') in (2, 3, 4, 5, 6, 7):
         fields.add('globals')
-    if isinstance(record, dict) and record.get('schema') in (3, 4, 5, 6):
+    if isinstance(record, dict) and record.get('schema') in (3, 4, 5, 6, 7):
         fields.add('script')
         fields.add('operations')
-    if isinstance(record, dict) and record.get('schema') in (4, 5, 6):
+    if isinstance(record, dict) and record.get('schema') in (4, 5, 6, 7):
         fields.add('boundary')
-    if isinstance(record, dict) and record.get('schema') in (5, 6):
+    if isinstance(record, dict) and record.get('schema') in (5, 6, 7):
         fields.add('world')
-    if isinstance(record, dict) and record.get('schema') == 6:
+    if isinstance(record, dict) and record.get('schema') in (6, 7):
         fields.add('mission_globals')
     if (not isinstance(record, dict) or
             set(record) != fields or
-            type(record['schema']) is not int or record['schema'] not in (1, 2, 3, 4, 5, 6) or
+            type(record['schema']) is not int or record['schema'] not in (1, 2, 3, 4, 5, 6, 7) or
             record['coverage'] != 'partial' or
             type(record['tick']) is not int or record['tick'] != tick):
         raise InvalidTrace('invalid tick/schema/coverage')
-    if record['schema'] in (4, 5, 6) and record['boundary'] not in (
+    if record['schema'] in (4, 5, 6, 7) and record['boundary'] not in (
             ('initial',) if tick == 0 else ('after-logic', 'after-physical')):
         raise InvalidTrace('invalid original observation boundary')
-    if record['schema'] in (5, 6):
-        validate_world(record['world'])
-    if record['schema'] == 6:
+    if record['schema'] in (5, 6, 7):
+        validate_world(record['world'], record['schema'] == 7)
+    if record['schema'] in (6, 7):
         validate_script(dict(schema=1, data=record['mission_globals'], last_extended=0, programs=[]))
-    if record['schema'] in (3, 4, 5, 6):
+    if record['schema'] in (3, 4, 5, 6, 7):
         validate_script(record['script'])
         validate_operations(record['operations'])
-    if record['schema'] in (2, 3, 4, 5, 6):
+    if record['schema'] in (2, 3, 4, 5, 6, 7):
         state = record['globals']
         if (not isinstance(state, dict) or set(state) != {'game_speed', 'frame_limit',
                 'constant_update_rate', 'game_active', 'paused', 'world_paused'} or
@@ -137,7 +137,7 @@ def validate_tick(record, tick):
         raise InvalidTrace('invalid resource/agent fields')
 
 
-def validate_world(world):
+def validate_world(world, engine_state=False):
     def bits(values):
         return (isinstance(values, list) and len(values) == 3 and
                 all(isinstance(v, str) and len(v) == 8 and
@@ -147,8 +147,12 @@ def validate_world(world):
         raise InvalidTrace('missing original world object list')
     for obj in world:
         scalars = {'id', 'class', 'owner', 'system', 'update_bin'}
-        if (not isinstance(obj, dict) or set(obj) != scalars | {
-                'transform_f32', 'velocity_f32', 'visibility', 'flags'} or
+        fields = scalars | {'transform_f32', 'velocity_f32', 'visibility', 'flags'}
+        if engine_state:
+            fields.add('engine_angular_velocity_f32')
+        if (not isinstance(obj, dict) or set(obj) != fields or
+                (engine_state and obj['engine_angular_velocity_f32'] is not None and
+                 not bits(obj['engine_angular_velocity_f32'])) or
                 any(type(obj[k]) is not int or not 0 <= obj[k] <= 0xffffffff for k in scalars) or
                 not isinstance(obj['transform_f32'], list) or len(obj['transform_f32']) != 4 or
                 not all(bits(v) for v in obj['transform_f32']) or not bits(obj['velocity_f32']) or
@@ -237,7 +241,7 @@ def read_checkpoint(path):
     if not isinstance(record, dict) or record.get('tick') not in (256, 512):
         raise InvalidTrace('invalid checkpoint tick')
     validate_tick(record, record['tick'])
-    if record['schema'] in (4, 5, 6) and record['boundary'] != 'after-physical':
+    if record['schema'] in (4, 5, 6, 7) and record['boundary'] != 'after-physical':
         raise InvalidTrace('checkpoint requires completed physical boundary')
     return record
 

@@ -23,6 +23,23 @@ class ComparisonTests(unittest.TestCase):
         with self.assertRaises(compare.InvalidTrace):
             compare.validate_world([changed])
 
+    def test_engine_angular_velocity_is_nullable_and_compared_exactly(self):
+        obj = dict(id=0, **{'class': 1}, owner=0, system=1, update_bin=0,
+                   transform_f32=[['00000000'] * 3 for _ in range(4)],
+                   velocity_f32=['00000000'] * 3, visibility=[0, 0], flags=[0] * 8,
+                   engine_angular_velocity_f32=None)
+        compare.validate_world([obj], engine_state=True)
+        changed = copy.deepcopy(obj)
+        changed['engine_angular_velocity_f32'] = ['00000000'] * 3
+        compare.validate_world([changed], engine_state=True)
+        self.assertEqual(compare.first_difference(obj, changed), '$.engine_angular_velocity_f32')
+        obj['engine_angular_velocity_f32'] = ['00000000'] * 3
+        changed['engine_angular_velocity_f32'][0] = '80000000'
+        self.assertEqual(compare.first_difference(obj, changed), '$.engine_angular_velocity_f32[0]')
+        changed['engine_angular_velocity_f32'] = ['00000000'] * 2
+        with self.assertRaises(compare.InvalidTrace):
+            compare.validate_world([changed], engine_state=True)
+
     def test_operation_payload_and_queue_order_are_comparison_inputs(self):
         op = dict(id=1, command=4, packet_type=0xfffffff4, parent=0, group=0, user_bits=0, control_bits=0,
                   flags=[0, 0, 0, 0], objects=[11, 12],

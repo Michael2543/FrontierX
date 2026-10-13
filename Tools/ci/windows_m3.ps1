@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $private = $null
+$stage = 'private-workspace'
 try {
     $private = & python (Join-Path $PSScriptRoot 'private_workspace.py') --repository $root --prefix 'frontierx-m3-'
     if ($LASTEXITCODE -or !$private) { throw 'retained private evidence root unavailable' }
@@ -16,14 +17,20 @@ try {
     Write-Output "MSVC $tools; MSBuild native Win32 Debug/Final; external installed DXSDK"
     $dumpbin = Join-Path $vs "VC\Tools\MSVC\$tools\bin\Hostx64\x86\dumpbin.exe"
     foreach ($config in @('Debug', 'Final')) {
+        $stage = "$config-rebuild-abi"
         # Campaign outputs are shared: check ABI immediately before next rebuild.
         & (Join-Path $root 'Build-Conquest.ps1') -Configuration $config -NoDeploy *> (Join-Path $private "$config-build.log")
         & (Join-Path $root 'Tools\abicheck\allmods.ps1') -DumpbinPath $dumpbin -BuiltGameDirectory (Join-Path $root "Code\App\Src\$config") -ScriptDirectory (Join-Path $root 'Code\App\Src\Scripts\Build') *> (Join-Path $private "$config-abi.log")
         Write-Output "Native Windows $config rebuild and same-build campaign ABI executed"
     }
+    if ($env:GITHUB_OUTPUT) {
+        'rebuild_abi=true' | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+    }
+    $stage = 'launch-helper-regression'
     & (Join-Path $root 'Tools\windows\Test-RestoredValidation.ps1') -PrivateDirectory $private *> (Join-Path $private 'helper-tests.log')
     Write-Output 'Synthetic Windows launch/error/timeout and registry-restore checks executed'
     $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars32.bat'
+    $stage = 'dacom-regression'
     $registryExe = Join-Path $private 'dacom-registry.exe'
     $registrySource = Join-Path $root 'Tools\portability\dacom_registry_probe.cpp'
     $registryInclude = Join-Path $root 'Code\Libs\Include'
@@ -42,6 +49,7 @@ try {
     }
     Write-Output 'Native production DACOM registry and provider-release regressions executed'
     $source = Join-Path $root 'Tools\portability\rng_contract_probe.cpp'
+    $stage = 'random-contract'
     $exe = Join-Path $private 'rng-contract.exe'
     $cmd = Join-Path $private 'rng-build.cmd'
     $randomOwner = Join-Path $root 'Code\App\Src\Final\RandomGen.obj'
@@ -60,6 +68,9 @@ try {
     & $exe --randomgen-trace | Set-Content -Encoding ascii (Join-Path $out 'windows-randomgen.json')
     if ($LASTEXITCODE) { throw 'original RandomGen trace failed' }
 } catch {
-    Write-Output 'FAIL: native Windows CI scope; private runner diagnostics retained'
+    if ($private -and (Test-Path -LiteralPath $private)) {
+        $_ | Out-String | Set-Content -LiteralPath (Join-Path $private 'failure-private.txt')
+    }
+    Write-Output "FAIL: native Windows CI scope at $stage; private runner diagnostics retained"
     exit 1
 }

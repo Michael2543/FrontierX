@@ -64,7 +64,7 @@ inline void WriteSnapshot(FILE *file, U32 tick, const char *boundary)
 {
     // Original getters are read without executing Save or a simulation owner.
     const USER_DEFAULTS *defaults = DEFAULTS->GetDefaults();
-    std::fprintf(file, "{\"schema\":6,\"coverage\":\"partial\",\"tick\":%u,\"boundary\":\"%s\","
+    std::fprintf(file, "{\"schema\":7,\"coverage\":\"partial\",\"tick\":%u,\"boundary\":\"%s\","
         "\"globals\":{\"game_speed\":%d,\"frame_limit\":%u,\"constant_update_rate\":%u,"
         "\"game_active\":%u,\"paused\":%u,\"world_paused\":%u},\"mission_globals\":",
         static_cast<unsigned int>(tick), boundary, static_cast<int>(defaults->gameSpeed),
@@ -91,6 +91,14 @@ inline void WriteSnapshot(FILE *file, U32 tick, const char *boundary)
         WriteVector(file, transform.get_k()); std::fputc(',', file);
         WriteVector(file, transform.translation);
         std::fputs("],\"velocity_f32\":", file); WriteVector(file, object->GetVelocity());
+        std::fputs(",\"engine_angular_velocity_f32\":", file);
+        const S32 index = object->GetObjectIndex();
+        if (index >= 0)
+        {
+            if (!ENGINE) std::abort();
+            WriteVector(file, ENGINE->get_angular_velocity(index));
+        }
+        else std::fputs("null", file);
         std::fprintf(file, ",\"visibility\":[%u,%u],\"update_bin\":%u,\"flags\":[%u,%u,%u,%u,%u,%u,%u,%u]}",
             static_cast<unsigned int>(object->GetVisibilityFlags()),
             static_cast<unsigned int>(object->GetPendingVisibilityFlags()),

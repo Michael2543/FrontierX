@@ -1,5 +1,24 @@
 # FrontierX Project Charter
 
+Latest M3 evidence (2026-10-13): **NOT ACCEPTED**. Completed protected CI
+[run38426508626](https://github.com/Michael2543/frontierX/actions/runs/38426508626)
+at `b24115686c0f733f3d22a7ee852f638dd26cd205` fails overall. Its six Linux
+CPU scopes and both explicit GPU jobs pass; native observer export, mission,
+sanitizer and comparison gates fail. Follow-up
+[run38439947717](https://github.com/Michael2543/frontierX/actions/runs/38439947717)
+at `b6ca3dd2051703764cbf0144516bce22b6442f16` is still running. Both GPU jobs
+pass; native Debug/Final rebuilds and ABI execute successfully, but the job
+fails afterward in the launch-helper regression. Windows mission is skipped.
+GCC measured mission sanitizers expose an unaligned Planetoid sync store after
+the preceding OpAgent correction. Working-tree follow-up is supplementary,
+not executed CI proof. The user confirms the separate Steam executable is
+unmodified retail; its runtime has not yet been compared. Retail behavior is
+the preferred corroborating reference, rather than the restored conversation
+failure. Full state/RNG, repeatability and Save/Reload continuation remain open.
+See [the current evidence](M3_SIMULATION_COMPARISON.md#retail-reference-and-next-sync-boundary-2026-10-13).
+
+Earlier updates below are dated historical snapshots.
+
 Latest M3 working update (2026-10-13):b241156 CI run38426508626 actually passes
 both explicit X11 GPU jobs; its introduced native observer export and mission
 sanitizer gates fail. Working corrections retain sound through real completion,

@@ -110,12 +110,15 @@ jobs:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     runs-on: [self-hosted, Windows, X64, frontierx-m3-windows]
+    outputs:
+      rebuild_abi: ${{ steps.native.outputs.rebuild_abi }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
           clean: true
-      - shell: powershell
+      - id: native
+        shell: powershell
         run: ./Tools/ci/windows_m3.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -127,7 +130,9 @@ jobs:
           retention-days: 3
 
   windows-host-mission:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # A later helper regression must not hide successfully rebuilt/ABI-checked
+    # mission evidence; the native job remains a required failing gate.
+    if: always() && needs.windows-native.outputs.rebuild_abi == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     runs-on: [self-hosted, Windows, X64, frontierx-m3-windows-gpu]
     needs: windows-native
