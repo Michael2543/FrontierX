@@ -8,7 +8,7 @@
 
 struct ARCHDATATYPE;
 
-struct ARCHNODE 
+struct ARCHNODE
 {
 	struct ARCHNODE * prev, * next;
 	U32 usage;
@@ -17,7 +17,7 @@ struct ARCHNODE
 	HANDLE hArchetype;
 
 #ifndef FINAL_RELEASE
-	
+
 	struct NAMENODE
 	{
 		NAMENODE * pNext;
