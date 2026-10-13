@@ -2157,7 +2157,11 @@ void OpAgent::SendOperationData (U32 agentID, U32 dwMissionID, void *lpBuffer, U
 		memcpy(buffer, lpBuffer, bufferSize);
 
 	U32 oldTotal = totalDataSent;
+#if defined(_WIN32)
 	((U32 *)(buffer+bufferSize))[0] = agentID;
+#else
+	std::memcpy(buffer + bufferSize, &agentID, sizeof(agentID));
+#endif
 	bufferedSend(pFirst->isProcess() ? OPDATA: OPDATA2, allocOpID(), buffer, size, set);
 
 	U32 dataAmount = totalDataSent - oldTotal;
@@ -2251,7 +2255,11 @@ void OpAgent::ForceSyncData(IBaseObject * obj)
 				}
 
 				U32 oldTotal = totalDataSent;
+#if defined(_WIN32)
 				((U32 *)(buffer+size))[0] = parentOp;
+#else
+				std::memcpy(buffer + size, &parentOp, sizeof(parentOp));
+#endif
 				bufferedSend((bNoDelayAction) ? OBJSYNC : OBJSYNC2, allocOpID(), buffer, size+sizeof(U32), set);
 
 				if (CQFLAGS.bTraceMission)
@@ -6316,7 +6324,12 @@ void OpAgent::clientObjSync (SUBPACKET_HEADER *header)
 {
 	U8 * buffer = (U8 *) (header+1);		// get user data
 	U32 size = header->size - sizeof(SUBPACKET_HEADER) - sizeof(U32);		// size of user data
+#if defined(_WIN32)
 	U32 parentOp = ((U32 *)(buffer+size))[0];
+#else
+	U32 parentOp;
+	std::memcpy(&parentOp, buffer + size, sizeof(parentOp));
+#endif
 	SUPERBASE_PACKET * node = findOp(parentOp);		// find the parent op
 
 	SUPERBASE_PACKET * packet = clientCreateSuperPacket(header);
@@ -6390,7 +6403,12 @@ void OpAgent::clientOpData (SUBPACKET_HEADER *header)
 {
 	U8 * buffer = (U8 *) (header+1);		// get user data
 	U32 size = header->size - sizeof(SUBPACKET_HEADER) - sizeof(U32);		// size of user data
+#if defined(_WIN32)
 	U32 agentID = ((U32 *)(buffer+size))[0];
+#else
+	U32 agentID;
+	std::memcpy(&agentID, buffer + size, sizeof(agentID));
+#endif
 	SUPERBASE_PACKET * node = findOp(agentID);		// find the parent op
 
 	if (node)		
@@ -7315,7 +7333,12 @@ void SUPERBASE_PACKET::doOpData (void)
 		{
 			U8 * buffer = (U8 *) getOperands();
 			U32 size = getOperandSize() - sizeof(U32);		// subtract out piggyback data
+#if defined(_WIN32)
 			U32 agentID = ((U32 *)(buffer+size))[0];
+#else
+			U32 agentID;
+			std::memcpy(&agentID, buffer + size, sizeof(agentID));
+#endif
 
 			DEBUG_traceCommand(this);
 			actor->ReceiveOperationData(agentID, (size)?buffer:0, size);

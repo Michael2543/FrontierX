@@ -1188,3 +1188,15 @@ both native rebuilds and ABI checks pass. It may then execute independently
 of a later helper failure; that failure still blocks mandatory overall
 acceptance. The host job rebuilds Final itself and retains private source/run
 provenance. No failed rebuild, skipped ABI check or missing output admits it.
+
+GCC optional sanitizer supplemental schema7 reaches672 records, then exposes
+`OpAgent::SendOperationData` line2160: an agent U32 is appended after a
+variable-sized payload. This is distinct from the earlier GeneralSync append.
+The next Linux-only follow-up also copies at the matching clientOpData,
+clientObjSync and doOpData readers and ForceSyncData writer; original offsets,
+packet sizes, IDs and Windows branches remain unchanged. Corrected supplemental GCC16.2.1 optional ASan/UBSan measured mission reaches
+all1025 records with no invalid-access/UBSan report. Whole LSan still fails
+3596B/11 allocations and process exit1; neither runtime nor partial coverage
+is accepted. All six affected local builds and non-GPU CTest suites pass. Queued run38443845234 atb76f24d was cancelled before
+any job executed; no evidence is claimed from it. The next dispatch explicitly
+selects the reviewed `hyprland-x11` GPU fixture. Older b6ca3dd CI continues.
