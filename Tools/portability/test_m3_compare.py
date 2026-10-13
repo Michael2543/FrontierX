@@ -50,6 +50,32 @@ class ComparisonTests(unittest.TestCase):
             with self.assertRaises(compare.InvalidTrace):
                 compare.read_rng(path)
 
+    def test_checkpoint_observation_never_counts_as_complete_save_semantics(self):
+        unit = dict(id=1, owner=1, system=1, **{'class': 1},
+                    position_f32=['00000000'] * 3, hull=10, supplies=10,
+                    selected=0, ready=1, pending_valid=0, pending_op=0,
+                    last_op=0, group=0)
+        record = dict(schema=1, coverage='partial', tick=256, units=[unit],
+                      objectives=[], agents=0, resources=[1, 1, 1])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'generated.json'
+            path.write_text(json.dumps(record))
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(compare.main(['checkpoint', str(path), str(path)]), 2)
+                self.assertEqual(compare.main(['checkpoint', str(path), str(path), '--observed-only']), 0)
+            record['tick'] = 257
+            path.write_text(json.dumps(record))
+            with self.assertRaises(compare.InvalidTrace):
+                compare.read_checkpoint(path)
+            record.update(schema=2, tick=256, globals=dict(game_speed=0, frame_limit=1,
+                          constant_update_rate=0, game_active=1, paused=0, world_paused=0))
+            path.write_text(json.dumps(record))
+            self.assertEqual(compare.read_checkpoint(path)['globals']['game_speed'], 0)
+            record['globals']['game_speed'] = 11
+            path.write_text(json.dumps(record))
+            with self.assertRaises(compare.InvalidTrace):
+                compare.read_checkpoint(path)
+
 
 if __name__ == '__main__':
     unittest.main()

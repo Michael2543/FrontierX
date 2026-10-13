@@ -25,19 +25,24 @@ assigns native Windows/module ABI and comparative retail validation to M3;
 no such result is claimed for M2. Keep external dependency leaks/Wayland probe
 behavior in the technical backlog with their reproducers. M3 is now in progress and **not accepted**. Supplementary native Windows
 Debug/Final rebuilds and same-build campaign ABI checks execute successfully
-on the supplied SSH machine. First Actions run38360609114 now executes
-at published09d3c7d: GCC/Clang default and optional jobs and Clang sanitizer
-checks pass; GCC sanitizer linking and both compilers' GPU/mission jobs fail.
-Complete CI results are pending. User-pushed revision
-`09d3c7d` contains the manual workflow. A follow-up DACOM owner correction
-restores all14 Windows system-provider creations locally; its new native
-registry/release regression fails before the correction and passes afterward.
-Matching source DAHotkey restores normal close in2 actual Windows mission
-runs, but their first exact position difference is count3. The user has now
-configured a local Linux runner; its labels and current owner-only/private/
-fork-disabled policy are verified, and it is online. The Windows runner is now online after the user corrected its UTC clock;
-its required job labels are verified. The native Windows CI job remains
-queued; full semantic/save continuation remains unimplemented. The first same-build
+on the supplied SSH machine. Follow-up Actions run38368454837 at62662a1
+actually passes all six Linux default/optional/sanitizer build jobs and native
+Windows Debug/Final, same-build ABI and DACOM regression checks. GPU, original
+mission, mission sanitizer, Windows repeatability and CRT compatibility jobs
+fail; M3 is not accepted. Both controlled host runners are online. The user's
+known Windows defect skips conversations in every mission; its cause remains
+unknown, and further Windows repairs are explicitly out of scope. Linux must
+not adopt that failure as expected behavior.
+The current Linux working overlay adds original fixed-period frame input and
+exact256/512 Mission Save/Load access outside object iteration. A local Clang256
+Save/Reload continues to1024 but shows reload order/selection differences and
+retains the original voice-diagnostic failure. The native UTF writer's lexical
+sibling normalization contradicts the original append contract and is corrected
+at the native owner; its regression fails before and passes after the fix.
+New measured/fixed and sanitizer matrices and private GCC/Clang cross-build
+comparisons are prepared but not CI-executed at this revision. Complete semantic
+RNG/script/queued-payload state and save-continuation equivalence remain open.
+The first same-build
 Linux trace divergence is count5/Z physical position; native Windows/Linux
 CRT draws also differ. Complete state/RNG capture, exact save/reload
 continuation, speech/GPU/retail

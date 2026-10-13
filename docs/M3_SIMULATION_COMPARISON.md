@@ -667,3 +667,133 @@ moved-state reload checks do not establish full RNG/queued-order/script/physical
 continuation equivalence. The known restored-Windows conversation defect
 remains open across script trigger, lookup, decode, playback and completion;
 matching compiler traces cannot serve as retail behavior evidence.
+
+## Completed CI follow-up and Linux-only continuation (2026-10-13)
+
+The user explicitly authorized commit, push and CI execution. Commits824aa2e
+(owner/CI repairs) and62662a1 (extracted-header whitespace) were pushed to main.
+[Run38368454837](https://github.com/Michael2543/frontierX/actions/runs/38368454837)
+at `62662a112c6d3fd51490eb40b1232a30caf0b6fc` is completed with failure.
+
+| Executed Actions job | Job ID | Result |
+|---|---:|---|
+| Linux GCC default / optional / sanitizers | 115208559560 / 115208559430 / 115208559499 | all passed |
+| Linux Clang default / optional / sanitizers | 115208559603 / 115208559638 / 115208559562 | all passed |
+| Native Windows Debug/Final and same-build ABI | 115208559574 | passed, including synthetic validation helpers and all6 DACOM provider/release cases |
+| Linux host GPU GCC / Clang | 115208559258 / 115208559478 | failed |
+| Linux original mission GCC / Clang | 115208559498 / 115208559453 | failed |
+| Linux original mission ASan/UBSan GCC / Clang | 115208559345 / 115208559657 | failed; CPU checks passed before real mission checks |
+| Native Windows original mission | 115210863409 | failed exact same-build comparison at count3/unit40/Z; mission runs executed |
+| CRT cross-build | 115218979919 | GCC/Clang characterization equal; Windows differs at first draw |
+| Acceptance | 115219147229 | failed explicitly; not M3 acceptance |
+
+Private evidence survives runner cleanup at the configured retained root.
+Public logs contain bounded revision/toolchain/stage summaries; only synthetic
+CRT metadata is uploaded. Both Linux ASan/UBSan compiler paths now actually
+execute in CI; the earlier GCC link failure is fixed at the original owner.
+This does not turn failed live mission or GPU sanitizer processes into passes.
+Native Windows uses MSVC14.44.35207, native Win32, installed external DXSDK.
+The final local isolated15-provider Final rebuild/ABI after ICloakEffect's
+interface correction also passes. An earlier local overlapping rebuild lost
+DACOM.lib while another project rebuilt it: a test-setup conflict, not a source
+link defect; it was rerun serially. Those local checks supplement CI only.
+
+The user clarifies that **every restored-Windows mission, training or campaign,
+immediately skips conversations when they should start**. Cause/stage remains
+unknown. The user also explicitly limits further repair work to Linux. No
+additional Windows Streamer/provider repair is pursued. Existing native Windows
+comparison/ABI jobs remain observations of a constrained reference, not the
+Linux behavior specification. An x86 ACM format-availability query returns0
+for PCM and IAC tags1025/1026; this does not prove actual resource decoding,
+playback or completion. Experimental uncommitted Windows Streamer work was
+removed; no retail installation was overwritten.
+
+## Prepared original Linux frame/checkpoint access (working overlay)
+
+Evidence below is local source/build/runtime work on base62662a1, not CI
+execution of this overlay. The original Modal and ObjectList owners accept an
+opt-in `FRONTIERX_M3_FIXED_FRAME=1` input equal to source `RENDER_PERIOD` for
+each frame. Modal retains the original truncated1/1024-millisecond control
+units; ObjectList retains original scaling, tick remainder, logic, scheduler,
+physical updates and event processing. Normal measured-time paths are unchanged.
+The private trace is required. Audio completion and other live clocks remain
+live; this is not proof of complete deterministic input isolation. A first
+120-second fixed-period attempt captured only519 records and timed out; fixed
+frame cases therefore have a documented600-second bound. Timeouts fail.
+
+`FRONTIERX_M3_CHECKPOINT` selects only256-save/256-reload/512-save/512-reload.
+After original physical updating, outside ObjectList iteration and before the
+GameSystem event pump, the test access calls original Mission::Save and optional
+Mission::Load through SAVEDIR. It requires the exact updateCount and rejects an
+overshot point rather than moving it. Independent private states are captured
+before/after save and after reload. No mission objective setter, replacement
+simulation or sidecar restoration of omitted state is used.
+
+The local optional Clang256-reload path executes Save/Load, retains a263765-byte
+original UTF save, and continues through all1025 tick records to1024. Its
+process still fails the existing two-unit-voice diagnostic (the original script
+move is silent); that assertion remains intact. Observed fields before/after
+Save are equal. Reload changes master-list order and clears the Forger selection;
+identity sets remain equal. Global speed/limit/pause/active controls match, and
+all1024 observed frames have exactly one original logic step with active,
+unpaused flags. Another earlier trial timed out after257; its exact cause was
+not measured and is not attributed to the new control-field observations.
+
+Schema2 adds original global speed/frame-limit/constant-rate/active/pause flags.
+Boolean flags use their documented truth value0/1; no float tolerance or ID/list
+normalization is applied. The paused-world original tick branch now receives
+the same observer/command access, preventing silent gaps in captured updateCount.
+The comparator retains schema1 compatibility for old diagnostics; mismatched
+schemas do not compare equal. Partial checkpoint equality explicitly cannot
+satisfy complete save semantics; existing CTest comparator checks enforce this.
+Complete RNG/script/queued-payload capture remains open.
+
+The workflow prepares measured and fixed-source-period Linux mission matrices
+under GCC/Clang, also under ASan/UBSan. Fixed cases execute two uninterrupted
+references and Save-only/Save+Reload at both points, followed by continuation to
+1024 and exact comparisons. Each process result is retained, including timeouts,
+and independent cases still run after a failure. Original save bytes are read
+and compared separately; no blanket byte-equality requirement or unknown-metadata
+normalization is inferred. All traces/saves stay private. A protected
+`linux-cross-build` job reads only matching same-run/attempt/revision input
+manifests from retained host storage; stale/dirty/missing inputs fail. It checks
+same-build repeatability first and labels later comparisons as characterization
+when repeatability fails. This new job/matrix has not yet run in CI.
+
+## Native UTF sibling-order owner correction (working overlay)
+
+Original `DOSFile/UTFDMan.cpp`, DirectoryManager::addChildEntry, appends children.
+Original UTF::FindNextFile follows the stored sibling chain. NativeUtfWriter
+instead used lexical map traversal, and NativeWritableUtfArchive enumerated and
+flushed a lexical map. Original ObjectList::Load consumes that enumeration and
+AddObject prepends to the master list; engine_update calls PhysicalUpdate in
+master-list order. Lexical canonicalization therefore changes an observable
+simulation input and must not be treated as harmless save normalization.
+
+The native writer now retains node creation order for sibling links. The writable
+archive retains a private creation ordinal for enumeration/flush and preserves it
+when an existing file is truncated. No serialized field/public interface changes.
+The existing data_root CTest now checks the **original append contract**: identical
+ordered inputs encode identically, changed creation order remains visible,
+nonlexical live child enumeration survives Flush/production-reader reopening,
+and invalid duplicates/traversal leave the last valid output unchanged. This
+replaces the old lexical-canonicalization expectation with the source format
+contract, not a weakened gameplay assertion. The extended regression fails
+against the pre-fix native libraries and passes with the corrected owners.
+All six affected local GCC/Clang default/optional and optional ASan/UBSan build/
+non-GPU sequences pass. Actual checkpoint continuation after this writer change
+and its CI execution remain pending. Original reload selection and further
+save/continuation differences remain visible open investigations; no list
+sorting or selection restoration is added to make observations match.
+
+Follow-up local native-writer execution: the Clang256-reload trial reaches the
+checkpoint with the corrected append owner. The first immediate reload
+difference moves from unit0/class to unit0/ID: lexical class-group reordering is
+removed, but the original AddObject prepend reverses instance traversal. All
+per-identity observed unit fields match except the selected Forger bit; identity
+sets and global controls match. This identifies a remaining shared-loader
+ordering behavior by source review and native execution, not a proved Windows
+Save runtime result. No comparator sort, selection restoration or gameplay
+relinking is used. The latest trial also captures all1025 records through1024 and exits7 at the
+unchanged voice diagnostic. Its Save/Load file and continued path are real
+execution, while reload differences and full-coverage gaps remain failures.

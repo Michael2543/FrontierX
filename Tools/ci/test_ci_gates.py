@@ -7,12 +7,45 @@ import unittest
 from unittest.mock import patch
 import os
 import shutil
+import json
 
 import check_ctest
 import private_workspace
+import cross_m3
 
 
 class GateTests(unittest.TestCase):
+    def test_cross_build_rejects_stale_dirty_and_outside_host_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'mission-index').mkdir()
+            evidence = root / 'run'
+            evidence.mkdir()
+            inputs = {name: {'bytes': 1, 'sha256': '0' * 64} for name in
+                      ('stringpack.db', 'gendata.db', 'gametypes.db', 'maps',
+                       'objects', 'mspeech', 'speech', 'textures', 'font')}
+            execution = dict(revision='a' * 40, working_tree_dirty=False,
+                             workflow_run='123', attempt='1', compiler='gcc', scope='mission')
+            record = dict(private_directory=str(evidence), manifest=dict(schema=1,
+                          inputs=inputs, execution=execution,
+                          protocol={'frame_input': 'measured'}))
+            path = root / 'mission-index' / ('123-1-' + 'a' * 40 + '-mission-measured-gcc.json')
+            with patch.dict(os.environ, {'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1'}):
+                path.write_text(json.dumps(record))
+                self.assertEqual(cross_m3.read_case(root, 'a' * 40, 'mission', 'measured', 'gcc')[0], evidence)
+                for key, value in [('revision', 'b' * 40), ('working_tree_dirty', True),
+                                   ('workflow_run', '124'), ('compiler', 'clang')]:
+                    old = execution[key]
+                    execution[key] = value
+                    path.write_text(json.dumps(record))
+                    with self.assertRaises(ValueError):
+                        cross_m3.read_case(root, 'a' * 40, 'mission', 'measured', 'gcc')
+                    execution[key] = old
+                record['private_directory'] = str(root.parent)
+                path.write_text(json.dumps(record))
+                with self.assertRaises(ValueError):
+                    cross_m3.read_case(root, 'a' * 40, 'mission', 'measured', 'gcc')
+
     def test_private_evidence_survives_runner_temp_cleanup(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

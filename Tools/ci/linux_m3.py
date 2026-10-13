@@ -19,6 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--compiler', choices=['gcc', 'clang'], required=True)
     parser.add_argument('--scope', choices=['default', 'optional', 'sanitizers', 'gpu', 'mission', 'mission-sanitizers'], required=True)
+    parser.add_argument('--frame-input', choices=['measured', 'fixed-source-period'], default='measured')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
     private = create(root, 'frontierx-m3-')
@@ -29,6 +30,8 @@ def main():
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     compiler = 'g++' if args.compiler == 'gcc' else 'clang++'
     version = subprocess.check_output([compiler, '--version'], text=True).splitlines()[0]
+    env.update(FRONTIERX_M3_COMPILER=args.compiler, FRONTIERX_M3_SCOPE=args.scope,
+               FRONTIERX_M3_TOOLCHAIN=version)
     print(f'Revision {revision}; {version}; input scope synthetic (mission uses external inputs)', flush=True)
     command = ['cmake', '-S', str(root), '-B', str(build), '-G', 'Ninja',
                '-DCMAKE_BUILD_TYPE=Debug', '-DBUILD_TESTING=ON',
@@ -64,7 +67,7 @@ def main():
                        cwd=private, env=env, stdout=stream, check=True)
     if args.scope in ('mission', 'mission-sanitizers'):
         run([sys.executable, str(root / 'Tools/ci/mission_m3.py'),
-             '--build', str(build)], root, log, env)
+             '--build', str(build), '--frame-input', args.frame_input], root, log, env)
     print(f'Linux {args.compiler} {args.scope}: required scope executed without skips')
 
 

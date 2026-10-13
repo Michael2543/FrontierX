@@ -19,12 +19,14 @@ format is introduced. Default font/decoder-free builds compile/check; full
 visible M2 uses the optional external font/shared decoder configuration.
 M3 comparison/determinism is now in progress, with supplementary native
 Windows Debug/Final full rebuilds and same-build campaign ABI execution.
-First manual Actions run38360609114 at revision09d3c7d executes: Linux
-GCC/Clang default/optional and Clang sanitizer jobs pass; GCC sanitizer and
-GPU/mission jobs fail. The Windows runner is online with matching labels;
-its native CI job remains queued. Same-build physical state and cross-platform
-CRT contract differences remain failures, and semantic/save/continuation plus
-interactive Windows speech/retail gates are open. See
+Actions run38368454837 at62662a1 passes Linux GCC/Clang default/optional/
+sanitizer jobs and native Windows Debug/Final plus same-build ABI. Host/GPU/
+mission and CRT compatibility comparisons fail. The user's restored Windows
+skips conversations in all missions; further Windows repairs are out of scope,
+and that path is not the Linux behavior specification. Current Linux work adds
+original frame/checkpoint test access and corrects native UTF sibling order;
+complete semantic/RNG/script/order capture and equivalent Save/Reload continuation
+remain open, as do retail/visible/audible checks. See
 [M3 comparison evidence](M3_SIMULATION_COMPARISON.md).
 The next acceptance milestone remains M3 comparison/determinism. Windows/module ABI and actual
 retail comparison are explicitly assigned there by the user; no current

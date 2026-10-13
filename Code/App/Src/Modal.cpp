@@ -49,6 +49,9 @@ struct BaseHotRect;
 #include <TComponent.h>
 #include <TSmartPointer.h>
 #include <FrontierX/PlatformTime.h>
+#if !defined(_WIN32)
+#include "Include/M3FrameInput.h"
+#endif
 
 
 #if defined(_WIN32)
@@ -73,6 +76,15 @@ static S32 currentFrameTime=0;
 
 static S32 get_frame_time (void)
 {
+#if !defined(_WIN32)
+	if (FrontierXM3::FixedFrameInput())
+	{
+		// Same source RENDER_PERIOD input as ObjectList::BeginFrame, retaining
+		// the original control-event integer units and truncation.
+		currentFrameTime = S32(double(RENDER_PERIOD) * 1024.0 * 1000.0);
+		return currentFrameTime;
+	}
+#endif
 	const U64 clockTick = FrontierX::Platform::MonotonicMicroseconds();
 	static U64 lastClockTick;
 
@@ -468,6 +480,9 @@ BOOL32 EndModal(SINGLE dt)
 
 	if (CQFLAGS.bGameActive)
 		OBJLIST->Update();
+#if !defined(_WIN32)
+	FrontierXM3::AfterFrame();
+#endif
 
 	QueryPerformanceCounter((LARGE_INTEGER *)&time1);
 	((ISystemContainer *)GS)->Update();			// service windows message queue, etc.

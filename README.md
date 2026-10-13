@@ -770,8 +770,9 @@ limits: [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
 M3 automation is under development, not accepted. Existing Linux presets also
 build/register the CRT and strict comparison/execution-gate checks. The manual
 [controlled CI workflow](.github/workflows/m3.yml) requires authorized protected
-runners and external inputs. First Actions run38360609114 executes published
-revision09d3c7d, with both passed CPU jobs and failed sanitizer/host jobs;
+runners and external inputs. Follow-up Actions run38368454837 at62662a1 passes six Linux build/sanitizer
+jobs and native Windows rebuild/ABI checks, while host/mission/compatibility
+checks fail;
 M3 remains blocked. The follow-up overlay requires an absolute retained
 `FRONTIERX_M3_PRIVATE_ROOT` outside checkout, runner temp and retail roots. Original-owner
 diagnostics, exact comparison rules, native Windows build evidence and remaining

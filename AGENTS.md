@@ -447,17 +447,15 @@ determinism includes the deferred Windows/module ABI/retail checks.
 Commands and explicit host/media limits:
 [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
 
-M3 work in progress (2026-10-13): opt-in original-owner tick/audio observation
-and a protected manual CI workflow are prepared. Supplementary native Windows
-Debug/Final rebuilds and same-build campaign ABI checks execute on the supplied
-SSH host. First Actions run38360609114 executes at user-pushed09d3c7d;
-Linux default/optional GCC/Clang and Clang sanitizer jobs pass; GCC sanitizer
-and GPU/mission jobs fail. Complete results remain pending. A follow-up DACOM owner fix
-restores Windows provider registration locally. Two actual Windows mission
-runs with matching source DAHotkey close normally but first differ at count3.
-The Linux runner is online with verified current access restrictions. Both host runners are online with verified labels; native Windows CI remains
-queued. Complete CI execution and full semantic/save continuation remain open.
-Same-build physical state and CRT contract differences,
-complete semantic/save/continuation and interactive Windows speech/retail gates
-remain open. Do not count partial capture or local checks as M3 acceptance.
-See [M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).
+M3 work in progress (2026-10-13): controlled Actions run38368454837 at62662a1
+passes Linux GCC/Clang default/optional/sanitizer builds and native Windows
+Debug/Final plus ABI/provider regressions. Host/GPU/mission comparisons and CRT
+compatibility fail; no M3 acceptance. Both trusted runners are operational.
+The user reports restored Windows skips conversations in every mission and
+explicitly limits further repairs to Linux; preserve that reference limitation.
+Linux frame/checkpoint access and private cross-build gates are in preparation.
+Original native UTF append-order correction passes local owner regressions and
+all six affected build/non-GPU configurations; new overlay CI remains required.
+Full semantic RNG/script/order capture, save-continuation equivalence and
+retail/visible/audible corroboration remain open. See
+[M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).

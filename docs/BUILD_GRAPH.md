@@ -2443,3 +2443,14 @@ regression. These are local synthetic checks, not CI validation of this overlay
 or original-mission sanitizer acceptance. Published09d3c7d CI GCC sanitizer
 linking remains failed; the other five Linux build jobs passed. See the focused
 [M3 record](M3_SIMULATION_COMPARISON.md) for actual job IDs and host failures.
+
+Linux M3 frame/checkpoint and UTF owner overlay (2026-10-13, base62662a1):
+all six current default/optional GCC/Clang and optional ASan/UBSan graphs build
+and pass their non-GPU CTests after the source append-order correction.
+Existing data_root checks reject the old lexical native libraries and validate
+creation-order enumeration/Flush against the production UTF reader. The schema2
+comparator remains a partial observer and cannot pass acceptance. Protected CI
+at62662a1 actually passes six Linux build/sanitizer jobs; its host/GPU/mission
+failures remain explicit. New fixed-period/exact256/512 Save/Load and private
+cross-build jobs require CI execution of the overlay. See the focused
+[M3 record](M3_SIMULATION_COMPARISON.md) for job IDs and exact runtime limits.

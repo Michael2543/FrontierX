@@ -2,7 +2,7 @@
 #define FRONTIERX_M3_TRACE_H
 
 // Opt-in observation/command access to the original ObjectList tick owner.
-// No replacement clock, RNG, speech completion or mission condition.
+// No replacement simulation, RNG, speech completion or mission condition.
 #include "MScript.h"
 #include "MPartRef.h"
 #include <cstdio>
@@ -43,14 +43,18 @@ inline unsigned int FloatBits(SINGLE value)
     return static_cast<unsigned int>(bits);
 }
 
-inline void Snapshot(U32 tick)
+inline void WriteSnapshot(FILE *file, U32 tick)
 {
-    FILE *file = TraceFile();
-    if (!file || tick > 1024) return;
     // Order IDs are observed, but the queued operation payload, script state
     // and CRT RNG state are NOT yet available through a semantic interface.
-    std::fprintf(file, "{\"schema\":1,\"coverage\":\"partial\",\"tick\":%u,\"units\":[",
-        static_cast<unsigned int>(tick));
+    const USER_DEFAULTS *defaults = DEFAULTS->GetDefaults();
+    std::fprintf(file, "{\"schema\":2,\"coverage\":\"partial\",\"tick\":%u,"
+        "\"globals\":{\"game_speed\":%d,\"frame_limit\":%u,\"constant_update_rate\":%u,"
+        "\"game_active\":%u,\"paused\":%u,\"world_paused\":%u},\"units\":[",
+        static_cast<unsigned int>(tick), static_cast<int>(defaults->gameSpeed),
+        defaults->bNoFrameLimit ? 0U : 1U, defaults->bConstUpdateRate ? 1U : 0U,
+        CQFLAGS.bGameActive ? 1U : 0U, CQFLAGS.bGamePaused ? 1U : 0U,
+        CQFLAGS.bRTGamePaused ? 1U : 0U);
     bool first = true;
     for (IBaseObject *object = OBJLIST->GetObjectList(); object; object = object->next)
     {
@@ -97,6 +101,13 @@ inline void Snapshot(U32 tick)
         static_cast<unsigned int>(MGlobals::GetCurrentCrew(MGlobals::GetThisPlayer())));
     if (std::fflush(file) || std::ferror(file))
     { std::fputs("M3 trace write failed\n", stderr); std::abort(); }
+}
+
+inline void Snapshot(U32 tick)
+{
+    FILE *file = TraceFile();
+    if (!file || tick > 1024) return;
+    WriteSnapshot(file, tick);
     if (tick == 1024 && EVENTSYS->Post(CQE_PLAYER_QUIT) != GR_OK)
     { std::fputs("M3 original quit request failed\n", stderr); std::abort(); }
 }

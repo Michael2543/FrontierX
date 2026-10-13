@@ -32,6 +32,10 @@ struct MeshChain;
 #include "TResClient.h"
 #include "IObject.h"
 #include "Include/AppArchetypeNode.h"
+#if !defined(_WIN32)
+#include "Include/M3FrameInput.h"
+#include "FrontierX/CompatibilityJournal.h"
+#endif
 #include "ObjList.h"
 #include "Objwatch.h"
 #include "ObjClass.h"
@@ -1033,6 +1037,10 @@ void ObjectList::BeginFrame (void)
 
 	if (elapsedTime < 0 || elapsedTime > 0.25)
 		elapsedTime = 0.25;
+#if !defined(_WIN32)
+	if (FrontierXM3::FixedFrameInput())
+		elapsedTime = RENDER_PERIOD;
+#endif
 	realRenderTime = elapsedTime;
 
 	UpdateRenderEffects(realRenderTime);
@@ -1099,6 +1107,17 @@ void ObjectList::BeginFrame (void)
 		numRealTimeFrames++;
 		updateTimeRemainder -= ELAPSED_TIME/8;
 	}
+#if !defined(_WIN32)
+	if (FrontierXM3::FixedFrameInput())
+	{
+		static FrontierX::CompatibilityJournal journal("object-frame");
+		const U32 count = MGlobals::GetUpdateCount();
+		const U32 flags = (CQFLAGS.bGameActive ? 1U : 0U) |
+			(CQFLAGS.bGamePaused ? 2U : 0U) | (CQFLAGS.bRTGamePaused ? 4U : 0U);
+		journal.Write("frame-steps", count, numRealTimeFrames);
+		journal.Write("frame-flags", count, flags);
+	}
+#endif
 
 #if 0
 	if (DEFAULTS->GetDefaults()->bNoFrameLimit==0)
@@ -1140,6 +1159,59 @@ void ObjectList::EndFrame (void)
 //--------------------------------------------------------------------------//
 //
 #include "M3Trace.h"
+
+#if !defined(_WIN32)
+namespace FrontierXM3
+{
+void AfterFrame()
+{
+	const char *mode = std::getenv("FRONTIERX_M3_CHECKPOINT");
+	if (!mode || !*mode) return;
+	static bool done = false;
+	if (done) return;
+	const bool reload = std::strcmp(mode, "256-reload") == 0 ||
+		std::strcmp(mode, "512-reload") == 0;
+	const U32 point = (std::strcmp(mode, "256-save") == 0 ||
+		std::strcmp(mode, "256-reload") == 0) ? 256 :
+		(std::strcmp(mode, "512-save") == 0 ||
+		std::strcmp(mode, "512-reload") == 0) ? 512 : 0;
+	const char *prefix = std::getenv("FRONTIERX_M3_CHECKPOINT_PREFIX");
+	if (!point || !prefix || !*prefix || !FixedFrameInput() || !TraceFile() || !SAVEDIR)
+	{ std::fputs("M3 checkpoint configuration invalid\n", stderr); std::abort(); }
+	const U32 tick = MGlobals::GetUpdateCount();
+	if (tick < point) return;
+	if (tick != point)
+	{ std::fputs("M3 checkpoint skipped its exact source tick\n", stderr); std::abort(); }
+	done = true;
+	auto capture = [&](const char *stage) {
+		char path[1024];
+		const int length = std::snprintf(path, sizeof(path), "%s-%s.json", prefix, stage);
+		if (length < 0 || length >= int(sizeof(path)))
+		{ std::fputs("M3 private checkpoint name invalid\n", stderr); std::abort(); }
+		FILE *file = std::fopen(path, "wb");
+		if (!file)
+		{ std::fputs("M3 private checkpoint open failed\n", stderr); std::abort(); }
+		WriteSnapshot(file, point);
+		if (std::fclose(file))
+		{ std::fputs("M3 private checkpoint close failed\n", stderr); std::abort(); }
+	};
+	// This runs after physical updates, outside all ObjectList iterations.
+	// Only the original Mission/ISaveLoad/UTF owners write and reload the file.
+	capture("before-save");
+	if (!MISSION->Save("m3-checkpoint.mission", SAVEDIR) ||
+		MGlobals::GetUpdateCount() != point)
+	{ std::fputs("M3 original checkpoint save failed\n", stderr); std::abort(); }
+	capture("after-save");
+	if (reload)
+	{
+		if (!MISSION->Load("m3-checkpoint.mission", SAVEDIR) ||
+			MGlobals::GetUpdateCount() != point)
+		{ std::fputs("M3 original checkpoint reload failed\n", stderr); std::abort(); }
+		capture("after-reload");
+	}
+}
+}
+#endif
 
 void ObjectList::Update (void)
 {
@@ -1235,6 +1307,7 @@ void ObjectList::Update (void)
 	{
 		for (i = 0; i < numRealTimeFrames; i++)
 		{
+			FrontierXM3::BeforeTick(updateCounter);
 			if (elapsedTime >= ELAPSED_TIME && i+2< numRealTimeFrames && ((updateCounter & 7) == 0) )
 			{
 				elapsedTime -= ELAPSED_TIME;
@@ -1247,6 +1320,7 @@ void ObjectList::Update (void)
 			{
 				MGlobals::SetUpdateCount(++updateCounter);
 				SCHEDULER->UpdateQueue();
+				FrontierXM3::Snapshot(updateCounter);
 			}
 		}
 		if (elapsedTime > 0)
