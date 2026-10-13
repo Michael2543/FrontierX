@@ -54,26 +54,44 @@ def read_ticks(path):
         raise InvalidTrace('expected all ticks 0..1024')
     for tick, record in enumerate(records):
         validate_tick(record, tick)
+    if any(record.get('schema') != records[0]['schema'] for record in records):
+        raise InvalidTrace('mixed observation schemas')
+    if records[0]['schema'] in (4, 5, 6) and any(
+            record['boundary'] != records[1]['boundary'] for record in records[1:]):
+        raise InvalidTrace('mixed logic/physical observation boundaries')
     return records
 
 
 def validate_tick(record, tick):
     fields = {'schema', 'coverage', 'tick', 'units', 'objectives', 'agents', 'resources'}
-    if isinstance(record, dict) and record.get('schema') in (2, 3):
+    if isinstance(record, dict) and record.get('schema') in (2, 3, 4, 5, 6):
         fields.add('globals')
-    if isinstance(record, dict) and record.get('schema') == 3:
+    if isinstance(record, dict) and record.get('schema') in (3, 4, 5, 6):
         fields.add('script')
         fields.add('operations')
+    if isinstance(record, dict) and record.get('schema') in (4, 5, 6):
+        fields.add('boundary')
+    if isinstance(record, dict) and record.get('schema') in (5, 6):
+        fields.add('world')
+    if isinstance(record, dict) and record.get('schema') == 6:
+        fields.add('mission_globals')
     if (not isinstance(record, dict) or
             set(record) != fields or
-            type(record['schema']) is not int or record['schema'] not in (1, 2, 3) or
+            type(record['schema']) is not int or record['schema'] not in (1, 2, 3, 4, 5, 6) or
             record['coverage'] != 'partial' or
             type(record['tick']) is not int or record['tick'] != tick):
         raise InvalidTrace('invalid tick/schema/coverage')
-    if record['schema'] == 3:
+    if record['schema'] in (4, 5, 6) and record['boundary'] not in (
+            ('initial',) if tick == 0 else ('after-logic', 'after-physical')):
+        raise InvalidTrace('invalid original observation boundary')
+    if record['schema'] in (5, 6):
+        validate_world(record['world'])
+    if record['schema'] == 6:
+        validate_script(dict(schema=1, data=record['mission_globals'], last_extended=0, programs=[]))
+    if record['schema'] in (3, 4, 5, 6):
         validate_script(record['script'])
         validate_operations(record['operations'])
-    if record['schema'] in (2, 3):
+    if record['schema'] in (2, 3, 4, 5, 6):
         state = record['globals']
         if (not isinstance(state, dict) or set(state) != {'game_speed', 'frame_limit',
                 'constant_update_rate', 'game_active', 'paused', 'world_paused'} or
@@ -117,6 +135,29 @@ def validate_tick(record, tick):
             len(record['resources']) != 3 or
             any(type(v) is not int or v < 0 for v in record['resources'])):
         raise InvalidTrace('invalid resource/agent fields')
+
+
+def validate_world(world):
+    def bits(values):
+        return (isinstance(values, list) and len(values) == 3 and
+                all(isinstance(v, str) and len(v) == 8 and
+                    all(c in '0123456789abcdef' for c in v) and
+                    int(v, 16) & 0x7f800000 != 0x7f800000 for v in values))
+    if not isinstance(world, list) or not world:
+        raise InvalidTrace('missing original world object list')
+    for obj in world:
+        scalars = {'id', 'class', 'owner', 'system', 'update_bin'}
+        if (not isinstance(obj, dict) or set(obj) != scalars | {
+                'transform_f32', 'velocity_f32', 'visibility', 'flags'} or
+                any(type(obj[k]) is not int or not 0 <= obj[k] <= 0xffffffff for k in scalars) or
+                not isinstance(obj['transform_f32'], list) or len(obj['transform_f32']) != 4 or
+                not all(bits(v) for v in obj['transform_f32']) or not bits(obj['velocity_f32']) or
+                not isinstance(obj['visibility'], list) or len(obj['visibility']) != 2 or
+                any(type(v) is not int or not 0 <= v <= 255 for v in obj['visibility']) or
+                not 0 <= obj['update_bin'] <= 31 or
+                not isinstance(obj['flags'], list) or len(obj['flags']) != 8 or
+                any(type(v) is not int or v not in (0, 1) for v in obj['flags'])):
+            raise InvalidTrace('invalid original world object state')
 
 
 def validate_script(script):
@@ -196,6 +237,8 @@ def read_checkpoint(path):
     if not isinstance(record, dict) or record.get('tick') not in (256, 512):
         raise InvalidTrace('invalid checkpoint tick')
     validate_tick(record, record['tick'])
+    if record['schema'] in (4, 5, 6) and record['boundary'] != 'after-physical':
+        raise InvalidTrace('checkpoint requires completed physical boundary')
     return record
 
 
@@ -212,16 +255,34 @@ def read_rng(path):
     return value
 
 
+def read_randomgen(path):
+    value = load_json(Path(path).read_text(encoding='utf-8'))
+    if (not isinstance(value, dict) or set(value) != {'schema', 'owner', 'modulus', 'state_bytes', 'sequences'} or
+            type(value['schema']) is not int or value['schema'] != 1 or value['owner'] != 'RandomGen' or
+            type(value['modulus']) is not int or value['modulus'] != 32767 or
+            type(value['state_bytes']) is not int or value['state_bytes'] != 4 or
+            not isinstance(value['sequences'], list) or len(value['sequences']) != 4):
+        raise InvalidTrace('invalid original RandomGen contract')
+    for expected, sequence in zip((0, 1, 17, 254), value['sequences']):
+        if (not isinstance(sequence, dict) or set(sequence) != {'seed', 'draws'} or
+                type(sequence['seed']) is not int or sequence['seed'] != expected or
+                not isinstance(sequence['draws'], list) or len(sequence['draws']) != 32 or
+                any(type(draw) is not int or not 0 <= draw < 32767 for draw in sequence['draws'])):
+            raise InvalidTrace('invalid original RandomGen sequence')
+    return value
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('kind', choices=['rng', 'ticks', 'checkpoint'])
+    parser.add_argument('kind', choices=['rng', 'randomgen', 'ticks', 'checkpoint'])
     parser.add_argument('left')
     parser.add_argument('right')
     parser.add_argument('--observed-only', action='store_true',
                         help='compare partial observation; never an M3 acceptance')
     args = parser.parse_args(argv)
     try:
-        reader = {'rng': read_rng, 'ticks': read_ticks, 'checkpoint': read_checkpoint}[args.kind]
+        reader = {'rng': read_rng, 'randomgen': read_randomgen,
+                  'ticks': read_ticks, 'checkpoint': read_checkpoint}[args.kind]
         left, right = reader(args.left), reader(args.right)
         difference = first_difference(left, right)
     except (OSError, ValueError, TypeError, KeyError):
@@ -230,12 +291,12 @@ def main(argv=None):
     if difference:
         print('FAIL: first differing field ' + difference, file=sys.stderr)
         return 1
-    if args.kind != 'rng' and not args.observed_only:
+    if args.kind not in ('rng', 'randomgen') and not args.observed_only:
         print('BLOCKED: partial coverage omits full physics, transport payloads and RNG state',
               file=sys.stderr)
         return 2
-    print('Equal observed fields; ' + ('CRT characterization only' if args.kind == 'rng'
-                                     else 'partial coverage, no M3 acceptance'))
+    description = {'rng': 'CRT characterization only', 'randomgen': 'original RandomGen synthetic contract only'}
+    print('Equal observed fields; ' + description.get(args.kind, 'partial coverage, no M3 acceptance'))
     return 0
 
 

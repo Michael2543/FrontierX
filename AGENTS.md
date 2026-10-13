@@ -447,19 +447,15 @@ determinism includes the deferred Windows/module ABI/retail checks.
 Commands and explicit host/media limits:
 [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
 
-M3 work in progress (2026-10-13): controlled Actions run38368454837 at62662a1
-passes Linux GCC/Clang default/optional/sanitizer builds and native Windows
-Debug/Final plus ABI/provider regressions. Host/GPU/mission comparisons and CRT
-compatibility fail; no M3 acceptance. Both trusted runners are operational.
-The user reports restored Windows skips conversations in every mission and
-explicitly limits further repairs to Linux; preserve that reference limitation.
-Linux frame/checkpoint access and private cross-build gates are in preparation.
-Original native UTF append-order correction passes local owner regressions and
-all six affected build/non-GPU configurations; new overlay CI remains required.
-Current Actions run38384161068 tests118efae. A Linux-only Camera startup
-return-contract fix and opt-in workflow `gpu_host_setup=hyprland-x11` prepare
-corrected startup/GPU checks; their runtime/CI proof remains pending. The GPU
-setup changes only owned test windows, with no persistent desktop rules.
-Full semantic RNG/script/order capture, save-continuation equivalence and
-retail/visible/audible corroboration remain open. See
-[M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).
+M3 work in progress (2026-10-13), not accepted: protected CI build/ABI and
+explicit GPU evidence is distinct from failed mission/compatibility gates.
+The current follow-up adds complete physical observation boundaries, declared
+global/world state, real sound-lifetime regressions and native save/continued
+comparison fixtures. Full relevant RNG/physics, live event repeatability,
+Save/Reload equivalence and retail/visible/audible corroboration remain open.
+The user's restored Windows skips conversations in every mission; further
+Windows product repairs are out of scope, while comparison instrumentation and
+native rebuild/ABI checks remain required. Keep private SSH connection data,
+retail inputs/traces/saves and detailed failures outside repository/logs/caches/
+artifacts. Only bounded synthetic CRT/production-RandomGen vectors are uploaded.
+See [the current M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).

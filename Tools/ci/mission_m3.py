@@ -37,8 +37,9 @@ def main():
     fixed = args.frame_input == 'fixed-source-period'
     if args.case and '-' in args.case and not fixed:
         raise RuntimeError('exact-tick checkpoint requires fixed frame input')
-    inputs['protocol'] = {'version': 2, 'movement_owner': 'CQE_MOVE_SELECTED_UNITS/ObjComm',
+    inputs['protocol'] = {'version': 3, 'movement_owner': 'CQE_MOVE_SELECTED_UNITS/ObjComm',
                           'frame_input': args.frame_input,
+                          'snapshot_boundary': 'after-physical' if fixed else 'after-logic',
                           'control_time_units': '1/1024 millisecond, truncated',
                           'commands_before_ticks': [32, 64], 'last_tick': 1024,
                           'window_input': 'active, centered pointer; host input excluded; close fatal',
@@ -53,6 +54,7 @@ def main():
         'compiler': os.environ.get('FRONTIERX_M3_COMPILER', 'local-supplement'),
         'scope': os.environ.get('FRONTIERX_M3_SCOPE', 'local-supplement'),
         'toolchain': os.environ.get('FRONTIERX_M3_TOOLCHAIN', 'local-supplement'),
+        'binary': digest(args.build / 'frontierx_native_shell'),
         'timeout_seconds': 600 if fixed else 120}
     (private / 'input-manifest.json').write_text(json.dumps(inputs, sort_keys=True))
     command = [str(args.build / 'frontierx_native_shell'), '--data-root', str(data),
@@ -75,6 +77,8 @@ def main():
         cases = [args.case]
     codes = []
     for case in cases:
+        if digest(args.build / 'frontierx_native_shell') != inputs['execution']['binary']:
+            raise RuntimeError('compiled mission binary changed within comparison')
         run = private / case
         run.mkdir()
         env = os.environ.copy()

@@ -3675,7 +3675,12 @@ void OpAgent::sendSyncMessages (void)
 						}
 
 						U32 oldTotal = totalDataSent;
+#if defined(_WIN32)
 						((U32 *)(buffer+size))[0] = parentOp;
+#else
+						// General-sync records have variable byte lengths.
+						std::memcpy(buffer + size, &parentOp, sizeof(parentOp));
+#endif
 						bufferedSend((bNoDelayAction) ? OBJSYNC : OBJSYNC2, allocOpID(), buffer, size+sizeof(U32), set);
 
 						if (CQFLAGS.bTraceMission)
@@ -8526,7 +8531,11 @@ void WriteOperationComparisonState(M3StateOutput output, void *context)
             first = false;
             writer.Text("{"); scalar("id", node->opID);
             writer.Text(","); scalar("command", node->hostCmd);
-            writer.Text(","); scalar("packet_type", static_cast<U32>(node->type));
+            // Processed MOVETO dispatches solely on hostCmd. Its original
+            // save record omits the obsolete user transport type; pending user
+            // commands still require and retain that type. Other commands do
+            // not inherit this narrowly audited normalization.
+            writer.Text(","); scalar("packet_type", node->hostCmd == MOVETO ? 0U : static_cast<U32>(node->type));
             writer.Text(","); scalar("parent", node->parentOp);
             writer.Text(","); scalar("group", node->groupID);
             writer.Text(","); scalar("user_bits", node->userBits);

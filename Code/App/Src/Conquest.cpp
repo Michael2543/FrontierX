@@ -353,6 +353,16 @@ static bool init_mission (void)
 //
 static void create_bogus_savedir (void)
 {
+	const char *testRoot = std::getenv("FRONTIERX_M3_SAVE_ROOT");
+	if (testRoot && *testRoot)
+	{
+		if (!std::getenv("FRONTIERX_M3_TRACE") || !std::getenv("FRONTIERX_M3_SOLTRAIN"))
+			std::abort();
+		DAFILEDESC descriptor = testRoot;
+		if (DACOM->CreateInstance(&descriptor, (void **)&SAVEDIR) != GR_OK || !SAVEDIR)
+		{ std::fputs("M3 private original save directory unavailable\n", stderr); std::abort(); }
+		return;
+	}
 	char buffer[256];
 	char name[128];
 

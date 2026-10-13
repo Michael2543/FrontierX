@@ -26,6 +26,7 @@ static CompatibilityJournal & M3StreamerJournal()
 class NativeStreamer;
 std::vector<NativeStreamer *> owners;
 std::uintptr_t nextHandle = 1;
+std::uint32_t diagnosticTick = 0;
 char interfaceName[] = "IStreamer";
 
 class NativeStreamer : public ISystemComponent, public IStreamer
@@ -265,6 +266,7 @@ private:
     }
     void Notify(HSTREAM handle, STATUS status)
     {
+        M3StreamerJournal().Write("stream-notification-tick", 0, diagnosticTick);
         M3StreamerJournal().Write("stream-notification", 0, static_cast<unsigned int>(status));
         if (window && message)
             DispatchNativeWindowMessage(window, message, static_cast<LegacyWParam>(status),
@@ -295,5 +297,9 @@ void UpdateNativeStreamers()
         owner->Update();
         static_cast<IStreamer *>(owner)->Release();
     }
+}
+void SetNativeStreamerDiagnosticTick(std::uint32_t tick)
+{
+    diagnosticTick = tick;
 }
 }

@@ -1,5 +1,16 @@
 # FrontierX Project Charter
 
+Latest M3 working update (2026-10-13):b241156 CI run38426508626 actually passes
+both explicit X11 GPU jobs; its introduced native observer export and mission
+sanitizer gates fail. Working corrections retain sound through real completion,
+fix the Linux variable-length sync append and expand declared global/world
+state at complete physical boundaries. Native comparison fixtures and private
+SSH cross-platform plus production RandomGen vector jobs are prepared; their
+corrected complete CI execution is pending. Same-build live speech/script and
+Save/Reload continuation still differ; M3 remains **NOT ACCEPTED**. The current
+[evidence/normalization ledger](M3_SIMULATION_COMPARISON.md#post-physical-state-and-sound-lifetime-follow-up-working-tree-2026-10-13)
+supersedes older pending-run summaries below.
+
 Current M3 update (2026-10-13): **NOT ACCEPTED**. Completed protected Actions
 [run38386971218](https://github.com/Michael2543/frontierX/actions/runs/38386971218)
 atd089a15 passes six Linux CPU build scopes and native Windows Debug/Final/ABI;

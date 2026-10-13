@@ -28,6 +28,7 @@
 #define __min(a,b) (((a) < (b)) ? (a) : (b))
 #endif
 #include <MGlobals.h>
+#include "Include/M3SemanticWriter.h"
 
 
 #include <wchar.h>
@@ -71,6 +72,7 @@
 #include <TSmartPointer.h>
 #include <HeapObj.h>
 #include <Viewer.h>
+#include <ViewCnst.h>
 #include <EventSys.h>
 #include <3dmath.h>
 #include <ENGINE.H>
@@ -105,6 +107,33 @@ struct WindowPosStruct : WINDOWPLACEMENT
 //----------------------------------------------------------------------------
 
 static MT_GlobalData globalData;
+
+void MGlobals::WriteComparisonState(M3StateOutput output, void *context)
+{
+	COMPTR<IViewConstructor2> constructor;
+	if (!output || !PARSER || PARSER->QueryInterface("IViewConstructor2", constructor) != GR_OK)
+		std::abort();
+	DPARSERDESC descriptor;
+	descriptor.symbol = constructor->GetSymbol(nullptr, "MT_GlobalData");
+	COMPTR<IDataParser> parser;
+#if defined(_WIN32)
+	const void *bytes = &globalData;
+	const U32 length = sizeof(globalData);
+#else
+	FrontierX::GlobalDataDiskBytes encoded;
+	if (!FrontierX::EncodeGlobalData(globalData, encoded)) std::abort();
+	const void *bytes = encoded.data();
+	const U32 length = encoded.size();
+#endif
+	FrontierXM3::SemanticWriter writer(output, context);
+	if (!descriptor.symbol || constructor->GetTypeSize(descriptor.symbol) != length ||
+		constructor->CreateInstance(&descriptor, parser) != GR_OK || !parser ||
+		!writer.Fields(parser, bytes, length, false, 0, descriptor.symbol))
+	{
+		std::fputs("M3 global semantic observation failed\n", stderr);
+		std::abort();
+	}
+}
 static GT_GLOBAL_VALUES globalValues;
 #ifdef _WIN32
 static void updateGlobalViewer (void);

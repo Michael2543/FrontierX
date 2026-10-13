@@ -5,6 +5,10 @@
 // No replacement simulation, RNG, speech completion or mission condition.
 #include "MScript.h"
 #include "MPartRef.h"
+#include "Include/M3FrameInput.h"
+#if !defined(_WIN32)
+#include <FrontierX/NativeStreamer.h>
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -50,21 +54,53 @@ inline void __cdecl StateOutput(const char *bytes, U32 length, void *context)
     { std::fputs("M3 state output failed\n", stderr); std::abort(); }
 }
 
-inline void WriteSnapshot(FILE *file, U32 tick)
+inline void WriteVector(FILE *file, const Vector &value)
 {
-    // Order IDs are observed, but the queued operation payload, script state
-    // and CRT RNG state are NOT yet available through a semantic interface.
+    std::fprintf(file, "[\"%08x\",\"%08x\",\"%08x\"]",
+        FloatBits(value.x), FloatBits(value.y), FloatBits(value.z));
+}
+
+inline void WriteSnapshot(FILE *file, U32 tick, const char *boundary)
+{
+    // Original getters are read without executing Save or a simulation owner.
     const USER_DEFAULTS *defaults = DEFAULTS->GetDefaults();
-    std::fprintf(file, "{\"schema\":3,\"coverage\":\"partial\",\"tick\":%u,"
+    std::fprintf(file, "{\"schema\":6,\"coverage\":\"partial\",\"tick\":%u,\"boundary\":\"%s\","
         "\"globals\":{\"game_speed\":%d,\"frame_limit\":%u,\"constant_update_rate\":%u,"
-        "\"game_active\":%u,\"paused\":%u,\"world_paused\":%u},\"script\":",
-        static_cast<unsigned int>(tick), static_cast<int>(defaults->gameSpeed),
+        "\"game_active\":%u,\"paused\":%u,\"world_paused\":%u},\"mission_globals\":",
+        static_cast<unsigned int>(tick), boundary, static_cast<int>(defaults->gameSpeed),
         defaults->bNoFrameLimit ? 0U : 1U, defaults->bConstUpdateRate ? 1U : 0U,
         CQFLAGS.bGameActive ? 1U : 0U, CQFLAGS.bGamePaused ? 1U : 0U,
         CQFLAGS.bRTGamePaused ? 1U : 0U);
+    MGlobals::WriteComparisonState(StateOutput, file);
+    std::fputs(",\"script\":", file);
     MScript::WriteComparisonState(StateOutput, file);
     std::fputs(",\"operations\":", file);
     WriteOperationComparisonState(StateOutput, file);
+    std::fputs(",\"world\":[", file);
+    bool worldFirst = true;
+    for (IBaseObject *object = OBJLIST->GetObjectList(); object; object = object->next)
+    {
+        if (!worldFirst) std::fputc(',', file);
+        worldFirst = false;
+        const TRANSFORM &transform = object->GetTransform();
+        std::fprintf(file, "{\"id\":%u,\"class\":%u,\"owner\":%u,\"system\":%u,\"transform_f32\":[",
+            static_cast<unsigned int>(object->GetPartID()), static_cast<unsigned int>(object->objClass),
+            static_cast<unsigned int>(object->GetPlayerID()), static_cast<unsigned int>(object->GetSystemID()));
+        WriteVector(file, transform.get_i()); std::fputc(',', file);
+        WriteVector(file, transform.get_j()); std::fputc(',', file);
+        WriteVector(file, transform.get_k()); std::fputc(',', file);
+        WriteVector(file, transform.translation);
+        std::fputs("],\"velocity_f32\":", file); WriteVector(file, object->GetVelocity());
+        std::fprintf(file, ",\"visibility\":[%u,%u],\"update_bin\":%u,\"flags\":[%u,%u,%u,%u,%u,%u,%u,%u]}",
+            static_cast<unsigned int>(object->GetVisibilityFlags()),
+            static_cast<unsigned int>(object->GetPendingVisibilityFlags()),
+            static_cast<unsigned int>(object->updateBin),
+            object->bHighlight ? 1U : 0U, object->bVisible ? 1U : 0U,
+            object->bSelected ? 1U : 0U, object->bCloaked ? 1U : 0U,
+            object->bSpecialRender ? 1U : 0U, object->bMimic ? 1U : 0U,
+            object->bSpecialHighlight ? 1U : 0U, object->bExploding ? 1U : 0U);
+    }
+    std::fputc(']', file);
     std::fputs(",\"units\":[", file);
     bool first = true;
     for (IBaseObject *object = OBJLIST->GetObjectList(); object; object = object->next)
@@ -118,7 +154,27 @@ inline void Snapshot(U32 tick)
 {
     FILE *file = TraceFile();
     if (!file || tick > 1024) return;
-    WriteSnapshot(file, tick);
+#if !defined(_WIN32)
+    FrontierX::SetNativeStreamerDiagnosticTick(tick);
+#endif
+    if (tick && FixedFrameInput()) return;
+    WriteSnapshot(file, tick, tick ? "after-logic" : "initial");
+    if (tick == 1024 && EVENTSYS->Post(CQE_PLAYER_QUIT) != GR_OK)
+    { std::fputs("M3 original quit request failed\n", stderr); std::abort(); }
+}
+
+inline void SnapshotAfterPhysical(U32 tick)
+{
+    static U32 lastTick = 0;
+    if (!TraceFile() || !FixedFrameInput() || tick == lastTick) return;
+    // Reject gaps instead of inventing intermediate physical states.
+    if (tick != lastTick + 1 || tick > 1024)
+    { std::fputs("M3 physical boundary skipped an original tick\n", stderr); std::abort(); }
+    lastTick = tick;
+#if !defined(_WIN32)
+    FrontierX::SetNativeStreamerDiagnosticTick(tick);
+#endif
+    WriteSnapshot(TraceFile(), tick, "after-physical");
     if (tick == 1024 && EVENTSYS->Post(CQE_PLAYER_QUIT) != GR_OK)
     { std::fputs("M3 original quit request failed\n", stderr); std::abort(); }
 }
@@ -126,6 +182,9 @@ inline void Snapshot(U32 tick)
 inline void BeforeTick(U32 tick)
 {
     if (!TraceFile()) return;
+#if !defined(_WIN32)
+    FrontierX::SetNativeStreamerDiagnosticTick(tick);
+#endif
     if (tick == 0) Snapshot(0);
     if (tick != 32 && tick != 64) return;
     const MPartRef forger = MScript::GetPartByName("Forger");

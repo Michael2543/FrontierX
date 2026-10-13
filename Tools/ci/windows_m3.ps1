@@ -57,6 +57,8 @@ try {
     New-Item $out -ItemType Directory -Force | Out-Null
     & $exe --trace | Set-Content -Encoding ascii (Join-Path $out 'windows.json')
     if ($LASTEXITCODE) { throw 'CRT trace failed' }
+    & $exe --randomgen-trace | Set-Content -Encoding ascii (Join-Path $out 'windows-randomgen.json')
+    if ($LASTEXITCODE) { throw 'original RandomGen trace failed' }
 } catch {
     Write-Output 'FAIL: native Windows CI scope; private runner diagnostics retained'
     exit 1

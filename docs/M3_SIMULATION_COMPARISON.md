@@ -312,7 +312,7 @@ workflow allowlist under [runner-group access control](https://docs.github.com/e
 `Tools/ci/check_ctest.py` rejects absent testcases, failure, error and skip.
 CTest registers the CRT repeat, comparator and execution-gate regression
 checks. Existing GPU CTests carry `gpu;host` labels; CPU exclusion does not
-satisfy GPU acceptance. Only16 synthetic CRT draws/RAND_MAX/seed/schema may
+satisfy GPU acceptance. Only synthetic CRT and fixed-seed production RandomGen draws/contract metadata may
 be uploaded. Build/test logs, journals, captures, saves and external runtime
 files stay in private runner temporary directories, without caches/uploads.
 The Linux mission driver retains real presentation/audio. Its current
@@ -980,7 +980,7 @@ workflow before any corrected CI pass is claimed.
 
 Local working-tree verification before the next publication: all six existing
 Linux Debug trees rebuild and pass their complete non-GPU CTest scopes under
-GCC15.2/Clang20.1, including default, optional and optional ASan/UBSan with
+GCC16.2.1/Clang22.1.8, including default, optional and optional ASan/UBSan with
 fatal errors/leak detection enabled. The optional font and shared decoder use
 the existing reviewed external installation. This covers the production-owner
 RNG and parser, input/Streamer lifecycle and comparator regressions. A real
@@ -989,3 +989,132 @@ MOVETO; the observer now captures its original packet type and typed destination
 in both states, rather than dropping the pending payload. This is an observer
 correction, not a command executor or gameplay change. Full corrected mission
 and CI comparisons remain pending.
+
+
+## Post-physical state and sound lifetime follow-up (working tree, 2026-10-13)
+
+User-authorized publicationb241156 starts protected Actions
+[38426508626](https://github.com/Michael2543/frontierX/actions/runs/38426508626).
+Its GCC and Clang `linux-host-gpu` jobs actually pass both existing GPU CTests
+with explicit owned-window X11 setup; ordinary Wayland success is not inferred.
+The native build fails on the introduced operation-observer export: OpAgent is
+in Mission.dll, so its borrowed callback entry needs the same producer/import
+boundary as the other Mission exports. That declaration is corrected; a
+supplementary native Debug rebuild passes afterward. A new complete CI native
+Debug/Final/ABI execution remains required. Windows mission is skipped by its
+failed prerequisite inb241156 and provides no runtime proof.
+
+GCC measured mission sanitizer actually reaches the first source tick after the
+Field correction, then finds a misaligned U32 append at OpAgent::sendSyncMessages
+(line3678 inb241156). Original GeneralSync records have variable byte lengths;
+the Linux append now uses memcpy for the exact same four-byte parent operation
+value. Windows product code and packet byte layout are unchanged. Supplementary
+Clang measured ASan/UBSan now reaches1024/all1025 records with no fatal access/UB
+report, but whole LSan still fails3836B/9 allocations with external/unresolved
+frames. This is not a leak-free acceptance or completed corrected CI result.
+
+Protocol version3 and schema4 move **fixed-input** snapshots after physical
+updating/deferred destruction, before the original GameSystem pump. Tick0 is
+the explicit initial boundary; measured diagnostics remain after-logic. The
+observer rejects skipped physical ticks rather than inventing intermediate
+states or changing original step grouping. On Windows Trim's Modal calls the
+existing original ObjectList IEventCallback with a private opt-in observation
+event; the callback executes outside iteration in the Conquest owner. FILEs and
+allocators remain in their original modules, and no vtable slot is added.
+Checkpoint capture and continued tick capture use the same complete boundary.
+The parser rejects mixed boundaries/schemas and incomplete checkpoint boundaries.
+
+Six supplementary optional Clang schema4 processes (two references, Save-only
+and Save/Reload at256/512) all reach1024 and exit0. Before/after Save observations
+match at both points. Save/Reload does not: raw processed-packet transport type,
+original master-list order and selection are visibly different. Whole save bytes
+also differ across independent save/reload cases; no whole-container byte-equality
+contract is inferred. The first same-build **post-physical** difference is tick185,
+MissionData.displayObjectiveHandlerParams_teletypeHandle and the original
+TM1_DisplayObjectiveHandler program list. Its source Update waits on
+IsStreamPlaying before starting TeletypeObjective. This confirms actual audio
+completion affects script scheduling, not merely presentation. The field and
+program remain in the comparator; no forced completion, tolerance or omitted
+script state is introduced.
+
+A separate confirmed Linux sound lifetime error: NativeMissionSound::IsPlaying
+returned false at EOFREACHED, while NativeStreamer still waits for the audible
+device tail and source SoundMan retains its registered stream until completion/
+error handling or explicit stop. Native IsPlaying now retains that same owner
+lifetime. Existing native_shell CTest plays its generated PCM through the real
+NativeStreamer/SDL device and actual mission sound owner, checks paused/EOF live
+status, real completion/owner cleanup and explicit stop. The new EOF regression
+fails before this owner correction and passes afterward under Clang ASan/UBSan;
+no fabricated status or mission is used. This does not make asynchronous live
+speech deterministic or prove audible retail parity. Private native completion,
+stream notifications and script polls now include original tick context without
+changing notification order or delivering replacement events.
+
+Schema5 includes every original world-list object, including objects without
+mission data: existing part/class/owner/system accessors, original transform
+basis/translation, linear velocity, visibility masks, update bin and eight
+original object flags. Order and exact f32 bits remain; zero part IDs are retained,
+not replaced with invented identities. Angular velocity, internal control goals
+and procedural field state are still missing. Schema6 additionally reads all
+35 top-level MT_GlobalData field trees through the original DataParser. Linux
+uses the existing production UTF16/Win32-layout encoder on a temporary record;
+Windows reads its original3236-byte record. Only declared fields are exported;
+no runtime pointers, record padding, save mutation or objective setter is used.
+A supplementary optional Clang schema6 run validates all1025 records,77 original
+world objects and the full declared global field tree and exits0. It is a dirty
+working-tree supplement, not a CI or whole-state acceptance result.
+
+Narrow normalization added for processed MOVETO only: its obsolete user transport
+packet type is exported as0. Original save RWPACKET_HEADER stores host command,
+operands and ordered object set, omitting this prior user type; loaded MOVETO has
+type0. Source sendHostCommand consumes the user type before the operation reaches
+the host queue; MOVETO dispatch/operand access uses hostCmd. Pending user commands
+retain the actual type, and other commands do not inherit this normalization
+(the docking path, for example, still uses type). This removes an irrelevant
+transport-stage distinction; destination, operation IDs/flags/order and actual
+reload list/selection differences remain exact and visible.
+
+Native Windows comparison access is expanded to measured/fixed references and
+original Save/Reload points with continuation. Fixed source frame input is shared
+with Linux, normal frame timing unchanged. The opt-in original System wndProc
+excludes manual key/text/mouse messages while retaining resize, close, streamer
+and activation handling. The original WindowManager must actually be active;
+held modifiers or failed exact client-center cursor placement fail the case.
+Original SAVEDIR is redirected only in the explicit private Sol_Train fixture;
+retail installation data is not overwritten. Each case continues independently
+on failure and records its actual process result. Manifests bind revision,
+working state, input hashes, protocol and actual binary SHA256; changing the
+binary within a case set fails. The known Windows conversation fault is not
+repaired, suppressed or used as Linux's specification.
+
+The protected `native-cross-build` job is prepared to fetch only same-run/
+attempt/revision private Windows semantic traces over confirmed SSH. Connection
+configuration/key paths and copied traces remain in the retained private Linux
+root with restricted permissions, outside checkout/logs/caches/artifacts. It
+checks same-build repeatability and input/protocol provenance before describing
+cross-platform fields; missing/dirty/stale evidence fails. No raw media or dumps
+are transferred. Actual execution remains pending. The separate
+`randomgen-cross-build` job compares four fixed-seed32-draw vectors from the real
+production owner under GCC/Clang/native MSVC. Only those synthetic vectors and
+the existing16-draw libc characterization are allowed in uploaded artifacts.
+Matching that narrow owner does not satisfy mission/RNG or retail acceptance;
+the incompatible libc characterization and incomplete coverage remain failures.
+
+All six local GCC16.2.1/Clang22.1.8 default/optional and optional ASan/UBSan
+build/non-GPU scopes pass for the global/sound observer follow-up before the
+latest Windows frame-access changes. The final combined source, native ABI,
+controlled Windows cases and new comparison jobs still require rebuilding and
+actual CI execution. Remaining implementation/acceptance blockers include full
+relevant RNG/physics/queued-transport state, reproducible genuine speech events,
+equivalent original Save/Reload continuation, whole-process leaks and additional
+retail/visible/audible corroboration. No partial equality or skip counts as M3.
+
+
+Final combined local preparation: all six Linux default/optional/optional-
+sanitizer builds and non-GPU CTest scopes pass after native frame fixture and
+original global/sound corrections. The subsequent cross-DLL post-frame routing
+uses the existing ObjectList callback instead of a new Conquest import; a final
+focused rebuild/replay of that routing and native Final/ABI are in progress.
+The private SSH host key/connection configuration is retained outside source
+with restricted permissions; no runner re-registration or credential transfer
+is required for this comparison integration. This prepares execution, not proof.

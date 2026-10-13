@@ -64,11 +64,14 @@ def main():
     else:
         run(command, root, log, env)
     run([sys.executable, str(root / 'Tools/ci/check_ctest.py'), str(junit)], root, log, env)
-    # Only these synthetic CRT numbers may be uploaded. No retail state/logs.
+    # Only synthetic CRT/RandomGen draws may be uploaded. No retail state/logs.
     output = root / 'out' / 'm3-synthetic' / (args.compiler + '.json')
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open('wb') as stream:
         subprocess.run([str(build / 'frontierx_rng_contract_probe'), '--trace'],
+                       cwd=private, env=env, stdout=stream, check=True)
+    with (output.parent / (args.compiler + '-randomgen.json')).open('wb') as stream:
+        subprocess.run([str(build / 'frontierx_rng_contract_probe'), '--randomgen-trace'],
                        cwd=private, env=env, stdout=stream, check=True)
     if args.scope in ('mission', 'mission-sanitizers'):
         run([sys.executable, str(root / 'Tools/ci/mission_m3.py'),

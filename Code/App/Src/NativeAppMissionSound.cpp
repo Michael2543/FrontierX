@@ -1,6 +1,9 @@
 #include "FrontierX/CompatibilityJournal.h"
+#include "FrontierX/PlatformTime.h"
+#include "FrontierX/NativeStreamer.h"
 #include "Include/NativeAppGlobals.h"
 #include "Include/NativeAppMissionMedia.h"
+#include "Include/MGlobals.h"
 #include <DACOM.H>
 #include "SoundManager.h"
 #include "MusicManager.h"
@@ -99,6 +102,7 @@ struct NativeMissionSound : ISoundManager, IEventCallback
             const auto status = STREAMER->GetStatus(it->second.handle);
             if (status == IStreamer::COMPLETED || status == IStreamer::INVALID)
             {
+                M3NativeSoundJournal().Write("completion-observed-tick", it->first, MGlobals::GetUpdateCount());
                 M3NativeSoundJournal().Write("completion-observed", it->first, status);
                 if (it->second.unitVoice && status == IStreamer::COMPLETED) ++stats.unitCompleted;
                 ClearHighlight(it->second);
@@ -156,9 +160,9 @@ struct NativeMissionSound : ISoundManager, IEventCallback
 
     BOOL32 IsPlaying(U32 soundID) const override
     {
-        const auto found = streams.find(soundID);
-        if (found == streams.end()) return FALSE;
-        return STREAMER->GetStatus(found->second.handle) == IStreamer::PLAYING;
+        // Original SoundMan retains registered streams until completion/error
+        // handling or explicit stop. EOF and paused playback are still live.
+        return streams.find(soundID) != streams.end();
     }
 
     BOOL32 StopPlayback(U32 soundID) override
@@ -299,5 +303,40 @@ bool GetNativeMissionAudioStats(ISoundManager *manager, NativeMissionAudioStats 
     stats = native->stats;
     stats.activeStreams = static_cast<U32>(native->streams.size());
     return true;
+}
+
+// Existing shell smoke: real generated PCM through the real stream/device and
+// mission sound owner, without a mission or fabricated completion status.
+bool CheckNativeMissionSoundCompletion()
+{
+    if (!STREAMER || !SFXDIR) return false;
+    COMPTR<ISoundManager> sound;
+    auto *owner = new DAComponent<NativeMissionSound>;
+    sound = owner;
+    owner->Release();
+    const U32 id = owner->PlayCommMessage("interface1.wav", SFXDIR, nullptr, 1.0F);
+    if (!id || !owner->IsPlaying(id)) return false;
+    const HSTREAM stream = owner->streams.at(id).handle;
+    if (!STREAMER->Stop(stream) || STREAMER->GetStatus(stream) != IStreamer::STOPPED ||
+            !owner->IsPlaying(id) || !STREAMER->Restart(stream)) return false;
+    const auto until = Platform::MonotonicMicroseconds() + 3000000;
+    auto waitFor = [&](IStreamer::STATUS state) {
+        while (Platform::MonotonicMicroseconds() < until)
+        {
+            UpdateNativeStreamers();
+            const auto actual = STREAMER->GetStatus(stream);
+            if (actual == state) return true;
+            if (actual == IStreamer::INVALID || actual == IStreamer::COMPLETED) return false;
+            Platform::SleepForMilliseconds(1);
+        }
+        return false;
+    };
+    if (!waitFor(IStreamer::EOFREACHED) || !owner->IsPlaying(id) ||
+            !waitFor(IStreamer::COMPLETED)) return false;
+    owner->Notify(CQE_UPDATE, nullptr);
+    if (owner->IsPlaying(id) || !owner->streams.empty()) return false;
+    const U32 stopped = owner->PlayCommMessage("interface1.wav", SFXDIR, nullptr, 1.0F);
+    return stopped && owner->IsPlaying(stopped) && owner->StopPlayback(stopped) &&
+        !owner->IsPlaying(stopped) && owner->streams.empty();
 }
 }

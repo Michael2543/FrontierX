@@ -18,6 +18,8 @@
 #include "pch.h"
 #include <globals.h>
 #include <stdio.h>
+#include "Include/M3FrameInput.h"
+#include <FrontierX/CompatibilityJournal.h>
 
 #include "Resource.h"
 #include "Cursor.h"
@@ -309,6 +311,25 @@ static LONG CALLBACK wndProc (HWND hWindow, UINT message, WPARAM wParam, LPARAM 
 	 * touch the game's state. */
 	if (s_wndProcThreadId && GetCurrentThreadId() != s_wndProcThreadId)
 		return DefWindowProc(hWindow, message, wParam, lParam);
+	if (FrontierXM3::ControlledInput())
+	{
+		switch (message)
+		{
+		case WM_MOUSEMOVE: case WM_MOUSEWHEEL: case WM_MOUSEHWHEEL:
+		case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_LBUTTONDBLCLK:
+		case WM_RBUTTONDOWN: case WM_RBUTTONUP: case WM_RBUTTONDBLCLK:
+		case WM_MBUTTONDOWN: case WM_MBUTTONUP: case WM_MBUTTONDBLCLK:
+		case WM_XBUTTONDOWN: case WM_XBUTTONUP: case WM_XBUTTONDBLCLK:
+		case WM_KEYDOWN: case WM_KEYUP: case WM_SYSKEYDOWN: case WM_SYSKEYUP:
+		case WM_CHAR: case WM_SYSCHAR: case WM_UNICHAR:
+		{
+			static FrontierX::CompatibilityJournal journal("input");
+			journal.Write("external-input-excluded", 0, message);
+			return 0;
+		}
+		default: break;
+		}
+	}
 
 	MSG msg;
 	static BOOL32 bInactive,bRecurse,bHasFocus,bLeadChar;

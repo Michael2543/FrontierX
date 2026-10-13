@@ -18,6 +18,7 @@ struct NativeMissionAudioStats
     std::uint32_t activeStreams = 0;
 };
 bool GetNativeMissionAudioStats(ISoundManager *manager, NativeMissionAudioStats &stats);
+bool CheckNativeMissionSoundCompletion();
 ISoundManager *CreateNativeMissionSoundManager(bool skipSpeech, bool skipAnimatedPortraits);
 ITeletype *CreateNativeMissionTeletype(bool skipVisuals);
 IUnitComm *CreateNativeDisabledUnitComm();

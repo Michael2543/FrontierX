@@ -8,6 +8,7 @@
 #include "AppObjectContracts.h"
 #include <DMissionEnum.h>
 #endif
+#include "M3StateOutput.h"
 
 //--------------------------------------------------------------------------//
 //                                                                          //
@@ -33,8 +34,9 @@ enum UG_TYPE
 };
 //---------------------------------------------------------------------------
 //
-struct MGlobals 
+struct MGlobals
 {
+	MEXTERN static void WriteComparisonState(M3StateOutput output, void *context);
 	MEXTERN static U32 GetUpgradeLevel (U32 playerID,enum UG_TYPE ug_type,S32 race);
 
 	MEXTERN static void SetAlly (U32 playerID1, U32 playerID2, bool bAlly=true);	// one-way alliance

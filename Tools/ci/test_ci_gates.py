@@ -15,9 +15,34 @@ import check_ctest
 import private_workspace
 import cross_m3
 import gpu_host_setup
+import native_cross_m3
 
 
 class GateTests(unittest.TestCase):
+    def test_native_cross_rejects_stale_dirty_and_outside_windows_evidence(self):
+        config = dict(target='fixture@example', key='/fixture/key', known_hosts='/fixture/known',
+                      windows_private_root='C:/Fixture/Private')
+        execution = dict(revision='a' * 40, working_tree_dirty=False, workflow_run='123',
+                         attempt='1', compiler='msvc', scope='mission', configuration='Final')
+        record = dict(private_directory='C:/Fixture/Private/run', manifest=dict(
+            execution=execution, protocol=dict(frame_input='fixed-source-period')))
+        def result():
+            return subprocess.CompletedProcess([], 0, json.dumps(record).encode(), b'')
+        with patch('native_cross_m3.subprocess.run', side_effect=lambda *a, **k: result()):
+            native_cross_m3.windows_case(config, '123', '1', 'a' * 40, 'fixed-source-period')
+            execution['working_tree_dirty'] = True
+            with self.assertRaises(ValueError):
+                native_cross_m3.windows_case(config, '123', '1', 'a' * 40, 'fixed-source-period')
+            execution['working_tree_dirty'] = False
+            execution['revision'] = 'b' * 40
+            with self.assertRaises(ValueError):
+                native_cross_m3.windows_case(config, '123', '1', 'a' * 40, 'fixed-source-period')
+            execution['revision'] = 'a' * 40
+            for directory in ('C:/Fixture/Private-other/run', 'C:/Fixture/Private/../Outside'):
+                record['private_directory'] = directory
+                with self.assertRaises(ValueError):
+                    native_cross_m3.windows_case(config, '123', '1', 'a' * 40, 'fixed-source-period')
+
     def test_gpu_host_setup_never_selects_unrelated_processes(self):
         child = subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.read()'],
                                  stdin=subprocess.PIPE)

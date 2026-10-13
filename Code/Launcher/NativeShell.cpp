@@ -2014,6 +2014,15 @@ int Run(int argc, char ** argv)
                 return 6;
             }
             std::cout << "Native ISFX BUTTONPRESS1 preload/open/play/stop checked\n";
+            if (!options.missionStart)
+            {
+                if (!FrontierX::CheckNativeMissionSoundCompletion())
+                {
+                    std::cerr << "Native mission sound EOF/completion contract failed\n";
+                    return 6;
+                }
+                std::cout << "Native mission sound retains EOF until actual completion and owner cleanup checked\n";
+            }
         }
     }
     // Wayland compositors own top-level placement, so the portable shell does not

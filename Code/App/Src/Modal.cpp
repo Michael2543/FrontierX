@@ -49,9 +49,7 @@ struct BaseHotRect;
 #include <TComponent.h>
 #include <TSmartPointer.h>
 #include <FrontierX/PlatformTime.h>
-#if !defined(_WIN32)
 #include "Include/M3FrameInput.h"
-#endif
 
 
 #if defined(_WIN32)
@@ -74,9 +72,30 @@ static bool QueryPerformanceCounter(LARGE_INTEGER *tick)
 //
 static S32 currentFrameTime=0;
 
+namespace FrontierXM3
+{
+void PrepareFrameInput()
+{
+#if defined(_WIN32)
+	if (!ControlledInput()) return;
+	if (!WM || !WM->AppIsActive() ||
+		(GetAsyncKeyState(VK_SHIFT) & 0x8000) || (GetAsyncKeyState(VK_CONTROL) & 0x8000) ||
+		(GetAsyncKeyState(VK_MENU) & 0x8000))
+	{ std::fputs("M3 Windows active desktop/input prerequisites failed\n", stderr); std::abort(); }
+	WM_WINAREA area = {};
+	WM->GetClientArea(area);
+	if (area.w <= 0 || area.h <= 0) std::abort();
+	WM->SetCursorPos(area.w / 2, area.h / 2);
+	S32 x, y;
+	WM->GetCursorPos(x, y);
+	if (x != area.w / 2 || y != area.h / 2)
+	{ std::fputs("M3 Windows controlled cursor placement failed\n", stderr); std::abort(); }
+#endif
+}
+}
+
 static S32 get_frame_time (void)
 {
-#if !defined(_WIN32)
 	if (FrontierXM3::FixedFrameInput())
 	{
 		// Same source RENDER_PERIOD input as ObjectList::BeginFrame, retaining
@@ -84,7 +103,6 @@ static S32 get_frame_time (void)
 		currentFrameTime = S32(double(RENDER_PERIOD) * 1024.0 * 1000.0);
 		return currentFrameTime;
 	}
-#endif
 	const U64 clockTick = FrontierX::Platform::MonotonicMicroseconds();
 	static U64 lastClockTick;
 
@@ -480,9 +498,15 @@ BOOL32 EndModal(SINGLE dt)
 
 	if (CQFLAGS.bGameActive)
 		OBJLIST->Update();
-#if !defined(_WIN32)
-	FrontierXM3::AfterFrame();
-#endif
+	if (FrontierXM3::FixedFrameInput())
+	{
+		// Original ObjList callback crosses Trim/Conquest without transferring
+		// FILE ownership or adding an interface slot; it executes after iteration.
+		COMPTR<IEventCallback> callback;
+		if (OBJLIST->QueryInterface("IEventCallback", callback) != GR_OK || !callback ||
+			callback->Notify(FrontierXM3::AfterFrameEvent, nullptr) != GR_OK)
+		{ std::fputs("M3 original post-frame owner callback failed\n", stderr); std::abort(); }
+	}
 
 	QueryPerformanceCounter((LARGE_INTEGER *)&time1);
 	((ISystemContainer *)GS)->Update();			// service windows message queue, etc.
@@ -538,6 +562,7 @@ U32 __stdcall CQDoModal (BaseHotRect * pDialog)
 
 	while (modalEvent.bResultSet==false)
 	{
+		FrontierXM3::PrepareFrameInput();
 		S32 dt = get_frame_time();
 
 		QueryPerformanceCounter((LARGE_INTEGER *)&time1);

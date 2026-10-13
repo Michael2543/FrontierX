@@ -4189,6 +4189,7 @@ void MScript::FlushStreams()
 BOOL32 MScript::IsStreamPlaying (U32 movie_handle)
 {
 	const BOOL32 playing = SOUNDMANAGER->IsPlaying(movie_handle);
+	M3ScriptJournal().Write("script-poll-tick", movie_handle, MGlobals::GetUpdateCount());
 	M3ScriptJournal().Write("script-poll", movie_handle, playing);
 	return playing;
 }

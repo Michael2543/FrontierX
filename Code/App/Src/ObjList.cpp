@@ -32,8 +32,8 @@ struct MeshChain;
 #include "TResClient.h"
 #include "IObject.h"
 #include "Include/AppArchetypeNode.h"
-#if !defined(_WIN32)
 #include "Include/M3FrameInput.h"
+#if !defined(_WIN32)
 #include "FrontierX/CompatibilityJournal.h"
 #endif
 #include "ObjList.h"
@@ -1037,10 +1037,8 @@ void ObjectList::BeginFrame (void)
 
 	if (elapsedTime < 0 || elapsedTime > 0.25)
 		elapsedTime = 0.25;
-#if !defined(_WIN32)
 	if (FrontierXM3::FixedFrameInput())
 		elapsedTime = RENDER_PERIOD;
-#endif
 	realRenderTime = elapsedTime;
 
 	UpdateRenderEffects(realRenderTime);
@@ -1160,10 +1158,9 @@ void ObjectList::EndFrame (void)
 //
 #include "M3Trace.h"
 
-#if !defined(_WIN32)
 namespace FrontierXM3
 {
-void AfterFrame()
+static void Checkpoint()
 {
 	const char *mode = std::getenv("FRONTIERX_M3_CHECKPOINT");
 	if (!mode || !*mode) return;
@@ -1191,7 +1188,7 @@ void AfterFrame()
 		FILE *file = std::fopen(path, "wb");
 		if (!file)
 		{ std::fputs("M3 private checkpoint open failed\n", stderr); std::abort(); }
-		WriteSnapshot(file, point);
+		WriteSnapshot(file, point, "after-physical");
 		if (std::fclose(file))
 		{ std::fputs("M3 private checkpoint close failed\n", stderr); std::abort(); }
 	};
@@ -1210,8 +1207,14 @@ void AfterFrame()
 		capture("after-reload");
 	}
 }
+
+void AfterFrame()
+{
+	if (!TraceFile() || !FixedFrameInput()) return;
+	Checkpoint();
+	SnapshotAfterPhysical(MGlobals::GetUpdateCount());
 }
-#endif
+}
 
 void ObjectList::Update (void)
 {
@@ -2814,6 +2817,13 @@ IBaseObject * ObjectList::CreateUIAnim (UIANIMTYPE type,const Vector &vec)
 //
 GENRESULT ObjectList::Notify (U32 message, void *param)
 {
+	if (message == FrontierXM3::AfterFrameEvent)
+	{
+		if (param || !FrontierXM3::FixedFrameInput() || !FrontierXM3::TraceFile())
+			return GR_INVALID_PARMS;
+		FrontierXM3::AfterFrame();
+		return GR_OK;
+	}
 #if defined(_WIN32)
 	MSG *msg = (MSG *) param;
 #else

@@ -11,6 +11,18 @@ import m3_compare as compare
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_world_keeps_non_mission_objects_orientation_and_velocity_bits(self):
+        obj = dict(id=0, **{'class': 1}, owner=0, system=1, update_bin=0,
+                   transform_f32=[['00000000'] * 3 for _ in range(4)],
+                   velocity_f32=['00000000'] * 3, visibility=[0, 0], flags=[0] * 8)
+        compare.validate_world([obj])
+        changed = copy.deepcopy(obj)
+        changed['transform_f32'][0][1] = '80000000'
+        self.assertEqual(compare.first_difference(obj, changed), '$.transform_f32[0][1]')
+        changed['velocity_f32'][0] = '7f800000'
+        with self.assertRaises(compare.InvalidTrace):
+            compare.validate_world([changed])
+
     def test_operation_payload_and_queue_order_are_comparison_inputs(self):
         op = dict(id=1, command=4, packet_type=0xfffffff4, parent=0, group=0, user_bits=0, control_bits=0,
                   flags=[0, 0, 0, 0], objects=[11, 12],
@@ -83,6 +95,19 @@ class ComparisonTests(unittest.TestCase):
             path.write_text('{"schema":1,"seed":1,"rand_max":32767,"draws":[]}')
             with self.assertRaises(compare.InvalidTrace):
                 compare.read_rng(path)
+            contract = dict(schema=1, owner='RandomGen', modulus=32767, state_bytes=4,
+                            sequences=[dict(seed=seed, draws=[0] * 32) for seed in (0, 1, 17, 254)])
+            path.write_text(json.dumps(contract))
+            self.assertEqual(compare.read_randomgen(path), contract)
+            contract['sequences'][0]['draws'].pop()
+            path.write_text(json.dumps(contract))
+            with self.assertRaises(compare.InvalidTrace):
+                compare.read_randomgen(path)
+            contract['sequences'][0]['draws'].append(0)
+            contract['state_bytes'] = 8
+            path.write_text(json.dumps(contract))
+            with self.assertRaises(compare.InvalidTrace):
+                compare.read_randomgen(path)
 
     def test_checkpoint_observation_never_counts_as_complete_save_semantics(self):
         unit = dict(id=1, owner=1, system=1, **{'class': 1},
@@ -107,6 +132,19 @@ class ComparisonTests(unittest.TestCase):
             self.assertEqual(compare.read_checkpoint(path)['globals']['game_speed'], 0)
             record['globals']['game_speed'] = 11
             path.write_text(json.dumps(record))
+            with self.assertRaises(compare.InvalidTrace):
+                compare.read_checkpoint(path)
+            record['globals']['game_speed'] = 0
+            record.update(schema=4, boundary='after-physical',
+                          script=dict(schema=1, data=[], last_extended=0, programs=[]),
+                          operations=dict(last_id=0, update_counter=256, buffered_bytes=0,
+                                          queues=[[], []], termination=[], completion=[], recalculate=[]))
+            path.write_text(json.dumps(record))
+            self.assertEqual(compare.read_checkpoint(path)['boundary'], 'after-physical')
+            other = copy.deepcopy(record)
+            other['boundary'] = 'after-logic'
+            self.assertEqual(compare.first_difference(record, other), '$.boundary')
+            path.write_text(json.dumps(other))
             with self.assertRaises(compare.InvalidTrace):
                 compare.read_checkpoint(path)
 

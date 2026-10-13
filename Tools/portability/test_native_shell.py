@@ -179,6 +179,8 @@ class NativeShellTests(unittest.TestCase):
             self.assertIn('Native mission loading: 5%', result.stderr)
             self.assertIn('Native App MusicManager initialized', result.stdout)
             self.assertIn('Native ISFX BUTTONPRESS1 preload/open/play/stop checked', result.stdout)
+            self.assertIn('Native mission sound retains EOF until actual completion and owner cleanup checked',
+                          result.stdout)
             if GPU_ENABLED:
                 self.assertIn('Native operation storage alignment/copy/load checked', result.stdout)
                 self.assertIn('Native objective storage compaction/state checked', result.stdout)
