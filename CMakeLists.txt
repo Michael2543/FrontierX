@@ -1257,9 +1257,16 @@ target_compile_features(frontierx_app_objwatch_owner PRIVATE cxx_std_17)
 
 # Compile the production object/archetype owner used by mission loading.
 # Its App service link closure remains a separate integration gate.
+add_library(frontierx_app_base_object_owner OBJECT
+	Code/App/Src/BaseObject.cpp)
+target_include_directories(frontierx_app_base_object_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include
+	Code/Libs/Src/Viewer/DOCUVIEW)
+target_compile_features(frontierx_app_base_object_owner PRIVATE cxx_std_17)
+
 add_library(frontierx_app_object_list_owner OBJECT
 	Code/App/Src/ObjList.cpp
-	Code/App/Src/BaseObject.cpp
 	Code/App/Src/GroupObj.cpp
 	Tools/portability/app_object_template_header.cpp)
 target_include_directories(frontierx_app_object_list_owner PRIVATE
@@ -1681,6 +1688,10 @@ target_compile_features(frontierx_app_net_packet_owner PRIVATE cxx_std_17)
 add_executable(frontierx_net_buffer_probe
 	Tools/portability/net_buffer_probe.cpp
 	Tools/portability/camera_save_support.cpp
+	# MovieCamera's UBSan vptr checks require the original IBaseObject RTTI owner.
+	$<TARGET_OBJECTS:frontierx_app_base_object_owner>
+	$<TARGET_OBJECTS:frontierx_app_primitive_builder_owner>
+	$<TARGET_OBJECTS:frontierx_app_circle_lines_owner>
 	$<TARGET_OBJECTS:frontierx_app_net_buffer_owner>
 	$<TARGET_OBJECTS:frontierx_app_net_packet_owner>
 	$<TARGET_OBJECTS:frontierx_app_movie_camera_manager_owner>
@@ -1875,6 +1886,10 @@ target_link_libraries(frontierx_state_material_probe PRIVATE
 	frontierx_native_render_primitive
 	frontierx_native_render_pipeline frontierx_platform)
 target_compile_features(frontierx_state_material_probe PRIVATE cxx_std_17)
+# Legacy Shading IMaterial and CQ2 IMaterialManager's IMaterial are unrelated
+# interfaces. Keep their RTTI distinct when both DLL closures share one ELF.
+target_compile_definitions(frontierx_state_material_probe PRIVATE
+	IMaterial=NativeLegacyMaterial)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 	target_compile_options(frontierx_state_material_probe PRIVATE
 		${FRONTIERX_RB_HEADER_WARNS} -Wno-unused-parameter)
@@ -2038,6 +2053,7 @@ int main() {
 			$<TARGET_OBJECTS:frontierx_app_vertex_buffer_owner>
 			$<TARGET_OBJECTS:frontierx_app_mglobals_owner>
 			$<TARGET_OBJECTS:frontierx_app_object_list_owner>
+			$<TARGET_OBJECTS:frontierx_app_base_object_owner>
 			$<TARGET_OBJECTS:frontierx_app_object_comm_owner>
 			$<TARGET_OBJECTS:frontierx_app_ui_anim_owner>
 			$<TARGET_OBJECTS:frontierx_app_anim_obj_owner>
@@ -2226,6 +2242,8 @@ int main() {
 				frontierx_sdl3_gpu_renderer
 				PkgConfig::SDL3)
 		target_compile_features(frontierx_sdl3_gpu_probe PRIVATE cxx_std_17)
+		target_compile_definitions(frontierx_sdl3_gpu_probe PRIVATE
+			IMaterial=NativeLegacyMaterial)
 		frontierx_enable_strict_warnings(frontierx_sdl3_gpu_probe)
 		if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 			target_compile_options(frontierx_sdl3_gpu_probe PRIVATE

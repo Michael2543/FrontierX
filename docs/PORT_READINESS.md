@@ -1,6 +1,6 @@
 # Linux Port Readiness Plan
 
-## Current milestone (2026-10-12)
+## Current milestone (2026-10-13)
 
 **M2 Linux Sol_Train gameplay is complete in the agreed scope.** Original
 entry, all23 training goals, required HUD/commands/map, pause/resume, early
@@ -25,10 +25,22 @@ assigns native Windows/module ABI and comparative retail validation to M3;
 no such result is claimed for M2. Keep external dependency leaks/Wayland probe
 behavior in the technical backlog with their reproducers. M3 is now in progress and **not accepted**. Supplementary native Windows
 Debug/Final rebuilds and same-build campaign ABI checks execute successfully
-on the supplied SSH machine; no CI job has executed. The first same-build
+on the supplied SSH machine. First Actions run38360609114 now executes
+at published09d3c7d: GCC/Clang default and optional jobs and Clang sanitizer
+checks pass; GCC sanitizer linking and both compilers' GPU/mission jobs fail.
+Complete CI results are pending. User-pushed revision
+`09d3c7d` contains the manual workflow. A follow-up DACOM owner correction
+restores all14 Windows system-provider creations locally; its new native
+registry/release regression fails before the correction and passes afterward.
+Matching source DAHotkey restores normal close in2 actual Windows mission
+runs, but their first exact position difference is count3. The user has now
+configured a local Linux runner; its labels and current owner-only/private/
+fork-disabled policy are verified, and it is online. The Windows runner is now online after the user corrected its UTC clock;
+its required job labels are verified. The native Windows CI job remains
+queued; full semantic/save continuation remains unimplemented. The first same-build
 Linux trace divergence is count5/Z physical position; native Windows/Linux
 CRT draws also differ. Complete state/RNG capture, exact save/reload
-continuation, restored Windows startup/factory creation, speech/GPU/retail
+continuation, speech/GPU/retail
 checks and CI infrastructure
 remain open. No matching fields, partial trace or skip counts as success.
 Current protocol, owner findings, protected workflow and concrete blockers:

@@ -66,6 +66,22 @@ jobs:
           clean: true
       - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope mission
 
+  linux-host-mission-sanitizers:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: frontierx-m3-controlled
+    runs-on: [self-hosted, Linux, X64, frontierx-m3-linux-gpu]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          clean: true
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope mission-sanitizers
+
   windows-native:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
@@ -98,6 +114,8 @@ jobs:
         run: ./Tools/ci/windows_mission_m3.ps1
 
   crt-cross-build:
+    # CPU sanitizer failures must not hide independent available CRT evidence.
+    if: always() && needs.windows-native.result == 'success'
     needs: [linux, windows-native]
     runs-on: ubuntu-24.04
     steps:
@@ -115,7 +133,7 @@ jobs:
 
   acceptance:
     if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    needs: [linux, linux-host-gpu, linux-host-mission, windows-native, windows-host-mission, crt-cross-build]
+    needs: [linux, linux-host-gpu, linux-host-mission, linux-host-mission-sanitizers, windows-native, windows-host-mission, crt-cross-build]
     runs-on: ubuntu-24.04
     steps:
       - run: |

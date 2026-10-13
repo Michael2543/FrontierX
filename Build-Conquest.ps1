@@ -18,6 +18,7 @@ $outputDirectory = Join-Path $repoRoot "Code\App\Src\$Configuration"
 $campaignSolution = Join-Path $repoRoot 'Code\App\Src\Scripts\ConquestCampaign.sln'
 $campaignOutputDirectory = Join-Path $repoRoot 'Code\App\Src\Scripts\Build'
 $engineProjects = @(
+    (Join-Path $repoRoot 'Code\Libs\Src\DAHOTKEY\Hotkey.vcxproj'),
     (Join-Path $repoRoot 'Code\Libs\Src\RenderPipeline\D3DRenderPipe.vcxproj'),
     (Join-Path $repoRoot 'Code\Libs\Src\MeshManager\MeshManager.vcxproj'),
     (Join-Path $repoRoot 'Code\Libs\Src\Engine\Engine.vcxproj'),
@@ -101,6 +102,7 @@ $campaignConfiguration = if ($Configuration -eq 'Debug') { 'Debug' } else { 'Rel
 $dacomSource = Join-Path $repoRoot "Code\Libs\ImplicitDLL\$engineConfiguration\DACOM.dll"
 $engineOutputDirectory = Join-Path $repoRoot "Code\Libs\ExplicitDLL\$engineConfiguration"
 $engineBinaries = @(
+    'DAHotKey.dll',
     'D3DRenderPipe.dll', 'MeshManager.dll', 'Engine.dll', 'Anim.dll',
     'HardPoint.dll', 'RenderMgr.dll', 'TextureLibrary.dll', 'PolyMesh.dll', 'Optics.dll'
 )

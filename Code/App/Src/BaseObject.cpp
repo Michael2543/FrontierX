@@ -19,6 +19,8 @@
 #endif
 
 #include "IObject.h"
+#include "Objwatch.h"
+#include "Include/AppArchetypeNode.h"
 #include "SuperTrans.h"
 #include "UserDefaults.h"
 #include "GridVector.h"
@@ -34,6 +36,32 @@ static constexpr U8 GetRValue(COLORREF color) { return static_cast<U8>(color); }
 static constexpr U8 GetGValue(COLORREF color) { return static_cast<U8>(color >> 8); }
 static constexpr U8 GetBValue(COLORREF color) { return static_cast<U8>(color >> 16); }
 #endif
+
+IBaseObject::~IBaseObject(void)
+{
+#ifndef FINAL_RELEASE
+	if (debugName && CQFLAGS.bTraceMission)
+	{
+		FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), "~BaseObject() \"%s\"\r\n", debugName);
+	}
+#endif
+	if (pArchetype != 0)
+	{
+		pArchetype->usage--;
+		CQASSERT(S32(pArchetype->usage) >= 0);
+	}
+
+	if (OBJLIST)
+	{
+		if (objClass == OC_GROUP)
+			OBJLIST->RemoveGroupObject(this);
+		else
+			OBJLIST->RemoveObject(this);
+
+		UnregisterWatchersForObject(this);
+	}
+
+}
 
 extern Vector circleLines[NUM_CIRCLE_SEGS];
 

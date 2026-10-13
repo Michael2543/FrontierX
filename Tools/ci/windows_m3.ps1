@@ -3,9 +3,10 @@ param()
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$private = Join-Path $env:RUNNER_TEMP ('frontierx-m3-' + [guid]::NewGuid())
+$private = $null
 try {
-    New-Item $private -ItemType Directory | Out-Null
+    $private = & python (Join-Path $PSScriptRoot 'private_workspace.py') --repository $root --prefix 'frontierx-m3-'
+    if ($LASTEXITCODE -or !$private) { throw 'retained private evidence root unavailable' }
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
     $vs = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -property installationPath
     if (!$vs -or !(Test-Path (Join-Path $env:DXSDK_DIR 'Include\d3dx9.h'))) { throw 'native toolchain missing' }
@@ -23,6 +24,23 @@ try {
     & (Join-Path $root 'Tools\windows\Test-RestoredValidation.ps1') -PrivateDirectory $private *> (Join-Path $private 'helper-tests.log')
     Write-Output 'Synthetic Windows launch/error/timeout and registry-restore checks executed'
     $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars32.bat'
+    $registryExe = Join-Path $private 'dacom-registry.exe'
+    $registrySource = Join-Path $root 'Tools\portability\dacom_registry_probe.cpp'
+    $registryInclude = Join-Path $root 'Code\Libs\Include'
+    $registryLib = Join-Path $root 'Code\Libs\Static\Release\DACOM.lib'
+    $registryCmd = Join-Path $private 'dacom-registry-build.cmd'
+    @("@echo off", "call `"$vcvars`"", "if errorlevel 1 exit /b 1", "cl /nologo /EHsc /MT /W4 /I`"$registryInclude`" `"$registrySource`" /Fe:`"$registryExe`" /Fo:`"$private\dacom-registry.obj`" /link `"$registryLib`"", "exit /b %errorlevel%") | Set-Content $registryCmd
+    & cmd /c $registryCmd *> (Join-Path $private 'dacom-registry-build.log')
+    if ($LASTEXITCODE) { throw 'native DACOM regression build failed' }
+    foreach ($engineConfig in @('Debug', 'Release')) {
+        Copy-Item (Join-Path $root "Code\Libs\ImplicitDLL\$engineConfig\DACOM.dll") $private -Force
+        Copy-Item (Join-Path $root "Code\Libs\ExplicitDLL\$engineConfig\D3DRenderPipe.dll") $private -Force
+        foreach ($searchPath in @('unset', 'dot', 'absolute')) {
+            & $registryExe $searchPath *> (Join-Path $private "dacom-registry-$engineConfig-$searchPath.log")
+            if ($LASTEXITCODE) { throw 'native DACOM registry or module release regression failed' }
+        }
+    }
+    Write-Output 'Native production DACOM registry and provider-release regressions executed'
     $source = Join-Path $root 'Tools\portability\rng_contract_probe.cpp'
     $exe = Join-Path $private 'rng-contract.exe'
     $cmd = Join-Path $private 'rng-build.cmd'

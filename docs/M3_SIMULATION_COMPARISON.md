@@ -1,7 +1,9 @@
 # M3 simulation, save and compatibility comparison
 
-Status: **2026-10-13, NOT ACCEPTED** (work started2026-10-12). CI has not executed this work. Local
-Linux and SSH native Windows results below are supplementary evidence only.
+Status: **2026-10-13, NOT ACCEPTED** (work started2026-10-12). The first
+actual GitHub Actions run is in progress at the published09d3c7d revision;
+no complete CI acceptance is established. Local Linux and SSH native Windows
+results below remain supplementary evidence only.
 The restored Windows executable is an implementation under test, not an
 unqualified retail oracle. The user's mission-conversation failure remains
 open; no Linux behavior is changed to imitate it.
@@ -9,8 +11,11 @@ open; no Linux behavior is changed to imitate it.
 ## Baseline audit and source provenance
 
 The initial Linux worktree was clean at
-`516b842820776b0699e270fcb37e8a77c4dc5c77`. This work is an uncommitted
-working-tree overlay; no commit, branch, push or publication was performed.
+`516b842820776b0699e270fcb37e8a77c4dc5c77`. The user subsequently committed
+and pushed the prepared work as `09d3c7d86a39bc900afc746207d7c2e6bffdf288`,
+verified on the private repository default branch on2026-10-13. This follow-up
+starts from that clean revision; its additional changes remain uncommitted.
+The agent has performed no commit, branch, push or publication.
 The supplied SSH machine has a clean older checkout at
 `7c5aa450ba531b1abaee31d0a2639561df29deba`; it was preserved. Builds use a
 separate private source export of the Linux revision plus this overlay.
@@ -310,16 +315,17 @@ The Linux mission driver retains real presentation/audio. Its current
 coverage and process failures are deliberately fatal; the Windows driver
 rejects session0 rather than reporting a skip/pass.
 
-**Actual CI execution: none.** The checkout has no previous workflows.
+**CI snapshot before runner setup:** no execution. The user-pushed revision
+contains the workflow. The latest actual run is recorded in the follow-up below.
 `gh` has no authenticated session. The installed GitHub connector does read
 this private repository: default branch `main`, user-owned repository,
-remote `.github` contains only instructions, and Actions reports0 workflow
-runs. The exposed connector has no runner-administration endpoint. Actual
+remote `main` is revision `09d3c7d`, and Actions still reports0 workflow
+runs on the follow-up inspection. The exposed connector has no runner-administration endpoint. Actual
 registered-runner inventory and access policy therefore remain unverified;
 admin-capable local API access is still needed for registration/policy checks. On the supplied
 Windows machine no Actions runner service or conventional runner installation
 was found. No registration token was obtained and no runner registered.
-No workflow has been pushed or dispatched. The first controlled interactive
+The workflow was pushed by the user, but no executed or queued run is reported. The first controlled interactive
 Windows runtime-driver attempt rebuilt Final and failed before producing a
 tick trace. Its initial staging omitted installed provider DLLs from the
 external `DLL` directory and the newly built implicit DACOM owner; it also
@@ -346,9 +352,9 @@ creation failed, then multiple required provider creations failed. All tested
 runtime modules are native x86 PE images. The owning path is
 `SystemContainer::LoadSystemComponents` → DACOM/factory creation; the Windows
 branch currently continues after required creation failure. That first
-failure's registration/descriptor/module cause remains unresolved. The later
+failure was resolved locally in the follow-up described below. The later
 hotkey crash is not yet the root cause, nor a reproduced dialogue defect.
-This restored-runtime/module-composition failure is an explicit M3 blocker;
+The historical restored-runtime/module-composition failure did not establish parity;
 no Linux failure is introduced to match it. Temporary interactive tasks were
 removed, and the helper restores DataPath on the observed failed process.
 No original installation or existing checkout is overwritten. Local repeat
@@ -365,8 +371,10 @@ Next infrastructure actions, requiring the user's requested authorization:
    the repository's short-lived registration token and appropriate permission.
    The Windows GPU label additionally requires an actual interactive desktop
    runner and working GPU/audio, not the current SSH session0.
-3. Authorize commit/push of the reviewed overlay, then dispatch that revision.
-   Record workflow run/job IDs and results. Until then, local results cannot
+3. The user has committed/pushed `09d3c7d`. Dispatch the protected workflow
+   once runner access and inputs are verified; publish any further reviewed
+   overlay only with explicit authorization. Record workflow run/job IDs and
+   results. Until then, local results cannot
    fulfill the user's mandatory CI criterion.
 
 The implementation blockers remain independently visible: frame/physical
@@ -375,3 +383,287 @@ script/order capture, exact save/reload continuation, remaining input/state iden
 Windows speech-stage characterization and correct retail reference behavior.
 No M3 success is claimed; visible image/input and audible comparisons remain
 additional required evidence after automated core gates.
+
+## Follow-up at user-pushed revision09d3c7d (2026-10-13)
+
+Evidence: source review and supplementary native Windows execution, not CI.
+The user confirmed that no runners have been registered. The supplied SSH
+host also reports no Actions runner service. Runner registration, desktop
+sessions and the repository-wide runner access policy remain infrastructure blockers.
+Local `gh` remains unauthenticated and the installed connector cannot dispatch
+workflows or administer runners. Commit/push is complete; runner administration
+and actual workflow execution remain separate prerequisites.
+
+The original DACOM owner journal now records bounded interface names, descriptor
+sizes, registration counts and factory results, with no pointer/path/media
+capture. It establishes the first startup failure: `LoadAllFromPath` scans the
+application directory twice when `DACOM` is unset or resolves to that directory.
+The second `AddLibrary` unregisters the first factory. `DACOM_GetDllVersion`
+leaks its `LoadLibrary` reference when version metadata is absent, so the
+second load does not invoke DLL_PROCESS_ATTACH and re-register it. Observed
+`IRenderPipeline`, `IViewConstructor` and `IMaterialManager` provider counts
+fall to0. This is a Windows-specific source-owner defect, separated from
+Linux port changes and the unresolved reported conversation defect.
+
+The owner fix avoids scanning the application directory twice and releases
+module references and version buffers on all version-query error paths.
+Explicit `AddLibrary` replacement behavior, interface layouts, registration
+priority, gameplay, assertions and saves are unchanged. MSBuild17.14 /
+MSVC14.44 native Win32 DACOM Debug and Release rebuilds pass. The new
+`dacom_registry_probe.cpp` exercises actual built DACOM and D3DRenderPipe
+providers without retail input or a graphics device: unset, relative-dot
+and absolute application-directory searches retain exactly one production
+IRenderPipeline factory and release its module after shutdown. All3 cases
+fail with the original09d3c7d Release DACOM and pass with the owner correction
+under both Debug and Release (6 successful actual-provider executions).
+`windows-native` now compiles and executes this regression; that job has not
+run. Script syntax checks pass for both changed Windows CI drivers.
+
+The interactive corrected startup now creates all14 configured system
+components successfully. It still produces no mission tick trace: private
+window inspection identifies the original missing `Scripts` directory
+dialog, not a reproduced conversation fault. The automated driver previously
+flattened campaign DLLs into the runtime root; it now stages them in the
+original `Scripts` directory as `Build-Conquest.ps1` does. Failure details are
+retained in a private runner file, with only a bounded stage printed publicly.
+The next actual run reaches all1025 records (counts0..1024), with original
+script requests at0/32/72 for STMG03/04/05. All3 lip resources resolve/parse
+and streams open;4 original completion notifications are observed. Separate
+decoding, playback and audible behavior remain unverified. On original quit,
+the process exits-1073741819; Application Error again identifies the installed
+retail `dahotkey.dll`, exceptionc0000005 at offset0x18be. The driver correctly
+fails the first process and does not claim a repetition or cross-build pass.
+A controlled follow-up rebuilds the source DAHotkey owner, preserving the
+installation and all assertions; the wrapper now includes that required
+provider in both native configurations (15 explicit provider projects). Both
+source DAHotkey configurations compile successfully with NoDeploy. With that
+matching source provider, both actual Windows Sol_Train processes reach all
+1025 records and close with exit0. The strict comparator fails at
+`$[3].units[40].position_f32[2]`: count3, missionID57313, class98, owner1.
+No position normalization or tolerance is introduced. This same-platform
+repeatability failure must be resolved before cross-platform conclusions;
+the shared wall-clock/physical-frame boundary remains the first owner to
+control. Both runs resolve/parse/open3 training speech resources and emit4
+completion notifications, but decode/playback/audible parity is still open.
+Replacing the installed provider with the matching built source removes the
+observed close crash in these2 runs; the exact installed-module defect is
+not inferred, and the reported Windows conversation issue remains open.
+Temporary tasks and validation game processes are confirmed absent afterward. The first Release attempt omitted
+NoDeploy and failed at its legacy nonexistent build-drive copy command;
+repeating with explicit NoDeploy passes. This was a tooling failure, not a
+passed full wrapper rebuild. Provider registry regressions do not prove
+mission, speech, save/reload or retail compatibility.
+
+## Runner registration handoff
+
+Follow-up2026-10-13: the user installed/configured the Linux runner outside
+the repository. Its local non-secret configuration identifies agent
+`froniterX-linux`, group `Default`, and the intended private repository.
+No Runner.Listener/Runner.Worker process is running. No credentials were read
+or transferred and the agent did not start/register a runner. Server-side
+registration status, labels and access restrictions still require an
+authenticated administrative check; local `gh` remains unauthenticated.
+Actions still reports0 workflow runs. Windows runner registration remains
+missing. Installation/configuration does not establish CI or GPU evidence.
+
+The GitHub registration screen is repository **Settings → Actions → Runners
+→ New self-hosted runner**, selecting Linux/x64 or Windows/x64. Execute its
+download/configuration commands on the corresponding host, not in the source
+checkout. The displayed registration token is temporary and must not be
+pasted into chat or committed. See [GitHub registration instructions](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners).
+
+Required custom labels, in addition to automatically assigned OS/architecture:
+
+| Controlled machine | Labels | Required execution environment |
+|---|---|---|
+| Linux build and desktop runner | `frontierx-m3-linux`, `frontierx-m3-linux-gpu` | GCC/Clang, CMake/Ninja, SDL3/Vulkan, reviewed optional shared decoder/font; actual desktop/GPU/audio for host jobs |
+| Native Windows desktop runner | `frontierx-m3-windows`, `frontierx-m3-windows-gpu` | VS2022 Win32, external DXSDK, Python, lawful external installation; active console session/GPU/audio |
+
+One runner per machine can carry both labels and serialize that machine's
+jobs. For the Windows GPU label, use the runner from the logged-in desktop
+(`run.cmd`); a Windows service/SSH session0 fails the explicit mission check.
+The Linux desktop runner likewise needs the actual display/audio environment.
+
+**Resolve runner access policy before exposing either retail-capable host.**
+A label and protected environment in this workflow cannot prevent another
+workflow from requesting the same runner. Use an organization runner group
+restricted to the selected repository and exact reviewed default-branch
+workflow where that policy is available; otherwise use a separate controlled
+private CI repository with no untrusted PR jobs and access restricted to its
+trusted operators. The current personal repository has no established such
+policy. No organization/repository transfer, CI repository creation or token
+registration is authorized/performed by this handoff. See [GitHub runner
+access policies](https://docs.github.com/en/enterprise-cloud@latest/actions/how-tos/manage-runners/self-hosted-runners/manage-access).
+
+After the policy and local-only input configuration are verified, dispatch
+**M3 controlled compatibility gates** from the **Actions** tab on the reviewed
+revision. A queued job, skipped host test or failure of the current explicit
+acceptance blocker is not M3 acceptance. The user-pushed09d3c7d workflow is
+available, but this follow-up owner/tooling overlay still needs separately
+authorized publication before CI can exercise it.
+
+Focused follow-up CTest execution: existing `portability.rng_contract`,
+`portability.m3_compare` and `portability.m3_ci_gates` all pass under the
+existing GCC and Clang default graphs, with0 skips. These are contract/tool
+regressions, not deterministic mission acceptance. The new15-provider full
+Debug/Final wrapper and complete core comparisons still require real CI.
+
+## First actual CI run and access-policy verification (2026-10-13)
+
+GitHub administrator access is now authenticated locally. API inspection
+confirms repository privacy, only the owner's collaborator account, disabled
+fork-PR workflow execution, and the Linux runner's2 required custom labels.
+This establishes a current trusted-operator boundary, not an organization
+runner-group workflow allowlist. Recheck it before granting any additional
+repository access, adding PR workflows or exposing another runner.
+
+The `frontierx-m3-controlled` environment now exists and its only deployment
+branch rule permits branch `main`. Repository Actions settings require full
+commit-SHA pinning, permit GitHub-owned actions (no verified-marketplace
+allowance or extra patterns), give the default job token read permissions
+and disallow approving PR reviews. Fork workflow execution remains disabled;
+no write-token or secret/variable forwarding is enabled. These settings were
+applied and read back through the official API. They complement the reviewed
+manual-only workflow; an environment alone does not constrain other workflows.
+
+The user-installed Linux runner2.337.0 (`froniterX-linux`) is now online and
+executing a job. Local decoder/font/retail/display/audio configuration is
+stored only in its outside-repository environment file with owner-only
+permissions. No credentials, paths or retail files were published or uploaded.
+The source worktree and its uncommitted changes remain separate from the
+runner's clean checkout.
+
+[Actions run38360609114](https://github.com/Michael2543/frontierX/actions/runs/38360609114)
+was dispatched for workflow `.github/workflows/m3.yml`, revision
+`09d3c7d86a39bc900afc746207d7c2e6bffdf288`. Initial job
+`linux-host-mission (gcc)` /115173651342 executes on that Linux runner;
+setup and checkout complete successfully, and actual GCC optional source
+build execution is in progress. Results must be updated after job completion.
+Queued jobs are not executed evidence, and this initial run cannot exercise
+the uncommitted follow-up DACOM/DAHotkey/tooling changes. Its explicit
+incomplete semantic/save/continuation acceptance failure remains intact.
+
+The Windows host is reachable again. The user's runner is now registered
+and online; its required Windows build and GPU labels have been applied and
+read back. A misleading registration-deleted startup error was traced to a
+three-hour UTC clock difference: the runner diagnostic recorded an OAuth
+expiry already in the server's past. The user synchronized the clock;
+read-only checks now show successful session creation and Listening for Jobs.
+No credentials were copied into the repository. Attempt1 Windows CI job115173651357 remained queued despite matching labels.
+After an idle listener-session refresh, the stale attempt was cancelled and
+only the Windows job requested again. Attempt2 job115196293924 now executes
+on frontierX-Windows at the same09d3c7d revision. Online/session status alone
+is infrastructure evidence; native build results remain pending. Linux results
+above belong to completed attempt1 jobs and remain preserved.
+
+The independent CI and source preparation continues without committing or
+pushing this overlay. Its additional owner/tooling fixes need explicit
+commit/push authorization before a later CI revision can validate them.
+
+## Executed first-run Linux results and follow-up overlay (2026-10-13)
+
+Revision `09d3c7d86a39bc900afc746207d7c2e6bffdf288`, workflow `m3.yml`,
+run38360609114 executes the published baseline, not this working overlay.
+
+| Actual Actions job | Job ID | Result |
+|---|---:|---|
+| linux (gcc, default) | 115173651453 | passed |
+| linux (gcc, optional) | 115173651578 | passed |
+| linux (clang, default) | 115173651656 | passed |
+| linux (clang, optional) | 115173651596 | passed |
+| linux (clang, sanitizers) | 115173651597 | passed |
+| linux (gcc, sanitizers) | 115173651511 | failed linking the NetBuffer/MovieCamera closure: missing IBaseObject RTTI |
+| linux-host-gpu (gcc / clang) | 115173651227 / 115173651443 | failed; not accepted |
+| linux-host-mission (gcc / clang) | 115173651342 / 115173651514 | failed; not accepted |
+
+Toolchains are GCC15.2 and Clang21.1. Published drivers generated input manifests
+and exercised source/synthetic checks; the GCC mission job built the optional
+closure and passed its non-GPU checks before the real mission failed. The
+initial GPU/mission jobs' detailed private diagnostics were erased by automatic
+RUNNER_TEMP cleanup before investigation. Their exact failure owners cannot be
+claimed from local reproductions. Late-job diagnostics are retained privately;
+no retail traces or private logs were uploaded.
+
+The overlay requires `FRONTIERX_M3_PRIVATE_ROOT`, an absolute outside-checkout,
+outside-RUNNER_TEMP, outside-retail directory. The helper resolves symlinks and
+rejects protected/disposable roots, uses POSIX owner-only directory permissions
+and retains evidence between jobs. Windows uses the configured private host
+folder's inherited access policy. Existing CTest execution-gate tests now check
+retention across temp deletion and reject absent/relative/unsafe roots. Those
+checks pass locally; native Windows helper creation also passes. Linux listener
+configuration must be reloaded before an overlay CI run.
+
+The original IBaseObject destructor now resides in BaseObject.cpp with its
+unchanged destruction sequence. The original ARCHNODE definition moved unchanged
+to a private header shared by BaseObject and ObjList; serialized/public fields
+and offsets did not change. A bounded BaseObject owner target supplies the real
+RTTI, vtable and implementation to NetBuffer instead of disabling UBSan vptr.
+Local GCC ASan/UBSan NetBuffer checks pass. All five existing GCC/Clang optional and
+Clang-sanitized non-GPU sequences passed after this owner relocation.
+Native Windows Debug/Final full15-provider rebuilds and immediate same-build
+campaign ABI checks also pass on the private source overlay.
+
+A further full GCC sanitizer link identified ICloakEffect::Init as an undefined
+non-pure key function. Source review finds only the concrete CloakEffect::Init
+implementation; the real ObjectCloak caller invokes that implementation through
+the interface. The overlay declares this interface slot pure virtual without
+adding substitute behavior or changing the slot signature/order. Full GCC
+sanitizer linking now passes. Its first non-GPU execution fails at
+MaterialLibrary.cpp:526, material->AddRef(), with a UBSan dynamic-type report for
+DAComponent<StateMaterial>. GDB identifies the actual material vtable and
+original caller. Source review identifies an ELF ODR collision: legacy
+Shading/IMaterial.h defines an IDAComponent-derived IMaterial, while
+IMaterialManager.h defines a different CQ2 IMaterial without that base.
+The native probe links both previously separate DLL closures, including the
+original CQ2 PolyMesh owner. The RTTI symbol selected for the common name
+therefore described the wrong interface. The two legacy material targets now
+use a private build definition IMaterial=NativeLegacyMaterial, consistent across
+their actual owners and callers. Interface slots, registered DACOM names, data
+formats and Windows projects are unchanged. No vptr check is disabled.
+After rebuilding the complete GCC ASan/UBSan graph, all52 non-GPU CTests pass
+with detect_leaks=1 and halt_on_error=1. This covers synthetic/default closure
+checks, not the original live mission or whole GPU/host process. All five other affected optional GCC/Clang configurations now also rebuild
+and pass their non-GPU checks after the final build-definition change, including
+the optional Clang ASan/UBSan closure. These remain local checks of the overlay. Native Windows
+revalidation of the final interface correction remains pending.
+
+The workflow additionally prepares explicit GCC/Clang original-mission
+ASan/UBSan jobs (`linux-host-mission-sanitizers`), with leak detection and fatal
+reports. They use the optional font/shared-decoder closure and live graphics/audio;
+no headless replacement or leak suppression is used. These jobs have not yet
+executed in CI. Independent CRT comparison can run when native Windows passes,
+even if another Linux matrix scope fails; missing artifacts still fail.
+Full-state, RNG/script/order capture, controlled timing, exact-tick save/reload
+continuation, Windows conversations and retail corroboration remain mandatory
+open acceptance blockers. No skip, partial trace or local check fulfills them.
+
+## Next original-owner gates (source review, 2026-10-13)
+
+The next determinism intervention must preserve the original frame/event
+contract rather than force a matching snapshot. ObjectList::BeginFrame derives
+elapsedTime from performance-counter deltas, clamps to0.25, scales game speed,
+and accumulates ELAPSED_TIME/8 logic steps. ObjectList::Update may interleave
+engine_update(ELAPSED_TIME) with batches, then engine_update(elapsedTime) after
+the observed logic ticks. A logic-tick snapshot is therefore not a complete
+physical frame boundary. Frame timing/event observation is required before
+choosing a controlled clock entry; the existing positional first difference
+alone does not establish the exact causal counter delta. No Z normalization,
+float tolerance, gameplay change or assertion weakening is authorized by this
+incomplete evidence.
+
+| Original owner / caller | Source finding | Remaining required evidence |
+|---|---|---|
+| MGlobals::AssignPlayers | srand(randomSeed) seeds its CRT domain | actual training entry seed and complete draw-domain provenance |
+| MGlobals::IsUpdateFrame | CRT rand controls the source synchronization decision | real mission draw sequence/state, not only standalone CRT probe |
+| OpAgent synchronization / ID selection | CRT draws participate in decisions and selection | relevant queues, masks and CRT-domain state at each comparison tick |
+| Trim DLL initialization | srand(time(NULL)), then rand, in its Windows CRT domain | distinguish Windows DLL/MT domains from merged Linux ownership |
+| cloud.cpp temporary RandomGen | seed derives from mission ID; default modulus is RAND_MAX | actual training relevance and Windows/native modulus contract |
+| ObjectList frame owner | wall-clock remainder and physical batching are separate from updateCount | controlled original event/frame boundary and identical audio completion ordering |
+| Mission::Save / original ISaveLoad owners | original file-backed owner exists | tick256/512 safe-boundary saves, semantic records, reload and continued tick1024 comparison |
+
+These are source findings, not executed deterministic or save acceptance.
+Save/reload must not occur during an ObjectList iteration. The current M2
+moved-state reload checks do not establish full RNG/queued-order/script/physical
+continuation equivalence. The known restored-Windows conversation defect
+remains open across script trigger, lookup, decode, playback and completion;
+matching compiler traces cannot serve as retail behavior evidence.

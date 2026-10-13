@@ -29,6 +29,13 @@ $Author: Jasony $
 #include "FDump.h"
 #include "TempStr.h"
 #include "stddat.h"
+#include "FrontierX/CompatibilityJournal.h"
+
+static FrontierX::CompatibilityJournal &CompatibilityJournal()
+{
+	static FrontierX::CompatibilityJournal journal("dacom");
+	return journal;
+}
 
 //
 HINSTANCE hInstance;
@@ -249,17 +256,23 @@ GENRESULT DACOManager::CreateInstance (DACOMDESC *descriptor, //)
 		//
 		
 		REGISTERED_OBJECT *obj = NULL;
+		U32 providers = 0;
 		
 		while ((obj = object_list.next(obj)) != NULL)
 		{
 			if (!strcmp(obj->interface_name, descriptor->interface_name))
             {
+				++providers;
 				result = obj->component->CreateInstance(descriptor,
 					instance);
+				CompatibilityJournal().Write("factory-result", descriptor->size,
+					static_cast<unsigned int>(result), descriptor->interface_name);
 				if (result == GR_OK)
 					break;
             }
 		}
+		CompatibilityJournal().Write("create-result", providers,
+			static_cast<unsigned int>(result), descriptor->interface_name);
 	}
 	
 	return result;
@@ -305,6 +318,7 @@ GENRESULT DACOManager::RegisterComponent  (IComponentFactory *component, //)
 	obj->component      = component;
 	obj->interface_name = interface_name;
 	obj->library		= pCurrentLibrary;
+	CompatibilityJournal().Write("registered", priority, 0, interface_name);
 	
 	//
 	// Add a reference to account for the stored obj->component pointer 
@@ -465,6 +479,9 @@ GENRESULT DACOManager::AddLibrary(const C8 *DLL_filename)
 
 	pCurrentLibrary = 0;
 	
+	const char *journalName = std::strrchr(DLL_filename, '\\');
+	CompatibilityJournal().Write("library-load", registration_cnt,
+		library->instance != NULL, journalName ? journalName + 1 : DLL_filename);
 	if ((library->instance == NULL) || 
 		(registration_cnt  == 0))
 	{
@@ -747,7 +764,15 @@ void DACOManager::LoadAllFromPath (const C8 *searchName)
 			*endptr++ = 0;
 		
 		if (GetAbsolutePath(load_path, app_path, startptr, sizeof(load_path)))
-			LoadAllFromDirectory(load_path, searchName);
+		{
+			// The application directory is scanned below. Reloading it here
+			// unregisters factories even when another module pins the DLL.
+			C8 absolute_path[MAX_PATH+4];
+			const DWORD absolute_length = GetFullPathName(load_path, sizeof(absolute_path), absolute_path, NULL);
+			if (absolute_length == 0 || absolute_length >= sizeof(absolute_path) ||
+				_stricmp(absolute_path, app_path) != 0)
+				LoadAllFromDirectory(load_path, searchName);
+		}
 		
 	} while ((startptr = endptr) != 0);
 	
@@ -934,6 +959,7 @@ void DACOManager::UnregisterRelatedComponents (ADDED_LIBRARY *library)
 	{
 		if (obj->library == library)
 		{
+			CompatibilityJournal().Write("library-unregister", 0, 0, obj->interface_name);
 			//
 			// Release reference before invalidating object pointer
 			//
@@ -1055,10 +1081,12 @@ extern "C"
 		}
 
 		if( GetModuleFileName( hModule, filename, sizeof(filename)/sizeof(filename[0]) ) <= 0 ) {
+			FreeLibrary( hModule );
 			return GR_GENERIC; 
 		}
 
 		if( (len = GetFileVersionInfoSize( filename, &dwDummyHandle )) <= 0 ) {
+			FreeLibrary( hModule );
 			return GR_GENERIC; 
 		}
 
@@ -1066,10 +1094,13 @@ extern "C"
 		
 		if( ::GetFileVersionInfo(filename, 0, len, vi ) == 0 ) {
 			delete[] vi;
+			FreeLibrary( hModule );
 			return GR_GENERIC; 
 		}
 
 		if( VerQueryValue( vi, "\\", &lpvi, &iLen ) == 0 ) {
+			delete[] vi;
+			FreeLibrary( hModule );
 			return GR_GENERIC; 
 		}
 

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
+from private_workspace import create
 
 
 def run(command, root, log, env):
@@ -18,10 +18,10 @@ def run(command, root, log, env):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--compiler', choices=['gcc', 'clang'], required=True)
-    parser.add_argument('--scope', choices=['default', 'optional', 'sanitizers', 'gpu', 'mission'], required=True)
+    parser.add_argument('--scope', choices=['default', 'optional', 'sanitizers', 'gpu', 'mission', 'mission-sanitizers'], required=True)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
-    private = Path(tempfile.mkdtemp(prefix='frontierx-m3-', dir=os.environ.get('RUNNER_TEMP')))
+    private = create(root, 'frontierx-m3-')
     build, log = private / 'build', private / 'execution-private.log'
     env = os.environ.copy()
     env['ASAN_OPTIONS'] = 'detect_leaks=1:halt_on_error=1'
@@ -34,7 +34,7 @@ def main():
                '-DCMAKE_BUILD_TYPE=Debug', '-DBUILD_TESTING=ON',
                '-DCMAKE_CXX_COMPILER=' + ('g++' if args.compiler == 'gcc' else 'clang++'),
                '-DFRONTIERX_BUILD_SDL3=ON', '-DFRONTIERX_BUILD_SDL3_GPU=ON']
-    if args.scope in ('optional', 'sanitizers', 'gpu', 'mission'):
+    if args.scope in ('optional', 'sanitizers', 'gpu', 'mission', 'mission-sanitizers'):
         prefix = env.get('FRONTIERX_LGPL_PREFIX')
         if not prefix:
             raise RuntimeError('external reviewed shared LGPL decoder prefix missing')
@@ -44,7 +44,7 @@ def main():
         command += ['-DFRONTIERX_TEST_FONT_FILE=' + font,
                     '-DFRONTIERX_BUILD_NATIVE_FONTS=ON', '-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON',
                     '-DCMAKE_PREFIX_PATH=' + prefix]
-    if args.scope == 'sanitizers':
+    if args.scope in ('sanitizers', 'mission-sanitizers'):
         command += ['-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer',
                     '-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined',
                     '-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined']
@@ -62,7 +62,7 @@ def main():
     with output.open('wb') as stream:
         subprocess.run([str(build / 'frontierx_rng_contract_probe'), '--trace'],
                        cwd=private, env=env, stdout=stream, check=True)
-    if args.scope == 'mission':
+    if args.scope in ('mission', 'mission-sanitizers'):
         run([sys.executable, str(root / 'Tools/ci/mission_m3.py'),
              '--build', str(build)], root, log, env)
     print(f'Linux {args.compiler} {args.scope}: required scope executed without skips')

@@ -8,10 +8,10 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 import json
 
 from input_manifest import manifest
+from private_workspace import create
 
 
 def main():
@@ -27,8 +27,7 @@ def main():
     data = next((p for p in install.iterdir() if p.name.lower() == 'data'), None)
     if data is None:
         raise RuntimeError('external data root missing')
-    private = Path(tempfile.mkdtemp(prefix='frontierx-m3-mission-',
-                                   dir=os.environ.get('RUNNER_TEMP')))
+    private = create(root, 'frontierx-m3-mission-')
     if private.resolve().is_relative_to(root):
         raise RuntimeError('private mission output must be outside source checkout')
     (private / 'input-manifest.json').write_text(json.dumps(manifest(install, font), sort_keys=True))

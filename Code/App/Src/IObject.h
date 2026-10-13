@@ -321,7 +321,7 @@ public:
 		objwatch = NULL;
 	}
 
-	virtual ~IBaseObject (void);	// See ObjList.cpp
+	virtual ~IBaseObject (void);	// See BaseObject.cpp
 
 	//
 	// Engine abstraction

@@ -2413,3 +2413,33 @@ sanitizer success or new every-step run is claimed. GPU conditional X11
 results/Wayland failures remain as documented. User moves Windows/module ABI/
 retail/determinism comparison to M3; M2 Linux gameplay acceptance is in the
 focused ledger and does not erase these measured host validation failures.
+
+### M3 follow-up at09d3c7d (2026-10-13; supplementary local evidence)
+
+The user pushed the previous M3 overlay. No Actions run exists and the user
+confirms runner registration is still missing. DACOM Debug/Release rebuilds
+and6 actual-provider registry/release regressions pass after the Windows
+owner correction; the3 Release cases fail against the previous source.
+Original DAHotkey Debug/Release NoDeploy rebuilds pass. The build wrapper now
+includes that fifteenth explicit provider; a new full15-provider Debug/Final
+wrapper execution is not claimed. With matching source DACOM/DAHotkey and
+original Scripts directory staging,2 actual Windows Sol_Train runs reach
+counts0..1024 and close0, but strict repetition first differs at count3/Z.
+Mission speech triggering/resource/lip/stream/completion observations do not
+prove decode/playback/audible parity. Full semantic/save/continuation and CI
+acceptance remain open. See [current M3 ledger](M3_SIMULATION_COMPARISON.md).
+
+M3 follow-up overlay (2026-10-13, base09d3c7d): the original BaseObject
+owner now supplies its destructor/vtable/RTTI directly to NetBuffer. Original
+ARCHNODE storage/lifetime is shared through a private header. ICloakEffect::Init
+is declared pure virtual because only its concrete original override exists.
+GCC15.2 ASan/UBSan full linking succeeds. The first full non-GPU run identifies
+legacy/CQ2 IMaterial RTTI collision when previously separate DLL owners link
+into one ELF. Private IMaterial=NativeLegacyMaterial definitions on the legacy
+state-material and SDL GPU targets separate those distinct source contracts.
+The rebuilt GCC instrumented graph passes all52 non-GPU CTests with fatal ASan,
+UBSan and leak detection, including the existing StateMaterial real-owner
+regression. These are local synthetic checks, not CI validation of this overlay
+or original-mission sanitizer acceptance. Published09d3c7d CI GCC sanitizer
+linking remains failed; the other five Linux build jobs passed. See the focused
+[M3 record](M3_SIMULATION_COMPARISON.md) for actual job IDs and host failures.

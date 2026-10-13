@@ -20,7 +20,7 @@
 
 struct _NO_VTABLE ICloakEffect : IObject
 {
-	virtual void Init(IBaseObject *_owner);
+	virtual void Init(IBaseObject *_owner) = 0;
 };
 
 struct _NO_VTABLE IFireball : IObject

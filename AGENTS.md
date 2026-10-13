@@ -450,7 +450,14 @@ Commands and explicit host/media limits:
 M3 work in progress (2026-10-13): opt-in original-owner tick/audio observation
 and a protected manual CI workflow are prepared. Supplementary native Windows
 Debug/Final rebuilds and same-build campaign ABI checks execute on the supplied
-SSH host. CI has not run; same-build physical state and CRT contract differences,
+SSH host. First Actions run38360609114 executes at user-pushed09d3c7d;
+Linux default/optional GCC/Clang and Clang sanitizer jobs pass; GCC sanitizer
+and GPU/mission jobs fail. Complete results remain pending. A follow-up DACOM owner fix
+restores Windows provider registration locally. Two actual Windows mission
+runs with matching source DAHotkey close normally but first differ at count3.
+The Linux runner is online with verified current access restrictions. Both host runners are online with verified labels; native Windows CI remains
+queued. Complete CI execution and full semantic/save continuation remain open.
+Same-build physical state and CRT contract differences,
 complete semantic/save/continuation and interactive Windows speech/retail gates
 remain open. Do not count partial capture or local checks as M3 acceptance.
 See [M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).

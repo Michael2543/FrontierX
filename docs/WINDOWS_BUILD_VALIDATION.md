@@ -853,3 +853,18 @@ immediately restored and verified, and the script now creates that key only when
 second check exited with the utility's code 2, created both expected junctions and preserved
 `DataPath=DataOverlay;Data` before and after the run. This validates the helper's setup and
 cleanup with an existing value; a real gameplay launch through it remains unperformed.
+
+### M3 follow-up at09d3c7d (2026-10-13; supplementary local evidence)
+
+The user pushed the previous M3 overlay. No Actions run exists and the user
+confirms runner registration is still missing. DACOM Debug/Release rebuilds
+and6 actual-provider registry/release regressions pass after the Windows
+owner correction; the3 Release cases fail against the previous source.
+Original DAHotkey Debug/Release NoDeploy rebuilds pass. The build wrapper now
+includes that fifteenth explicit provider; a new full15-provider Debug/Final
+wrapper execution is not claimed. With matching source DACOM/DAHotkey and
+original Scripts directory staging,2 actual Windows Sol_Train runs reach
+counts0..1024 and close0, but strict repetition first differs at count3/Z.
+Mission speech triggering/resource/lip/stream/completion observations do not
+prove decode/playback/audible parity. Full semantic/save/continuation and CI
+acceptance remain open. See [current M3 ledger](M3_SIMULATION_COMPARISON.md).
