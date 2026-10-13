@@ -28,6 +28,10 @@ original frame/checkpoint test access and corrects native UTF sibling order;
 complete semantic/RNG/script/order capture and equivalent Save/Reload continuation
 remain open, as do retail/visible/audible checks. See
 [M3 comparison evidence](M3_SIMULATION_COMPARISON.md).
+Current Actions run38384161068 tests118efae. A Linux-only Camera startup
+return-contract fix and opt-in workflow `gpu_host_setup=hyprland-x11` prepare
+corrected startup/GPU checks; their runtime/CI proof remains pending. The GPU
+setup changes only owned test windows, with no persistent desktop rules.
 The next acceptance milestone remains M3 comparison/determinism. Windows/module ABI and actual
 retail comparison are explicitly assigned there by the user; no current
 Windows or parity pass is inferred. Details: [final M2 evidence](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12)

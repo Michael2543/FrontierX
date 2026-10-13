@@ -1,4 +1,5 @@
 #include <SDL3/SDL.h>
+#include "SdlGpuHostSetup.h"
 
 #include "FrontierX/NativeComponentManager.h"
 #include "FrontierX/NativeUtfFileSystem.h"
@@ -827,6 +828,11 @@ int main(int argc, char ** argv)
     windowRuntime.window = SDL_CreateWindow("FrontierX SDL3 GPU probe", 640, 360, flags);
     if (!windowRuntime.window)
         return RuntimeUnavailable(requireRuntime, "window creation", SDL_GetError());
+    if (!WaitForSdlGpuHostSetup())
+    {
+        std::cerr << "GPU host window preparation failed\n";
+        return 1;
+    }
 
     FrontierX::SdlGpuRenderer renderer;
     std::string error;

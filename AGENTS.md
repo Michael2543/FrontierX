@@ -456,6 +456,10 @@ explicitly limits further repairs to Linux; preserve that reference limitation.
 Linux frame/checkpoint access and private cross-build gates are in preparation.
 Original native UTF append-order correction passes local owner regressions and
 all six affected build/non-GPU configurations; new overlay CI remains required.
+Current Actions run38384161068 tests118efae. A Linux-only Camera startup
+return-contract fix and opt-in workflow `gpu_host_setup=hyprland-x11` prepare
+corrected startup/GPU checks; their runtime/CI proof remains pending. The GPU
+setup changes only owned test windows, with no persistent desktop rules.
 Full semantic RNG/script/order capture, save-continuation equivalence and
 retail/visible/audible corroboration remain open. See
 [M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).

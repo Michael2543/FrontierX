@@ -1,6 +1,12 @@
 name: M3 controlled compatibility gates
 on:
   workflow_dispatch:
+    inputs:
+      gpu_host_setup:
+        description: Explicit Linux GPU desktop setup (ordinary default retained)
+        type: choice
+        options: [ordinary, hyprland-x11]
+        default: ordinary
 permissions:
   contents: read
 concurrency:
@@ -38,6 +44,8 @@ jobs:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     runs-on: [self-hosted, Linux, X64, frontierx-m3-linux-gpu]
+    env:
+      FRONTIERX_M3_GPU_SETUP: ${{ inputs.gpu_host_setup == 'hyprland-x11' && 'hyprland-x11' || '' }}
     strategy:
       fail-fast: false
       max-parallel: 1

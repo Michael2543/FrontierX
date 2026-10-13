@@ -8,13 +8,29 @@ from unittest.mock import patch
 import os
 import shutil
 import json
+import subprocess
+import sys
 
 import check_ctest
 import private_workspace
 import cross_m3
+import gpu_host_setup
 
 
 class GateTests(unittest.TestCase):
+    def test_gpu_host_setup_never_selects_unrelated_processes(self):
+        child = subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.read()'],
+                                 stdin=subprocess.PIPE)
+        try:
+            if Path('/proc/self/stat').exists():
+                self.assertTrue(gpu_host_setup.descendant(child.pid, os.getpid()))
+            else:
+                self.assertFalse(gpu_host_setup.descendant(child.pid, os.getpid()))
+            self.assertFalse(gpu_host_setup.descendant(os.getpid(), child.pid))
+            self.assertFalse(gpu_host_setup.descendant(0, child.pid))
+        finally:
+            child.communicate(timeout=5)
+
     def test_cross_build_rejects_stale_dirty_and_outside_host_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

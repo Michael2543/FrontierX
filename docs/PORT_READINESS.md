@@ -33,14 +33,21 @@ fail; M3 is not accepted. Both controlled host runners are online. The user's
 known Windows defect skips conversations in every mission; its cause remains
 unknown, and further Windows repairs are explicitly out of scope. Linux must
 not adopt that failure as expected behavior.
-The current Linux working overlay adds original fixed-period frame input and
+Pushed revision118efae adds original fixed-period frame input and
 exact256/512 Mission Save/Load access outside object iteration. A local Clang256
 Save/Reload continues to1024 but shows reload order/selection differences and
 retains the original voice-diagnostic failure. The native UTF writer's lexical
 sibling normalization contradicts the original append contract and is corrected
 at the native owner; its regression fails before and passes after the fix.
 New measured/fixed and sanitizer matrices and private GCC/Clang cross-build
-comparisons are prepared but not CI-executed at this revision. Complete semantic
+comparisons are executing in Actions run38384161068, without a final result yet.
+That run exposes pre-mission Camera RECT use after a failed GetSystemRect; a
+Linux-only return-contract correction is locally built/CPU-tested, with actual
+corrected mission and CI execution pending. Explicit ordinary GPU resize jobs still fail. A prepared opt-in
+`gpu_host_setup=hyprland-x11` automates the previously external mapped-floating
+setup for the two existing GPU CTests, with process ownership and fatal
+setup/skip gates; corrected host execution and CI remain pending.
+Complete semantic
 RNG/script/queued-payload state and save-continuation equivalence remain open.
 The first same-build
 Linux trace divergence is count5/Z physical position; native Windows/Linux

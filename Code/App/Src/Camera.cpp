@@ -533,11 +533,18 @@ BOOL32 Camera::SetWorldRotation (SINGLE rotation, BOOL32 update)
 
 	data.worldRotation = rotation;
 
+#if !defined(_WIN32)
+	// Global startup precedes mission loading; no system means no rectangle.
+	RECT rect;
+	if (SECTOR && SECTOR->GetSystemRect(SECTOR->GetCurrentSystem(), &rect))
+#else
 	if (SECTOR)
+#endif
 	{
+#if defined(_WIN32)
 		RECT rect;
-		
 		SECTOR->GetSystemRect(SECTOR->GetCurrentSystem(),&rect);
+#endif
 		pos.x = (rect.left + rect.right) / 2;
 		pos.y = (rect.top + rect.bottom) / 2;
 		pos.z = 0;
@@ -663,11 +670,18 @@ BOOL32 Camera::SetWorldRotationPitchRoll (SINGLE rotation, SINGLE pitch, SINGLE 
 
 	data.worldRotation = rotation;
 
+#if !defined(_WIN32)
+	// Global startup precedes mission loading; no system means no rectangle.
+	RECT rect;
+	if (SECTOR && SECTOR->GetSystemRect(SECTOR->GetCurrentSystem(), &rect))
+#else
 	if (SECTOR)
+#endif
 	{
+#if defined(_WIN32)
 		RECT rect;
-		
 		SECTOR->GetSystemRect(SECTOR->GetCurrentSystem(),&rect);
+#endif
 		pos.x = (rect.left + rect.right) / 2;
 		pos.y = (rect.top + rect.bottom) / 2;
 		pos.z = 0;

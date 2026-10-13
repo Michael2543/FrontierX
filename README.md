@@ -773,6 +773,10 @@ build/register the CRT and strict comparison/execution-gate checks. The manual
 runners and external inputs. Follow-up Actions run38368454837 at62662a1 passes six Linux build/sanitizer
 jobs and native Windows rebuild/ABI checks, while host/mission/compatibility
 checks fail;
+Current Actions run38384161068 tests118efae. A Linux-only Camera startup
+return-contract fix and opt-in workflow `gpu_host_setup=hyprland-x11` prepare
+corrected startup/GPU checks; their runtime/CI proof remains pending. The GPU
+setup changes only owned test windows, with no persistent desktop rules.
 M3 remains blocked. The follow-up overlay requires an absolute retained
 `FRONTIERX_M3_PRIVATE_ROOT` outside checkout, runner temp and retail roots. Original-owner
 diagnostics, exact comparison rules, native Windows build evidence and remaining

@@ -1,8 +1,8 @@
 # M3 simulation, save and compatibility comparison
 
-Status: **2026-10-13, NOT ACCEPTED** (work started2026-10-12). The first
-actual GitHub Actions run is in progress at the published09d3c7d revision;
-no complete CI acceptance is established. Local Linux and SSH native Windows
+Status: **2026-10-13, NOT ACCEPTED** (work started2026-10-12). Actions run38368454837 at62662a1 is complete and failed overall.
+The Linux frame/checkpoint and UTF-order changes are pushed at118efae;
+run38384161068 is executing them. No complete CI acceptance is established. Local Linux and SSH native Windows
 results below remain supplementary evidence only.
 The restored Windows executable is an implementation under test, not an
 unqualified retail oracle. The user's mission-conversation failure remains
@@ -13,9 +13,9 @@ open; no Linux behavior is changed to imitate it.
 The initial Linux worktree was clean at
 `516b842820776b0699e270fcb37e8a77c4dc5c77`. The user subsequently committed
 and pushed the prepared work as `09d3c7d86a39bc900afc746207d7c2e6bffdf288`,
-verified on the private repository default branch on2026-10-13. This follow-up
-starts from that clean revision; its additional changes remain uncommitted.
-The agent has performed no commit, branch, push or publication.
+verified on the private repository default branch on2026-10-13. The user subsequently explicitly authorized committing, pushing and running CI.
+Related changes are now pushed through118efae; the initial worktree and
+the older Windows checkout were preserved.
 The supplied SSH machine has a clean older checkout at
 `7c5aa450ba531b1abaee31d0a2639561df29deba`; it was preserved. Builds use a
 separate private source export of the Linux revision plus this overlay.
@@ -708,7 +708,7 @@ for PCM and IAC tags1025/1026; this does not prove actual resource decoding,
 playback or completion. Experimental uncommitted Windows Streamer work was
 removed; no retail installation was overwritten.
 
-## Prepared original Linux frame/checkpoint access (working overlay)
+## Original Linux frame/checkpoint access (118efae CI in progress)
 
 Evidence below is local source/build/runtime work on base62662a1, not CI
 execution of this overlay. The original Modal and ObjectList owners accept an
@@ -758,9 +758,10 @@ normalization is inferred. All traces/saves stay private. A protected
 `linux-cross-build` job reads only matching same-run/attempt/revision input
 manifests from retained host storage; stale/dirty/missing inputs fail. It checks
 same-build repeatability first and labels later comparisons as characterization
-when repeatability fails. This new job/matrix has not yet run in CI.
+when repeatability fails. This matrix is now executing in run38384161068 at118efae. Its final
+results and downstream cross-build evaluation are still pending.
 
-## Native UTF sibling-order owner correction (working overlay)
+## Native UTF sibling-order owner correction (34159ed, included in118efae)
 
 Original `DOSFile/UTFDMan.cpp`, DirectoryManager::addChildEntry, appends children.
 Original UTF::FindNextFile follows the stored sibling chain. NativeUtfWriter
@@ -797,3 +798,70 @@ Save runtime result. No comparator sort, selection restoration or gameplay
 relinking is used. The latest trial also captures all1025 records through1024 and exits7 at the
 unchanged voice diagnostic. Its Save/Load file and continued path are real
 execution, while reload differences and full-coverage gaps remain failures.
+
+
+## Linux startup sanitizer failure and correction (2026-10-13)
+
+Run38384161068 at118efae, job115251675803 (`linux-host-mission-sanitizers
+(gcc, measured)`), actually fails both original mission attempts before tick0.
+With fatal UBSan, Camera::SetWorldRotation reads an uninitialized RECT and
+reports signed overflow at Camera.cpp:541. The original global startup caller
+creates Camera before Mission::Load. Sector's current system is0 and
+GetSystemRect returns FALSE without writing its output when no system exists.
+This is a source return-contract misuse exposed in the native startup closure,
+not a measured simulation/RNG difference or an external GPU sanitizer leak.
+
+Hypothesis: honoring the failed rectangle lookup removes this startup UB while
+preserving the successful loaded-system branch. Linux SetWorldRotation and
+SetWorldRotationPitchRoll now use their existing zero-center/no-sector branch
+when GetSystemRect fails. Windows code, loaded-system arithmetic, camera layout,
+saves, simulation updates and assertions are unchanged. The smallest falsifying
+check is the same original mission startup under fatal UBSan; build/CPU tests
+alone do not establish that it passes. Local GCC/Clang sanitizer shell builds
+and their existing non-GPU CTest suites pass. Actual corrected mission execution
+and CI remain pending; the current run still tests118efae before this correction.
+
+In that same run the GCC/Clang explicit GPU jobs115251675425/115251675507
+actually fail `portability.sdl3_gpu`: requested resizing leaves the mapped
+swapchain size unchanged. This remains a desktop/resize environment limitation,
+not a skipped or passed GPU gate. GCC measured mission job115251675670 records
+both complete1025-tick traces but retains process exit7. Native Windows job
+115251675441 passes Debug/Final/ABI; Windows mission115253813234 fails. No new
+Windows repair is undertaken. Fixed-period/save cases, remaining Linux scopes
+and private cross-build jobs are still pending; do not infer their results.
+
+
+## Prepared explicit GPU host setup (2026-10-13)
+
+The ordinary Wayland resize failure remains reproducible. M2's supplementary
+mapped-floating X11 runs used an external preload; that is not CI evidence.
+The existing two GPU CTests now have opt-in pre-render host preparation. Each
+real probe creates its real SDL window, writes a private per-process request,
+and pumps SDL events while waiting at most10 seconds. Normal probe execution
+is unchanged when no setup directory is supplied. Setup timeout fails rather
+than skips; renderer initialization, original resize request and all readback,
+retirement/depth/material assertions remain unchanged. No mission frame/input
+or audio owner is involved in this GPU-only preparation.
+
+Manual workflow input `gpu_host_setup=hyprland-x11` selects this explicitly
+conditioned job. Tools/ci/gpu_host_setup.py requires mapped Xwayland windows
+with one of the exact two probe titles **and a PID descended from its own CTest
+process**. Only those windows are floated through the current Hyprland Lua
+dispatcher; readiness requires an actually floating mapped window. There is no
+persistent desktop rule, inventory log, preload, media transfer or assertion
+override. Other windows are excluded. The existing deterministic CTest
+`portability.m3_ci_gates` exercises real child-process ownership and rejects
+unrelated processes. Missing compositor/access, unsupported host setup, timeouts,
+skips and failed renderer assertions remain failures. The ordinary input remains
+the workflow default. Host-conditioned success would not prove ordinary Wayland
+resize success or audible/visual retail parity.
+
+The current118efae run does not contain this preparation; corrected GPU runtime
+and CI are pending. Its GCC fixed-period references each reach1024 and have
+no difference in the **partial observed fields**. Their source process still
+exits7 at the retained voice assertion, and full RNG/script state is absent.
+The256-save case instead returns source modal result0 after mouse messages
+with only ticks0..143; it never reaches its checkpoint and fails. The reason
+for that early return/input provenance has not yet been established. Do not
+count the completed reference subset as full repeatability or that truncated
+case as executed save evidence.

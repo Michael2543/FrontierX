@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 from private_workspace import create
+import gpu_host_setup
 
 
 def run(command, root, log, env):
@@ -57,7 +58,11 @@ def main():
     command = ['ctest', '--test-dir', str(build), '--output-on-failure',
                '--no-tests=error', '--output-junit', str(junit)]
     command += ['-L', 'gpu'] if args.scope == 'gpu' else ['-LE', 'gpu']
-    run(command, root, log, env)
+    if args.scope == 'gpu' and env.get('FRONTIERX_M3_GPU_SETUP'):
+        print('Explicit GPU host setup: ' + env['FRONTIERX_M3_GPU_SETUP'], flush=True)
+        gpu_host_setup.run(command, root, log, env, private)
+    else:
+        run(command, root, log, env)
     run([sys.executable, str(root / 'Tools/ci/check_ctest.py'), str(junit)], root, log, env)
     # Only these synthetic CRT numbers may be uploaded. No retail state/logs.
     output = root / 'out' / 'm3-synthetic' / (args.compiler + '.json')
@@ -74,6 +79,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (RuntimeError, OSError, subprocess.SubprocessError):
+    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
         print('FAIL: Linux CI scope; inspect private runner diagnostics', file=sys.stderr)
         sys.exit(1)
