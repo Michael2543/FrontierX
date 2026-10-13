@@ -37,9 +37,11 @@ def main():
     fixed = args.frame_input == 'fixed-source-period'
     if args.case and '-' in args.case and not fixed:
         raise RuntimeError('exact-tick checkpoint requires fixed frame input')
-    inputs['protocol'] = {'frame_input': args.frame_input,
+    inputs['protocol'] = {'version': 2, 'movement_owner': 'CQE_MOVE_SELECTED_UNITS/ObjComm',
+                          'frame_input': args.frame_input,
                           'control_time_units': '1/1024 millisecond, truncated',
                           'commands_before_ticks': [32, 64], 'last_tick': 1024,
+                          'window_input': 'active, centered pointer; host input excluded; close fatal',
                           'speech_completion': 'live original owner',
                           'coverage': 'partial'}
     inputs['execution'] = {
@@ -78,6 +80,7 @@ def main():
         env = os.environ.copy()
         env.update(FRONTIERX_M3_TRACE=str(run / 'ticks.jsonl'),
                    FRONTIERX_M3_JOURNAL=str(run / 'speech'),
+                   FRONTIERX_M3_CONTROLLED_INPUT='1',
                    XDG_CONFIG_HOME=str(run / 'config'))
         if fixed:
             env['FRONTIERX_M3_FIXED_FRAME'] = '1'

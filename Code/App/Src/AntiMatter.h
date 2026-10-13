@@ -230,7 +230,11 @@ struct AntiMatter : ObjectMission<
 };
 
 struct AntiMatterArchetype *CreateAntiMatterArchetype(PARCHETYPE pArchetype,BT_ANTIMATTER_DATA *data);
+#if defined(_WIN32)
 struct AntiMatter *CreateAntiMatter(FieldArchetype<BASIC_DATA> *arch);
+#else
+struct AntiMatter *CreateAntiMatter(HANDLE archetype, PARCHETYPE metadata);
+#endif
 
 //------------------------------------------------------------------------------//
 //-------------------------------End AntiMatter.h-------------------------------//

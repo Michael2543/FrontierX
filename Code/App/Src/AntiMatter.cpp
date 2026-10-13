@@ -444,7 +444,11 @@ AntiMatter::~AntiMatter()
 	}	
 }
 
+#if defined(_WIN32)
 struct AntiMatter *CreateAntiMatter(FieldArchetype<BASIC_DATA> *pField)//AntiMatterArchetype *arch)
+#else
+struct AntiMatter *CreateAntiMatter(HANDLE archetype, PARCHETYPE metadata)
+#endif
 {
 	AntiMatter *obj = new ObjectImpl<AntiMatter>;
 //	BT_ANTIMATTER_DATA *data = (BT_ANTIMATTER_DATA *)pField->pData;
@@ -455,9 +459,17 @@ struct AntiMatter *CreateAntiMatter(FieldArchetype<BASIC_DATA> *pField)//AntiMat
 	obj->objClass = OC_FIELD;
 	obj->SetSystemID(SECTOR->GetCurrentSystem());
 //	obj->attributes = data->attributes;
+#if defined(_WIN32)
 	strcpy(obj->name, ARCHLIST->GetArchName(pField->pArchetype));
+#else
+	strcpy(obj->name, ARCHLIST->GetArchName(metadata));
+#endif
 //	field = obj;
+#if defined(_WIN32)
 	obj->Init(pField);
+#else
+	obj->Init(archetype);
+#endif
 				
 	return obj;
 }

@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 using std::min;
 using std::max;
 
@@ -3551,6 +3552,17 @@ struct DACOM_NO_VTABLE FieldManager : public IFieldManager, IEventCallback, IObj
 
 	//child object info
 	FieldArchetype<void> *fieldArch;
+#if !defined(_WIN32)
+	// Preserve the real factory metadata and typed destruction; unrelated
+	// FieldArchetype<T> specializations are not interchangeable C++ base types.
+	struct NativeFactoryEntry
+	{
+		BASIC_DATA *data;
+		PARCHETYPE archetype;
+		void (*destroy)(HANDLE);
+	};
+	std::map<HANDLE, NativeFactoryEntry> nativeFactoryEntries;
+#endif
 
 	//FieldManager methods
 
@@ -4603,13 +4615,42 @@ HANDLE FieldManager::CreateArchetype(const char *szArchname, OBJCLASS objClass, 
 
 Done:
 
+#if !defined(_WIN32)
+	if (result)
+	{
+		NativeFactoryEntry entry{static_cast<BASIC_DATA *>(data),
+			ARCHLIST->GetArchetype(szArchname), nullptr};
+		if (objClass == OC_NEBULA)
+			entry.destroy = [](HANDLE handle) { delete static_cast<NebulaArchetype *>(handle); };
+		else if (objClass == OC_MINEFIELD)
+			entry.destroy = [](HANDLE handle) { delete static_cast<FieldArchetype<BT_MINEFIELD_DATA> *>(handle); };
+		else if (objClass == OC_FIELD)
+		{
+			const auto *fieldData = static_cast<BASE_FIELD_DATA *>(entry.data);
+			if (fieldData->fieldClass == FC_ASTEROIDFIELD)
+				entry.destroy = [](HANDLE handle) { delete static_cast<AsteroidArchetype *>(handle); };
+			else if (fieldData->fieldClass == FC_ANTIMATTER)
+				entry.destroy = [](HANDLE handle) { delete static_cast<AntiMatterArchetype *>(handle); };
+		}
+		if (!entry.destroy || !nativeFactoryEntries.emplace(result, entry).second)
+			std::abort();
+	}
+#endif
 	return result;
 }
 
 BOOL32 FieldManager::DestroyArchetype(HANDLE hArchetype)
 {
+#if defined(_WIN32)
 	FieldArchetype<BASIC_DATA> *deadguy = (FieldArchetype<BASIC_DATA> *)hArchetype;
 	delete deadguy;
+#else
+	const auto found = nativeFactoryEntries.find(hArchetype);
+	if (found == nativeFactoryEntries.end()) return 0;
+	const auto destroy = found->second.destroy;
+	nativeFactoryEntries.erase(found);
+	destroy(hArchetype);
+#endif
 	NEBTEXTUREUSED = FIELDTEXTUREUSED = ANTIMATTERTEXMEMUSED = 0;
 
 	return 1;
@@ -4617,8 +4658,16 @@ BOOL32 FieldManager::DestroyArchetype(HANDLE hArchetype)
 
 IBaseObject * FieldManager::CreateInstance(HANDLE hArchetype)
 {
+#if defined(_WIN32)
 	FieldArchetype<BASIC_DATA> *pField = (FieldArchetype<BASIC_DATA> *)hArchetype;
 	BASIC_DATA *_data = pField->pData;
+	const PARCHETYPE fieldArchetype = pField->pArchetype;
+#else
+	const auto found = nativeFactoryEntries.find(hArchetype);
+	if (found == nativeFactoryEntries.end()) return nullptr;
+	BASIC_DATA *_data = found->second.data;
+	const PARCHETYPE fieldArchetype = found->second.archetype;
+#endif
 	IField * field=NULL;
 	
 	if (_data->objClass == OC_FIELD)
@@ -4636,14 +4685,18 @@ IBaseObject * FieldManager::CreateInstance(HANDLE hArchetype)
 				obj->objClass = OC_FIELD;
 				obj->SetSystemID(SECTOR->GetCurrentSystem());
 				obj->attributes = data->attributes;
-				strcpy(obj->name, ARCHLIST->GetArchName(pField->pArchetype));
+				strcpy(obj->name, ARCHLIST->GetArchName(fieldArchetype));
 				field = obj;
 				obj->Init(hArchetype);
 			}
 			break;
 		case FC_ANTIMATTER:
 			{
+#if defined(_WIN32)
 				field = CreateAntiMatter(pField);
+#else
+				field = CreateAntiMatter(hArchetype, fieldArchetype);
+#endif
 			}
 		}
 	}
@@ -4657,7 +4710,7 @@ IBaseObject * FieldManager::CreateInstance(HANDLE hArchetype)
 		obj->fieldType = FC_NEBULA;
 
 		obj->attributes = data->attributes;
-		strcpy(obj->name,ARCHLIST->GetArchName(pField->pArchetype));
+		strcpy(obj->name,ARCHLIST->GetArchName(fieldArchetype));
 			
 		field = obj;
 		obj->Init(hArchetype);

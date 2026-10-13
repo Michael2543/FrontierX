@@ -41,6 +41,7 @@ static U32 GetTickCount()
 #include "CommPacket.h"
 #include "IGroup.h"
 #include "OpAgent.h"
+#include "Include/M3SemanticWriter.h"
 #include "IAttack.h"
 #include "IGotoPos.h"
 #include "IRepairee.h"
@@ -8499,6 +8500,90 @@ struct _opagent : GlobalComponent
 };
 
 static _opagent agent;
+
+// Read-only access at the original ObjectList boundary, never Save/Load or an
+// operation executor. Unknown payload contracts fail instead of disappearing.
+void WriteOperationComparisonState(M3StateOutput output, void *context)
+{
+    if (!output || !THEMATRIX) std::abort();
+    const OpAgent *owner = static_cast<const OpAgent *>(THEMATRIX);
+    FrontierXM3::SemanticWriter writer(output, context);
+    auto scalar = [&](const char *name, U32 value)
+    { writer.String(name); writer.Text(":"); writer.Number(value); };
+    writer.Text("{"); scalar("last_id", owner->lastOpID);
+    writer.Text(","); scalar("update_counter", owner->updateCounter);
+    writer.Text(","); scalar("buffered_bytes", owner->bufferOffset);
+    writer.Text(",\"queues\":[");
+    const SUPERBASE_PACKET *queues[]{owner->pCommandList, owner->pOpList};
+    for (U32 queue = 0; queue < 2; ++queue)
+    {
+        if (queue) writer.Text(",");
+        writer.Text("[");
+        bool first = true;
+        for (const SUPERBASE_PACKET *node = queues[queue]; node; node = node->pNext)
+        {
+            if (!first) writer.Text(",");
+            first = false;
+            writer.Text("{"); scalar("id", node->opID);
+            writer.Text(","); scalar("command", node->hostCmd);
+            writer.Text(","); scalar("packet_type", static_cast<U32>(node->type));
+            writer.Text(","); scalar("parent", node->parentOp);
+            writer.Text(","); scalar("group", node->groupID);
+            writer.Text(","); scalar("user_bits", node->userBits);
+            writer.Text(","); scalar("control_bits", node->ctrlBits);
+            writer.Text(",\"flags\":[");
+            writer.Number(node->bCancelDisabled ? 1 : 0); writer.Text(",");
+            writer.Number(node->bDelayDependency ? 1 : 0); writer.Text(",");
+            writer.Number(node->bStalled ? 1 : 0); writer.Text(",");
+            writer.Number(node->bLongTerm ? 1 : 0);
+            writer.Text("],\"objects\":[");
+            const ObjSet &set = node->getSet();
+            if (set.numObjects > MAX_SELECTED_UNITS) std::abort();
+            for (U32 index = 0; index < set.numObjects; ++index)
+            { if (index) writer.Text(","); writer.Number(set.objectIDs[index]); }
+            writer.Text("],\"payload\":");
+            if ((node->hostCmd == MOVETO ||
+                    (node->hostCmd == NOTHING && node->type == PT_USRMOVE)) &&
+                    node->getOperandSize() == sizeof(NETGRIDVECTOR))
+            {
+                // Pending user commands have not passed sendHostCommand yet.
+                const NETGRIDVECTOR &position = *static_cast<const NETGRIDVECTOR *>(node->getOperands());
+                writer.Text("{\"grid_quarters\":[");
+                writer.Number(static_cast<U32>(position.getX() * 4)); writer.Text(",");
+                writer.Number(static_cast<U32>(position.getY() * 4));
+                writer.Text("],"); scalar("system", position.systemID); writer.Text("}");
+            }
+            else if (!node->getOperandSize()) writer.Text("null");
+            else
+            {
+                std::fprintf(stderr, "M3 unsupported operation payload contract: command=%u extent=%u\n",
+                    static_cast<unsigned int>(node->hostCmd), node->getOperandSize());
+                std::abort();
+            }
+            writer.Text("}");
+        }
+        writer.Text("]");
+    }
+    writer.Text("],\"termination\":[");
+    bool first = true;
+    for (const TERMINATION_NODE *node = owner->pHitList; node; node = node->pNext)
+    {
+        if (!first) writer.Text(","); first = false;
+        writer.Text("["); writer.Number(node->victimID); writer.Text(",");
+        writer.Number(node->attackerID); writer.Text("]");
+    }
+    writer.Text("],\"completion\":["); first = true;
+    for (const OPCOMPLETE_NODE *node = owner->pCompleteList; node; node = node->pNext)
+    {
+        if (!first) writer.Text(","); first = false;
+        writer.Text("["); writer.Number(node->agentID); writer.Text(",");
+        writer.Number(node->dwMissionID); writer.Text("]");
+    }
+    writer.Text("],\"recalculate\":["); first = true;
+    for (const RECALCPARENT_NODE *node = owner->pRecalcList; node; node = node->pNext)
+    { if (!first) writer.Text(","); first = false; writer.Number(node->opID); }
+    writer.Text("]}");
+}
 
 //------------------------------------------------------------------------------------//
 //---------------------------------------End OpAgent.cpp------------------------------//

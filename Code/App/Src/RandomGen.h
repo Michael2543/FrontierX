@@ -23,7 +23,12 @@ public:
 
 	void srand(U16 seed);
 
+#if defined(_WIN32)
 	U32 rand(U32 max = RAND_MAX);
+#else
+	// Original Win32 caller domain; the libc RAND_MAX is unrelated to this owner.
+	U32 rand(U32 max = 32767);
+#endif
 };
 
 //------------------------------------------------------------------------------//

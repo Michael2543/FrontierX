@@ -249,6 +249,65 @@ struct CloseCallback final : ISystemEventCallback
     U32 calls = 0;
     bool veto = true;
 };
+
+void CheckControlledInput()
+{
+    FrontierX::NativeComponentManager manager;
+    FrontierX::RegisterNativeWindowManager(&manager);
+    setenv("FRONTIERX_M3_CONTROLLED_INPUT", "1", 1);
+    setenv("FRONTIERX_M3_TRACE", "generated-test-access", 1);
+    AGGDESC descriptor("IWindowManager", "WindowManager");
+    void *raw = nullptr;
+    Require(manager.CreateInstance(&descriptor, &raw) == GR_OK && raw,
+            "controlled input component creation failed");
+    unsetenv("FRONTIERX_M3_CONTROLLED_INPUT");
+    unsetenv("FRONTIERX_M3_TRACE");
+    auto *aggregate = static_cast<IAggregateComponent *>(raw);
+    IWindowManager *window = nullptr;
+    Require(aggregate->QueryInterface(IID_IWindowManager,
+            reinterpret_cast<void **>(&window)) == GR_OK && window,
+            "controlled input window query failed");
+    Require(window->Startup(nullptr, "controlled input", ExitHandler,
+            WMF_ALLOW_WINDOW_RESIZE), "controlled input window startup failed");
+    Require(window->SetWindowPos(400, 300, WMF_ALLOW_WINDOW_RESIZE),
+            "controlled input window dimensions failed");
+    window->SetCallback(WindowCallback);
+    window->ServeMessageQueue(WMF_BACKGROUND);
+    messages.clear();
+    const auto id = static_cast<Uint32>(window->GetWindowHandle());
+    SDL_Event event{};
+    event.window.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+    event.window.windowID = id;
+    Push(event);
+    event = {};
+    event.motion.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.windowID = id;
+    event.motion.x = 1; event.motion.y = 1;
+    Push(event);
+    event = {};
+    event.key.type = SDL_EVENT_KEY_DOWN;
+    event.key.windowID = id;
+    event.key.key = SDLK_ESCAPE;
+    Push(event);
+    window->ServeMessageQueue(WMF_BACKGROUND);
+    S32 x = 0, y = 0;
+    window->GetCursorPos(x, y);
+    Require(window->AppIsActive() && x == 200 && y == 150 && messages.empty(),
+            "host focus/key/motion contaminated the explicit input fixture");
+    // Completion callbacks must still reach the real source window pump.
+    CheckStreamer(manager, window);
+    messages.clear();
+    event = {};
+    event.window.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+    event.window.windowID = id;
+    Push(event);
+    window->ServeMessageQueue(0);
+    Require(messages.size() == 1 && messages.front().message == FrontierX::LegacyMessage::Close,
+            "controlled input swallowed an external close instead of failing the run");
+    window->Release();
+    aggregate->Release();
+    Require(manager.ShutDown() == GR_OK, "controlled input component shutdown failed");
+}
 }
 
 int main()
@@ -397,6 +456,7 @@ int main()
         aggregate->Release();
         Require(manager.ShutDown() == GR_OK && manager.RegisteredCount() == 0,
             "native window manager shutdown failed");
+        CheckControlledInput();
 
         std::cout << "native SDL IWindowManager component passed\n";
         return EXIT_SUCCESS;

@@ -40,6 +40,7 @@ def run(command, root, log, env, private):
         process = subprocess.Popen(command, cwd=root, env=env, stdout=stream,
                                    stderr=subprocess.STDOUT, start_new_session=True)
         dispatched = set()
+        reported = set()
         try:
             while process.poll() is None:
                 requests = [p for p in directory.glob('*.requested')
@@ -49,6 +50,13 @@ def run(command, root, log, env, private):
                                                         env=env, timeout=5)
                     clients = json.loads(inventory)
                     for request in requests:
+                        matches = [c for c in clients if c.get('pid') == int(request.stem)]
+                        status = (request.stem, tuple((c.get('mapped'), c.get('xwayland'),
+                                                      c.get('floating')) for c in matches))
+                        if status not in reported:
+                            stream.write(('GPU setup owned-window status: ' + repr(status) + '\n').encode())
+                            stream.flush()
+                            reported.add(status)
                         for client in clients:
                             if (client.get('pid') != int(request.stem) or
                                     client.get('title') not in ('FrontierX SDL3 GPU probe',

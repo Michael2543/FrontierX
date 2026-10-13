@@ -1,5 +1,19 @@
 # Linux Port Readiness Plan
 
+Current M3 update (2026-10-13): **NOT ACCEPTED**. Completed protected Actions
+[run38386971218](https://github.com/Michael2543/frontierX/actions/runs/38386971218)
+atd089a15 passes six Linux CPU build scopes and native Windows Debug/Final/ABI;
+GPU/mission/sanitizer/compatibility gates fail. Run38384161068 was cancelled.
+Current Linux working-tree follow-up corrects typed Field factory access and
+RandomGen's original Win32 default domain, excludes uncontrolled host input
+through a narrow fixture, uses the original player move event and expands
+semantic script/operation observations. Explicit X11 GPU preparation is moved
+after first presentation. Supplementary results do not replace CI; full
+physics/RNG coverage, repeatability, equivalent Save/Reload continuation and
+retail/visible/audible corroboration remain open. Windows product repair remains
+out of scope. See [the current owner/evidence ledger](M3_SIMULATION_COMPARISON.md#completed-d089a15-ci-and-next-owner-corrections-2026-10-13).
+Earlier pending-run statements below are historical snapshots.
+
 ## Current milestone (2026-10-13)
 
 **M2 Linux Sol_Train gameplay is complete in the agreed scope.** Original

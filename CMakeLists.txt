@@ -2286,7 +2286,10 @@ endif()
 
 include(CTest)
 # M3 preflight: actual CRT draws used by simulation owners, not a simulation.
-add_executable(frontierx_rng_contract_probe Tools/portability/rng_contract_probe.cpp)
+add_executable(frontierx_rng_contract_probe Tools/portability/rng_contract_probe.cpp
+	$<TARGET_OBJECTS:frontierx_app_random_gen_owner>)
+target_include_directories(frontierx_rng_contract_probe PRIVATE
+	Code/App/Src Code/Libs/Include)
 frontierx_enable_strict_warnings(frontierx_rng_contract_probe)
 
 if(BUILD_TESTING)

@@ -1,9 +1,13 @@
 # M3 simulation, save and compatibility comparison
 
-Status: **2026-10-13, NOT ACCEPTED** (work started2026-10-12). Actions run38368454837 at62662a1 is complete and failed overall.
-The Linux frame/checkpoint and UTF-order changes are pushed at118efae;
-run38384161068 is executing them. No complete CI acceptance is established. Local Linux and SSH native Windows
-results below remain supplementary evidence only.
+Status: **2026-10-13, NOT ACCEPTED**. The latest completed CI run is
+[38386971218](https://github.com/Michael2543/frontierX/actions/runs/38386971218)
+at `d089a1537e01446a12f7c1b11873bb470a571b0b`; it fails overall. All six
+Linux CPU build scopes and the native Windows rebuild/ABI job pass. GPU,
+mission, mission-sanitizer, repeatability and comparison gates fail. Run
+38384161068 at118efae was cancelled; its partial observations are historical,
+not a completed acceptance result. The following Linux owner corrections and
+expanded observers are working-tree changes pending new CI execution.
 The restored Windows executable is an implementation under test, not an
 unqualified retail oracle. The user's mission-conversation failure remains
 open; no Linux behavior is changed to imitate it.
@@ -879,3 +883,109 @@ The retained Linux/Windows comparison jobs do not authorize further Windows
 repair. Corrected camera startup, GPU host execution and final CI comparisons
 remain pending. Complete semantic/RNG/script capture and equivalent continued
 Save/Reload remain open implementation/acceptance blockers.
+
+
+## Completed d089a15 CI and next owner corrections (2026-10-13)
+
+All21 jobs of run38386971218 completed. The six `linux` GCC/Clang
+Default/Optional/Sanitizer scopes pass; `windows-native` passes actual
+Win32 Debug/Final rebuilds, campaign/module ABI and DACOM regression.
+Both `linux-host-gpu` jobs fail: the opt-in preparation waits for a mapped
+window before its first presentation, but SDL's X11 window is not yet mapped.
+Preparation now runs after the SDL probe's first successful original
+presentation and before the unchanged resize request. The material probe
+needs no preparation hook; that unnecessary hook is removed. The helper
+still only floats its own mapped descendant-PID test window. Existing GPU
+assertions and fatal timeout/skip policy remain intact. Supplementary GCC
+optional execution now passes both original GPU CTests in this explicit
+X11 configuration; corrected CI and Clang execution remain pending.
+
+All four `linux-host-mission-sanitizers` jobs fail before tick0 at the
+original FieldManager::CreateInstance (`cloud.cpp:4621`): an AsteroidArchetype
+is accessed as the unrelated FieldArchetype<BASIC_DATA> specialization.
+Camera startup gets past the previous RECT failure. The Linux Field owner
+now registers its original data/archetype metadata and exact typed destructor
+at successful factory creation, and uses that metadata for instance creation
+and destruction. This private lookup is not simulation iteration; no field,
+vtable, save layout or Windows product implementation changes. The native
+AntiMatter factory receives the original archetype from that metadata.
+Supplementary Clang optional ASan/UBSan executes the original mission through
+1024 after this correction, with no fatal access/UB report. Whole LeakSanitizer
+still fails3644B/9 allocations including DBus and unresolved module frames;
+these are not suppressed or all assumed external. Corrected CI remains pending.
+
+The four ordinary host-mission jobs fail. GCC fixed-period cases record exits
+0/0/0/0/timeout/7, but uncontrolled desktop input contaminates their protocol;
+those zero exits are not controlled comparison passes. The narrow Linux
+WindowManager fixture now requires an explicit private trace plus
+FRONTIERX_M3_CONTROLLED_INPUT=1. It holds the source active state and centers
+the pointer while excluding host focus, key/text and mouse events. Original
+close/quit/resize and actual Streamer notifications remain delivered. Its
+existing WindowManager regression tests real generated PCM initialization,
+EOF/completion alongside excluded input and a fatal original close message.
+Ordinary game input is unchanged. Modifier-state access remains in the
+existing native Tab input owner, whose key event is excluded by this fixture.
+
+Protocol version2 replaces the silent script move at64 with the original
+player CQE_MOVE_SELECTED_UNITS event. Original ObjComm constructs the actual
+user-move packet, updates the original operation owner and starts the movement
+voice. The32 selection and1024 quit boundaries remain. No objective setter,
+voice assertion change or fabricated playback completion is introduced.
+A supplementary optional Clang original mission run reaches all1025 records,
+starts two unit voices and exits0 with the retained native-shell diagnostic.
+This is a source-process result, not an accepted comparator/CI result.
+
+Schema3 now observes original MissionData and registered MScript program
+identity/order/flags/save-record fields, plus original OpAgent queues and
+deferred completion/termination/dependency state. DataParser enumerates declared
+fields, using its original symbol schema to distinguish anonymous enums from
+pointers. Scalars retain exact little-endian bits; nested fields retain order.
+MPartRef retains only documented mission identity, excluding its cache index
+and debug pSave/pInit pointers. Declared padding and the compiler's empty-record
+size byte are excluded; generic pointers or unknown nonempty operation payloads
+fail. MOVETO exports actual grid-quarter coordinates/system and ordered object
+IDs, not runtime packet padding. Parser tests show changed identity/state matters,
+while cache/debug/padding does not. No Save or script/operation executor is
+called to observe state. The synchronous borrowed output callback keeps FILE
+and allocation ownership within the caller's CRT. Its additive MScript export
+requires actual new native rebuild/ABI execution, still pending.
+
+Coverage stays explicitly partial: full physics/non-mission object state,
+transport-buffer payloads and relevant RNG state are absent; snapshots remain
+at the existing pre-physical logic boundary. Live speech completion can affect
+script scheduling and is retained. No comparator tolerance, list sorting,
+script-field omission or forced speech completion is used. Save-only versus
+Save/Reload continuation is still required at256 and512. Existing reload
+order and selection differences remain visible and uncorrected.
+
+A separate concrete Linux RNG contract correction fixes RandomGen's implicit
+modulus to the original Win32 value32767. The original class recurrence,
+seed/state widths and explicit-modulus callers remain unchanged. Native libc
+RAND_MAX2147483647 was incorrectly substituted into this non-libc owner;
+Field's original ephemeral seeded generators use that default for placement.
+The existing RNG CTest now links the production RandomGen owner and verifies
+32 default-versus-explicit32767 draws for four seeds. It fails before and
+passes after the Linux correction. Windows CI links its real rebuilt Final
+RandomGen.obj for the same contract check; no new Windows product repair or
+replacement CRT generator is introduced. The16-draw libc characterization
+still differs across Windows/Linux and is not concealed by this correction.
+
+`windows-host-mission`, `linux-cross-build`, `crt-cross-build` and `acceptance`
+also fail in d089a15. Matching builds still cannot establish retail parity.
+The user-reported instantly skipped Windows conversations remain an open
+Windows defect/reference limitation; further Windows repairs are out of scope.
+New working-tree evidence must be committed and tested by the protected
+workflow before any corrected CI pass is claimed.
+
+
+Local working-tree verification before the next publication: all six existing
+Linux Debug trees rebuild and pass their complete non-GPU CTest scopes under
+GCC15.2/Clang20.1, including default, optional and optional ASan/UBSan with
+fatal errors/leak detection enabled. The optional font and shared decoder use
+the existing reviewed external installation. This covers the production-owner
+RNG and parser, input/Streamer lifecycle and comparator regressions. A real
+mission trial exposes a pending PT_USRMOVE before sendHostCommand assigns
+MOVETO; the observer now captures its original packet type and typed destination
+in both states, rather than dropping the pending payload. This is an observer
+correction, not a command executor or gameplay change. Full corrected mission
+and CI comparisons remain pending.

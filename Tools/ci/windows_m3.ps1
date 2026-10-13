@@ -44,7 +44,11 @@ try {
     $source = Join-Path $root 'Tools\portability\rng_contract_probe.cpp'
     $exe = Join-Path $private 'rng-contract.exe'
     $cmd = Join-Path $private 'rng-build.cmd'
-    @("@echo off", "call `"$vcvars`"", "if errorlevel 1 exit /b 1", "cl /nologo /EHsc /MT /W4 `"$source`" /Fe:`"$exe`" /Fo:`"$private\rng-contract.obj`"", "exit /b %errorlevel%") | Set-Content $cmd
+    $randomOwner = Join-Path $root 'Code\App\Src\Final\RandomGen.obj'
+    if (!(Test-Path -LiteralPath $randomOwner)) { throw 'rebuilt original RandomGen owner missing' }
+    $randomIncludes = Join-Path $root 'Code\App\Src'
+    $typeIncludes = Join-Path $root 'Code\Libs\Include'
+    @("@echo off", "call `"$vcvars`"", "if errorlevel 1 exit /b 1", "cl /nologo /EHsc /MT /W4 /I`"$randomIncludes`" /I`"$typeIncludes`" `"$source`" /Fe:`"$exe`" /Fo:`"$private\rng-contract.obj`" /link `"$randomOwner`"", "exit /b %errorlevel%") | Set-Content $cmd
     & cmd /c $cmd *> (Join-Path $private 'rng-build.log')
     if ($LASTEXITCODE) { throw 'CRT characterization build failed' }
     & $exe

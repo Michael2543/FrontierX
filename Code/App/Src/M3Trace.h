@@ -43,18 +43,29 @@ inline unsigned int FloatBits(SINGLE value)
     return static_cast<unsigned int>(bits);
 }
 
+inline void __cdecl StateOutput(const char *bytes, U32 length, void *context)
+{
+    FILE *file = static_cast<FILE *>(context);
+    if (std::fwrite(bytes, 1, length, file) != length)
+    { std::fputs("M3 state output failed\n", stderr); std::abort(); }
+}
+
 inline void WriteSnapshot(FILE *file, U32 tick)
 {
     // Order IDs are observed, but the queued operation payload, script state
     // and CRT RNG state are NOT yet available through a semantic interface.
     const USER_DEFAULTS *defaults = DEFAULTS->GetDefaults();
-    std::fprintf(file, "{\"schema\":2,\"coverage\":\"partial\",\"tick\":%u,"
+    std::fprintf(file, "{\"schema\":3,\"coverage\":\"partial\",\"tick\":%u,"
         "\"globals\":{\"game_speed\":%d,\"frame_limit\":%u,\"constant_update_rate\":%u,"
-        "\"game_active\":%u,\"paused\":%u,\"world_paused\":%u},\"units\":[",
+        "\"game_active\":%u,\"paused\":%u,\"world_paused\":%u},\"script\":",
         static_cast<unsigned int>(tick), static_cast<int>(defaults->gameSpeed),
         defaults->bNoFrameLimit ? 0U : 1U, defaults->bConstUpdateRate ? 1U : 0U,
         CQFLAGS.bGameActive ? 1U : 0U, CQFLAGS.bGamePaused ? 1U : 0U,
         CQFLAGS.bRTGamePaused ? 1U : 0U);
+    MScript::WriteComparisonState(StateOutput, file);
+    std::fputs(",\"operations\":", file);
+    WriteOperationComparisonState(StateOutput, file);
+    std::fputs(",\"units\":[", file);
     bool first = true;
     for (IBaseObject *object = OBJLIST->GetObjectList(); object; object = object->next)
     {
@@ -126,7 +137,16 @@ inline void BeforeTick(U32 tick)
         const MPartRef target = MScript::GetPartByName("TriggerPoint");
         if (!target.isValid())
         { std::fputs("M3 Sol_Train move target unavailable\n", stderr); std::abort(); }
-        MScript::OrderMoveTo(forger, target, false);
+        IBaseObject *targetObject = OBJLIST->FindObject(target->dwMissionID);
+        if (!targetObject || !OBJLIST->GetSelectedList())
+        { std::fputs("M3 original selected move prerequisites missing\n", stderr); std::abort(); }
+        NETGRIDVECTOR destination;
+        destination.init(targetObject->GetGridPosition(),
+            targetObject->GetSystemID() & ~HYPER_SYSTEM_MASK);
+        // Same player event as Sector/SysMap, including original ObjComm,
+        // packet creation, UI feedback and movement voice. Script moves omit it.
+        if (EVENTSYS->Send(0x102CU, &destination) != GR_OK)
+        { std::fputs("M3 original selected move event failed\n", stderr); std::abort(); }
     }
 }
 }

@@ -4,6 +4,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <TYPEDEFS.H>
+#include "RandomGen.h"
 
 static std::vector<int> sequence()
 {
@@ -15,6 +17,14 @@ static std::vector<int> sequence()
 
 int main(int argc, char **argv)
 {
+    // Real field/nugget owner, not a reproduced RNG algorithm. Its original
+    // Win32 default domain must agree with the explicit 32767 contract.
+    for (U16 seed : {U16(0), U16(1), U16(17), U16(254)})
+    {
+        RandomGen implicit(seed), explicitRange(seed);
+        for (unsigned int index = 0; index < 32; ++index)
+            if (implicit.rand() != explicitRange.rand(32767)) return 3;
+    }
     const auto first = sequence();
     if (first != sequence()) return 1;
     if (argc == 1) return 0;

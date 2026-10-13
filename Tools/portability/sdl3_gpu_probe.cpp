@@ -828,11 +828,6 @@ int main(int argc, char ** argv)
     windowRuntime.window = SDL_CreateWindow("FrontierX SDL3 GPU probe", 640, 360, flags);
     if (!windowRuntime.window)
         return RuntimeUnavailable(requireRuntime, "window creation", SDL_GetError());
-    if (!WaitForSdlGpuHostSetup())
-    {
-        std::cerr << "GPU host window preparation failed\n";
-        return 1;
-    }
 
     FrontierX::SdlGpuRenderer renderer;
     std::string error;
@@ -924,6 +919,13 @@ int main(int argc, char ** argv)
             ++presentedFrames;
             if (!initialWidth)
             {
+                // The compositor can only map the GPU window after its first
+                // real presentation. Prepare it before the unchanged resize.
+                if (!WaitForSdlGpuHostSetup())
+                {
+                    std::cerr << "GPU host window preparation failed\n";
+                    return 1;
+                }
                 initialWidth = renderer.DepthWidth();
                 initialHeight = renderer.DepthHeight();
                 if (!SDL_SetWindowSize(windowRuntime.window, 800, 450) ||

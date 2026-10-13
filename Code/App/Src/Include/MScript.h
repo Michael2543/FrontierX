@@ -283,8 +283,12 @@ inline AIPersonality::AIPersonality (void)
 
 //---------------------------------------------------------------------------
 //
+#include "M3StateOutput.h"
+
 struct MScript
 {
+	// Read-only original script state for the opt-in comparison observer.
+	MEXTERN static void WriteComparisonState(M3StateOutput output, void *context);
 	/*
 	 *	Called by DLLMain in the script DLL, not intended for use by script writer.
 	 */

@@ -6,7 +6,7 @@
 #include <fstream>
 #include <unistd.h>
 
-// Explicit GPU-probe host preparation, before renderer initialization. The
+// Explicit GPU-probe host preparation, after first real presentation, before resize. The
 // regular test path and all resize/readback assertions remain unchanged.
 inline bool WaitForSdlGpuHostSetup()
 {

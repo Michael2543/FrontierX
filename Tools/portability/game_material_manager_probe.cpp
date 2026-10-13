@@ -41,7 +41,6 @@
 #include "xmesh.h"
 #include "matrix4.h"
 #if defined(FRONTIERX_GAME_GPU)
-#include "SdlGpuHostSetup.h"
 #include "FrontierX/RenderSmokeScene.h"
 #include "FrontierX/SdlGpuRenderer.h"
 #include <SDL3/SDL.h>
@@ -819,11 +818,6 @@ int main(int argc, char **argv)
         {
             std::cerr << "SDL window unavailable: " << SDL_GetError() << '\n';
             return 77;
-        }
-        if (!WaitForSdlGpuHostSetup())
-        {
-            std::cerr << "GPU host window preparation failed\n";
-            return 1;
         }
         const FrontierX::SdlGpuTextureView smokeTexture{
             FrontierX::RenderSmokeTextureRgba.data(),

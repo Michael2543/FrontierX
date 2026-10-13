@@ -104,6 +104,7 @@ struct IMeshArchetype;
 #include "Include/AppStringTableLoad.h"
 
 #include <malloc.h>
+#include "Include/M3SemanticWriter.h"
 
 #define MISSION_OVER_TELETYPE_MIN_X_POS 80
 #define MISSION_OVER_TELETYPE_MAX_X_POS 560
@@ -282,6 +283,46 @@ static HINSTANCE g_hScriptDLL, g_hLocalDLL;
 static PROGNODE * g_pPrograms;
 static PROGNODE * g_pProgramsEnd;
 static FILE * g_scriptDiag;
+
+void MScript::WriteComparisonState(M3StateOutput output, void *context)
+{
+	COMPTR<IViewConstructor2> constructor;
+	if (!output || !PARSER || !g_hNewSymbols || !g_pScriptData ||
+		PARSER->QueryInterface("IViewConstructor2", constructor) != GR_OK)
+		std::abort();
+	FrontierXM3::SemanticWriter writer(output, context);
+	auto fields = [&](const char *type, const void *bytes, U32 size)
+	{
+		DPARSERDESC descriptor;
+		descriptor.symbol = constructor->GetSymbol(g_hNewSymbols, type);
+		COMPTR<IDataParser> parser;
+		if (!descriptor.symbol || constructor->GetTypeSize(descriptor.symbol) > size ||
+			constructor->CreateInstance(&descriptor, parser) != GR_OK || !parser ||
+            !writer.Fields(parser, bytes, size, false, 0, descriptor.symbol))
+		{
+            std::fprintf(stderr, "M3 script semantic observation failed: %.64s extent=%u\n", type, size);
+			std::abort();
+		}
+	};
+	writer.Text("{\"schema\":1,\"data\":");
+	fields(g_scriptDataType, g_pScriptData, g_scriptDataSize);
+	writer.Text(",\"last_extended\":"); writer.Number(lastExtended);
+	writer.Text(",\"programs\":[");
+	bool first = true;
+	for (const PROGNODE *node = g_pPrograms; node; node = node->pNext)
+	{
+		if (!first) writer.Text(",");
+		first = false;
+		writer.Text("{\"name\":"); writer.String(node->pScript->progName);
+		writer.Text(",\"flags\":"); writer.Number(node->pScript->eventFlags);
+		writer.Text(",\"state\":");
+		fields(node->pScript->saveLoadStruct,
+			static_cast<const char *>(static_cast<const void *>(node->pProgram)) + node->pScript->saveOffset,
+			node->pScript->saveSize);
+		writer.Text("}");
+	}
+	writer.Text("]}");
+}
 #define SCRIPT_LOGF(...) do { if (!g_scriptDiag) g_scriptDiag = fopen("debug/mscript_diag.txt", "w"); if (g_scriptDiag) { fprintf(g_scriptDiag, __VA_ARGS__); fflush(g_scriptDiag); } } while (0)
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//

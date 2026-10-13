@@ -65,6 +65,7 @@
 #include "Symtable.h"
 #include "ViewSymbolOperations.h"
 #include "ViewCnst.h"
+#include "M3SemanticWriter.h"
 #include "Tokendef.h"
 
 #include <cstdint>
@@ -1001,6 +1002,48 @@ BOOL32 COMAPI ReportBlock(IHeap * heap, void * block, U32 flags, void *)
     return TRUE;
 }
 
+void DACOM_CDECL CaptureSemanticText(const char *bytes, U32 length, void *context)
+{
+    static_cast<std::string *>(context)->append(bytes, length);
+}
+
+bool CheckScriptSemanticFields(IViewConstructor2 *constructor)
+{
+    const HANDLE symbols = constructor->ParseNewMemory(
+        "struct MPartRef { unsigned int index; unsigned int dwMissionID; void *pSave; void *pInit; };"
+        "struct Observed { unsigned char marker; MPartRef ref; float value; unsigned int low:3; unsigned int high:5; int items[2]; enum { Idle, Active } state; };"
+        "struct Empty {}; struct Unsafe { void *pointer; };");
+    auto observe = [&](const char *name, const void *bytes, U32 length, std::string &text)
+    {
+        DPARSERDESC descriptor;
+        descriptor.symbol = constructor->GetSymbol(symbols, name);
+        IDataParser *parser = nullptr;
+        if (!descriptor.symbol || constructor->CreateInstance(&descriptor,
+                reinterpret_cast<void **>(&parser)) != GR_OK || !parser) return false;
+        FrontierXM3::SemanticWriter writer(CaptureSemanticText, &text);
+        const bool valid = writer.Fields(parser, bytes, length, false, 0, descriptor.symbol);
+        parser->Release();
+        return valid;
+    };
+    unsigned char bytes[40];
+    std::memset(bytes, 0xa5, sizeof(bytes));
+    bytes[0] = 7;
+    auto put = [&](U32 offset, U32 value) { std::memcpy(bytes + offset, &value, sizeof(value)); };
+    put(8, 0x1234); put(20, 0x80000000); put(24, 0xaa); put(28, 1); put(32, 2); put(36, 1);
+    std::string first, normalized, changed, empty, unsafe;
+    bool valid = symbols && observe("Observed", bytes, sizeof(bytes), first) &&
+        first.find("<anonymous enum>") != std::string::npos;
+    bytes[1] = 1; bytes[2] = 2; bytes[3] = 3;
+    put(4, 9); put(12, 0x87654321); put(16, 0x11223344);
+    valid = valid && observe("Observed", bytes, sizeof(bytes), normalized) && first == normalized;
+    put(8, 0x4321);
+    valid = valid && observe("Observed", bytes, sizeof(bytes), changed) && first != changed;
+    valid = valid && observe("Empty", bytes, 1, empty) && empty == "[]" &&
+        !observe("Unsafe", bytes, 4, unsafe);
+    if (symbols) constructor->DestroySymbols(symbols);
+    return Expect(valid, "script semantic fields preserve IDs, reject pointers and omit only padding/cache slots");
+}
+
 class FieldCapture final : public IParserCallback
 {
 public:
@@ -1303,6 +1346,7 @@ int main(int argc, char ** argv)
     view2->DestroySymbols(oldNestedSymbols);
     view2->DestroySymbols(newSymbols);
     view2->DestroySymbols(oldSymbols);
+    if (!CheckScriptSemanticFields(view2)) return 1;
     view2->Release();
     if (!Expect(DACOM->UnregisterComponent(view, "IViewConstructor") == GR_OK,
                 "production view constructor unregister")) return 1;

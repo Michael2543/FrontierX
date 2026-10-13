@@ -11,6 +11,40 @@ import m3_compare as compare
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_operation_payload_and_queue_order_are_comparison_inputs(self):
+        op = dict(id=1, command=4, packet_type=0xfffffff4, parent=0, group=0, user_bits=0, control_bits=0,
+                  flags=[0, 0, 0, 0], objects=[11, 12],
+                  payload=dict(grid_quarters=[80, 120], system=1))
+        state = dict(last_id=1, update_counter=64, buffered_bytes=0,
+                     queues=[[op], []], termination=[], completion=[], recalculate=[])
+        compare.validate_operations(state)
+        other = copy.deepcopy(state)
+        other['queues'][0][0]['payload']['grid_quarters'][0] += 1
+        self.assertEqual(compare.first_difference(state, other),
+                         '$.queues[0][0].payload.grid_quarters[0]')
+        other = copy.deepcopy(state)
+        other['queues'][0][0]['objects'].reverse()
+        self.assertEqual(compare.first_difference(state, other), '$.queues[0][0].objects[0]')
+        other['queues'][0][0]['payload']['raw_padding'] = 'ignored'
+        with self.assertRaises(compare.InvalidTrace):
+            compare.validate_operations(other)
+
+    def test_script_program_state_and_identity_are_semantic_comparison_inputs(self):
+        field = dict(name='state', type='State', value='0000000000000001', width=4, bits=0)
+        script = dict(schema=1, data=[], last_extended=0,
+                      programs=[dict(name='OriginalProgram', flags=1, state=[field])])
+        compare.validate_script(script)
+        other = copy.deepcopy(script)
+        other['programs'][0]['state'][0]['value'] = '0000000000000002'
+        self.assertEqual(compare.first_difference(script, other), '$.programs[0].state[0].value')
+        other['programs'][0]['state'][0]['type'] = 'void*'
+        with self.assertRaises(compare.InvalidTrace):
+            compare.validate_script(other)
+        other = copy.deepcopy(script)
+        other['programs'][0]['state'][0]['padding'] = 'ignored'
+        with self.assertRaises(compare.InvalidTrace):
+            compare.validate_script(other)
+
     def test_nested_first_difference_keeps_float_bits_and_order(self):
         a = {'units': [{'position_f32': ['00000000', '3f800000', '00000000']}]}
         b = copy.deepcopy(a)

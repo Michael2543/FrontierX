@@ -2,6 +2,7 @@
 
 #include "FrontierX/LegacyInput.h"
 #include "FrontierX/NativeStreamer.h"
+#include "FrontierX/CompatibilityJournal.h"
 #include "FrontierX/SdlWindow.h"
 #include "SYSTEM.H"
 #include "TComponent.h"
@@ -10,6 +11,7 @@
 #include "WindowManager.h"
 
 #include <cstring>
+#include <cstdlib>
 #include <limits>
 #include <string>
 
@@ -39,7 +41,16 @@ public:
     DACOM_INTERFACE_ENTRY_AGGREGATE("ISystemEventCallback", close_callbacks_)
     END_DACOM_MAP()
 
-    NativeWindowManager() : close_callbacks_(0) {}
+    NativeWindowManager() : close_callbacks_(0)
+    {
+        const char *mode = std::getenv("FRONTIERX_M3_CONTROLLED_INPUT");
+        if (mode && *mode)
+        {
+            const char *trace = std::getenv("FRONTIERX_M3_TRACE");
+            if (std::strcmp(mode, "1") || !trace || !*trace) std::abort();
+            controlled_input_ = true;
+        }
+    }
     ~NativeWindowManager()
     {
         window_.Close();
@@ -139,6 +150,14 @@ public:
 
     void GetCursorPos(S32 & x, S32 & y) override
     {
+        if (controlled_input_)
+        {
+            int left = 0, top = 0, width = 0, height = 0;
+            if (!window_.ClientArea(left, top, width, height)) std::abort();
+            x = width / 2;
+            y = height / 2;
+            return;
+        }
         x = cursor_x_;
         y = cursor_y_;
     }
@@ -166,6 +185,27 @@ private:
 
     bool HandleEvent(const WindowEvent & event)
     {
+        if (controlled_input_)
+        {
+            switch (event.type)
+            {
+            case WindowEventType::FocusGained:
+            case WindowEventType::FocusLost:
+            case WindowEventType::MouseMotion:
+            case WindowEventType::MouseButtonDown:
+            case WindowEventType::MouseButtonUp:
+            case WindowEventType::MouseWheel:
+            case WindowEventType::KeyDown:
+            case WindowEventType::KeyUp:
+            case WindowEventType::TextInput:
+            {
+                static CompatibilityJournal journal("input");
+                journal.Write("external-input-excluded", 0, static_cast<unsigned int>(event.type));
+                return false;
+            }
+            default: break;
+            }
+        }
         if (event.type == WindowEventType::FocusGained) active_ = true;
         if (event.type == WindowEventType::FocusLost) active_ = false;
         if (event.type == WindowEventType::MouseMotion)
@@ -223,6 +263,7 @@ private:
     S32 cursor_x_ = 0;
     S32 cursor_y_ = 0;
     bool active_ = true;
+    bool controlled_input_ = false;
     bool close_requested_ = false;
 };
 
