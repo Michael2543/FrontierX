@@ -865,3 +865,17 @@ with only ticks0..143; it never reaches its checkpoint and fails. The reason
 for that early return/input provenance has not yet been established. Do not
 count the completed reference subset as full repeatability or that truncated
 case as executed save evidence.
+
+
+Publication/execution ledger: the user-authorized Linux follow-up is committed
+and pushed as `d089a1537e01446a12f7c1b11873bb470a571b0b`. Manual
+[Actions run38386971218](https://github.com/Michael2543/frontierX/actions/runs/38386971218)
+was dispatched with `gpu_host_setup=hyprland-x11`; it is queued behind the
+retained118efae run, not an executed corrected CI result. All six affected
+local Linux default/optional/sanitizer build and non-GPU sequences pass with
+this code, using the existing lawfully external optional dependencies; fatal
+ASan/UBSan and leak detection remain enabled for the instrumented scopes.
+The retained Linux/Windows comparison jobs do not authorize further Windows
+repair. Corrected camera startup, GPU host execution and final CI comparisons
+remain pending. Complete semantic/RNG/script capture and equivalent continued
+Save/Reload remain open implementation/acceptance blockers.

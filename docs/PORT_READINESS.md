@@ -47,6 +47,8 @@ corrected mission and CI execution pending. Explicit ordinary GPU resize jobs st
 `gpu_host_setup=hyprland-x11` automates the previously external mapped-floating
 setup for the two existing GPU CTests, with process ownership and fatal
 setup/skip gates; corrected host execution and CI remain pending.
+Linux follow-upd089a15 is pushed; Actions run38386971218 with explicit
+Hyprland/X11 GPU setup is queued behind118efae, not executed proof yet.
 Complete semantic
 RNG/script/queued-payload state and save-continuation equivalence remain open.
 The first same-build
