@@ -23,8 +23,18 @@ No source/simulation/save-format change is made to ease the training.
 **Next milestone: M3 comparison and determinism.** The user explicitly
 assigns native Windows/module ABI and comparative retail validation to M3;
 no such result is claimed for M2. Keep external dependency leaks/Wayland probe
-behavior in the technical backlog with their reproducers. M3 work has not
-started. Exact acceptance, commands, evidence provenance and limits:
+behavior in the technical backlog with their reproducers. M3 is now in progress and **not accepted**. Supplementary native Windows
+Debug/Final rebuilds and same-build campaign ABI checks execute successfully
+on the supplied SSH machine; no CI job has executed. The first same-build
+Linux trace divergence is count5/Z physical position; native Windows/Linux
+CRT draws also differ. Complete state/RNG capture, exact save/reload
+continuation, restored Windows startup/factory creation, speech/GPU/retail
+checks and CI infrastructure
+remain open. No matching fields, partial trace or skip counts as success.
+Current protocol, owner findings, protected workflow and concrete blockers:
+[M3_SIMULATION_COMPARISON.md](M3_SIMULATION_COMPARISON.md).
+
+Exact M2 acceptance, commands, evidence provenance and limits:
 [NATIVE_SINGLEPLAYER_SLICE.md](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12).
 
 ## Historical validation snapshots (superseded by the current status above)

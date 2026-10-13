@@ -446,3 +446,11 @@ M2 Linux training is accepted in its documented scope; M3 comparison/
 determinism includes the deferred Windows/module ABI/retail checks.
 Commands and explicit host/media limits:
 [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
+
+M3 work in progress (2026-10-13): opt-in original-owner tick/audio observation
+and a protected manual CI workflow are prepared. Supplementary native Windows
+Debug/Final rebuilds and same-build campaign ABI checks execute on the supplied
+SSH host. CI has not run; same-build physical state and CRT contract differences,
+complete semantic/save/continuation and interactive Windows speech/retail gates
+remain open. Do not count partial capture or local checks as M3 acceptance.
+See [M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).

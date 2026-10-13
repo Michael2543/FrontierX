@@ -1,3 +1,4 @@
+#include "FrontierX/CompatibilityJournal.h"
 #include "Include/NativeAppGlobals.h"
 #include "Include/NativeAppMissionMedia.h"
 #include <DACOM.H>
@@ -20,6 +21,12 @@
 #include <cstdlib>
 #include <limits>
 #include <map>
+
+static FrontierX::CompatibilityJournal & M3NativeSoundJournal()
+{
+    static FrontierX::CompatibilityJournal journal("native-sound");
+    return journal;
+}
 
 namespace
 {
@@ -92,6 +99,7 @@ struct NativeMissionSound : ISoundManager, IEventCallback
             const auto status = STREAMER->GetStatus(it->second.handle);
             if (status == IStreamer::COMPLETED || status == IStreamer::INVALID)
             {
+                M3NativeSoundJournal().Write("completion-observed", it->first, status);
                 if (it->second.unitVoice && status == IStreamer::COMPLETED) ++stats.unitCompleted;
                 ClearHighlight(it->second);
                 if (!STREAMER->CloseHandle(it->second.handle)) Unsupported("completed stream close");
@@ -225,6 +233,7 @@ struct NativeMissionSound : ISoundManager, IEventCallback
             return 0;
         }
         HSTREAM handle = STREAMER->Open(filename, source, 0);
+        M3NativeSoundJournal().Write("stream-open", 0, handle != nullptr, filename);
         if (!handle)
         {
             std::fprintf(stderr, "Native mission speech failed to open: %s\n", filename);
@@ -239,6 +248,7 @@ struct NativeMissionSound : ISoundManager, IEventCallback
             Unsupported("Play streamer start");
         }
         const U32 id = ++lastID;
+        M3NativeSoundJournal().Write("playback-started", id, 1, filename);
         const bool unitVoice = source == SPEECHDIR;
         streams.emplace(id, StreamEntry{handle, object ? object->GetPartID() : 0U, unitVoice});
         if (object) object->bSpecialHighlight = true;
@@ -263,6 +273,7 @@ struct NativeMissionSound : ISoundManager, IEventCallback
     FrontierX::NativeMissionAudioStats stats{};
 };
 }
+
 
 namespace FrontierX
 {

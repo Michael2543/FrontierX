@@ -47,6 +47,7 @@
       "configurePreset": "linux-gcc-debug",
       "targets": [
         "frontierx_layout_probe",
+        "frontierx_rng_contract_probe",
         "frontierx_tinyxml_probe",
         "frontierx_string_table_file_text_probe",
         "frontierx_platform_time_probe",
@@ -96,6 +97,7 @@
       "configurePreset": "linux-clang-debug",
       "targets": [
         "frontierx_layout_probe",
+        "frontierx_rng_contract_probe",
         "frontierx_tinyxml_probe",
         "frontierx_string_table_file_text_probe",
         "frontierx_platform_time_probe",

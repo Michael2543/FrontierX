@@ -17,7 +17,13 @@ the existing native render/font/audio adapters and original command processing.
 No replacement training, altered objectives, simulation/RNG order or save
 format is introduced. Default font/decoder-free builds compile/check; full
 visible M2 uses the optional external font/shared decoder configuration.
-The next milestone is M3 comparison/determinism. Windows/module ABI and actual
+M3 comparison/determinism is now in progress, with supplementary native
+Windows Debug/Final full rebuilds and same-build campaign ABI execution.
+No CI job has executed; same-build physical state and cross-platform CRT
+contract differences remain failures, and semantic/save/continuation plus
+interactive Windows speech/retail gates are open. See
+[M3 comparison evidence](M3_SIMULATION_COMPARISON.md).
+The next acceptance milestone remains M3 comparison/determinism. Windows/module ABI and actual
 retail comparison are explicitly assigned there by the user; no current
 Windows or parity pass is inferred. Details: [final M2 evidence](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12)
 and [current next step](PORT_READINESS.md).

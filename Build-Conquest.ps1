@@ -26,7 +26,12 @@ $engineProjects = @(
     (Join-Path $repoRoot 'Code\Libs\Src\EngComps\RenderMgr\RenderMgr.vcxproj'),
     (Join-Path $repoRoot 'Code\Libs\Src\Shading\TextureLibrary\TextureLibrary.vcxproj'),
     (Join-Path $repoRoot 'Code\Libs\Src\RendComp\PolyMesh\PolyMesh.vcxproj'),
-    (Join-Path $repoRoot 'Code\Libs\Src\RendComp\Optics\Optics.vcxproj')
+    (Join-Path $repoRoot 'Code\Libs\Src\RendComp\Optics\Optics.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\VertexBufferManager\VertexBufferManager.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\MaterialManager\MaterialManager.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\ParticleEffect\ParticleEffect.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\StringTable\StringTable.vcxproj'),
+    (Join-Path $repoRoot 'Code\Libs\Src\TextureManager\TextureManager.vcxproj')
 )
 if ([string]::IsNullOrWhiteSpace($DeployDirectory)) {
     $DeployDirectory = if ($Configuration -eq 'Debug') {

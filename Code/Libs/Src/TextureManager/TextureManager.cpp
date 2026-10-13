@@ -233,7 +233,7 @@ static U32 nearestPower (S32 number)
 	U32 result = 1;
 	while (result < target)
 	{
-		if (result > std::numeric_limits<U32>::max() / 2U) return 0;
+		if (result > (std::numeric_limits<U32>::max)() / 2U) return 0;
 		result <<= 1U;
 	}
 	return result;
@@ -702,7 +702,7 @@ U32 TManager::createTextureFromMemory (void *pMemory, DA::FILETYPE type, const P
 	rect.bottom = height - 1;
 
 	{
-	int minDim = std::min(width,height);
+	int minDim = (std::min)(width,height);
 	int numMipmapLevels = log((float)minDim)/log(2.0f) -1;
 #if !defined(_WIN32)
     if (nativeBaseLevelOnly) numMipmapLevels = 1;

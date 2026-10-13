@@ -1,3 +1,20 @@
+## M3 supplementary validation addendum (2026-10-13)
+
+The supplied SSH Windows11/VS2022 Community machine executes current native
+Debug/Final full no-deploy builds and immediate same-build campaign ABI checks
+for the uncommitted M3 overlay; CI has not run. The former nine-engine wrapper
+now also rebuilds the source VertexBufferManager, MaterialManager,
+ParticleEffect, StringTable and TextureManager required by the isolated
+runtime. Shared PCH platform-guard and Win32 min/max fixes are tracked
+separately from gameplay comparisons. The existing outside-repository
+validation helper gains bounded launch arguments, timeout/nonzero failure
+status and tested registry restoration. Both the first staging and corrected interactive composition have no mission
+trace. The latter exits with an access violation in installed dahotkey.dll,
+after required provider creation failures beginning at IRenderPipeline.
+This is an open restored-runtime/module gate, not mission/audio evidence. Current results and limitations:
+[M3_SIMULATION_COMPARISON.md](M3_SIMULATION_COMPARISON.md). The older entries
+below remain historical, not proof for the current overlay.
+
 # VS2022 Win32 Build Validation
 
 Status snapshot: **2026-09-25**. This record covers native Windows compilation and linking of the

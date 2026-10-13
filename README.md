@@ -766,3 +766,10 @@ uses the original Solar training selector and briefing with --mission-start
 and Sol_Train.dmission. Visible Clang initial entry executes; other campaigns,
 full training and winning return are unaccepted. Commands, requirements and
 limits: [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
+
+M3 automation is under development, not accepted. Existing Linux presets also
+build/register the CRT and strict comparison/execution-gate checks. The manual
+[controlled CI workflow](.github/workflows/m3.yml) requires authorized protected
+runners and external inputs; it has not been pushed or executed. Original-owner
+diagnostics, exact comparison rules, native Windows build evidence and remaining
+blockers are in [the focused M3 record](docs/M3_SIMULATION_COMPARISON.md).

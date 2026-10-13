@@ -298,16 +298,16 @@ struct MGlobals
 	static void RemoveFromObjectiveList (U32 stringID);
 	
 	static void MarkObjectiveCompleted (U32 stringID);
-	static const bool IsObjectiveCompleted (const U32 stringID);
-	static const bool IsObjectiveSecondary (const U32 stringID);
+	MEXTERN static const bool IsObjectiveCompleted (const U32 stringID);
+	MEXTERN static const bool IsObjectiveSecondary (const U32 stringID);
 	
 	static void MarkObjectiveFailed (U32 stringID);
-	static const bool IsObjectiveFailed (const U32 stringID);
+	MEXTERN static const bool IsObjectiveFailed (const U32 stringID);
 
     static const bool IsObjectiveInList (const U32 stringID);
 
-	static const U32 GetNumberObjectives (void);
-	static const U32 GetObjectiveStringID (const U32 index);
+	MEXTERN static const U32 GetNumberObjectives (void);
+	MEXTERN static const U32 GetObjectiveStringID (const U32 index);
 
 
 	// the following is for M_OBJCLASS recognition

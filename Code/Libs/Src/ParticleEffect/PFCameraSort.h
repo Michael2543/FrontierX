@@ -183,7 +183,7 @@ bool CameraSortEffect::Update(U32 inputStart, U32 numInput, bool bShutdown,U32 i
 	{
 		Vector cameraPos = parentSystem->GetOwner()->GetCamera()->get_position();
 		Vector lookDir = -(parentSystem->GetOwner()->GetCamera()->get_transform().get_k());
-		lastLive = std::min(static_cast<U32>(MAX_SORT), lastLive);
+		lastLive = (std::min)(static_cast<U32>(MAX_SORT), lastLive);
 		for(U32 i = 0; i < lastLive; ++i)
 		{
 			Vector partDir = p1[i].pos-cameraPos;

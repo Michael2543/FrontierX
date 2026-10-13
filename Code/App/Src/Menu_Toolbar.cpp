@@ -1239,6 +1239,8 @@ MSG msg;
 Menu_tb::~Menu_tb (void)
 {
 	TOOLBAR = 0;
+	delete [] map;
+	map = NULL;
 	flushControlList();
 	flushMenuList();
 	if (m_pPaddedData) {

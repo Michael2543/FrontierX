@@ -1220,6 +1220,8 @@ void ObjectList::EndFrame (void)
 }
 //--------------------------------------------------------------------------//
 //
+#include "M3Trace.h"
+
 void ObjectList::Update (void)
 {
 	U32 i;
@@ -1246,6 +1248,7 @@ void ObjectList::Update (void)
 
 		for (i = 0; i < numRealTimeFrames; i++)
 		{
+			FrontierXM3::BeforeTick(updateCounter);
 				QueryPerformanceCounter((LARGE_INTEGER *)&pretick);
 			if ((updateCounter & 7) == 0)
 				SECTOR->Update();
@@ -1287,6 +1290,7 @@ void ObjectList::Update (void)
 			{
 				MGlobals::SetUpdateCount(++updateCounter);
 				SCHEDULER->UpdateQueue();
+				FrontierXM3::Snapshot(updateCounter);
 			}
 		}
 

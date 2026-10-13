@@ -1,3 +1,23 @@
+2026-10-13 M3 current supplementary validation (no CI execution): default
+GCC/Clang, optional font/shared-decoder GCC/Clang and optional Clang ASan/UBSan
+Debug graphs build and each executes52 non-GPU CTests with zero failures/skips
+in the final toolbar-owner revision. New CRT/comparator/execution-gate checks
+are registered; presets include the CRT target. Separate optional Clang GPU
+scope executes both existing host checks: game_material_gpu passes, sdl3_gpu
+fails compositor-denied resize (unchanged1236x1390). No GPU skip/pass substitution.
+Native Windows Debug/Final full no-deploy wrappers and immediate same-build
+campaign ABI execute with zero unsatisfied among153 Mission/2 Trim imports.
+The extended14-provider Debug/Final wrappers and immediate ABI checks also
+execute successfully. The corrected interactive Final startup fails before
+any mission tick (required factory creation failure, later retail dahotkey
+access violation); it is not a runtime pass. Details are recorded in docs/M3_SIMULATION_COMPARISON.md. Identical-build
+physical traces fail at count5; native Windows/Linux CRT contracts differ.
+A real optional ASan diagnostic exposes/fixes the toolbar's direct99840-byte
+error-close root; retained voice assertion and whole3812B/12 LSan report still
+fail. Shared dependencies are uninstrumented; remaining unknown frames are
+not declared clean/external automatically. CI, whole semantic/save continuation,
+Windows speech/retail and controlled frame/event/RNG gates remain open.
+
 2026-10-12 native ObjectExtent/Explosion tree-association cleanup: all five
 affected Debug configurations build and pass49 non-GPU checks each,
 extent-tree-owner-current. Focused optional ASan view_parser/app_schema/

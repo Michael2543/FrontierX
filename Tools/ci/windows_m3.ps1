@@ -1,0 +1,41 @@
+[CmdletBinding()]
+param()
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+$private = Join-Path $env:RUNNER_TEMP ('frontierx-m3-' + [guid]::NewGuid())
+try {
+    New-Item $private -ItemType Directory | Out-Null
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    $vs = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild -property installationPath
+    if (!$vs -or !(Test-Path (Join-Path $env:DXSDK_DIR 'Include\d3dx9.h'))) { throw 'native toolchain missing' }
+    $revision = & git -C $root rev-parse HEAD
+    Write-Output "Revision $revision; native Windows source/synthetic scope"
+    $tools = Get-Content (Join-Path $vs 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt')
+    Write-Output "MSVC $tools; MSBuild native Win32 Debug/Final; external installed DXSDK"
+    $dumpbin = Join-Path $vs "VC\Tools\MSVC\$tools\bin\Hostx64\x86\dumpbin.exe"
+    foreach ($config in @('Debug', 'Final')) {
+        # Campaign outputs are shared: check ABI immediately before next rebuild.
+        & (Join-Path $root 'Build-Conquest.ps1') -Configuration $config -NoDeploy *> (Join-Path $private "$config-build.log")
+        & (Join-Path $root 'Tools\abicheck\allmods.ps1') -DumpbinPath $dumpbin -BuiltGameDirectory (Join-Path $root "Code\App\Src\$config") -ScriptDirectory (Join-Path $root 'Code\App\Src\Scripts\Build') *> (Join-Path $private "$config-abi.log")
+        Write-Output "Native Windows $config rebuild and same-build campaign ABI executed"
+    }
+    & (Join-Path $root 'Tools\windows\Test-RestoredValidation.ps1') -PrivateDirectory $private *> (Join-Path $private 'helper-tests.log')
+    Write-Output 'Synthetic Windows launch/error/timeout and registry-restore checks executed'
+    $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars32.bat'
+    $source = Join-Path $root 'Tools\portability\rng_contract_probe.cpp'
+    $exe = Join-Path $private 'rng-contract.exe'
+    $cmd = Join-Path $private 'rng-build.cmd'
+    @("@echo off", "call `"$vcvars`"", "if errorlevel 1 exit /b 1", "cl /nologo /EHsc /MT /W4 `"$source`" /Fe:`"$exe`" /Fo:`"$private\rng-contract.obj`"", "exit /b %errorlevel%") | Set-Content $cmd
+    & cmd /c $cmd *> (Join-Path $private 'rng-build.log')
+    if ($LASTEXITCODE) { throw 'CRT characterization build failed' }
+    & $exe
+    if ($LASTEXITCODE) { throw 'CRT repeat failed' }
+    $out = Join-Path $root 'out\m3-synthetic'
+    New-Item $out -ItemType Directory -Force | Out-Null
+    & $exe --trace | Set-Content -Encoding ascii (Join-Path $out 'windows.json')
+    if ($LASTEXITCODE) { throw 'CRT trace failed' }
+} catch {
+    Write-Output 'FAIL: native Windows CI scope; private runner diagnostics retained'
+    exit 1
+}

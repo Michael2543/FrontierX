@@ -4074,9 +4074,18 @@ U32 MScript::PlayCommAudio (const char * fileName,const MPartRef & speaker, U32 
 }
 //--------------------------------------------------------------------------//
 //
+#include "FrontierX/CompatibilityJournal.h"
+static FrontierX::CompatibilityJournal & M3ScriptJournal()
+{
+    static FrontierX::CompatibilityJournal journal("script");
+    return journal;
+}
+
 U32 MScript::PlayAnimatedMessage (const char * filename, const char * animType, S32 x, S32 y,U32 subtitle)
 {
+	M3ScriptJournal().Write("animated-request", 0, MGlobals::GetUpdateCount(), filename);
 	U32 handle = SOUNDMANAGER->PlayAnimatedMessage(filename, animType, x, y);
+	M3ScriptJournal().Write("animated-result", handle, MGlobals::GetUpdateCount(), filename);
 	if(subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewSubtitle(GetCountedString(subtitle),handle);
@@ -4088,7 +4097,9 @@ U32 MScript::PlayAnimatedMessage (const char * filename, const char * animType, 
 U32 MScript::PlayAnimatedMessage (const char * filename, const char * animType, S32 x, S32 y, const MPartRef & speaker,U32 subtitle)
 {
 	MCachedPart & object = speaker.getPartFromCache();
+	M3ScriptJournal().Write("animated-request", 0, MGlobals::GetUpdateCount(), filename);
 	U32 handle = SOUNDMANAGER->PlayAnimatedMessage(filename, animType, x, y, object.obj);
+	M3ScriptJournal().Write("animated-result", handle, MGlobals::GetUpdateCount(), filename);
 	if(subtitle && NativeShowSubtitle())
 	{
 		SUBTITLE->NewSubtitle(GetCountedString(subtitle),handle);
@@ -4136,7 +4147,9 @@ void MScript::FlushStreams()
 //
 BOOL32 MScript::IsStreamPlaying (U32 movie_handle)
 {
-	return SOUNDMANAGER->IsPlaying(movie_handle);
+	const BOOL32 playing = SOUNDMANAGER->IsPlaying(movie_handle);
+	M3ScriptJournal().Write("script-poll", movie_handle, playing);
+	return playing;
 }
 
 //--------------------------------------------------------------------------//

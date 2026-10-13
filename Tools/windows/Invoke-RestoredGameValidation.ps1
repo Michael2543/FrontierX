@@ -7,7 +7,12 @@ param(
     [string]$RepositoryRoot,
 
     [Parameter(Mandatory = $true)]
-    [string]$RetailDataDirectory
+    [string]$RetailDataDirectory,
+
+    [string[]]$Arguments = @(),
+
+    [ValidateRange(0, 3600)]
+    [int]$TimeoutSeconds = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -74,8 +79,23 @@ $previousPath = if ($hadValue) { $oldValue.DataPath } else { $null }
 
 try {
     Set-ItemProperty -Path $registryPath -Name DataPath -Value 'DataOverlay;Data'
-    $process = Start-Process -FilePath $exe -WorkingDirectory $testRoot -PassThru -Wait
+    $launch = @{ FilePath = $exe; WorkingDirectory = $testRoot; PassThru = $true }
+    if ($Arguments.Count) { $launch.ArgumentList = $Arguments }
+    $process = Start-Process @launch
+    # Keep a handle before waiting so ExitCode remains available in Windows PS.
+    $null = $process.Handle
+    if ($TimeoutSeconds -gt 0) {
+        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            $process.Kill()
+            $process.WaitForExit()
+            throw 'Restored game validation timed out.'
+        }
+    } else {
+        $process.WaitForExit()
+    }
+    $process.Refresh()
     Write-Output "Conquest exited with code $($process.ExitCode)."
+    if ($process.ExitCode -ne 0) { throw 'Restored game process failed.' }
 }
 finally {
     if ($hadValue) {

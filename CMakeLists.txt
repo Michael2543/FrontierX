@@ -2267,6 +2267,10 @@ int main() {
 endif()
 
 include(CTest)
+# M3 preflight: actual CRT draws used by simulation owners, not a simulation.
+add_executable(frontierx_rng_contract_probe Tools/portability/rng_contract_probe.cpp)
+frontierx_enable_strict_warnings(frontierx_rng_contract_probe)
+
 if(BUILD_TESTING)
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_test(NAME portability.headless COMMAND ${Python3_EXECUTABLE}
@@ -2278,6 +2282,11 @@ if(BUILD_TESTING)
 		ENVIRONMENT "PYTHONDONTWRITEBYTECODE=1")
 	add_test(NAME portability.profile_document COMMAND frontierx_profile_document_probe)
 	add_test(NAME portability.profile_buffer COMMAND frontierx_profile_buffer_probe)
+	add_test(NAME portability.rng_contract COMMAND frontierx_rng_contract_probe)
+	add_test(NAME portability.m3_ci_gates COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/ci/test_ci_gates.py)
+	add_test(NAME portability.m3_compare COMMAND ${Python3_EXECUTABLE}
+		${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/test_m3_compare.py)
 	add_test(NAME portability.layout COMMAND frontierx_layout_probe)
 	add_test(NAME portability.tinyxml COMMAND frontierx_tinyxml_probe)
 	add_test(NAME portability.string_table_file_text
@@ -2358,7 +2367,7 @@ if(BUILD_TESTING)
 			${FRONTIERX_GPU_FRAGMENT_SHADER}
 			${FRONTIERX_GPU_T4_VERTEX_SHADER}
 			${FRONTIERX_GPU_MT_VERTEX_SHADER})
-		set_tests_properties(portability.game_material_gpu PROPERTIES SKIP_RETURN_CODE 77)
+		set_tests_properties(portability.game_material_gpu PROPERTIES SKIP_RETURN_CODE 77 LABELS "gpu;host")
 		add_test(NAME portability.sdl3_gpu COMMAND frontierx_sdl3_gpu_probe
 			${FRONTIERX_GPU_VERTEX_SHADER}
 			${FRONTIERX_GPU_FRAGMENT_SHADER}
@@ -2366,6 +2375,6 @@ if(BUILD_TESTING)
 			${CMAKE_CURRENT_BINARY_DIR}/sdl_gpu_material_texture_fixture.utf
 			${FRONTIERX_GPU_MT_VERTEX_SHADER}
 			--visible)
-		set_tests_properties(portability.sdl3_gpu PROPERTIES SKIP_RETURN_CODE 77)
+		set_tests_properties(portability.sdl3_gpu PROPERTIES SKIP_RETURN_CODE 77 LABELS "gpu;host")
 	endif()
 endif()

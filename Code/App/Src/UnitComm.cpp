@@ -600,7 +600,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, U32 indexPos
 					indexPos = cqoffsetofmember(UNITSOUNDS::SPEECH::SPACESHIP, aggravated) / sizeof(M_STRING);
 				else
 				{
-					node->decayTime = (std::max)(node->decayTime, SHORT_DECAY/2);
+					node->decayTime = (std::max)(node->decayTime, S32(SHORT_DECAY/2));
 					goto Done;		// throw away redundant
 				}
 			}
@@ -616,7 +616,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, U32 indexPos
 		{
 			if (node->index == indexPos)
 			{
-				node->decayTime = (std::max)(node->decayTime, SHORT_DECAY/2);
+				node->decayTime = (std::max)(node->decayTime, S32(SHORT_DECAY/2));
 				goto Done;		// throw away redundant message
 			}
 		}
@@ -631,7 +631,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, U32 indexPos
 		CommNode * node = findAlertFromUnit(dwMissionID);
 		if (node)
 		{
-			node->decayTime = (std::max)(node->decayTime, GOTO_DECAY);
+			node->decayTime = (std::max)(node->decayTime, S32(GOTO_DECAY));
 			node->gotoDecay = GOTO_DECAY;
 			flags &= ~COMMF_ALERT;
 		}
@@ -737,7 +737,7 @@ void UnitComm::PlayCommMessage (IBaseObject * obj, U32 dwMissionID, char * fileN
 		CommNode * node = findAlertFromUnit(dwMissionID);
 		if (node)
 		{
-			node->decayTime = (std::max)(node->decayTime, GOTO_DECAY);
+			node->decayTime = (std::max)(node->decayTime, S32(GOTO_DECAY));
 			node->gotoDecay = GOTO_DECAY;
 			flags &= ~COMMF_ALERT;
 		}

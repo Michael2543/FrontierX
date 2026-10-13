@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- /Yu skips text before its header, including an opening platform #if.
+       Load that same PCH before parsing the guarded source. Preserve the
+       project's header, creation entries, CRT and all compilation flags. -->
+  <Target Name="FrontierXLoadPchBeforePlatformGuards" BeforeTargets="ClCompile">
+    <ItemGroup>
+      <ClCompile Update="@(ClCompile)" Condition="'%(ClCompile.PrecompiledHeader)' == 'Use'">
+        <ForcedIncludeFiles Condition="'%(ClCompile.PrecompiledHeaderFile)' != ''">%(ClCompile.PrecompiledHeaderFile);%(ClCompile.ForcedIncludeFiles)</ForcedIncludeFiles>
+        <ForcedIncludeFiles Condition="'%(ClCompile.PrecompiledHeaderFile)' == ''">pch.h;%(ClCompile.ForcedIncludeFiles)</ForcedIncludeFiles>
+      </ClCompile>
+    </ItemGroup>
+  </Target>
+</Project>

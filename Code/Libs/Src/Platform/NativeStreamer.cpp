@@ -1,3 +1,4 @@
+#include "FrontierX/CompatibilityJournal.h"
 #include "FrontierX/NativeStreamer.h"
 #include "FrontierX/NativeWindowManager.h"
 #include "Streamer.h"
@@ -17,6 +18,11 @@ namespace FrontierX
 {
 namespace
 {
+static CompatibilityJournal & M3StreamerJournal()
+{
+    static CompatibilityJournal journal("native-streamer");
+    return journal;
+}
 class NativeStreamer;
 std::vector<NativeStreamer *> owners;
 std::uintptr_t nextHandle = 1;
@@ -97,6 +103,7 @@ public:
                 }
             }
         }
+        M3StreamerJournal().Write("resource-resolved", 0, file != INVALID_HANDLE_VALUE, filename);
         if (file == INVALID_HANDLE_VALUE) return nullptr;
         struct FileGuard
         {
@@ -125,13 +132,16 @@ public:
         if (!waveLoaded)
         {
 #if defined(FRONTIERX_HAVE_IAC_DECODER)
-            if (!DecodeNativeIacWave(bytes, spec, decoded)) return nullptr;
+            const bool decodedOk = DecodeNativeIacWave(bytes, spec, decoded);
+            M3StreamerJournal().Write("iac-decoded", 0, decodedOk, filename);
+            if (!decodedOk) return nullptr;
             pcm = decoded.data();
             length = static_cast<Uint32>(decoded.size());
 #else
             return nullptr;
 #endif
         }
+        M3StreamerJournal().Write("pcm-decoded", 0, length, filename);
         if (!length || length > 256U * 1024U * 1024U) return nullptr;
         auto stream = std::make_unique<Stream>();
         stream->audio = SDL_OpenAudioDeviceStream(device, &spec, nullptr, nullptr);
@@ -255,6 +265,7 @@ private:
     }
     void Notify(HSTREAM handle, STATUS status)
     {
+        M3StreamerJournal().Write("stream-notification", 0, static_cast<unsigned int>(status));
         if (window && message)
             DispatchNativeWindowMessage(window, message, static_cast<LegacyWParam>(status),
                                         reinterpret_cast<LegacyLParam>(handle));

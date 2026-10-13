@@ -303,9 +303,21 @@ static void forceDefaults()
 
 //--------------------------------------------------------------------------
 // return true if mission loaded
+#include <cstdlib>
+
 static bool init_mission (void)
 {
 	bool missionLoaded=0;
+
+    // Explicit M3 entry uses the same original Mission::Load owner as Linux.
+    // Retain live rendering/audio/event timing; no manufactured objectives.
+    if (std::getenv("FRONTIERX_M3_SOLTRAIN"))
+    {
+        forceDefaults();
+        ChangeInterfaceRes(IR_IN_GAME_RESOLUTION);
+        return MISSION->Load("Sol_Train.dmission", SPMAPDIR) != 0;
+    }
+
 
 	if (cmd_line_file[0])	// open the last mission file
 	{

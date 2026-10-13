@@ -11,6 +11,15 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+// Debug game diagnostics coexist with the supported static release CRT.
+// Prime the STL under that CRT contract; restore _DEBUG for game assertions.
+#if defined(_MSC_VER) && defined(_DEBUG) && !defined(_DLL)
+#pragma push_macro("_DEBUG")
+#undef _DEBUG
+#include <algorithm>
+#pragma pop_macro("_DEBUG")
+#endif
+
 #define WIN32_LEAN_AND_MEAN
 // 4514: unused inline function
 // 4201: nonstandard no-name structure use

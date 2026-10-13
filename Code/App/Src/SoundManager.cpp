@@ -532,6 +532,13 @@ Done:
 }
 //-------------------------------------------------------------------
 //
+#include "FrontierX/CompatibilityJournal.h"
+static FrontierX::CompatibilityJournal & M3WindowsSoundJournal()
+{
+    static FrontierX::CompatibilityJournal journal("windows-sound");
+    return journal;
+}
+
 U32 SoundMan::PlayAnimatedMessage (const char * filename, const char * animType, S32 x, S32 y, IBaseObject* obj, SINGLE volume)
 {
 	U32 result = 0;
@@ -544,9 +551,9 @@ U32 SoundMan::PlayAnimatedMessage (const char * filename, const char * animType,
 		char * ptr;
 
 		if (GENDATA->CreateInstance(animType, pComp) != GR_OK)
-			goto Done;
+		{ M3WindowsSoundJournal().Write("animation-resource-failed", 0, 0, filename); goto Done; }
 		if (pComp->QueryInterface("IAnimate", anim) != GR_OK)
-			goto Done;
+		{ M3WindowsSoundJournal().Write("animation-interface-failed", 0, 0, filename); goto Done; }
 
 		strncpy(buffer, filename, 32);
 		buffer[32] = 0;
@@ -555,7 +562,9 @@ U32 SoundMan::PlayAnimatedMessage (const char * filename, const char * animType,
 			strcpy(ptr+1, "txt");
 			if (CreateLFParser(pParser) == GR_OK)
 			{
-				if (pParser->Initialize(buffer))
+				const bool resolved = pParser->Initialize(buffer) != 0;
+				M3WindowsSoundJournal().Write("lip-resource-resolved", 0, resolved, buffer);
+				if (resolved)
 				{
 					PENDING_NODE * node = new PENDING_NODE;
 
@@ -605,10 +614,12 @@ void SoundMan::updatePendingList (void)
 	{
 		U32 *pFrameArray=0;
 		S32 numAnimFrames = node->pParser->ParseFile(&pFrameArray);
+		M3WindowsSoundJournal().Write("lip-parse", node->soundID, numAnimFrames > 0, node->filename);
 
 		if (numAnimFrames > 0)	 // parse success
 		{
 			HSTREAM hStream = STREAMER->Open(node->filename, MSPEECHDIR, 0);
+			M3WindowsSoundJournal().Write("stream-open", node->soundID, hStream != 0, node->filename);
 
 			if (hStream)
 			{
@@ -1121,6 +1132,7 @@ void SoundMan::handleStreamerNotify (HSTREAM hStream, IStreamer::STATUS state)
 	{
 		if (node->hStream == hStream)
 		{
+			M3WindowsSoundJournal().Write("completion-notification", node->soundID, state);
 			if (state == IStreamer::COMPLETED||state==IStreamer::INVALID)
 			{
 				// 

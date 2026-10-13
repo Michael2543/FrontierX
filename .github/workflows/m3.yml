@@ -1,0 +1,124 @@
+name: M3 controlled compatibility gates
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: frontierx-m3-controlled
+  cancel-in-progress: false
+
+# No pull_request/pull_request_target trigger. These persistent runners and
+# their external inputs must only execute reviewed default-branch code.
+jobs:
+  linux:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: frontierx-m3-controlled
+    runs-on: [self-hosted, Linux, X64, frontierx-m3-linux]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        compiler: [gcc, clang]
+        scope: [default, optional, sanitizers]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          clean: true
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope ${{ matrix.scope }}
+      - if: matrix.scope == 'default'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: crt-${{ matrix.compiler }}
+          path: out/m3-synthetic/${{ matrix.compiler }}.json
+          if-no-files-found: error
+          retention-days: 3
+
+  linux-host-gpu:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: frontierx-m3-controlled
+    runs-on: [self-hosted, Linux, X64, frontierx-m3-linux-gpu]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          clean: true
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope gpu
+
+  linux-host-mission:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: frontierx-m3-controlled
+    runs-on: [self-hosted, Linux, X64, frontierx-m3-linux-gpu]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          clean: true
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope mission
+
+  windows-native:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: frontierx-m3-controlled
+    runs-on: [self-hosted, Windows, X64, frontierx-m3-windows]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          clean: true
+      - shell: powershell
+        run: ./Tools/ci/windows_m3.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: crt-windows
+          path: out/m3-synthetic/windows.json
+          if-no-files-found: error
+          retention-days: 3
+
+  windows-host-mission:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: frontierx-m3-controlled
+    runs-on: [self-hosted, Windows, X64, frontierx-m3-windows-gpu]
+    needs: windows-native
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          clean: true
+      - shell: powershell
+        run: ./Tools/ci/windows_mission_m3.ps1
+
+  crt-cross-build:
+    needs: [linux, windows-native]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: crt-*
+          path: out/crt
+          merge-multiple: true
+      - run: python3 Tools/portability/m3_compare.py rng out/crt/gcc.json out/crt/clang.json
+      # Known incompatible CRT contract remains a real failure, not an xfail.
+      - run: python3 Tools/portability/m3_compare.py rng out/crt/gcc.json out/crt/windows.json
+
+  acceptance:
+    if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: [linux, linux-host-gpu, linux-host-mission, windows-native, windows-host-mission, crt-cross-build]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: |
+          echo 'M3 BLOCKED: full semantic RNG/script/order capture, exact-tick save/reload continuation and native Windows mission automation remain incomplete.'
+          echo 'Partial observer and CRT characterization cannot satisfy the simulation or retail acceptance criteria.'
+          exit 1

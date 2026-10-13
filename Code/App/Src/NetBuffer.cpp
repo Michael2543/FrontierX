@@ -52,6 +52,7 @@ static int nativePrefixCompare(const char *lhs, const char *rhs, size_t count)
 #define _localprintf(...) std::fprintf(stderr, __VA_ARGS__)
 #endif
 
+
 #include <algorithm>
 
 #include "NetBuffer.h"
@@ -689,7 +690,7 @@ U32 NetBuffer::GetSessionThroughput (void)
 		}
 
 		result *= numPlayers;
-		result = std::min(maxBandwidth, result);
+		result = (std::min)(maxBandwidth, result);
 	}
 	
 	return result;
