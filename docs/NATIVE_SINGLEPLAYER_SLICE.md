@@ -2212,8 +2212,8 @@ mkdir -p "$SAVE"
   --mission-hint-check --smoke-ms 60000 \
   --mission-gpu "$BUILD/generated/shaders/sdl3_gpu_probe.vert.spv" \
     "$BUILD/generated/shaders/sdl3_gpu_probe.frag.spv" \
-    "$BUILD/generated/shaders/sdl3_gpu_probe_mt.vert.spv" \
     "$BUILD/generated/shaders/sdl3_gpu_probe_t4.vert.spv" \
+    "$BUILD/generated/shaders/sdl3_gpu_probe_mt.vert.spv" \
   --string-pack "$RETAIL/stringpack.db" --gen-data "$RETAIL/gendata.db" \
   --game-types "$RETAIL/gametypes.db" \
   --hotkeys "$PWD/Code/App/Src/Hotkeys.utf" --save-root "$SAVE"
@@ -2432,8 +2432,8 @@ XDG_CONFIG_HOME="$RUN_CONFIG" timeout -k 5s 120s "$BUILD/frontierx_native_shell"
   --mission-source Sol_Train.dmission --mission-engine --mission-start \
   --mission-gpu "$BUILD/generated/shaders/sdl3_gpu_probe.vert.spv" \
     "$BUILD/generated/shaders/sdl3_gpu_probe.frag.spv" \
-    "$BUILD/generated/shaders/sdl3_gpu_probe_mt.vert.spv" \
     "$BUILD/generated/shaders/sdl3_gpu_probe_t4.vert.spv" \
+    "$BUILD/generated/shaders/sdl3_gpu_probe_mt.vert.spv" \
   --string-pack "$RETAIL/stringpack.db" --gen-data "$RETAIL/gendata.db" \
   --game-types "$RETAIL/gametypes.db" --hotkeys "$REPO/Code/App/Src/Hotkeys.utf" \
   --save-root "$RUN_SAVE" --smoke-ms 45000
@@ -2569,8 +2569,8 @@ XDG_CONFIG_HOME=/tmp/frontierx-alpha-runtime/config timeout -k 5s 120s <tree>/fr
   --mission-source Sol_Train.dmission --mission-engine --mission-start \
   --mission-gpu <tree>/generated/shaders/sdl3_gpu_probe.vert.spv \
     <tree>/generated/shaders/sdl3_gpu_probe.frag.spv \
-    <tree>/generated/shaders/sdl3_gpu_probe_mt.vert.spv \
     <tree>/generated/shaders/sdl3_gpu_probe_t4.vert.spv \
+    <tree>/generated/shaders/sdl3_gpu_probe_mt.vert.spv \
   --string-pack "$LAWFUL_INSTALL_ROOT/stringpack.db" \
   --gen-data "$LAWFUL_INSTALL_ROOT/gendata.db" --game-types "$LAWFUL_INSTALL_ROOT/gametypes.db" \
   --hotkeys "$REPO_ROOT/Code/App/Src/Hotkeys.utf" \
@@ -2808,8 +2808,8 @@ XDG_CONFIG_HOME="$settings" "$build/frontierx_native_shell" \
   --mission-source Sol_Train.dmission --mission-engine --mission-start \
   --mission-gpu "$build/generated/shaders/sdl3_gpu_probe.vert.spv" \
     "$build/generated/shaders/sdl3_gpu_probe.frag.spv" \
-    "$build/generated/shaders/sdl3_gpu_probe_mt.vert.spv" \
     "$build/generated/shaders/sdl3_gpu_probe_t4.vert.spv" \
+    "$build/generated/shaders/sdl3_gpu_probe_mt.vert.spv" \
   --string-pack "$install/stringpack.db" --gen-data "$install/gendata.db" \
   --game-types "$install/gametypes.db" \
   --hotkeys "$repo/Code/App/Src/Hotkeys.utf" \
@@ -3028,7 +3028,7 @@ directory outside the repository, and `--mission-source Sol_Train.dmission
 --mission-engine --mission-start --smoke-ms 10000`. Supply the four shaders
 from the same build tree to `--mission-gpu` in this order:
 `sdl3_gpu_probe.vert.spv`, `sdl3_gpu_probe.frag.spv`,
-`sdl3_gpu_probe_mt.vert.spv`, `sdl3_gpu_probe_t4.vert.spv`. The validated
+`sdl3_gpu_probe_t4.vert.spv`, `sdl3_gpu_probe_mt.vert.spv`. The validated
 bounded presentation exclusions were `--skip-movies`,
 `--skip-notification-cue`, `--skip-sector-map`,
 `--skip-space-background`, `--skip-unit-labels`, `--skip-planet-ui`,
@@ -12169,8 +12169,8 @@ installation root and an external writable save directory:
   --mission-source Sol_Train.dmission --mission-engine --mission-start --mission-campaign \
   --mission-gpu /tmp/frontierx-voice-clang/generated/shaders/sdl3_gpu_probe.vert.spv \
     /tmp/frontierx-voice-clang/generated/shaders/sdl3_gpu_probe.frag.spv \
-    /tmp/frontierx-voice-clang/generated/shaders/sdl3_gpu_probe_mt.vert.spv \
     /tmp/frontierx-voice-clang/generated/shaders/sdl3_gpu_probe_t4.vert.spv \
+    /tmp/frontierx-voice-clang/generated/shaders/sdl3_gpu_probe_mt.vert.spv \
   --string-pack "$LAWFUL_INSTALL_ROOT/stringpack.db" \
   --gen-data "$LAWFUL_INSTALL_ROOT/gendata.db" --game-types "$LAWFUL_INSTALL_ROOT/gametypes.db" \
   --hotkeys Code/App/Src/Hotkeys.utf --save-root "$EXTERNAL_SAVE_ROOT"
@@ -12198,3 +12198,11 @@ passed tests. They are retained in the backlog separately from the completed
 mission-owner gates. M3 next: comparative/determinism work, including the
 explicitly deferred native Windows Debug/Final/module ABI and retail checks;
 no M3 comparison is performed or claimed here.
+
+2026-10-14 shader command correction: the six reusable mission launch examples
+now pass VERTEX, FRAGMENT, EXTENDED (`_t4.vert`) and GAME (`_mt.vert`) in the
+NativeShell contract order. EXTENDED RPVERTEX2 has its first UV at input location
+2; GAME MTVERTEX has specular at location 2 and UV at location 3. Historical
+commands/logs and their bounded gameplay evidence are not newly executed or
+retroactively upgraded to correct presentation. The separate actual first-Terran
+shader-order correction is recorded in the current Terran evidence.

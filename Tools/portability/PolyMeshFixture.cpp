@@ -3,12 +3,14 @@
 #include "FrontierX/NativeUtfFileSystem.h"
 #include "ITextureLibrary.h"
 #include "xmesh.h"
+#include "TextureCoord.h"
 
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <initializer_list>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -72,7 +74,8 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
                           const char * cq2MaterialName = "Base",
                           bool wrapForComponent = false,
                           bool embeddedTexture = false, bool threeSortFaces = false,
-                          bool indexedTexture = false)
+                          bool indexedTexture = false, bool secondUvSeam = false,
+                          int compoundMode = -1, unsigned hardpointClaimMode = 0U)
 {
     std::vector<Entry> entries;
     entries.push_back({"/", {}, {}, true});
@@ -87,12 +90,14 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
         entries.push_back({name, std::move(data), {}, false});
         entries[parent].children.push_back(index);
     };
-    const U32 meshRoot = wrapForComponent ? directory(0U, "openFLAME 3D N-mesh") : 0U;
     auto words = [](std::initializer_list<U32> values) {
         std::vector<unsigned char> bytes;
         for (U32 value : values) Word(bytes, value);
         return bytes;
     };
+    if (hardpointClaimMode != 1U)
+    {
+    const U32 meshRoot = wrapForComponent ? directory(0U, "openFLAME 3D N-mesh") : 0U;
     const U32 groups = directory(meshRoot, "Face groups");
     file(groups, "Count", words({1U}));
     const U32 group = directory(groups, "Group0");
@@ -100,13 +105,14 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
     file(group, "Face count", words({threeSortFaces ? 3U : 2U}));
     file(group, "Face vertex chain", threeSortFaces
         ? words({0U, 1U, 2U, 0U, 3U, 4U, 0U, 3U, 2U})
-        : words({0U, 1U, 2U, 0U, 3U, 4U}));
+        : words({0U, 1U, 2U, secondUvSeam ? 5U : 0U, 3U, 4U}));
     file(group, "Face normal", threeSortFaces ? words({0U, 0U, 0U}) : words({0U, 0U}));
     file(group, "Face D-coefficient", threeSortFaces ? words({0U, 0U, 0U}) : words({0U, 0U}));
     file(group, "Face property", threeSortFaces ? words({4U, 4U, 4U}) : words({4U, 4U}));
     const U32 vertices = directory(meshRoot, "Vertices");
-    file(vertices, "Vertex batch count", words({5U}));
-    file(vertices, "Vertex batch list", words({0U, 1U, 2U, 3U, 4U}));
+    file(vertices, "Vertex batch count", words({secondUvSeam ? 6U : 5U}));
+    file(vertices, "Vertex batch list", secondUvSeam
+        ? words({0U, 1U, 2U, 3U, 4U, 0U}) : words({0U, 1U, 2U, 3U, 4U}));
     file(vertices, "Object vertex count", words({5U}));
     std::vector<unsigned char> positions;
     Vector3(positions, 0.0F, 0.0F, 0.0F);
@@ -129,7 +135,10 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
         Float(uv, coordinate.second);
     }
     file(vertices, "Texture vertex list", std::move(uv));
-    file(vertices, "Texture batch list", words({0U, 1U, 2U, 3U, 4U}));
+    file(vertices, "Texture batch list", secondUvSeam
+        ? words({0U, 1U, 2U, 3U, 4U, 0U}) : words({0U, 1U, 2U, 3U, 4U}));
+    if (secondUvSeam)
+        file(vertices, "Texture batch list2", words({0U, 1U, 2U, 3U, 4U, 3U}));
     const U32 normals = directory(meshRoot, "Normals");
     file(normals, "Surface normal count", words({1U}));
     std::vector<unsigned char> normal;
@@ -146,7 +155,25 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
         Float(diffuse, 0.25F);
         Float(diffuse, 0.5F);
         Float(diffuse, 1.0F);
-        file(base, "Diffuse", std::move(diffuse));
+        if (secondUvSeam)
+        {
+            // The source selects secondary coordinates only for the nested
+            // emission material format with TC_WRAP_UV_1. An old flat material
+            // explicitly has no emissive map, even when a UV2 batch exists.
+            directory(base, "Ambient");
+            const U32 diffuseProperty = directory(base, "Diffuse");
+            file(diffuseProperty, "Constant", std::move(diffuse));
+            const U32 diffuseMap = directory(diffuseProperty, "Map");
+            file(diffuseMap, "Name", std::vector<unsigned char>(textureName.begin(), textureName.end()));
+            file(diffuseMap, "Flags", words({0U}));
+            const U32 emissionProperty = directory(base, "Emission");
+            const U32 emissionMap = directory(emissionProperty, "Map");
+            file(emissionMap, "Name", std::vector<unsigned char>(textureName.begin(), textureName.end()));
+            U32 uv2Flags = 0U;
+            SET_TC_WRAP_MODE(uv2Flags, TC_WRAP_UV_1);
+            file(emissionMap, "Flags", words({uv2Flags}));
+        }
+        else file(base, "Diffuse", std::move(diffuse));
         std::vector<unsigned char> transparency;
         Float(transparency, 0.5F);
         file(base, "Transparency", std::move(transparency));
@@ -156,7 +183,7 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
     const U32 textureLibrary = directory(meshRoot, "Texture library");
     if (embeddedTexture)
     {
-        const U32 tile = directory(textureLibrary, indexedTexture ? "Tile8" : "Tile");
+        const U32 tile = directory(textureLibrary, textureName.c_str());
         file(tile, "Image X size", words({2U}));
         file(tile, "Image Y size", words({2U}));
         const U32 rgb = directory(tile, indexedTexture ? "Palette 8 Bit" : "True RGB 565");
@@ -173,10 +200,94 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
                 0x00U, 0xf8U, 0xe0U, 0x07U, 0x1fU, 0x00U, 0xffU, 0xffU});
     }
 
+    }
+    if (hardpointClaimMode != 0U)
+    {
+        const U32 hardpoints = directory(0U, "Hardpoints");
+        const U32 fixed = directory(hardpoints, "Fixed");
+        const U32 locator = directory(fixed, "Locator");
+        std::vector<unsigned char> position;
+        Vector3(position, 0.25F, 0.5F, 0.75F);
+        file(locator, "Position", std::move(position));
+        std::vector<unsigned char> orientation;
+        for (unsigned row = 0U; row < 3U; ++row)
+            for (unsigned column = 0U; column < 3U; ++column)
+                Float(orientation, row == column ? 1.0F : 0.0F);
+        file(locator, "Orientation", std::move(orientation));
+    }
     constexpr U32 headerSize = 56U;
     constexpr U32 recordSize = 44U;
-    const U32 recordsSize = static_cast<U32>(entries.size()) * recordSize;
     std::vector<unsigned char> names;
+    if (compoundMode >= 0)
+    {
+        // A valid simple mesh remains present to expose forbidden fallback
+        // after any required part of this declared compound fails.
+        const auto partPath = std::filesystem::path(path.string() + ".part");
+        if (!WritePolyMeshFixture(partPath, "", false, 1U, "Base", true)) return false;
+        std::ifstream input(partPath, std::ios::binary);
+        const std::vector<unsigned char> partBytes{std::istreambuf_iterator<char>(input),
+                                                  std::istreambuf_iterator<char>()};
+        if (partBytes.empty()) return false;
+        auto rendererClaimPart = [&](bool declared) {
+            const auto claimPath = std::filesystem::path(path.string() + ".claim-part");
+            if (!WritePolyMeshFixture(claimPath, declared ? "RequiredMissingTile" : "",
+                    false, 1U, "Base", true, false, false, false, false, -1, declared ? 2U : 1U))
+                return std::vector<unsigned char>{};
+            std::ifstream claimInput(claimPath, std::ios::binary);
+            return std::vector<unsigned char>{std::istreambuf_iterator<char>(claimInput),
+                                              std::istreambuf_iterator<char>()};
+        };
+        auto sharedPart = [&]() {
+            const auto sharedPath = std::filesystem::path(path.string() + ".shared-part");
+            if (!WritePolyMeshFixture(sharedPath, compoundMode == 7 ? "CompoundSharedTile" : "CompoundMissingTile",
+                    false, 1U, "Base", true)) return std::vector<unsigned char>{};
+            std::ifstream sharedInput(sharedPath, std::ios::binary);
+            return std::vector<unsigned char>{std::istreambuf_iterator<char>(sharedInput),
+                                              std::istreambuf_iterator<char>()};
+        };
+        const auto sharedBytes = compoundMode >= 7 ? sharedPart() : partBytes;
+        const auto rootBytes = compoundMode >= 7 ? sharedBytes : compoundMode == 4 || compoundMode == 6
+            ? rendererClaimPart(compoundMode == 4) : partBytes;
+        const auto childBytes = compoundMode >= 7 ? sharedBytes : compoundMode == 5 ? rendererClaimPart(true) : partBytes;
+        if (rootBytes.empty() || childBytes.empty()) return false;
+        file(0U, "CompoundRoot.3db", rootBytes);
+        file(0U, "CompoundChild.3db", childBytes);
+        if (compoundMode >= 7)
+        {
+            const U32 sharedLibrary = directory(0U, "Texture library");
+            if (compoundMode == 7)
+            {
+                const U32 tile = directory(sharedLibrary, "CompoundSharedTile");
+                file(tile, "Image X size", words({2U}));
+                file(tile, "Image Y size", words({2U}));
+                const U32 format = directory(tile, "True RGB 565");
+                const U32 mip = directory(format, "MIP0");
+                file(mip, "Image colors", {0x00U,0xf8U, 0xe0U,0x07U, 0x1fU,0x00U, 0xffU,0xffU});
+            }
+        }
+        const U32 compound = directory(0U, "Cmpnd");
+        auto part = [&](const char *directoryName, const char *objectName,
+                        const char *fileName, U32 index) {
+            const U32 entry = directory(compound, directoryName);
+            file(entry, "Object name", std::vector<unsigned char>(objectName, objectName + std::strlen(objectName)));
+            file(entry, "File name", std::vector<unsigned char>(fileName, fileName + std::strlen(fileName)));
+            file(entry, "Index", words({index}));
+        };
+        part("Root", "Root", compoundMode == 1 ? "MissingRoot.3db" : "CompoundRoot.3db", 0U);
+        part("Part0", "Child", compoundMode == 2 ? "MissingChild.3db" : "CompoundChild.3db", 1U);
+        if (compoundMode == 3) part("Part1", "Missing", "MissingLast.3db", 2U);
+        const U32 connections = directory(compound, "Cons");
+        // Original Fix record: two 64-byte names, float3 position, float3x3.
+        std::vector<unsigned char> joint(128U, 0U);
+        std::memcpy(joint.data(), "Root", 4U);
+        std::memcpy(joint.data() + 64U, "Child", 5U);
+        Vector3(joint, 0.0F, 0.0F, 0.0F);
+        for (unsigned row = 0U; row < 3U; ++row)
+            for (unsigned column = 0U; column < 3U; ++column)
+                Float(joint, row == column ? 1.0F : 0.0F);
+        file(connections, "Fix", std::move(joint));
+    }
+    const U32 recordsSize = static_cast<U32>(entries.size()) * recordSize;
     std::vector<U32> nameOffsets;
     for (const Entry & entry : entries)
     {
@@ -240,6 +351,39 @@ bool WriteLegacyGameMeshFixture(const std::filesystem::path & path,
 {
     return WritePolyMeshFixture(path, textured ? (indexed ? "Tile8" : "Tile") : "", false,
                                 1U, "Base", true, textured, false, indexed);
+}
+
+bool WriteAnim2DSharedTextureFixture(const std::filesystem::path &path)
+{
+    return WritePolyMeshFixture(path, "AnimSharedTile", false, 1U, "Base", false, true);
+}
+
+bool WriteLegacySeamGameMeshFixture(const std::filesystem::path &path, bool textured)
+{
+    return WritePolyMeshFixture(path, textured ? "Tile" : "", false,
+                               1U, "Base", true, textured, false, false, true);
+}
+
+bool WriteRequiredMaterialFailureFixture(const std::filesystem::path &path, unsigned mode)
+{
+    // Protect original XMesh/material callers against unresolved named assets
+    // and a material table that ends before its declared persistent count.
+    if (mode > 2U) return false;
+    return WritePolyMeshFixture(path, mode == 2U ? "" : "RequiredMissingTile", false,
+                               mode == 2U ? 2U : 1U, "Base", true, false,
+                               false, false, mode == 1U);
+}
+
+bool WriteCompoundGameMeshFixture(const std::filesystem::path &path, unsigned mode)
+{
+    return mode <= 8U && WritePolyMeshFixture(path, "", false, 1U, "Base", true,
+        false, false, false, false, static_cast<int>(mode));
+}
+
+bool WriteRendererClaimGameMeshFixture(const std::filesystem::path &path, bool declaredMesh)
+{
+    return WritePolyMeshFixture(path, declaredMesh ? "RequiredMissingTile" : "", false,
+        1U, "Base", true, false, false, false, false, -1, declaredMesh ? 2U : 1U);
 }
 
 bool RunPolyMeshFixture(const std::filesystem::path & path,
@@ -325,17 +469,13 @@ bool RunPolyMeshFixture(const std::filesystem::path & path,
     }
     {
         XMesh mesh;
-        loaded = mesh.read(archive, textures, nullptr, 0U) &&
-            mesh.material_cnt == 1 && mesh.material_list &&
-            mesh.material_list[0].diffuse_texture_ref != ITL_INVALID_REF_ID &&
-            mesh.material_list[0].texture_id == 0U &&
-            (mesh.material_list[0].texture_flags & TF_F_HAS_ALPHA) == 0U;
+        loaded = !mesh.read(archive, textures, nullptr, 0U);
     }
     archive->Release();
     loaded = loaded && textures->has_texture_id("Missing") != GR_OK;
     if (!loaded)
     {
-        error = "missing legacy material texture has no frame or retained ID";
+        error = "missing required legacy texture rejects mesh and retains no texture ID";
         return false;
     }
     const std::filesystem::path cq2Path = path.string() + ".cq2";
@@ -367,7 +507,7 @@ bool RunPolyMeshFixture(const std::filesystem::path & path,
     CountingMaterialManager manager;
     {
         XMesh mesh;
-        loaded = mesh.read(archive, textures, &manager, 0U) &&
+        loaded = !mesh.read(archive, textures, &manager, 0U) &&
             mesh.imaterial_cnt == 1 && mesh.imaterial_list &&
             mesh.imaterial_list[0] == nullptr &&
             manager.lookups == 1U && manager.lastName == "Base" &&
@@ -377,7 +517,7 @@ bool RunPolyMeshFixture(const std::filesystem::path & path,
     archive->Release();
     if (!loaded)
     {
-        error = "CQ2 material directory did not reach IMaterialManager lookup";
+        error = "unresolved CQ2 material must reach real lookup and reject the mesh";
         return false;
     }
     const std::filesystem::path countPath = path.string() + ".count";

@@ -29,6 +29,7 @@
 #include <map>
 #include <mutex>
 #include <stdexcept>
+#include <vector>
 #endif
  
 #include "MeshRender.h"
@@ -163,6 +164,12 @@ SINGLE chromeRot=0.0f;
 TRANSFORM chromeTrans;
 bool bChromeDirty=true;
 U8 chosenAngle;
+#if !defined(_WIN32)
+namespace
+{
+bool nativeLegacyPreview = false;
+}
+#endif
 
 //U32 testLightCurves = 0;
 
@@ -449,6 +456,13 @@ struct MMaterial : RenderMaterial
   
 struct FaceGroupRender : MMaterial<RPVertex,D3DFVF_RPVERTEX>
 {
+#if !defined(_WIN32)
+    // Capture corner UV2 without changing source vertex cooking or its rand()
+    // consumption. UV1 deduplication otherwise loses independent UV2 seams.
+    std::vector<TexCoord> nativeCornerUv2;
+    void RenderNativeLegacy(const Transform &inv);
+    void SubmitNativeLegacy(const Transform &inv, std::vector<Vertex2> &vertices, const std::vector<Vector> &normals);
+#endif
 	D3DXMATRIX matFlipY;
 	
 	void * operator new (size_t size)
@@ -700,6 +714,19 @@ void TreeRender(MeshChain &mc,bool bLight, DWORD color)
 	//BATCH->set_state(RPR_BATCH,TRUE);
 }
 
+#if !defined(_WIN32)
+void TreeRenderNativeLegacyPreview(MeshChain &mc)
+{
+    struct PreviewScope
+    {
+        bool previous = nativeLegacyPreview;
+        PreviewScope() { nativeLegacyPreview = true; }
+        ~PreviewScope() { nativeLegacyPreview = previous; }
+    } scope;
+    TreeRender(mc);
+}
+#endif
+
 void TreeRender(MeshInfo **mi,int num_children)
 {
 	if (mi[0]->bHasMesh)
@@ -904,6 +931,19 @@ void MeshRender::Render(MeshInfo *mc,const Transform &world_to_view)
 
 	Transform world_adjust_tr(false);
 	Transform inv(false);
+#if !defined(_WIN32)
+    bool previewLegacyMesh = nativeLegacyPreview && mc->bHasMesh;
+    for (RenderMaterial *material = fgr; previewLegacyMesh && material;
+         material = material->next)
+    {
+        if (!mc->fgi || material->fg_idx >= mc->faceGroupCnt)
+            throw std::runtime_error("Native preview material exceeds original face-group owner");
+        const auto &instanceMaterial = mc->fgi[material->fg_idx];
+        if ((material->flags & MM_CHROME) || instanceMaterial.iMat ||
+            instanceMaterial.bCQ2Mat)
+            previewLegacyMesh = false;
+    }
+#endif
 	
 	if (mc->cameraMoveCnt != camMoved)
 	{
@@ -974,6 +1014,11 @@ void MeshRender::Render(MeshInfo *mc,const Transform &world_to_view)
 
 	cam_pos_in_object_space = inv.rotate_translate(cam_pos);
 	
+#if !defined(_WIN32)
+    // Source CPU-prelit draws consume model/view and vertex diffuse colors;
+    // they do not consume the CQ2 shader constant mirror.
+    if (!NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && !previewLegacyMesh)
+#endif
 	PIPE->set_default_constants(world_adjust_tr,cam_pos_in_object_space,4);
 	
 
@@ -1007,6 +1052,10 @@ void MeshRender::Render(MeshInfo *mc,const Transform &world_to_view)
 		
 		while (pos)
 		{
+#if !defined(_WIN32)
+            if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && (pos->flags & MM_CHROME))
+                throw std::runtime_error("Native legacy chrome/Solarian rendering is not integrated");
+#endif
 			if (fgi[pos->fg_idx].bCQ2Mat || (pos->flags & MM_CHROME) == 0)
 			{
 				pos->Render(inv);
@@ -1103,6 +1152,11 @@ void MeshRender::RenderPortionZAlign(MeshInfo *mc,const Transform &world_to_view
 
 	cam_pos_in_object_space = inv.rotate_translate(cam_pos);
 
+#if !defined(_WIN32)
+    // Source CPU-prelit draws consume model/view and vertex diffuse colors;
+    // they do not consume the CQ2 shader constant mirror.
+    if (!NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+#endif
 	PIPE->set_default_constants(world_adjust_tr,cam_pos_in_object_space,4);
 
 	//try to light all the vertices here - unnecessary ?
@@ -1200,6 +1254,11 @@ void MeshRender::RenderPortion(MeshInfo *mc,const Transform &world_to_view,const
 //	if (mc->bCacheValid == false)
 //		LIGHT->light_vertices_U8(mc->lit,vert_list,norm_list,vert_cnt+vert_cnt2,&inv);
 	
+#if !defined(_WIN32)
+    // Source CPU-prelit draws consume model/view and vertex diffuse colors;
+    // they do not consume the CQ2 shader constant mirror.
+    if (!NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+#endif
 	PIPE->set_default_constants(world_adjust_tr,cam_pos_in_object_space,4);
 
 	RenderMaterial *pos;
@@ -2265,6 +2324,9 @@ void FaceGroupRender::Init(Mesh *mesh,int _fg_idx,MeshRender *_mr)//MeshInfo *mc
 				//temp?
 				tmp_verts[currentRef].color = 0xffffffff;
 				id_list[ref_cnt] = currentRef;
+#if !defined(_WIN32)
+                nativeCornerUv2.push_back(mesh->texture_vertex_list[tref2[vv]]);
+#endif
 				
 				tmp_n[currentRef] = this_norm;
 
@@ -2292,6 +2354,9 @@ void FaceGroupRender::Init(Mesh *mesh,int _fg_idx,MeshRender *_mr)//MeshInfo *mc
 				int temp=id_list[ref_cnt-2];
 				id_list[ref_cnt-2] = id_list[ref_cnt-1];
 				id_list[ref_cnt-1] = temp;
+#if !defined(_WIN32)
+                std::swap(nativeCornerUv2[ref_cnt - 2], nativeCornerUv2[ref_cnt - 1]);
+#endif
 			}
 			new_face_cnt++;
 		}
@@ -2333,6 +2398,9 @@ void FaceGroupRender::Clone(RenderMaterial **rm,bool bCopyBuffers)
 {
 	FaceGroupRender *fgr;
 	*rm = fgr = new FaceGroupRender;
+#if !defined(_WIN32)
+    fgr->nativeCornerUv2 = nativeCornerUv2;
+#endif
 	fgr->mr = mr;
 	fgr->fg_idx = fg_idx;
 	fgr->fg = fg;
@@ -2946,12 +3014,165 @@ Done:
 }	
 
 
+#if !defined(_WIN32)
+void FaceGroupRender::RenderNativeLegacy(const Transform &inv)
+{
+    if (!LIGHT || !PIPE || !BATCH || nativeCornerUv2.size() !=
+            static_cast<std::size_t>(new_face_cnt) * 3U)
+        throw std::runtime_error("Native original legacy material requires source light and corner UV owners");
+    const auto &material = fgi[fg_idx];
+    if (flags & MM_CHROME)
+        throw std::runtime_error("Native legacy chrome material is not integrated");
+    const auto *source = static_cast<const RPVertex *>(src_verts_buffer);
+    std::vector<Vertex2> vertices;
+    vertices.reserve(static_cast<std::size_t>(new_face_cnt) * 3U);
+    std::vector<Vector> normals;
+    const auto *faceStates = active_mi->faceRenders + face_offset;
+    for (int face = 0; face < new_face_cnt; ++face)
+    {
+        if (faceStates[face] & (FS__HIDDEN | FS__BUILDING)) continue;
+        if (dot_product(cam_pos_in_object_space, faces[face].norm) < 0) continue;
+        for (int corner = 0; corner < 3; ++corner)
+        {
+            const int offset = face * 3 + corner;
+            const auto index = index_list[offset];
+            if (index >= vert_cnt)
+                throw std::runtime_error("Native legacy material corner index exceeds source vertices");
+            Vertex2 vertex{};
+            vertex.pos = source[index].pos;
+            vertex.u = source[index].u; vertex.v = source[index].v;
+            vertex.u2 = nativeCornerUv2[offset].u; vertex.v2 = nativeCornerUv2[offset].v;
+            vertices.push_back(vertex);
+            normals.push_back(src_norms[index]);
+        }
+    }
+    SubmitNativeLegacy(inv, vertices, normals);
+}
+
+
+void FaceGroupRender::SubmitNativeLegacy(const Transform &inv, std::vector<Vertex2> &vertices,
+                                         const std::vector<Vector> &normals)
+{
+    if (vertices.empty()) return;
+    if (!LIGHT || !PIPE || !BATCH || normals.size() != vertices.size())
+        throw std::runtime_error("Native legacy submission requires source normals/light owners");
+    const auto &material = fgi[fg_idx];
+    if ((flags & MM_CHROME) || material.iMat || material.bCQ2Mat)
+        throw std::runtime_error("Native legacy submission cannot replace chrome/CQ2 materials");
+    std::vector<Vector> positions;
+    positions.reserve(vertices.size());
+    for (const auto &vertex : vertices) positions.push_back(vertex.pos);
+    std::vector<LightRGB_U8> colors(vertices.size());
+    LIGHT->light_vertices_U8(colors.data(), positions.data(), normals.data(),
+                             static_cast<int>(vertices.size()), &inv);
+    for (std::size_t index = 0; index < vertices.size(); ++index)
+    {
+        auto &vertex = vertices[index];
+        vertex.r = static_cast<U8>((std::min)(255U,
+            ((U32(material.diffuse.r) * colors[index].r) >> 8) + material.emissive.r));
+        vertex.g = static_cast<U8>((std::min)(255U,
+            ((U32(material.diffuse.g) * colors[index].g) >> 8) + material.emissive.g));
+        vertex.b = static_cast<U8>((std::min)(255U,
+            ((U32(material.diffuse.b) * colors[index].b) >> 8) + material.emissive.b));
+        vertex.a = material.a;
+    }
+    const auto checked = [](GENRESULT result) {
+        if (result != GR_OK) throw std::runtime_error("Native original legacy material state/draw rejected");
+    };
+    if (CQBATCH)
+    {
+        // Drain source pools before an immediate game draw, then keep their
+        // state cache synchronized instead of bypassing it with PIPE writes.
+        Transform modelview;
+        checked(PIPE->get_modelview(modelview));
+        checked(BATCH->set_state(RPR_BATCH, FALSE));
+        checked(BATCH->set_modelview(modelview));
+    }
+    const auto renderState = [](D3DRENDERSTATETYPE type, U32 value) {
+        const auto result = CQBATCH ? BATCH->set_render_state(type, value) : PIPE->set_render_state(type, value);
+        if (result != GR_OK) std::fprintf(stderr, "Native original legacy render state %u value %u rejected: %d\n", static_cast<unsigned>(type), value, static_cast<int>(result));
+        return result;
+    };
+    const auto samplerState = [](U32 stage, D3DSAMPLERSTATETYPE type, U32 value) {
+        const auto result = CQBATCH ? BATCH->set_sampler_state(stage, type, value) : PIPE->set_sampler_state(stage, type, value);
+        if (result != GR_OK) std::fprintf(stderr, "Native original legacy sampler stage %u state %u value %u rejected: %d\n", stage, static_cast<unsigned>(type), value, static_cast<int>(result));
+        return result;
+    };
+    const auto textureState = [](U32 stage, D3DTEXTURESTAGESTATETYPE type, U32 value) {
+        const auto result = CQBATCH ? BATCH->set_texture_stage_state(stage, type, value) : PIPE->set_texture_stage_state(stage, type, value);
+        if (result != GR_OK) std::fprintf(stderr, "Native original legacy texture stage %u state %u value %u rejected: %d\n", stage, static_cast<unsigned>(type), value, static_cast<int>(result));
+        return result;
+    };
+    const auto texture = [](U32 stage, U32 value) {
+        const auto result = CQBATCH ? BATCH->set_texture_stage_texture(stage, value) : PIPE->set_texture_stage_texture(stage, value);
+        if (result != GR_OK) std::fprintf(stderr, "Native original legacy texture stage %u handle %u rejected: %d\n", stage, value, static_cast<int>(result));
+        return result;
+    };
+    const bool translucent = (material.texture_flags & TF_F_HAS_ALPHA) || material.a != 255;
+    checked(renderState(D3DRS_LIGHTING, FALSE));
+    checked(renderState(D3DRS_ZENABLE, TRUE));
+    checked(renderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL));
+    checked(renderState(D3DRS_ZWRITEENABLE, !(material.texture_flags & TF_F_HAS_ALPHA)));
+    checked(renderState(D3DRS_CULLMODE, D3DCULL_NONE));
+    checked(renderState(D3DRS_ALPHATESTENABLE, FALSE));
+    checked(renderState(D3DRS_ALPHABLENDENABLE, translucent));
+    checked(renderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA));
+    checked(renderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA));
+    for (U32 stage = 0; stage < 2U; ++stage)
+    {
+        const auto wrap = stage ? material.emissive_texture_flags : material.texture_flags;
+        checked(samplerState(stage, D3DSAMP_ADDRESSU, MAT_GET_ADDR_MODE(wrap, 0)));
+        checked(samplerState(stage, D3DSAMP_ADDRESSV, MAT_GET_ADDR_MODE(wrap, 1)));
+        checked(samplerState(stage, D3DSAMP_MINFILTER, D3DTEXF_LINEAR));
+        checked(samplerState(stage, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR));
+        checked(samplerState(stage, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR));
+    }
+    checked(texture(0, material.texture_id));
+    checked(textureState(0, D3DTSS_COLOROP,
+        material.texture_id ? D3DTOP_MODULATE : D3DTOP_SELECTARG2));
+    checked(textureState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE));
+    checked(textureState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE));
+    checked(textureState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE));
+    checked(textureState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE));
+    checked(textureState(0, D3DTSS_ALPHAARG2, D3DTA_DIFFUSE));
+    checked(textureState(0, D3DTSS_TEXCOORDINDEX, 0));
+    const bool emissive = material.emissive_texture_id && CQEFFECTS.bEmissiveTextures &&
+        !active_mi->bSuppressEmissive;
+    checked(texture(1, emissive ? material.emissive_texture_id : 0));
+    checked(textureState(1, D3DTSS_COLOROP, emissive ? D3DTOP_ADD : D3DTOP_DISABLE));
+    checked(textureState(1, D3DTSS_COLORARG1, D3DTA_TEXTURE));
+    checked(textureState(1, D3DTSS_COLORARG2, D3DTA_CURRENT));
+    checked(textureState(1, D3DTSS_ALPHAOP, emissive ? D3DTOP_SELECTARG2 : D3DTOP_DISABLE));
+    checked(textureState(1, D3DTSS_ALPHAARG1, D3DTA_TEXTURE));
+    checked(textureState(1, D3DTSS_ALPHAARG2, D3DTA_CURRENT));
+    checked(textureState(1, D3DTSS_TEXCOORDINDEX, 1));
+    const auto drawResult = PIPE->draw_primitive(D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX2,
+        vertices.data(), static_cast<int>(vertices.size()), 0);
+    if (drawResult != GR_OK) std::fprintf(stderr, "Native original legacy draw (%zu vertices) rejected: %d\n", vertices.size(), static_cast<int>(drawResult));
+    checked(drawResult);
+    checked(textureState(1, D3DTSS_COLOROP, D3DTOP_DISABLE));
+    checked(textureState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE));
+    checked(texture(1, 0));
+}
+#endif
+
 void FaceGroupRender::Render(const Transform &inv)
 {
 	static bool bSkipRender = 0;
 	if (bSkipRender) return;
 	if (vert_cnt==0)
 		return;
+#if !defined(_WIN32)
+    if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS ||
+        (nativeLegacyPreview && !(flags & MM_CHROME) &&
+         !fgi[fg_idx].iMat && !fgi[fg_idx].bCQ2Mat))
+    {
+        if (fgi[fg_idx].iMat || fgi[fg_idx].bCQ2Mat)
+            throw std::runtime_error("Native source material effect/CQ2 path is not integrated");
+        RenderNativeLegacy(inv);
+        return;
+    }
+#endif
 	
 	if (false && (active_mi->bBroken || CQRENDERFLAGS.bSoftwareRenderer || index_list4[0]==0 || fgi[fg_idx].texture_flags & TF_F_HAS_ALPHA || fgi[fg_idx].a != 255 || vert_cnt < 50))
 	{
@@ -3244,6 +3465,10 @@ void FaceGroupRender::Render(const Transform &inv)
 template <class VertexStruct,U32 VERTEX_FORMAT>
 void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortionZAlign(const Transform &inv,const Vector &split_pt)
 {
+#if !defined(_WIN32)
+    if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+        throw std::runtime_error("Native legacy Portion rendering is not integrated for the selected mission");
+#endif
 	if (vert_cnt==0)
 		return;
 
@@ -3483,6 +3708,10 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortionZAlign(const Transform 
 template <class VertexStruct,U32 VERTEX_FORMAT>
 void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortion(const Transform &inv,const Vector &split_pt, const Vector & split_normal)
 {
+#if !defined(_WIN32)
+    if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+        throw std::runtime_error("Native legacy Portion rendering is not integrated for the selected mission");
+#endif
 	if (vert_cnt==0)
 		return;
 
@@ -3719,6 +3948,10 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPortion(const Transform &inv,c
 template <class VertexStruct,U32 VERTEX_FORMAT>
 void MMaterial<VertexStruct,VERTEX_FORMAT>::RenderPuffy(const Transform &inv,const Transform &local_to_obj,const Vector & scale)
 {
+#if !defined(_WIN32)
+    if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+        throw std::runtime_error("Native legacy Puffy rendering is not integrated for the selected mission");
+#endif
 	if (vert_cnt==0)
 		return;
 
@@ -4064,6 +4297,19 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::GetBuffers(void **vertices,U16 **ind
 template <class VertexStruct,U32 VERTEX_FORMAT>
 void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,MeshInfo &out0,MeshInfo &out1,RenderMaterial *fg_out0,RenderMaterial *fg_out1,SINGLE split_d,const Vector &split_n,struct MeshSplit &meshSplit)
 {
+#if !defined(_WIN32)
+    auto *nativeSource = dynamic_cast<FaceGroupRender *>(this);
+    auto *nativeOut0 = dynamic_cast<FaceGroupRender *>(fg_out0);
+    auto *nativeOut1 = dynamic_cast<FaceGroupRender *>(fg_out1);
+    if (nativeSource)
+    {
+        if (!nativeOut0 || !nativeOut1 || nativeSource->nativeCornerUv2.size() !=
+                static_cast<std::size_t>(new_face_cnt) * 3U)
+            throw std::runtime_error("Native split requires original per-corner UV2");
+        nativeOut0->nativeCornerUv2.clear();
+        nativeOut1->nativeCornerUv2.clear();
+    }
+#endif
 	U8 *dest_faceRender0 = &meshSplit.dest_face_render0[meshSplit.out_face_cnt0];
 	U8 *dest_faceRender1 = &meshSplit.dest_face_render1[meshSplit.out_face_cnt1];
 	int pos_list_index_offset0 = tmp_v_cnt;
@@ -4141,6 +4387,9 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 			sp.out_split_face1 = meshSplit.out_face_cnt1+index_count1/3;
 			
 			U16 out_ref0[4],out_ref1[4];
+#if !defined(_WIN32)
+            TexCoord nativeUv0[4]{}, nativeUv1[4]{};
+#endif
 			
 			int out0=0;
 			int out1=0;
@@ -4157,6 +4406,9 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 					tmp_v[tmp_v_cnt++] = src_verts[src_ref].pos;
 					dst_ref0++;
 				}
+#if !defined(_WIN32)
+                if (nativeSource) nativeUv0[out0] = nativeSource->nativeCornerUv2[f * 3 + sp.in_ref0[i]];
+#endif
 				out_ref0[out0++] = re_index_list[src_ref];
 			}
 			
@@ -4172,6 +4424,9 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 					tmp_v1[tmp_v_cnt1++] = src_verts[src_ref].pos;
 					dst_ref1++;
 				}
+#if !defined(_WIN32)
+                if (nativeSource) nativeUv1[out1] = nativeSource->nativeCornerUv2[f * 3 + sp.in_ref1[i]];
+#endif
 				out_ref1[out1++] = re_index_list1[src_ref];
 			}
 			
@@ -4184,6 +4439,17 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 				{
 					VertexStruct out_vert;
 					splitEdge(src_verts[ref0[i]],src_verts[ref1[j]],out_vert,split_d,split_n,ratios[rcnt]);
+#if !defined(_WIN32)
+                    if (nativeSource)
+                    {
+                        const auto &uv0 = nativeSource->nativeCornerUv2[f * 3 + sp.in_ref0[i]];
+                        const auto &uv1 = nativeSource->nativeCornerUv2[f * 3 + sp.in_ref1[j]];
+                        TexCoord intersection{};
+                        intersection.u = uv0.u + ratios[rcnt] * (uv1.u - uv0.u);
+                        intersection.v = uv0.v + ratios[rcnt] * (uv1.v - uv0.v);
+                        nativeUv0[out0] = nativeUv1[out1] = intersection;
+                    }
+#endif
 					rcnt++;
 					//mesh 0
 					dest_verts0[dst_ref0] = out_vert;
@@ -4207,6 +4473,14 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 			// re-index half 0
 			if (out0)
 			{
+#if !defined(_WIN32)
+                if (nativeSource)
+                {
+                    for (int corner : {0, 1, 2}) nativeOut0->nativeCornerUv2.push_back(nativeUv0[corner]);
+                    if (out0 == 4)
+                        for (int corner : {0, 2, 3}) nativeOut0->nativeCornerUv2.push_back(nativeUv0[corner]);
+                }
+#endif
 				afi0[index_count0/3] = afi;
 				dest_faceRender0[index_count0/3] = faceRenders[f];
 				
@@ -4229,6 +4503,14 @@ void MMaterial<VertexStruct,VERTEX_FORMAT>::SplitFaceGroup (const MeshInfo &src,
 			// re-index half 1
 			if (out1)
 			{
+#if !defined(_WIN32)
+                if (nativeSource)
+                {
+                    for (int corner : {0, 1, 2}) nativeOut1->nativeCornerUv2.push_back(nativeUv1[corner]);
+                    if (out1 == 4)
+                        for (int corner : {0, 2, 3}) nativeOut1->nativeCornerUv2.push_back(nativeUv1[corner]);
+                }
+#endif
 				afi1[index_count1/3] = afi;
 				dest_faceRender1[index_count1/3] = faceRenders[f];
 				id_list1[index_count1++] = out_ref1[0];
@@ -4894,6 +5176,17 @@ void EffectChannel::RenderWithTexture(U32 textureID,U32 color,bool bClamp)
 {
 	if (tc_cnt == 0)
 		return;
+#if !defined(_WIN32)
+    if (bScaleTrans)
+    {
+        // GirderRender supplies the raw instance transform. The native hull
+        // caller can also apply an original local model-axis correction.
+        const Transform visual = ENGINE->get_transform(mi->instanceIndex) * scaleTrans;
+        const GENRESULT result = BATCH->set_modelview(MAINCAM->get_inverse_transform() * visual);
+        if (result != GR_OK)
+            throw std::runtime_error("Native construction effect modelview rejected");
+    }
+#endif
 
 	U32 adjusted_color = color & 0x00ffffff;
 	adjusted_color |= (mi->fgi[0].a<<24);  //this is exceptionally kludgey!!!!

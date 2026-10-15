@@ -36,6 +36,7 @@
 #include <DFighter.h>
 #include <DFighterWing.h>
 #include <DReconLaunch.h>
+#include <DPingLauncher.h>
 #include <DTalorianLauncher.h>
 #include <DEndGame.h>
 #include <DConfirm.h>
@@ -52,6 +53,7 @@
 #include "NativeMusicDataFormat.h"
 #include "NativeAppSchema.h"
 #include "NativeSolTrainSchema.h"
+#include "Scripts/Script02T/Script01T/NativeScript01Resources.h"
 #include "NativeSolTrainStrings.h"
 #include "Scripts/Sol_T/resource.h"
 
@@ -141,6 +143,8 @@ extern ICOManager * DACOM;
 SYMBOL parse_memory(const char * memory);
 void COMAPI CreateDataParser(SYMBOL symbol, IDataParser ** parser);
 void RegisterViewConstructor(ICOManager * manager);
+BOOL32 CopyViewSymbolValue(SYMBOL source, U32 sourceModifiers, const char *sourceData,
+                          SYMBOL destination, U32 destinationModifiers, char *destinationData);
 
 namespace
 {
@@ -191,6 +195,131 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
     if (!symbols) return false;
     const SYMBOL global = constructor->GetSymbol(symbols, "MT_GlobalData");
     const SYMBOL record = ResolveViewSymbolType(global);
+    // Retail initial Globals lacks only the later lobby metadata nibble.
+    // Exercise the real owner-specific provider; generic missing fields fail.
+    const auto removeField = [](std::string source, const char *name) {
+        const std::size_t at = source.find(name);
+        if (at == std::string::npos) return std::string();
+        const std::size_t start = source.rfind('\n', at);
+        const std::size_t end = source.find(';', at);
+        if (end == std::string::npos) return std::string();
+        source.erase(start == std::string::npos ? 0U : start + 1U,
+                     end + 1U - (start == std::string::npos ? 0U : start + 1U));
+        return source;
+    };
+    const std::string oldGlobalText = removeField(removeField(std::string(text.data()), "maxPlayers"), "compChalange");
+    HANDLE oldGlobalSymbols = constructor->ParseNewMemory(oldGlobalText.c_str());
+    SYMBOL oldGlobal = ResolveViewSymbolType(constructor->GetSymbol(oldGlobalSymbols, "MT_GlobalData"));
+    std::vector<unsigned char> currentGlobals(3236U, 0), oldGlobalData(3236U, 0), restoredGlobals(3236U, 0);
+    const auto globalField = [&](const char *name) {
+        for (SYMBOL field = record ? record->datatype : nullptr; field; field = field->link)
+            if (field->name && !std::strcmp(field->name, name)) return field;
+        return SYMBOL(nullptr);
+    };
+    const auto setBits = [&](const char *name, U32 value) {
+        SYMBOL field = globalField(name);
+        if (!field || !field->bit_count || field->offset < 0) return false;
+        for (unsigned bit = 0; bit < field->bit_count; ++bit)
+        {
+            const std::size_t index = field->offset + (field->bit_offset + bit) / 8U;
+            if (index >= currentGlobals.size()) return false;
+            const unsigned char mask = static_cast<unsigned char>(1U << ((field->bit_offset + bit) % 8U));
+            if (value & (1U << bit)) currentGlobals[index] |= mask;
+            else currentGlobals[index] &= static_cast<unsigned char>(~mask);
+        }
+        return true;
+    };
+    const auto setWord = [&](const char *name, U32 value) {
+        SYMBOL field = globalField(name);
+        if (!field || field->offset < 0 || std::size_t(field->offset) + sizeof(value) > currentGlobals.size()) return false;
+        std::memcpy(currentGlobals.data() + field->offset, &value, sizeof(value)); return true;
+    };
+    if (!setBits("currentPlayer", 3U) || !setBits("maxPlayers", 7U) ||
+        !setBits("bGlobalLighting", 1U) || !setBits("bScriptUIControl", 1U) ||
+        !setWord("lastPartID", 0x12345678U) || !setWord("missionID", 0x87654321U)) return false;
+    const auto namedField = [](SYMBOL type, const char *name) {
+        for (SYMBOL field = type ? type->datatype : nullptr; field; field = field->link)
+        {
+            const char *fieldName = field->name ? field->name : ResolveViewSymbolType(field)->name;
+            if (fieldName && !std::strcmp(fieldName, name)) return field;
+        }
+        return SYMBOL(nullptr);
+    };
+    const auto slotArray = [&](SYMBOL globals) {
+        SYMBOL gameField = namedField(globals, "gameSettings");
+        SYMBOL baseField = namedField(ResolveViewSymbolType(gameField), "_CQGAME");
+        return namedField(ResolveViewSymbolType(baseField), "slot");
+    };
+    SYMBOL currentSlots = slotArray(record);
+    SYMBOL oldSlots = slotArray(oldGlobal);
+    if (!currentSlots || !oldSlots) return false;
+    SYMBOL oldArray = ResolveViewSymbolType(oldSlots);
+    SYMBOL oldSlot = ResolveViewSymbolType(oldArray->datatype);
+    SYMBOL gameField = namedField(record, "gameSettings");
+    SYMBOL baseField = namedField(ResolveViewSymbolType(gameField), "_CQGAME");
+    const std::size_t slotsOffset = gameField->offset + baseField->offset + currentSlots->offset;
+    const U32 slotWord = 1U | (5U << 3) | (1U << 7) | (1U << 10) | (9U << 14) | (3U << 19) | (2U << 23);
+    for (unsigned slot = 0; slot < 8U; ++slot)
+    {
+        const U32 id = 0x10203040U + slot;
+        std::memcpy(currentGlobals.data() + slotsOffset + 8U * slot, &slotWord, sizeof(slotWord));
+        std::memcpy(currentGlobals.data() + slotsOffset + 8U * slot + 4U, &id, sizeof(id));
+    }
+    auto expectedGlobals = currentGlobals;
+    expectedGlobals[624] &= 0x0fU;
+    for (unsigned slot = 0; slot < 8U; ++slot)
+    {
+        const U32 withoutChallenge = slotWord & ~(0xfU << 3);
+        std::memcpy(expectedGlobals.data() + slotsOffset + 8U * slot, &withoutChallenge, sizeof(withoutChallenge));
+    }
+    if (!Expect(record && oldGlobalSymbols && oldGlobal && oldGlobal->size == 3236 &&
+                record->size == 3236 &&
+                CorrelateNativeViewSymbols(constructor, record, currentGlobals.data(), oldGlobal, oldGlobalData.data()) &&
+                !CorrelateNativeViewSymbols(constructor, oldGlobal, oldGlobalData.data(), record, restoredGlobals.data()) &&
+                CorrelateNativeMissionGlobals(constructor, oldGlobal, oldGlobalData.data(), record, restoredGlobals.data()) &&
+                restoredGlobals == expectedGlobals,
+                "real Globals migration defaults only absent maxPlayers/challenge and preserves shifted slot fields/IDs")) return false;
+    std::vector<unsigned char> canonicalGlobals(3236U, 0);
+    if (!Expect(CorrelateNativeMissionGlobals(constructor, record, currentGlobals.data(), record, canonicalGlobals.data()) &&
+                canonicalGlobals == currentGlobals,
+                "real Globals canonical correlation retains explicit maxPlayers")) return false;
+    std::string badGlobalsText = oldGlobalText;
+    const auto requiredAt = badGlobalsText.find("lastPartID");
+    if (requiredAt == std::string::npos) return false;
+    badGlobalsText.replace(requiredAt, std::strlen("lastPartID"), "MissingRequiredPartID");
+    HANDLE badGlobalsSymbols = constructor->ParseNewMemory(badGlobalsText.c_str());
+    SYMBOL badGlobals = ResolveViewSymbolType(constructor->GetSymbol(badGlobalsSymbols, "MT_GlobalData"));
+    Symbol wrongExtent = *oldGlobal;
+    wrongExtent.size += 4;
+    Symbol wrongOwner = *oldGlobal;
+    wrongOwner.name = const_cast<char *>("OtherGlobalData");
+    if (!Expect(badGlobalsSymbols && badGlobals && badGlobals->size == 3236 &&
+                !CorrelateNativeMissionGlobals(constructor, badGlobals, oldGlobalData.data(), record, restoredGlobals.data()) &&
+                !CorrelateNativeMissionGlobals(constructor, &wrongExtent, oldGlobalData.data(), record, restoredGlobals.data()) &&
+                !CorrelateNativeMissionGlobals(constructor, &wrongOwner, oldGlobalData.data(), record, restoredGlobals.data()),
+                "Globals metadata compatibility rejects another missing field, extent and owner")) return false;
+    std::string missingSlotText = oldGlobalText;
+    const auto slotAt = missingSlotText.find("struct SLOT");
+    const auto idAt = missingSlotText.find("dpid", slotAt);
+    if (slotAt == std::string::npos || idAt == std::string::npos) return false;
+    missingSlotText.replace(idAt, 4U, "MissingRequiredPlayerID");
+    HANDLE missingSlotSymbols = constructor->ParseNewMemory(missingSlotText.c_str());
+    SYMBOL missingSlot = ResolveViewSymbolType(constructor->GetSymbol(missingSlotSymbols, "MT_GlobalData"));
+    const int originalCount = oldArray->arrayval;
+    oldArray->arrayval = 7;
+    const bool wrongCountRejected = !CorrelateNativeMissionGlobals(constructor, oldGlobal, oldGlobalData.data(), record, restoredGlobals.data());
+    oldArray->arrayval = originalCount;
+    const int originalStride = oldSlot->size;
+    oldSlot->size = 12;
+    const bool wrongStrideRejected = !CorrelateNativeMissionGlobals(constructor, oldGlobal, oldGlobalData.data(), record, restoredGlobals.data());
+    oldSlot->size = originalStride;
+    if (!Expect(missingSlotSymbols && missingSlot && missingSlot->size == 3236 &&
+                !CorrelateNativeMissionGlobals(constructor, missingSlot, oldGlobalData.data(), record, restoredGlobals.data()) &&
+                wrongCountRejected && wrongStrideRejected,
+                "legacy slot defaults reject required dpid loss, wrong array count and stride")) return false;
+    constructor->DestroySymbols(missingSlotSymbols);
+    constructor->DestroySymbols(badGlobalsSymbols);
+    constructor->DestroySymbols(oldGlobalSymbols);
     const SYMBOL mission = ResolveViewSymbolType(
         constructor->GetSymbol(symbols, "MISSION_SAVELOAD"));
     SYMBOL caps = nullptr;
@@ -209,6 +338,7 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
     movingShip.tobjmove.moveAgentID = 0x12345678;
     movingShip.tobjmove.jumpAgentID = 0x87654321;
     movingShip.tobjmove.pathLength = 3;
+    movingShip.tobjmove.overrideSpeed = 1.25F;
     movingShip.tobjmove.bMoveActive = true;
     movingShip.tobjmove.bCompletionAllowed = true;
     movingShip.tobjmove.bFinalMove = true;
@@ -625,6 +755,50 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
             supplyRestored.baseSaveLoad.bNeedToSendMoveToTarget &&
             supplyRestored.baseSaveLoad.bStoreAgentID;
     }
+    const SYMBOL pingArchetype = ResolveViewSymbolType(
+        constructor->GetSymbol(symbols, "BT_PING_LAUNCHER"));
+    const SYMBOL zealotArchetype = ResolveViewSymbolType(
+        constructor->GetSymbol(symbols, "BT_ZEALOT_DATA"));
+    const SYMBOL zealotRecord = ResolveViewSymbolType(
+        constructor->GetSymbol(symbols, "ZEALOT_SAVELOAD"));
+    const SYMBOL emptyPing = ResolveViewSymbolType(
+        constructor->GetSymbol(symbols, "PING_LAUNCHER_SAVELOAD"));
+    BT_PING_LAUNCHER pingSaved{}, pingRestored{};
+    BT_ZEALOT_DATA zealotDataSaved{}, zealotDataRestored{};
+    ZEALOT_SAVELOAD zealotSaved{}, zealotRestored{};
+    pingSaved.techNode.common_extra = static_cast<TECHTREE::COMMON_EXTRA>(0x43);
+    zealotDataSaved.kamikazeSpeed = 18.5F;
+    zealotDataSaved.damageAmount[2] = 90.25F;
+    std::strcpy(zealotDataSaved.impactBlastType, "GeneratedImpact");
+    zealotDataSaved.neededTech.common_extra = static_cast<TECHTREE::COMMON_EXTRA>(0x21);
+    zealotSaved.dwMissionID = 0x11223344U;
+    zealotSaved.targetID = 0x55667788U;
+    zealotSaved.zealotArchetypeID = 0x12345678U;
+    zealotSaved.systemID = 5U;
+    zealotSaved.stage = Z_THRUST;
+    zealotSaved.trans_SL.position.x = 1.25F;
+    zealotSaved.trans_SL.velocity.z = 9.5F;
+    zealotSaved.trans_SL.ang_velocity.y = 0.75F;
+    zealotSaved.visibilityFlags = 0xA5U;
+    if (!pingArchetype || pingArchetype->size != sizeof(pingSaved) ||
+        !zealotArchetype || zealotArchetype->size != sizeof(zealotDataSaved) ||
+        !zealotRecord || zealotRecord->size != sizeof(zealotSaved) ||
+        !emptyPing || emptyPing->size != 0U) valid = false;
+    else
+    {
+        constructor->CorrelateSymbol(pingArchetype, &pingSaved, pingArchetype, &pingRestored);
+        constructor->CorrelateSymbol(zealotArchetype, &zealotDataSaved, zealotArchetype, &zealotDataRestored);
+        constructor->CorrelateSymbol(zealotRecord, &zealotSaved, zealotRecord, &zealotRestored);
+        valid = valid && pingRestored.techNode.common_extra == pingSaved.techNode.common_extra &&
+            zealotDataRestored.kamikazeSpeed == 18.5F && zealotDataRestored.damageAmount[2] == 90.25F &&
+            std::strcmp(zealotDataRestored.impactBlastType, "GeneratedImpact") == 0 &&
+            zealotDataRestored.neededTech.common_extra == zealotDataSaved.neededTech.common_extra &&
+            zealotRestored.dwMissionID == zealotSaved.dwMissionID && zealotRestored.targetID == zealotSaved.targetID &&
+            zealotRestored.zealotArchetypeID == zealotSaved.zealotArchetypeID && zealotRestored.systemID == 5U &&
+            zealotRestored.stage == Z_THRUST && zealotRestored.trans_SL.position.x == 1.25F &&
+            zealotRestored.trans_SL.velocity.z == 9.5F && zealotRestored.trans_SL.ang_velocity.y == 0.75F &&
+            zealotRestored.visibilityFlags == 0xA5U;
+    }
     const SYMBOL buildDrone = ResolveViewSymbolType(
         constructor->GetSymbol(symbols, "BT_BUILDERSHIP_DATA"));
     BT_BUILDERSHIP_DATA droneSaved{}, droneRestored{};
@@ -715,7 +889,7 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
         std::vector<unsigned char> input(ship->size, 0), output(ship->size, 0);
         std::memcpy(input.data(), &movingShip, sizeof(movingShip));
         std::memcpy(input.data() + missionOffset, &saved, sizeof(saved));
-        constructor->CorrelateSymbol(ship, input.data(), ship, output.data());
+        valid = valid && CorrelateNativeViewSymbols(constructor, ship, input.data(), ship, output.data());
         MISSION_SAVELOAD nested = {};
         std::memcpy(&nested, output.data() + missionOffset, sizeof(nested));
         valid = valid && std::memcmp(&saved.caps, &nested.caps, sizeof(saved.caps)) == 0 &&
@@ -726,6 +900,7 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
         valid = valid && moved.tobjmove.moveAgentID == movingShip.tobjmove.moveAgentID &&
             moved.tobjmove.jumpAgentID == movingShip.tobjmove.jumpAgentID &&
             moved.tobjmove.pathLength == movingShip.tobjmove.pathLength &&
+            moved.tobjmove.overrideSpeed == movingShip.tobjmove.overrideSpeed &&
             moved.tobjmove.bMoveActive && moved.tobjmove.bCompletionAllowed &&
             moved.tobjmove.bFinalMove && moved.tobjmove.bSyncNeeded;
     }
@@ -733,6 +908,39 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
         std::cout << "App Data.i parsed; MT_GlobalData bytes: "
                   << record->size << '\n';
     constructor->DestroySymbols(symbols);
+    return valid;
+}
+
+// First Terran MScript binding needs its own schema/resource rather than Sol_T's.
+// This existing owner probe gates that binding, not full mission acceptance.
+bool ParseTerranSchema(IViewConstructor2 *constructor, const std::filesystem::path &path)
+{
+    std::ifstream source(path, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(source)), {});
+    std::size_t length = 0;
+    const void *embedded = FrontierX::GetNativeScript01Schema(length);
+    if (bytes.empty() || !embedded || length != bytes.size() ||
+        std::memcmp(embedded, bytes.data(), length)) return false;
+    std::string text = bytes;
+    const HANDLE symbols = constructor->ParseNewMemory(text.data());
+    if (!symbols) return false;
+    const auto global = ResolveViewSymbolType(constructor->GetSymbol(symbols, "MissionData"));
+    const auto briefing = ResolveViewSymbolType(constructor->GetSymbol(symbols, "TM1_Briefing_Save"));
+    const auto start = ResolveViewSymbolType(constructor->GetSymbol(symbols, "TM1_MissionStart_Save"));
+    bool waypoint = false, blackwell = false, end = false;
+    for (auto field = global ? global->datatype : nullptr; field; field = field->link)
+    {
+        if (!field->name) continue;
+        if (!std::strcmp(field->name, "WayPoint1")) waypoint = field->offset == 72;
+        if (!std::strcmp(field->name, "Blackwell")) blackwell = field->offset == 152;
+        if (!std::strcmp(field->name, "failureID")) end = field->offset + field->size == 376;
+    }
+    const auto name = FrontierX::GetNativeScript01CountedString(1055);
+    const bool valid = global && global->size == 376 && waypoint && blackwell && end &&
+        briefing && briefing->size == 32 && start && start->size == 4 &&
+        name && name[0] == 20 && std::wmemcmp(name+1, L"UNCHARTED TERRITORY.", 20) == 0 && !FrontierX::GetNativeScript01CountedString(0);
+    constructor->DestroySymbols(symbols);
+    if (valid) std::cout << "Script01T source schema/resource and fixed-width records checked\n";
     return valid;
 }
 
@@ -1124,10 +1332,11 @@ int main(int argc, char ** argv)
     const bool appSchema = argc == 3 && std::strcmp(argv[1], "--app-schema") == 0;
     const bool scriptSchema = argc == 3 &&
         std::strcmp(argv[1], "--script-schema") == 0;
+    const bool terranSchema = argc == 3 && std::strcmp(argv[1], "--terran-script-schema") == 0;
     const bool missionSchema = argc == 4 &&
         std::strcmp(argv[1], "--mission-schema") == 0 &&
         !std::strchr(argv[3], '/') && !std::strchr(argv[3], '\\');
-    if (argc != 1 && !appSchema && !scriptSchema && !missionSchema)
+    if (argc != 1 && !appSchema && !scriptSchema && !terranSchema && !missionSchema)
     {
         std::cerr << "Usage: frontierx_view_parser_probe [--app-schema data.i | "
                      "--script-schema DataDef.i | "
@@ -1236,6 +1445,8 @@ int main(int argc, char ** argv)
                 "production IViewConstructor2 query")) return 1;
     if (appSchema && !Expect(ParseAppSchema(view2, argv[2]),
                              "repository App Data.i schema")) return 1;
+    if (terranSchema && !Expect(ParseTerranSchema(view2, argv[2]),
+                                "selected Script01T schema/resource")) return 1;
     if (scriptSchema && !Expect(ParseScriptSchema(view2, argv[2]),
                                 "selected Sol_T script schema")) return 1;
     if (missionSchema && !Expect(ParseMissionSchema(view2, argv[2], argv[3]),
@@ -1269,8 +1480,8 @@ int main(int argc, char ** argv)
                 "native GUI factory rejection")) return 1;
     std::uint32_t oldData[]{0x11111111U, 0x22222222U};
     std::uint32_t newData[]{0xdeadbeefU, 0xdeadbeefU};
-    view2->CorrelateSymbol(oldRecord, oldData, newRecord, newData);
-    if (!Expect(newData[0] == oldData[1] && newData[1] == oldData[0],
+    const bool reorderedCorrelated = CorrelateNativeViewSymbols(view2, oldRecord, oldData, newRecord, newData);
+    if (!Expect(reorderedCorrelated && newData[0] == oldData[1] && newData[1] == oldData[0],
                 "production field correlation by name")) return 1;
     Symbol oldBit;
     oldBit.kind = BASICTYPE;
@@ -1314,12 +1525,113 @@ int main(int argc, char ** argv)
                            &newEnum, &newEnumValue);
     if (!Expect(newEnumValue == 7,
                 "production enum correlation by value name")) return 1;
+    Symbol basicInteger;
+    basicInteger.kind = BASICTYPE; basicInteger.basicdt = INTEGER; basicInteger.size = 4;
+    std::uint32_t basicValue = 0xdeadbeefU;
+    if (!Expect(CorrelateNativeViewSymbols(view2, &oldEnum, &oldEnumValue, &basicInteger, &basicValue) && basicValue == 0U,
+                "known enum identifier to basic integer follows Windows text conversion to zero")) return 1;
+    Symbol packedEnum = oldEnum;
+    packedEnum.bit_count = 3; packedEnum.bit_offset = 7;
+    Symbol packedInteger = basicInteger;
+    packedInteger.bit_count = 3; packedInteger.bit_offset = 12;
+    std::uint32_t packedSource = (0xa5a5a5a5U & ~(7U << 7)) | (1U << 7);
+    std::uint32_t packedDestination = 0xf0f0f0f0U;
+    const std::uint32_t preservedNeighbors = packedDestination & ~(7U << 12);
+    if (!Expect(CopyViewSymbolValue(&packedEnum, 0, reinterpret_cast<const char *>(&packedSource),
+                    &packedInteger, 0, reinterpret_cast<char *>(&packedDestination)) &&
+                packedDestination == preservedNeighbors,
+                "enum identifier to packed integer clears only destination bits and preserves neighbors")) return 1;
+    const auto rejectsEnumCopy = [&](Symbol source, Symbol destination) {
+        std::uint32_t unchanged = 0xdeadbeefU;
+        const BOOL32 result = CopyViewSymbolValue(&source, 0, reinterpret_cast<const char *>(&oldEnumValue),
+                    &destination, 0, reinterpret_cast<char *>(&unchanged));
+        if (result || unchanged != 0xdeadbeefU) std::cerr << "enum reject type=" << destination.basicdt << " size=" << destination.size << " bits=" << destination.bit_offset << '/' << destination.bit_count << " result=" << result << " value=" << unchanged << '\n';
+        return !result && unchanged == 0xdeadbeefU;
+    };
+    Symbol realDestination = basicInteger; realDestination.basicdt = REAL;
+    Symbol stringDestination = basicInteger; stringDestination.basicdt = STRINGTYPE;
+    Symbol shortDestination = basicInteger; shortDestination.size = 2;
+    Symbol invalidBits = packedInteger; invalidBits.bit_offset = 63;
+    Symbol invalidName = oldEntry; invalidName.name = const_cast<char *>("123");
+    Symbol invalidEnum = oldEnum; invalidEnum.datatype = &invalidName;
+    if (!Expect(rejectsEnumCopy(oldEnum, realDestination) && rejectsEnumCopy(oldEnum, stringDestination) &&
+                rejectsEnumCopy(oldEnum, shortDestination) && rejectsEnumCopy(oldEnum, invalidBits) &&
+                rejectsEnumCopy(invalidEnum, basicInteger),
+                "enum text conversion rejects unsupported type, width, bits and nonidentifier")) return 1;
+    std::uint32_t unknownPackedSource = (0xa5a5a5a5U & ~(7U << 7)) | (7U << 7);
+    std::uint32_t unknownPackedDestination = 0xf0f0f0f0U;
+    if (!Expect(!CopyViewSymbolValue(&packedEnum, 0, reinterpret_cast<const char *>(&unknownPackedSource),
+                    &packedInteger, 0, reinterpret_cast<char *>(&unknownPackedDestination)) &&
+                unknownPackedDestination == 0xf0f0f0f0U,
+                "unknown packed enum rejects without successful untouched placeholder or neighbor mutation")) return 1;
+    std::uint32_t unknownWhole = 99U, unknownWholeCopy = 0U;
+    if (!Expect(CopyViewSymbolValue(&oldEnum, 0, reinterpret_cast<const char *>(&unknownWhole),
+                    &basicInteger, 0, reinterpret_cast<char *>(&unknownWholeCopy)) && unknownWholeCopy == 99U,
+                "unknown nonpacked enum retains original Windows raw numeric copy")) return 1;
+    const char *anonymousSchema = "struct AnonymousRecord { int marker; union { float overrideSpeed; float overrideYaw; }; int tail; };";
+    HANDLE oldAnonymousSymbols = view2->ParseNewMemory(anonymousSchema);
+    HANDLE newAnonymousSymbols = view2->ParseNewMemory(anonymousSchema);
+    SYMBOL oldAnonymous = view2->GetSymbol(oldAnonymousSymbols, "AnonymousRecord");
+    SYMBOL newAnonymous = view2->GetSymbol(newAnonymousSymbols, "AnonymousRecord");
+    const std::uint32_t anonymousData[3] = {0x12345678U, 0x3fa00000U, 0x87654321U};
+    std::uint32_t anonymousCopy[3]{};
+    if (!Expect(oldAnonymousSymbols && newAnonymousSymbols && oldAnonymous && newAnonymous &&
+                oldAnonymous->size == 12 && newAnonymous->size == 12 &&
+                CorrelateNativeViewSymbols(view2, oldAnonymous, anonymousData, newAnonymous, anonymousCopy) &&
+                std::memcmp(anonymousData, anonymousCopy, sizeof(anonymousData)) == 0,
+                "genuine provider matches unique unnamed union and copies nonzero original payload")) return 1;
+    SYMBOL unnamedField = nullptr;
+    for (SYMBOL field = oldAnonymous->datatype; field; field = field->link)
+        if (!field->name && !ResolveViewSymbolType(field)->name) unnamedField = field;
+    if (!Expect(unnamedField && unnamedField->offset == 4 && unnamedField->size == 4,
+                "production parser exposes expected nameless union field extent")) return 1;
+    SYMBOL unnamedType = ResolveViewSymbolType(unnamedField);
+    SYMBOL firstMember = unnamedType->datatype;
+    const auto rejectsAnonymous = [&]() {
+        return !CorrelateNativeViewSymbols(view2, oldAnonymous, anonymousData, newAnonymous, anonymousCopy);
+    };
+    char *originalMemberName = firstMember->name;
+    firstMember->name = const_cast<char *>("MissingOverride");
+    const bool memberNameRejected = rejectsAnonymous(); firstMember->name = originalMemberName;
+    const int originalOffset = unnamedField->offset;
+    unnamedField->offset = 8; const bool offsetRejected = rejectsAnonymous(); unnamedField->offset = originalOffset;
+    const int originalSize = unnamedField->size;
+    unnamedField->size = 8; const bool sizeRejected = rejectsAnonymous(); unnamedField->size = originalSize;
+    SYMBOL originalMemberType = firstMember->datatype;
+    Symbol incompatibleMemberType = *ResolveViewSymbolType(firstMember);
+    incompatibleMemberType.basicdt = INTEGER;
+    firstMember->datatype = &incompatibleMemberType;
+    const bool typeRejected = rejectsAnonymous(); firstMember->datatype = originalMemberType;
+    Symbol duplicateUnion = *unnamedField;
+    duplicateUnion.link = unnamedField->link;
+    unnamedField->link = &duplicateUnion;
+    const bool ambiguityRejected = rejectsAnonymous(); unnamedField->link = duplicateUnion.link;
+    std::cerr << "Anonymous negative predicates member/offset/size/type/ambiguity: "
+              << memberNameRejected << '/' << offsetRejected << '/' << sizeRejected << '/'
+              << typeRejected << '/' << ambiguityRejected << '\n';
+    if (!Expect(memberNameRejected && offsetRejected && sizeRejected && typeRejected && ambiguityRejected,
+                "nameless union structural match rejects member/type/size/offset mismatch and duplicate ambiguity")) return 1;
+    view2->DestroySymbols(newAnonymousSymbols); view2->DestroySymbols(oldAnonymousSymbols);
     HANDLE sameSymbols = view2->ParseNewMemory(
         "struct MigrationRecord { int alpha; int beta; };");
     SYMBOL sameRecord = view2->GetSymbol(sameSymbols, "MigrationRecord");
     if (!Expect(sameSymbols && sameRecord &&
                 view2->IsEqual(oldRecord, sameRecord),
                 "same schema direct-copy decision across parsed tables")) return 1;
+    std::uint32_t sameData[2]{};
+    if (!Expect(CorrelateNativeViewSymbols(view2, oldRecord, oldData, sameRecord, sameData) &&
+                std::memcmp(sameData, oldData, sizeof(oldData)) == 0,
+                "native real provider returns successful canonical correlation")) return 1;
+    HANDLE incompleteSymbols = view2->ParseNewMemory("struct MigrationRecord { int alpha; int absent; };");
+    SYMBOL incompleteRecord = view2->GetSymbol(incompleteSymbols, "MigrationRecord");
+    std::uint32_t incompleteData[2]{0xdeadbeefU, 0xdeadbeefU};
+    if (!Expect(incompleteSymbols && incompleteRecord &&
+                !CorrelateNativeViewSymbols(view2, oldRecord, oldData, incompleteRecord, incompleteData) &&
+                incompleteData[0] == oldData[0] && incompleteData[1] == 0U &&
+                !CorrelateNativeViewSymbols(view2, nullptr, oldData, newRecord, newData) &&
+                !CorrelateNativeViewSymbols(nullptr, oldRecord, oldData, newRecord, newData),
+                "native real provider rejects missing fields and unknown provider/symbol")) return 1;
+    view2->DestroySymbols(incompleteSymbols);
     view2->DestroySymbols(sameSymbols);
     HANDLE oldNestedSymbols = view2->ParseNewMemory(
         "struct Inner { int left; int right; };"
@@ -1336,10 +1648,10 @@ int main(int argc, char ** argv)
                 "nested array schema from production parser")) return 1;
     std::uint32_t oldArrayData[]{10U, 11U, 12U, 13U, 14U, 15U};
     std::uint32_t newArrayData[6]{};
-    view2->CorrelateSymbol(oldArrayRecord, oldArrayData,
+    const bool nestedCorrelated = CorrelateNativeViewSymbols(view2, oldArrayRecord, oldArrayData,
                            newArrayRecord, newArrayData);
     constexpr std::uint32_t expectedArrayData[]{15U, 12U, 11U, 14U, 13U, 10U};
-    if (!Expect(std::memcmp(newArrayData, expectedArrayData,
+    if (!Expect(nestedCorrelated && std::memcmp(newArrayData, expectedArrayData,
                             sizeof(expectedArrayData)) == 0,
                 "production nested array and record correlation")) return 1;
     view2->DestroySymbols(newNestedSymbols);

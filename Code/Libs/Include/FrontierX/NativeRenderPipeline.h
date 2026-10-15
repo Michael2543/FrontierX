@@ -35,6 +35,15 @@ using NativeTextureCreate = GENRESULT (*)(void * context, U32 width, U32 height,
 using NativeTextureUpload = GENRESULT (*)(void * context, U32 handle,
                                          const std::uint8_t * pixels, U32 width,
                                          U32 height, std::size_t byteCount);
+struct NativeTextureLevel
+{
+    const std::uint8_t * pixels;
+    U32 width, height;
+    std::size_t byteCount;
+};
+using NativeTextureCreateMips = GENRESULT (*)(void *, U32, U32, U32, U32 &);
+using NativeTextureUploadMips = GENRESULT (*)(void *, U32,
+                                             const NativeTextureLevel *, U32);
 using NativeTextureDestroy = GENRESULT (*)(void * context, U32 handle);
 using NativeVertexConstants = GENRESULT (*)(void * context, UINT firstRegister,
                                            const FLOAT * values, UINT registerCount);
@@ -56,6 +65,8 @@ struct NativeTextureOperations
     NativeTextureCreate create = nullptr;
     NativeTextureUpload upload = nullptr;
     NativeTextureDestroy destroy = nullptr;
+    NativeTextureCreateMips createMips = nullptr;
+    NativeTextureUploadMips uploadMips = nullptr;
 };
 
 // Native implementation of the established IRenderPipeline boundary. The
@@ -182,15 +193,30 @@ private:
         ID3DXEffect * pointer = nullptr;
     };
 
+    struct TextureMip
+    {
+        U32 width, height;
+        std::vector<std::uint8_t> pixels;
+    };
+
     struct OwnedTexture
     {
         U32 width = 0U;
         U32 height = 0U;
         std::vector<std::uint8_t> pixels;
+        std::vector<TextureMip> mips;
+        int lockedLevel = -1;
         bool locked = false;
         bool opaque = false;
+        bool rgb5a1 = false;
         std::unique_ptr<TextureDC::Context> dc;
     };
+
+    GENRESULT UploadTexture(U32 handle, const OwnedTexture &texture,
+                            int overrideLevel = -1,
+                            const std::vector<std::uint8_t> *overridePixels = nullptr);
+    static void ApplyTexturePrecision(const OwnedTexture &texture,
+                                      std::vector<std::uint8_t> &pixels);
 
     struct OwnedVertexBuffer
     {

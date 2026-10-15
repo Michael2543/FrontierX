@@ -11,21 +11,51 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
-#include <globals.h>
+#include <Globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TObjTrans.h"
 #include "TObjControl.h"
 #include "TObjFrame.h"
 #include "TSpaceShip.h"
-#include <DSpaceShip.h>
+#include <DSpaceship.h>
 #include "TObject.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "Startup.h"
 #include "Mission.h"
 #include "IAttack.h"
 #include "Field.h"
-#include "IMinefield.h"
+#include "IMineField.h"
 #include "DMinefield.h"
 #include "OpAgent.h"
 #include "IHardPoint.h"
@@ -719,7 +749,7 @@ void Minelayer::physicalUpdate (SINGLE dt)
 				{
 					TRANSFORM hpTrans;
 
-					hpTrans.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+					hpTrans = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
 					hpTrans = ENGINE->get_transform(mineReleaseIndex).multiply(hpTrans);
 					pos = hpTrans.translation;
 					vel = -hpTrans.get_k()* pArch->pData->mineReleaseVelocity;
@@ -793,7 +823,7 @@ BOOL32 Minelayer::update (void)
 			{
 				Vector targDir = transform.translation-targetMinePos;
 				TRANSFORM hpTrans;
-				hpTrans.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+				hpTrans = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
 				hpTrans = ENGINE->get_transform(mineReleaseIndex).multiply(hpTrans);
 				SINGLE relYaw = get_angle(targDir.x,targDir.y) - TRANSFORM::get_yaw(hpTrans.get_k());
 				if (relYaw < -PI)
@@ -914,7 +944,7 @@ BOOL32 Minelayer::update (void)
 			{
 				Vector targDir = transform.translation-targetMinePos;
 				TRANSFORM hpTrans;
-				hpTrans.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+				hpTrans = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
 				hpTrans = ENGINE->get_transform(mineReleaseIndex).multiply(hpTrans);
 				SINGLE relYaw = get_angle(targDir.x,targDir.y) - TRANSFORM::get_yaw(hpTrans.get_k());
 				if (relYaw < -PI)
@@ -1103,7 +1133,9 @@ BOOL32 MinelayerFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -1120,7 +1152,14 @@ IBaseObject * MinelayerFactory::CreateInstance (HANDLE hArchetype)
 void MinelayerFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)objtype;
+	(void)info;
+	std::fputs("Native minelayer editor insertion is unavailable\n", stderr);
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

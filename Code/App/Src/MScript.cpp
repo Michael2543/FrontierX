@@ -19,17 +19,26 @@
 #include "FrontierX/PlatformTime.h"
 #include "Scripts/Sol_T/NativeSolTrainStrings.h"
 #include "Scripts/Sol_T/NativeSolTrainModule.h"
+#include "Scripts/Sol_T/NativeSolTrainSchema.h"
+#include "Scripts/Script02T/Script01T/NativeScript01Resources.h"
 #include "MyVertex.h"
 #include <ICamera.h>
 #include <ENGINE.H>
 #include <EventSys.h>
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
+#include <vector>
+#include <string>
+#include <stdexcept>
 #endif
 #include <stdio.h>
 #include <MGlobals.h>
 #include <MScript.h>
 #include <CQTrace.h>
+#if !defined(_WIN32)
+#include <ViewSymbolOperations.h>
+#endif
 #if defined(_WIN32)
 #include "Menu.h"
 #endif
@@ -273,6 +282,83 @@ struct PROGNODE
 //--------------------------------------------------------------------------//
 
 static const CQSCRIPTENTRY * g_pScripts;
+#if !defined(_WIN32)
+static const CQSCRIPTENTRY *nativeSolPrograms;
+static const CQSCRIPTENTRY *nativeTerranPrograms;
+void FrontierXRegisterNativeScriptProgram(const char *module, CQSCRIPTENTRY *entry)
+{
+    const CQSCRIPTENTRY **head = nullptr;
+    if (!strcmp(module, "Sol_T.dll")) head = &nativeSolPrograms;
+    else if (!strcmp(module, "Script01T.dll")) head = &nativeTerranPrograms;
+    else std::abort();
+    entry->pNext = *head;
+    *head = entry;
+}
+bool CheckNativeCampaignScriptPrograms()
+{
+    const auto check = [](const CQSCRIPTENTRY *head, const char *briefing, const char *start) {
+        unsigned int briefings = 0, starts = 0;
+        for (auto entry = head; entry; entry = entry->pNext)
+        {
+            if (entry->eventFlags & CQPROGFLAG_STARTBRIEFING)
+            {
+                if (std::strcmp(entry->progName, briefing)) return false;
+                ++briefings;
+            }
+            if (entry->eventFlags & CQPROGFLAG_STARTMISSION)
+            {
+                if (std::strcmp(entry->progName, start)) return false;
+                ++starts;
+            }
+        }
+        return briefings == 1 && starts == 1;
+    };
+    if (!check(nativeSolPrograms, "SolTrain_Briefing", "SolTrain_Start") ||
+        !check(nativeTerranPrograms, "TM1_Briefing", "TM1_MissionStart") || !GS)
+        return false;
+    COMPTR<IViewConstructor> constructor;
+    COMPTR<IViewConstructor2> provider;
+    if (GS->QueryInterface("IViewConstructor", constructor) != GR_OK ||
+        constructor->QueryInterface("IViewConstructor2", provider) != GR_OK) return false;
+    // Empty source programs have a genuine one-byte disk record, despite the
+    // parsed record having no fields. Never initialize a mission goal here.
+    const auto checkEmpty = [&](const CQSCRIPTENTRY *head, const void *schema, std::size_t length) {
+        if (!schema || !length) return false;
+        std::vector<char> text(static_cast<const char *>(schema),
+            static_cast<const char *>(schema)+length);
+        text.push_back(0);
+        HANDLE symbols = provider->ParseNewMemory(text.data());
+        if (!symbols) return false;
+        unsigned int empties = 0;
+        bool valid = true;
+        for (auto entry = head; entry && valid; entry = entry->pNext)
+        {
+            SYMBOL symbol = provider->GetSymbol(symbols, entry->saveLoadStruct);
+            SYMBOL type = ResolveViewSymbolType(symbol);
+            if (!type || type->kind != RECORDSYM) { valid = false; break; }
+            if (type->size || type->datatype) continue;
+            ++empties;
+            CQBaseProgram *program = entry->factory();
+            if (!program) { valid = false; break; }
+            U8 *record = reinterpret_cast<U8 *>(program)+entry->saveOffset;
+            const U8 savedByte = *record;
+            valid = entry->saveSize == 1 && entry->saveOffset >= sizeof(void *) &&
+                savedByte == 0 && CorrelateNativeViewSymbols(provider, symbol,
+                    &savedByte, symbol, record) && *record == savedByte;
+            program->Destroy();
+        }
+        provider->DestroySymbols(symbols);
+        return valid && empties != 0;
+    };
+    std::size_t solLength = 0, terranLength = 0;
+    const void *solSchema = FrontierX::GetNativeSolTrainSchema(solLength);
+    const void *terranSchema = FrontierX::GetNativeScript01Schema(terranLength);
+    return checkEmpty(nativeSolPrograms, solSchema, solLength) &&
+        checkEmpty(nativeTerranPrograms, terranSchema, terranLength);
+}
+
+#endif
+
 static HANDLE g_hOldSymbols, g_hNewSymbols;
 static const char * g_scriptDataType;
 static void * g_pScriptData;
@@ -595,6 +681,86 @@ static void appendProgram (CQBaseProgram * program, const CQSCRIPTENTRY * script
 }
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+static bool NativeScriptCheckpoint(IFileSystem *file)
+{
+	char filename[MAX_PATH+4] = {};
+	const LONG length = file ? file->GetFileName(filename, sizeof(filename)) : 0;
+	if (length <= 0 || length >= S32(sizeof(filename)))
+		throw std::runtime_error("Native script state cannot identify the mission file");
+	std::string name = filename;
+	for (char &value : name)
+		if (value >= 'A' && value <= 'Z') value = static_cast<char>(value + ('a'-'A'));
+	return name.size() >= 8 && name.compare(name.size()-8, 8, ".mission") == 0;
+}
+
+static std::vector<U8> ReadNativeScriptBytes(IFileSystem *file, const char *name, bool optional)
+{
+	DAFILEDESC descriptor = name;
+	HANDLE handle = file->OpenChild(&descriptor);
+	if (handle == INVALID_HANDLE_VALUE)
+	{
+		if (optional && (file->GetLastError() == ERROR_FILE_NOT_FOUND)) return {};
+		throw std::runtime_error(std::string("Native script state record missing: ") + name);
+	}
+	std::vector<U8> bytes;
+	U32 read = 0;
+	bool valid = false;
+	try
+	{
+		const U32 size = file->GetFileSize(handle);
+		if (size)
+		{
+			bytes.resize(size);
+			valid = file->ReadFile(handle, bytes.data(), size, &read, 0) && read == size;
+		}
+	}
+	catch (...)
+	{
+		file->CloseHandle(handle);
+		throw;
+	}
+	if (!file->CloseHandle(handle) || !valid)
+		throw std::runtime_error(std::string("Native script state record unreadable: ") + name);
+	return bytes;
+}
+
+static void CorrelateNativeScriptState(IViewConstructor2 *parser, const char *typeName,
+	const std::vector<U8> &bytes, void *destination, U32 destinationSize)
+{
+	if (!parser || !g_hOldSymbols || !g_hNewSymbols || !typeName || !destination)
+		throw std::runtime_error("Native script state schemas or destination missing");
+	SYMBOL oldSymbol = parser->GetSymbol(g_hOldSymbols, typeName);
+	SYMBOL newSymbol = parser->GetSymbol(g_hNewSymbols, typeName);
+	if (!oldSymbol || !newSymbol)
+		throw std::runtime_error(std::string("Native script state type missing: ") + typeName);
+	SYMBOL oldType = ResolveViewSymbolType(oldSymbol);
+	SYMBOL newType = ResolveViewSymbolType(newSymbol);
+	if (!oldType || !newType || oldType->kind != RECORDSYM || newType->kind != RECORDSYM)
+		throw std::runtime_error("Native script state is not an original record type");
+	const bool empty = oldType->size == 0 && newType->size == 0 &&
+		!oldType->datatype && !newType->datatype;
+	if (empty)
+	{
+		// NativeScriptSaveBase owns the original one-byte empty record outside
+		// the vtable. The real factory already constructed its stateless program.
+		if (destinationSize != 1 || bytes.size() != 1 ||
+			!CorrelateNativeViewSymbols(parser, oldSymbol, bytes.data(), newSymbol, destination))
+			throw std::runtime_error("Native empty script state record invalid");
+		return;
+	}
+	if (oldType->size <= 0 || newType->size <= 0 ||
+		bytes.size() != static_cast<U32>(oldType->size) ||
+		destinationSize != static_cast<U32>(newType->size))
+		throw std::runtime_error(std::string("Native script state record extent invalid: ") + typeName);
+	std::vector<U8> output(destinationSize, 0);
+	if (!CorrelateNativeViewSymbols(parser, oldSymbol, bytes.data(), newSymbol, output.data()))
+		throw std::runtime_error(std::string("Native script state correlation failed: ") + typeName);
+	std::memcpy(destination, output.data(), destinationSize);
+}
+#endif
+
+#if defined(_WIN32)
 static void loadParseData (IFileSystem * inFile, IViewConstructor2 * parser)
 {
 	DAFILEDESC fdesc = "\\Script\\ParseData";
@@ -617,6 +783,17 @@ Done:
 		inFile->CloseHandle(hFile);
 	::free(pTemp);
 }
+#else
+static void loadParseData (IFileSystem *inFile, IViewConstructor2 *parser)
+{
+	CQASSERT(g_hOldSymbols == 0);
+	auto bytes = ReadNativeScriptBytes(inFile, "\\Script\\ParseData", !NativeScriptCheckpoint(inFile));
+	if (bytes.empty()) return; // Only a missing initial retail schema is optional.
+	bytes.push_back(0);
+	g_hOldSymbols = parser->ParseNewMemory(reinterpret_cast<char *>(bytes.data()));
+	if (!g_hOldSymbols) throw std::runtime_error("Native saved script schema invalid");
+}
+#endif
 //--------------------------------------------------------------------------//
 // search through program list for a start program
 //
@@ -655,6 +832,7 @@ static const CQSCRIPTENTRY * findScript (const char * name)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 static void loadProgramData (IFileSystem * inFile, IViewConstructor2 * parser)
 {
 	DAFILEDESC fdesc = "\\Script\\Programs";
@@ -726,8 +904,59 @@ static void loadProgramData (IFileSystem * inFile, IViewConstructor2 * parser)
 #endif
 	}
 }
+#else
+static void loadProgramData (IFileSystem *inFile, IViewConstructor2 *parser)
+{
+	DAFILEDESC descriptor = "\\Script\\Programs";
+	COMPTR<IFileSystem> directory;
+	if (inFile->CreateInstance(&descriptor, directory) != GR_OK)
+		throw std::runtime_error("Native saved script Programs directory missing");
+	WIN32_FIND_DATA data = {};
+	HANDLE search = directory->FindFirstFile("*", &data);
+	if (search == INVALID_HANDLE_VALUE)
+	{
+		if (directory->GetLastError() != ERROR_FILE_NOT_FOUND &&
+			directory->GetLastError() != ERROR_NO_MORE_FILES)
+			throw std::runtime_error("Native saved script Programs enumeration failed");
+		return; // An existing canonical directory may contain no active programs.
+	}
+	try
+	{
+		do
+		{
+			const char *name = data.cFileName;
+			const char *separator = std::strchr(name, '-');
+			if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || !separator ||
+				separator == name || !separator[1])
+				throw std::runtime_error("Native saved script program record name invalid");
+			for (const char *digit = name; digit != separator; ++digit)
+				if (*digit < '0' || *digit > '9')
+					throw std::runtime_error("Native saved script program sequence invalid");
+			const CQSCRIPTENTRY *script = findScript(separator+1);
+			if (!script) throw std::runtime_error("Native saved script program factory missing");
+			CQBaseProgram *program = script->factory();
+			if (!program) throw std::runtime_error("Native saved script program creation failed");
+			try
+			{
+				auto bytes = ReadNativeScriptBytes(directory, name, false);
+				CorrelateNativeScriptState(parser, script->saveLoadStruct, bytes,
+					reinterpret_cast<char *>(program)+script->saveOffset, script->saveSize);
+				appendProgram(program, script); // Preserve source enumeration/order.
+			}
+			catch (...) { program->Destroy(); throw; }
+		} while (directory->FindNextFile(search, &data));
+		const U32 error = directory->GetLastError();
+		if (error != ERROR_NO_MORE_FILES && error != ERROR_FILE_NOT_FOUND)
+			throw std::runtime_error("Native saved script Programs enumeration interrupted");
+	}
+	catch (...) { directory->FindClose(search); throw; }
+	if (!directory->FindClose(search))
+		throw std::runtime_error("Native saved script Programs close failed");
+}
+#endif
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 static void loadGlobalData (IFileSystem * inFile, IViewConstructor2 * parser)
 {
 	DAFILEDESC fdesc = "\\Script\\GlobalData";
@@ -770,6 +999,14 @@ Done:
 		inFile->CloseHandle(hFile);
 	::free(pTemp);
 }
+#else
+static void loadGlobalData (IFileSystem *inFile, IViewConstructor2 *parser)
+{
+	CQASSERT(g_pScriptData);
+	auto bytes = ReadNativeScriptBytes(inFile, "\\Script\\GlobalData", false);
+	CorrelateNativeScriptState(parser, g_scriptDataType, bytes, g_pScriptData, g_scriptDataSize);
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 static void loadStringTable( IFileSystem & inFile )
@@ -804,21 +1041,20 @@ void MScript::Load (IFileSystem * inFile)
 {
 #if !defined(_WIN32)
 	char scriptName[MAX_PATH] = {};
-	if (!MGlobals::GetScriptName(scriptName, sizeof(scriptName)) ||
-		strcmp(scriptName, "Sol_T.dll") != 0 || !g_pScripts ||
-		!findScript("SolTrain_Start") || !PARSER || !SOUNDMANAGER ||
-		!TELETYPE || (inFile && (!STRINGTABLE || !SCRIPTING)))
-	{
-		std::fprintf(stderr, "Native training script prerequisites missing: %s\n",
-			scriptName);
-		std::fprintf(stderr, "scripts=%d start=%d parser=%d sound=%d teletype=%d string=%d scripting=%d\n",
-			g_pScripts != NULL, findScript("SolTrain_Start") != NULL,
-			PARSER != NULL, SOUNDMANAGER != NULL, TELETYPE != NULL,
-			STRINGTABLE != NULL, SCRIPTING != NULL);
-		std::abort();
-	}
-	const U32 updateCount = MGlobals::GetUpdateCount();
-	FrontierXInitializeSolTrainScript();
+    if (!MGlobals::GetScriptName(scriptName, sizeof(scriptName))) std::abort();
+    const bool training = strcmp(scriptName, "Sol_T.dll") == 0;
+    const bool terran = strcmp(scriptName, "Script01T.dll") == 0 ||
+        strcmp(scriptName, "script01.dll") == 0;
+    g_pScripts = training ? nativeSolPrograms : terran ? nativeTerranPrograms : nullptr;
+    if (!g_pScripts || !findScript(training ? "SolTrain_Start" : "TM1_MissionStart") ||
+        !PARSER || !SOUNDMANAGER || !TELETYPE || (inFile && (!STRINGTABLE || !SCRIPTING)))
+    {
+        std::fprintf(stderr, "Native script prerequisites missing: %s\n", scriptName);
+        std::abort();
+    }
+    const U32 updateCount = MGlobals::GetUpdateCount();
+    if (training) FrontierXInitializeSolTrainScript();
+    else FrontierXInitializeScript01();
 	SOUNDMANAGER->SetLastStreamID(MGlobals::GetLastStreamID());
 	TELETYPE->SetLastTeletypeID(MGlobals::GetLastTeletypeID());
 	if (inFile)
@@ -830,7 +1066,7 @@ void MScript::Load (IFileSystem * inFile)
 			std::abort();
 		}
 		loadParseData(inFile, parser);
-		if (updateCount > 0)
+		if (updateCount > 0 || NativeScriptCheckpoint(inFile))
 		{
 			loadGlobalData(inFile, parser);
 			loadProgramData(inFile, parser);
@@ -922,13 +1158,26 @@ void MScript::Load (IFileSystem * inFile)
 }
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+bool LoadNativeMissionScripts(IFileSystem *file)
+{
+	try { MScript::Load(file); return true; }
+	catch (const std::exception &error)
+	{
+		std::fprintf(stderr, "Native mission script load failed: %s\n", error.what());
+		MScript::Close();
+		return false;
+	}
+}
+#endif
+
 void MScript::LoadScript (void)
 {
 #if !defined(_WIN32)
 	// Use the same source module/resource binding as mission load, then its
 	// original briefing entry. No saved mission programs are loaded here.
 	Load(static_cast<IFileSystem *>(nullptr));
-	if (!findScript("SolTrain_Briefing") || !BRIEFING)
+	if ((!findScript("SolTrain_Briefing") && !findScript("TM1_Briefing")) || !BRIEFING)
 	{
 		std::fputs("Native training briefing prerequisites missing\n", stderr);
 		std::abort();
@@ -2219,15 +2468,15 @@ void MScript::SetPlayerTech (U32 playerID, TECHNODE node)
 wchar_t * MScript::GetCountedString (U32 stringID)
 {
 #if !defined(_WIN32)
-	if (g_hLocalDLL != FrontierX::GetNativeSolTrainResourceHandle())
-	{
-		std::fputs("Native script localization resource is not bound\n", stderr);
-		std::abort();
-	}
-	const wchar_t *counted = FrontierX::GetNativeSolTrainCountedString(stringID);
+    const wchar_t *counted = nullptr;
+    if (g_hLocalDLL == FrontierX::GetNativeSolTrainResourceHandle())
+        counted = FrontierX::GetNativeSolTrainCountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript01ResourceHandle())
+        counted = FrontierX::GetNativeScript01CountedString(stringID);
+    else std::abort();
 	if (!counted)
 	{
-		std::fprintf(stderr, "Native Sol_T string ID %u is missing\n", stringID);
+		std::fprintf(stderr, "Native selected script string ID %u is missing\n", stringID);
 		std::abort();
 	}
 	return const_cast<wchar_t *>(counted);

@@ -836,6 +836,39 @@ bool CheckIndexedPaletteAlphaPlane()
     return valid;
 }
 
+// SpaceEnvironment's real StarBk.tga caller requests RGB5/A1. The normalized
+// backend must retain its precision, including the alpha bit, on both upload
+// paths; accepting the format without quantizing would change its rendering.
+bool CheckRgb5A1Target()
+{
+    LockTextureBackend backend;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &backend;
+    operations.create = CreateLockTexture;
+    operations.upload = UploadLockTexture;
+    operations.destroy = DestroyLockTexture;
+    FrontierX::NativeRenderPipeline pipeline{nullptr, operations};
+    const std::array<std::uint8_t, 16> source{{
+        7U, 8U, 15U, 127U, 16U, 31U, 32U, 128U,
+        127U, 128U, 247U, 0U, 248U, 254U, 255U, 255U}};
+    const std::array<std::uint8_t, 16> expected{{
+        0U, 8U, 8U, 0U, 16U, 24U, 33U, 255U,
+        123U, 132U, 247U, 0U, 255U, 255U, 255U, 255U}};
+    U32 handle = 0U;
+    RPLOCKDATA locked{};
+    if (!Expect(pipeline.create_texture(2, 2, PixelFormat(PF_RGB5_A1), 1, 0, handle) == GR_OK &&
+                pipeline.set_texture_level_data(handle, 0, 2, 2, 8, PixelFormat(PF_RGBA8),
+                    source.data(), nullptr, nullptr) == GR_OK && backend.committed == expected,
+                "RGB5/A1 target quantizes source colors and alpha endpoints") ||
+        !Expect(pipeline.lock_texture(handle, 0, &locked) == GR_OK &&
+                    std::memcmp(locked.pixels, expected.data(), expected.size()) == 0,
+                "RGB5/A1 normalized shadow retains committed precision")) return false;
+    std::memcpy(locked.pixels, source.data(), source.size());
+    return Expect(pipeline.unlock_texture(handle, 0) == GR_OK && backend.committed == expected &&
+                    pipeline.destroy_texture(handle) == GR_OK,
+                "RGB5/A1 locked TGA conversion preserves target precision");
+}
+
 bool CheckTextureLockLifecycle()
 {
     LockTextureBackend backend;
@@ -1128,7 +1161,7 @@ int main()
         !CheckExtendedSubmissionRegressions() || !CheckTextureHandleCollision() ||
         !CheckTextureStateIdBoundary() || !CheckRgb565AlphaPlane() ||
         !CheckIndexedPaletteAlphaPlane() ||
-        !CheckTextureLockLifecycle() || !CheckTextureBlit())
+        !CheckRgb5A1Target() || !CheckTextureLockLifecycle() || !CheckTextureBlit())
     {
         return 1;
     }

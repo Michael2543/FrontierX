@@ -1,5 +1,10 @@
 #ifndef TFABRICATOR_H
 #define TFABRICATOR_H
+#if !defined(_WIN32)
+#include <IMeshManager.h>
+#include <stdexcept>
+#include <string>
+#endif
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                            TFabricator.h                                 //
@@ -997,8 +1002,25 @@ void TFabricator< Base >::initFabricator (const FABINITINFO & _data)
 		numDrones = _data.builderInfo[0].numDrones;
 	}
 
+#if defined(_WIN32)
 	animIndex = ANIM->create_script_inst(_data.animArchetype, instanceIndex, "Sc_build");
 	loopingAnimIndex = ANIM->create_script_inst(_data.animArchetype, instanceIndex, "Sc_construct");
+#else
+	// MeshManager owns the genuine script set. The obsolete S32 init field
+	// remains invalid and cannot hold this native pointer-sized archive handle.
+	const SCRIPT_SET_ARCH scriptSet = _data.meshArch ?
+		_data.meshArch->GetAnimArchtype() : INVALID_SCRIPT_SET_ARCH;
+	animIndex = ANIM->create_script_inst(scriptSet, instanceIndex, "Sc_build");
+	if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS &&
+		_data.pData->objClass == OC_SPACESHIP &&
+		_data.pData->missionData.race == M_TERRAN &&
+		animIndex == INVALID_SCRIPT_INST)
+		throw std::runtime_error(std::string("Native Terran fabricator required Sc_build unavailable: ") +
+			_data.pData->fileName);
+	// Sc_construct is absent from the authored Terran fabricator resource;
+	// keep the original optional-loop contract rather than inventing a loop.
+	loopingAnimIndex = ANIM->create_script_inst(scriptSet, instanceIndex, "Sc_construct");
+#endif
 }
 
 //---------------------------------------------------------------------------

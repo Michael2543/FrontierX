@@ -27,6 +27,11 @@ Read the smallest relevant authoritative document before changing code:
 
 ## Current reality
 
+For the active work queue, follow [Ordered priorities](#ordered-priorities) and
+[the current plan](docs/PORT_READINESS.md#active-plan-playable-single-player-first-2026-10-13).
+The component inventory below includes historical bring-up boundaries; it does not
+require completing full M3 comparisons before regular campaign integration.
+
 - VS2022 Win32 on Windows 10/11 remains the supported game build and regression baseline.
 - The Linux CMake/Ninja graph builds isolated libraries and checks, platform services,
   a headless data checker and a native startup/window shell. A bounded native
@@ -85,9 +90,9 @@ Read the smallest relevant authoritative document before changing code:
   with bounded construction evidence and a corrected native save capability
   schema. M2 Linux training now completes through original victory/return,
   normal early/later reload and repeated close in the documented optional
-  runtime scope. External host leak/resize limits remain explicit; native
-  Windows/module ABI and comparative determinism/retail work are M3 by user
-  instruction. Use the focused current acceptance and next-step ledger.
+  runtime scope. External host leak/resize limits remain explicit;
+  affected native Windows/module ABI checks remain required; full comparative determinism/retail
+  work is a separate later milestone. Use the active delivery plan for next steps.
   Generated PCM playback works; an explicit external shared-LGPL FFmpeg
   configuration also decodes and plays the selected training speech. See `docs/NATIVE_AUDIO_STREAMER.md`.
   The native shell enters the selected retail-data mission with explicit
@@ -169,17 +174,38 @@ retail runtime.
 
 ## Ordered priorities
 
-1. Preserve and measure the restored retail/Win32 baseline.
-2. Inventory platform, compiler, pointer-width, ABI, D3DX9 and build-graph blockers.
-3. Extend the portable build graph alongside the Visual Studio build.
-4. Establish focused platform interfaces before replacing implementations.
-5. Connect startup, data loading, SDL3 window/input and one production rendering vertical slice.
-6. Reach a deterministic playable single-player slice.
-7. Port audio and video; port networking last.
-8. Package only after dependency provenance and retail-data separation are automated.
+Current user-approved direction (2026-10-13): playable Linux single-player first.
+The active [delivery plan](docs/PORT_READINESS.md#active-plan-playable-single-player-first-2026-10-13)
+supersedes historical milestone ordering and “next M3” instructions.
 
-Do not combine several priorities into a repository-wide rewrite. Prefer the smallest change that
-advances a production owner and produces a falsifiable build, layout, ABI or runtime result.
+1. Preserve accepted M2 training and fix concrete crashes, memory errors and save corruption.
+2. Prepare builds, focused regression/layout/sanitizer checks and reproducible playtest candidates
+   in CI as far as practical. Reuse existing infrastructure; separate technical readiness from M3.
+3. Integrate the first regular Terran campaign mission through original entry, required gameplay,
+   normal save/load, victory/defeat and next-mission transition.
+4. Expand campaign coverage by integrating the production owners actually needed by each mission.
+5. Restore remaining single-player features and audiovisual presentation, then prepare packaging
+   subject to dependency provenance, license and retail-data separation requirements.
+6. Pursue full cross-platform comparison/determinism as a separate later milestone; network
+   portability and multiplayer remain later still.
+
+P1b acceptance requires complete presentation/media for its selected mission: all
+models, textures, required material/shader paths, lighting, background, effects,
+HUD, working animated selection/communication portraits and audio. Portraits must
+switch/clear correctly and work after reload. Both minimaps must function, including the second map showing
+system connections, original interactions and restoration after save/load.
+Do not defer this mission scope to P3 or accept reduced-rendering flags as complete.
+Detailed scope and P1b role allocation: [active plan](docs/PORT_READINESS.md#p1b-mandatory-presentation-and-media-acceptance-2026-10-13).
+
+The user may perform necessary full mission playtests. Hand over a technically prepared candidate
+with revision/configuration, exact launch instructions, known limits and a short test checklist.
+Batch related fixes; do not require a new full playthrough for every narrow correction. CI and
+synthetic checks do not replace user gameplay evidence, and pending user tests are not passes.
+Preserve affected Windows Debug/Final and module-ABI checks; unavailable execution remains pending.
+Do not expand M3 observers or CI machinery without a selected mission blocker or concrete regression.
+Do not weaken assertions or normalize away failures to implement this change in priorities.
+
+Prefer the smallest change that advances a production owner and produces a falsifiable result.
 
 ## Completed rendering slice and next milestone
 
@@ -374,7 +400,17 @@ at configure; see `docs/NATIVE_AUDIO_STREAMER.md` for the reviewed external
 shared-LGPL dependency build. Default builds remain SDL-only and reject IAC. Optional mission text uses
 `-DFRONTIERX_BUILD_NATIVE_FONTS=ON` (FreeType >=2.14) and `--ui-font FILE`;
 `FRONTIERX_TEST_FONT_FILE` supplies an external face to the existing shell
-lifecycle CTest. See `docs/NATIVE_SINGLEPLAYER_SLICE.md`. The checked-in presets currently
+lifecycle CTest. See `docs/NATIVE_SINGLEPLAYER_SLICE.md`. Full-media Terran
+candidates additionally use `-DFRONTIERX_BUILD_FFMPEG_VIDEO=ON` with the reviewed
+external shared-LGPL MPEG/IAC/swscale/parser closure, and strict original-family
+`--ui-font-map FILE`; default video remains OFF. Exact commands and interim
+limits: `docs/LINUX_PLAYTEST_CI.md` and `docs/NATIVE_TERRAN_MEDIA.md`.
+Optional native `--no-frame-limit` exposes the original option at normal game
+speed0 and is pinned by private handoff provenance; retain its original timing
+semantics and never change simulation constants to meet a presentation target.
+`--frame-stats` is an opt-in source-frame/backend diagnostic, not gameplay or
+full audiovisual acceptance.
+The checked-in presets currently
 enable SDL3 and the isolated SDL GPU target and therefore require SDL3's `pkg-config` module and
 `glslc`; the selected `Sol_T` source-resource target also requires Python 3 and `llvm-rc`. These commands build the documented native graph, not the game. For the latest measured
 targets and results, use [docs/BUILD_GRAPH.md](docs/BUILD_GRAPH.md).
@@ -440,22 +476,29 @@ their individual requirements remain conditional on the action being performed.
 
 Keep this table synchronized when scoped instruction files are added, removed or renamed.
 
-Native training entry (2026-10-12): --mission-campaign uses the original
-training selector/briefing with --mission-start and Sol_Train.dmission.
-M2 Linux training is accepted in its documented scope; M3 comparison/
-determinism includes the deferred Windows/module ABI/retail checks.
-Commands and explicit host/media limits:
-[native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
+Native training entry: --mission-campaign uses the original training selector/briefing
+with --mission-start and Sol_Train.dmission. M2 remains accepted only in its documented
+Linux scope. Commands and limits: [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
 
-M3 work in progress (2026-10-13), not accepted: protected CI build/ABI and
-explicit GPU evidence is distinct from failed mission/compatibility gates.
-The current follow-up adds complete physical observation boundaries, declared
-global/world state, real sound-lifetime regressions and native save/continued
-comparison fixtures. Full relevant RNG/physics, live event repeatability,
-Save/Reload equivalence and retail/visible/audible corroboration remain open.
-The user's restored Windows skips conversations in every mission; further
-Windows product repairs are out of scope, while comparison instrumentation and
-native rebuild/ABI checks remain required. Keep private SSH connection data,
-retail inputs/traces/saves and detailed failures outside repository/logs/caches/
-artifacts. Only bounded synthetic CRT/production-RandomGen vectors are uploaded.
-See [the current M3 evidence and protocol](docs/M3_SIMULATION_COMPARISON.md).
+The active next milestone is regular campaign gameplay prepared in CI and verified by
+user playtests. M3 is deferred, not accepted; keep its fixes and
+[evidence](docs/M3_SIMULATION_COMPARISON.md). Further Windows product repairs remain
+out of scope. Preserve affected native Windows rebuild/ABI checks. Keep private SSH
+connection data, retail inputs/traces/saves and detailed failures outside repository,
+CI logs/caches/artifacts; only reviewed synthetic evidence may be uploaded.
+
+P0 CI now uses separate technical/M3 dispatch tracks on the existing protected
+workflow. Build/launch and private candidate handoff commands:
+[Linux playtest CI](docs/LINUX_PLAYTEST_CI.md). Actual CI execution is pending;
+absent host checks remain untested and full gameplay remains user-operated.
+
+
+P1a now binds the first Terran `T_Mission1`/`script01.dll` source mission through
+original campaign controls; the user judged its bounded entry sufficient to
+proceed. P1b was completed by explicit user acceptance on 2026-10-15 after the
+reported mission victory/save-load and presentation fixes. P1c is the next active
+step. Keep documented technical follow-ups, unexecuted CI/Windows/ABI checks and
+separate M3 status explicit; acceptance does not invent missing test evidence.
+Current evidence:
+[Terran integration](docs/NATIVE_TERRAN_CAMPAIGN.md) and
+[presentation/media blockers](docs/NATIVE_TERRAN_MEDIA.md).

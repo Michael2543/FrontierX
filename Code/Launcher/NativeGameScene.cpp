@@ -555,7 +555,8 @@ bool RenderNativeGameScene(ICOManager * components, NativeGameSystem * gameSyste
         &gpu, SdlGpuRenderer::TextureLookupCallback,
         SdlGpuRenderer::TextureCreateCallback,
         SdlGpuRenderer::TextureUploadCallback,
-        SdlGpuRenderer::TextureDestroyCallback};
+        SdlGpuRenderer::TextureDestroyCallback,
+             SdlGpuRenderer::TextureCreateMipsCallback, SdlGpuRenderer::TextureUploadMipsCallback};
     NativeRenderPipeline localPipeline(primitive.Get(), textureOperations,
                                        SetSceneVertexConstants, &gpuContext);
     Owner<IRenderPipeline> profilePipeline;

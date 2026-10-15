@@ -17,7 +17,15 @@
 #include <DataDef.h>
 #include <DMBaseData.h>
 #include <DButton.h>
+#include <DPingLauncher.h>
+#include <DSpecial.h>
 #include "Scripts/Include/ScriptDef.h"
+#include <TComponent.h>
+// Source API returns const scalars; top-level return qualifiers have no ABI effect.
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
+#include "SPlayerAI.h"
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
@@ -27,6 +35,50 @@
 #include <cstring>
 #include <iostream>
 #include <type_traits>
+// Script01T DLL-local records use the same fixed-width storage contract as Sol_T.
+#undef DATADEF_H
+namespace Script01Layout
+{
+#include "Scripts/Script02T/Script01T/DataDef.h"
+}
+static_assert(sizeof(Script01Layout::MissionData) == 376);
+static_assert(offsetof(Script01Layout::MissionData, WayPoint1) == 72);
+static_assert(offsetof(Script01Layout::MissionData, Blackwell) == 152);
+static_assert(offsetof(Script01Layout::MissionData, failureID) + sizeof(U32) == 376);
+static_assert(sizeof(Script01Layout::TM1_Briefing_Save) == 32);
+static_assert(sizeof(Script01Layout::TM1_MissionStart_Save) == 4);
+
+
+// The source AI saves assignment records, never native linked-list pointers.
+static_assert(sizeof(PLAYERAI_ASSIGNMENT_RECORD) == 40 + 4 * MAX_SELECTED_UNITS);
+static_assert(offsetof(PLAYERAI_ASSIGNMENT_RECORD, type) == 4);
+static_assert(offsetof(PLAYERAI_ASSIGNMENT_RECORD, set) == 16);
+static_assert(offsetof(PLAYERAI_ASSIGNMENT_RECORD, supships) + sizeof(U32) ==
+    sizeof(PLAYERAI_ASSIGNMENT_RECORD));
+// PLAYERAI_SAVELOAD uses legacy value-type inheritance; measure its storage
+// extent explicitly rather than assume standard-layout. Native Windows remains
+// required to independently confirm this source-derived fixed-width record.
+static_assert(sizeof(PLAYERAI_SAVELOAD) == 47608);
+static_assert(alignof(PLAYERAI_SAVELOAD) == 8);
+static_assert(sizeof(BuildPriority) == 32);
+static_assert(sizeof(ResearchPriority) == 24);
+static_assert(sizeof(ShipPriority) == 16);
+static_assert(sizeof(EnemyStatus) == 16);
+static_assert(sizeof(ScoutRoute) == 28);
+
+// Actual TM1 Seeker/Khamir launchers and the original kamikaze save caller.
+static_assert(sizeof(SINGLE_TECHNODE) == 20);
+static_assert(sizeof(BT_PING_LAUNCHER) == 76);
+static_assert(sizeof(BT_ZEALOT_DATA) == 80);
+static_assert(sizeof(BT_ZEALOT_DATA::impactBlastType) == 32);
+static_assert(sizeof(BASE_ZEALOT_SAVELOAD) == 20);
+static_assert(offsetof(BASE_ZEALOT_SAVELOAD, dwMissionID) == 0);
+static_assert(offsetof(BASE_ZEALOT_SAVELOAD, targetID) == 4);
+static_assert(offsetof(BASE_ZEALOT_SAVELOAD, zealotArchetypeID) == 8);
+static_assert(offsetof(BASE_ZEALOT_SAVELOAD, systemID) == 12);
+static_assert(offsetof(BASE_ZEALOT_SAVELOAD, stage) + sizeof(ZSTAGE) == 20);
+static_assert(sizeof(TRANS_SAVELOAD) == 40);
+static_assert(sizeof(ZEALOT_SAVELOAD) == 64 && alignof(ZEALOT_SAVELOAD) == 4);
 
 static_assert(sizeof(void *) == 8, "The Linux port requires a 64-bit process");
 static_assert(sizeof(long) == 8, "The Linux x86_64 probe requires the LP64 data model");
@@ -188,6 +240,27 @@ bool checkCapabilityBits()
 
 int main()
 {
+    // These original value-type records use inheritance and are not standard
+    // layout. Measure real subobject addresses rather than apply offsetof to a
+    // conditionally supported type or suppress its compiler diagnostic.
+    BT_PING_LAUNCHER ping{};
+    BT_ZEALOT_DATA zealot{};
+    ZEALOT_SAVELOAD zealotSave{};
+    const auto offset = [](const void *record, const void *field) {
+        return static_cast<const unsigned char *>(field) -
+               static_cast<const unsigned char *>(record);
+    };
+    if (offset(&ping, &ping.techNode) != 56 ||
+        offset(&ping, &ping.techNode) + sizeof(ping.techNode) != sizeof(ping) ||
+        offset(&zealot, &zealot.impactBlastType) != 28 ||
+        offset(&zealot, &zealot.neededTech) != 60 ||
+        offset(&zealot, &zealot.neededTech) + sizeof(zealot.neededTech) != sizeof(zealot) ||
+        offset(&zealotSave, &zealotSave.trans_SL) != 20 ||
+        offset(&zealotSave, &zealotSave.trans_SL) + sizeof(TRANS_SAVELOAD) + sizeof(U32) != sizeof(zealotSave))
+    {
+        std::cerr << "Original Ping/Zealot archetype/save subobject layout mismatch\n";
+        return 1;
+    }
     GT_BUTTON button{};
     const auto *buttonBytes = reinterpret_cast<const unsigned char *>(&button);
     if (reinterpret_cast<const unsigned char *>(button.fontName) - buttonBytes != 8 ||

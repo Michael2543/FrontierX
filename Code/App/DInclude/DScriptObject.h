@@ -17,7 +17,11 @@
 #endif
 
 #ifndef DSPACESHIP_H
+#if defined(_WIN32)
 #include "DSpaceShip.h"
+#else
+#include "DSpaceship.h"
+#endif
 #endif
 
 //----------------------------------------------------------------

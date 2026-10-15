@@ -11,8 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "IBuild.h"
 #include "ObjList.h"
@@ -36,11 +67,11 @@
 
 #include <renderer.h>
 #include <IHardPoint.h>
-#include <LightMan.h>
+#include <lightman.h>
 #include <TSmartPointer.h>
 #include <IConnection.h>
 #include <ITextureLibrary.h>
-#include <FileSys.h>
+#include <Filesys.h>
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 
@@ -486,7 +517,7 @@ void MantisBuild::PhysicalUpdate (SINGLE dt)
 		SINGLE ratio;
 		ratio = (GROW_END_TIME-(totalTime-smoothTimer))/GROW_END_TIME;
 		
-		U32 reveal = max(0,pellet_face_cnt*ratio);
+		U32 reveal = __max(0,pellet_face_cnt*ratio);
 		
 		if (rate > 0)
 		{
@@ -531,7 +562,7 @@ void MantisBuild::Render (void)
 		
 		if (rootChild)
 		{
-			SINGLE scale=min(max(0,(smoothTimer-GROW_START_TIME)/(totalTime-GROW_END_TIME-GROW_START_TIME)),1.0f);
+			SINGLE scale=min(__max(0,(smoothTimer-GROW_START_TIME)/(totalTime-GROW_END_TIME-GROW_START_TIME)),1.0f);
 			TRANSFORM scaleTrans;
 			scaleTrans.d[0][0] = min(scale*1.5f,1.0f);
 			scaleTrans.d[1][1] = min(scale*1.5f,1.0f);
@@ -575,7 +606,7 @@ void MantisBuild::Render (void)
 void MantisBuild::renderCocoon()
 {
 	Vector v[3];
-	SINGLE morph=min(max(0,(smoothTimer-GROW_START_TIME)/(totalTime-GROW_END_TIME-GROW_START_TIME)),1.0f);
+	SINGLE morph=min(__max(0,(smoothTimer-GROW_START_TIME)/(totalTime-GROW_END_TIME-GROW_START_TIME)),1.0f);
 	SINGLE mmorph;
 //	if (morph < 0.5)
 //		mmorph = 1.0+8*morph;
@@ -672,7 +703,7 @@ void MantisBuild::renderGrowth()
 	//create a render mesh with texture function
 
 	Vector v[3];
-	SINGLE morph=min(max(0,(smoothTimer)/(totalTime-GROW_END_TIME)),1.0f);
+	SINGLE morph=min(__max(0,(smoothTimer)/(totalTime-GROW_END_TIME)),1.0f);
 	SINGLE mmorph;
 //	if (morph < 0.5)
 //		mmorph = 1.0+8*morph;
@@ -850,7 +881,7 @@ void MantisBuild::SynchBuilderShips()
 			Vector v;
 			S32 vert = rand()%3;
 			S32 face = droneRef[i];
-			SINGLE morph=min(max(0,(smoothTimer-GROW_START_TIME)/(totalTime-GROW_END_TIME-GROW_START_TIME)),1.0f);
+			SINGLE morph=min(__max(0,(smoothTimer-GROW_START_TIME)/(totalTime-GROW_END_TIME-GROW_START_TIME)),1.0f);
 			SINGLE mmorph = 1.0f - 13.0f*morph*morph + 12.0f*morph;
 			v = trans*(smesh->v_list[smesh->f_list[face].v[vert]].pt*morph+pellet_verts[smesh->f_list[face].v[vert]]*mmorph);
 			ISpiderDrone *drone = getNextDrone();

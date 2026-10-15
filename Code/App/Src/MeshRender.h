@@ -330,6 +330,10 @@ void TreeRender(MeshInfo **mi,int num_children);
 void TreeRender(MeshInfo **mi,int num_children,const Transform &scaleTrans);
 void TreeRender(MeshInfo *mi,const Transform &scaleTrans);
 void TreeRender(MeshChain &mc,bool bLight=true, DWORD color = 0xFFFFFFFF);
+#if !defined(_WIN32)
+// Use original per-instance legacy material colors for this preview draw only.
+void TreeRenderNativeLegacyPreview(MeshChain &mc);
+#endif
 void TreeRenderPortionZAlign(MeshInfo **mc,int num_children,const Vector &split_pt);
 void TreeRenderPortion(MeshInfo **mc,int num_children,const Vector &split_pt,const Vector &split_norm);
 void TreeRenderPuffy(MeshInfo **mc,int num_children,const Vector &scale,SINGLE puffPercent);

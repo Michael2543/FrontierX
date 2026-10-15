@@ -364,6 +364,69 @@ static void initGlobalData (void)
 }
 //----------------------------------------------------------------------------
 
+static void LoadSourceEffectsOptions()
+{
+	GlobalEffectsOptions options;
+	if (DEFAULTS->GetDataFromRegistry("effectsOptions", &options, sizeof(options)) == sizeof(options))
+	{
+		if (options.version == CQEFFECTSOPTIONS_VERSION)
+			CQEFFECTS = options;
+		else if(options.version == 3 && CQEFFECTSOPTIONS_VERSION == 5)
+		{
+			GlobalEffectsOptions_V3 * effV3 = (GlobalEffectsOptions_V3 *)(&options);
+			CQEFFECTS.bBackground = (GlobalEffectsOptions::OPTVAL)(effV3->bBackground);
+			CQEFFECTS.bEmissiveTextures = (GlobalEffectsOptions::OPTVAL)(effV3->bEmissiveTextures);
+			CQEFFECTS.bExpensiveTerrain = (GlobalEffectsOptions::OPTVAL)(effV3->bExpensiveTerrain);
+			CQEFFECTS.bFastRender = (GlobalEffectsOptions::OPTVAL)(effV3->bFastRender);
+			CQEFFECTS.bHighBackground = GlobalEffectsOptions::off;
+			CQEFFECTS.bNoForceMaxLOD = (GlobalEffectsOptions::OPTVAL)(effV3->bNoForceMaxLOD);
+			CQEFFECTS.bNoForceMinLOD = (GlobalEffectsOptions::OPTVAL)(effV3->bNoForceMinLOD);
+			CQEFFECTS.bTextures = (GlobalEffectsOptions::OPTVAL)(effV3->bTextures);
+			CQEFFECTS.bWeaponTrails = (GlobalEffectsOptions::OPTVAL)(effV3->bWeaponTrails);
+			CQEFFECTS.nFlatShipScale = 1;
+			CQEFFECTS.version = CQEFFECTSOPTIONS_VERSION;
+		}
+		else
+		{
+			CQEFFECTS.bBackground = GlobalEffectsOptions::on;
+			CQEFFECTS.bEmissiveTextures = GlobalEffectsOptions::on;
+			CQEFFECTS.bExpensiveTerrain = GlobalEffectsOptions::on;
+			CQEFFECTS.bFastRender = GlobalEffectsOptions::on;
+			CQEFFECTS.bHighBackground = GlobalEffectsOptions::off;
+			CQEFFECTS.bNoForceMaxLOD = GlobalEffectsOptions::on;
+			CQEFFECTS.bNoForceMinLOD = GlobalEffectsOptions::on;
+			CQEFFECTS.bTextures = GlobalEffectsOptions::on;
+			CQEFFECTS.bWeaponTrails = GlobalEffectsOptions::on;
+			CQEFFECTS.nFlatShipScale = 1;
+			CQEFFECTS.version = CQEFFECTSOPTIONS_VERSION;
+		}
+	}
+	else
+	{
+		CQEFFECTS.bBackground = GlobalEffectsOptions::on;
+		CQEFFECTS.bEmissiveTextures = GlobalEffectsOptions::on;
+		CQEFFECTS.bExpensiveTerrain = GlobalEffectsOptions::on;
+		CQEFFECTS.bFastRender = GlobalEffectsOptions::on;
+		CQEFFECTS.bHighBackground = GlobalEffectsOptions::off;
+		CQEFFECTS.bNoForceMaxLOD = GlobalEffectsOptions::on;
+		CQEFFECTS.bNoForceMinLOD = GlobalEffectsOptions::on;
+		CQEFFECTS.bTextures = GlobalEffectsOptions::on;
+		CQEFFECTS.bWeaponTrails = GlobalEffectsOptions::on;
+		CQEFFECTS.nFlatShipScale = 1;
+		CQEFFECTS.version = CQEFFECTSOPTIONS_VERSION;
+	}
+}
+
+#if !defined(_WIN32)
+void InitializeNativeEffectsOptions()
+{
+    // Match the original GlobalViewer constructor before its source settings load.
+    memset(&CQEFFECTS, 0xFF, sizeof(CQEFFECTS));
+    CQEFFECTS.version = CQEFFECTSOPTIONS_VERSION;
+    LoadSourceEffectsOptions();
+}
+#endif
+
 #ifdef _WIN32
 struct DACOM_NO_VTABLE GlobalViewer : IEventCallback, IDocumentClient
 {
@@ -564,55 +627,7 @@ void GlobalViewer::init()
 
 	initGlobalData();
 
-	GlobalEffectsOptions options;
-	if (DEFAULTS->GetDataFromRegistry("effectsOptions", &options, sizeof(options)) == sizeof(options))
-	{
-		if (options.version == CQEFFECTSOPTIONS_VERSION)
-			CQEFFECTS = options;
-		else if(options.version == 3 && CQEFFECTSOPTIONS_VERSION == 5)
-		{
-			GlobalEffectsOptions_V3 * effV3 = (GlobalEffectsOptions_V3 *)(&options);
-			CQEFFECTS.bBackground = (GlobalEffectsOptions::OPTVAL)(effV3->bBackground);
-			CQEFFECTS.bEmissiveTextures = (GlobalEffectsOptions::OPTVAL)(effV3->bEmissiveTextures);
-			CQEFFECTS.bExpensiveTerrain = (GlobalEffectsOptions::OPTVAL)(effV3->bExpensiveTerrain);
-			CQEFFECTS.bFastRender = (GlobalEffectsOptions::OPTVAL)(effV3->bFastRender);
-			CQEFFECTS.bHighBackground = GlobalEffectsOptions::off;
-			CQEFFECTS.bNoForceMaxLOD = (GlobalEffectsOptions::OPTVAL)(effV3->bNoForceMaxLOD);
-			CQEFFECTS.bNoForceMinLOD = (GlobalEffectsOptions::OPTVAL)(effV3->bNoForceMinLOD);
-			CQEFFECTS.bTextures = (GlobalEffectsOptions::OPTVAL)(effV3->bTextures);
-			CQEFFECTS.bWeaponTrails = (GlobalEffectsOptions::OPTVAL)(effV3->bWeaponTrails);
-			CQEFFECTS.nFlatShipScale = 1;
-			CQEFFECTS.version = CQEFFECTSOPTIONS_VERSION;
-		}
-		else
-		{
-			CQEFFECTS.bBackground = GlobalEffectsOptions::on;
-			CQEFFECTS.bEmissiveTextures = GlobalEffectsOptions::on;
-			CQEFFECTS.bExpensiveTerrain = GlobalEffectsOptions::on;
-			CQEFFECTS.bFastRender = GlobalEffectsOptions::on;
-			CQEFFECTS.bHighBackground = GlobalEffectsOptions::off;
-			CQEFFECTS.bNoForceMaxLOD = GlobalEffectsOptions::on;
-			CQEFFECTS.bNoForceMinLOD = GlobalEffectsOptions::on;
-			CQEFFECTS.bTextures = GlobalEffectsOptions::on;
-			CQEFFECTS.bWeaponTrails = GlobalEffectsOptions::on;
-			CQEFFECTS.nFlatShipScale = 1;
-			CQEFFECTS.version = CQEFFECTSOPTIONS_VERSION;
-		}
-	}
-	else
-	{
-		CQEFFECTS.bBackground = GlobalEffectsOptions::on;
-		CQEFFECTS.bEmissiveTextures = GlobalEffectsOptions::on;
-		CQEFFECTS.bExpensiveTerrain = GlobalEffectsOptions::on;
-		CQEFFECTS.bFastRender = GlobalEffectsOptions::on;
-		CQEFFECTS.bHighBackground = GlobalEffectsOptions::off;
-		CQEFFECTS.bNoForceMaxLOD = GlobalEffectsOptions::on;
-		CQEFFECTS.bNoForceMinLOD = GlobalEffectsOptions::on;
-		CQEFFECTS.bTextures = GlobalEffectsOptions::on;
-		CQEFFECTS.bWeaponTrails = GlobalEffectsOptions::on;
-		CQEFFECTS.nFlatShipScale = 1;
-		CQEFFECTS.version = CQEFFECTSOPTIONS_VERSION;
-	}
+	LoadSourceEffectsOptions();
 
 }
 //--------------------------------------------------------------------------//

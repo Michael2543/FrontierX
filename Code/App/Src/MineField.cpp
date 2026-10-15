@@ -1203,9 +1203,25 @@ HANDLE Minefield::CreateArchetype (PARCHETYPE pArchetype, OBJCLASS objClass, voi
 		mArch->regAnimArchetype =0;
 	}
 
+#if !defined(_WIN32)
+	if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && !mArch->regAnimArchetype)
+	{
+		std::fprintf(stderr, "Native required MineField animation missing: %s\n", mArch->pData->regAnimation);
+		delete mArch;
+		return NULL;
+	}
+#endif
 	if (mArch->pData->blastType[0])
 	{
 		mArch->blastType = ARCHLIST->LoadArchetype(mArch->pData->blastType);
+#if !defined(_WIN32)
+		if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && !mArch->blastType)
+		{
+			std::fprintf(stderr, "Native required MineField blast missing: %s\n", mArch->pData->blastType);
+			delete mArch;
+			return NULL;
+		}
+#endif
 		CQASSERT(mArch->blastType);
 		ARCHLIST->AddRef(mArch->blastType, OBJREFNAME);
 	}

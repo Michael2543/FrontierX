@@ -17,7 +17,7 @@
 #endif
 
 #ifndef HEAPOBJ_H
-#include <Heapobj.h>
+#include <HeapObj.h>
 #endif
 
 #ifndef OBJSET_H
@@ -29,7 +29,7 @@
 #endif
 
 #ifndef MPART_H
-#include "Mpart.h"
+#include "MPart.h"
 #endif
 
 #ifndef MSCRIPT_H
@@ -288,6 +288,29 @@ struct ASSIGNMENT
 		supships = 0;
 	}
 };
+
+#if !defined(_WIN32)
+// Win32 stores this record including an ignored four-byte list link. Native
+// ownership pointers must never be written into that persistent slot.
+struct PLAYERAI_ASSIGNMENT_RECORD
+{
+	U32 unusedLink;
+	ASSIGNMENTTYPE type;
+	U32 maxUnits;
+	U32 targetID;
+	ObjSet set;
+	U32 systemID;
+	S32 militaryPower;
+	U32 uStallTime;
+	bool bHasAdmiral;
+	bool bFabricator;
+	U32 supships;
+};
+static_assert(sizeof(PLAYERAI_ASSIGNMENT_RECORD) == 40 + 4 * MAX_SELECTED_UNITS);
+static_assert(offsetof(PLAYERAI_ASSIGNMENT_RECORD, set) == 16);
+static_assert(offsetof(PLAYERAI_ASSIGNMENT_RECORD, supships) + sizeof(U32)
+	== sizeof(PLAYERAI_ASSIGNMENT_RECORD));
+#endif
 
 struct GridSquare
 {

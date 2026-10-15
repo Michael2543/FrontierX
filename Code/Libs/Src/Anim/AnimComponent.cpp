@@ -1725,6 +1725,37 @@ BOOL COMAPI DllMain(HINSTANCE hinstDLL,
 #if !defined(_WIN32)
 namespace FrontierX
 {
+bool CheckNativeAnimationNodeRelease()
+{
+    // ScriptObject::~ScriptObject reaches unregister_target_affector/free.
+    // Script-set loading alone does not allocate this list. Exercise its real
+    // release owner with borrowed channel data and a non-spatial event pose.
+    MotionList nodes;
+    auto *channel = new ChannelNode(nullptr);
+    nodes.link(channel);
+    nodes.link(new TransitionNode(1.0F));
+    Target eventTarget;
+    eventTarget.type = EVENT;
+    nodes.link(new PoseNode(eventTarget));
+    if (nodes.count() != 3) return false;
+    nodes.free(channel);
+    if (nodes.count() != 2) return false;
+    nodes.free();
+    if (nodes.count() != 0 || nodes.first()) return false;
+    struct NoUpdateChannel final : IVirtualChannel
+    {
+        int update(void *, U32, const Target &, float) override { std::abort(); }
+    } controller;
+    // Script::load allocates these concrete streams; Script::free deletes
+    // Object*. No simulation callback may execute during this ownership check.
+    Channel::Object *streams[] = {
+        new Channel::Object(&controller), new Channel::FloatStream(&controller),
+        new Channel::VectorStream(&controller), new Channel::QuatStream(&controller),
+        new Channel::FullStream(&controller)};
+    for (auto *stream : streams) delete stream;
+    return true;
+}
+
 bool RegisterNativeAnimation(ICOManager * manager)
 {
 	if (!manager) return false;

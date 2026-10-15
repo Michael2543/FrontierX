@@ -25,6 +25,7 @@
 #include <ICamera.h>
 #include <renderer.h>
 #include <HeapObj.h>
+#include <IUTFWriter.h>
 #include <ENGINE.H>
 #include <FrontierX/PlatformTime.h>
 #include "Include/NativeAppUiInput.h"
@@ -33,6 +34,11 @@
 #include <cmath>
 #include <cstring>
 #include <cstdint>
+#include <limits>
+#include <memory>
+#include <stdexcept>
+#include <unordered_set>
+#include <vector>
 #define __min(a,b) (std::min)((a),(b))
 #define __max(a,b) (std::max)((a),(b))
 #define min(a,b) ((a)<(b)?(a):(b))
@@ -385,6 +391,10 @@ struct DACOM_NO_VTABLE SysMap : public ISystemMap,
 	virtual void Save(struct IFileSystem * outFile);
 
 	virtual void Load(struct IFileSystem * inFile);
+#if !defined(_WIN32)
+    void LoadChecked(IFileSystem *inFile, bool requireRecord);
+    void OnNativeInterfaceMapChange(bool enable);
+#endif
 
 	virtual void InvalidateMap(U32 systemID);
 
@@ -1828,6 +1838,10 @@ void SysMap::PingSystem(U32 systemID, Vector position, U32 playerID)
 //
 U32 SysMap::CreateMissionAnim(U32 systemID, GRIDVECTOR position)
 {
+#if !defined(_WIN32)
+    if (systemID == 0 || systemID > MAX_SYSTEMS || lastAnimID == (std::numeric_limits<U32>::max)())
+        throw std::runtime_error("Native system-map alert has invalid system or exhausted identifiers");
+#endif
 	MissionAnim * newAnim = new MissionAnim;
 	newAnim->animID = lastAnimID;
 	++lastAnimID;
@@ -1875,8 +1889,120 @@ void SysMap::FlushMissionAnims()
 }
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+namespace
+{
+static_assert(sizeof(U32) == 4 && sizeof(GRIDVECTOR) == 2,
+              "Original system-map alert record widths must remain fixed");
+constexpr U32 NativeMapRecordBytes = 2U * sizeof(U32) + sizeof(GRIDVECTOR);
+
+void WriteNativeMapExact(IFileSystem *file, const void *bytes, U32 count)
+{
+    DWORD written = 0;
+    if (!file || !file->WriteFile(0, bytes, count, &written) || written != count)
+        throw std::runtime_error("Native system-map alert record write failed or was short");
+}
+void ReadNativeMapExact(IFileSystem *file, void *bytes, U32 count)
+{
+    DWORD read = 0;
+    if (!file || !file->ReadFile(0, bytes, count, &read) || read != count)
+        throw std::runtime_error("Native system-map alert record read failed or was short");
+}
+void SaveNativeSystemMapRecord(SysMap &map, IFileSystem *directory)
+{
+    if (!directory) throw std::runtime_error("Native system-map save requires its file owner");
+    U32 count = 0;
+    std::unordered_set<U32> identifiers;
+    for (const auto *anim = map.missionAnimList; anim; anim = anim->next)
+    {
+        if (anim->systemID == 0 || anim->systemID > MAX_SYSTEMS ||
+            anim->animID >= map.lastAnimID || !identifiers.insert(anim->animID).second ||
+            count == ((std::numeric_limits<U32>::max)() - 2U * sizeof(U32)) / NativeMapRecordBytes)
+            throw std::runtime_error("Native system-map save has invalid alert records");
+        ++count;
+    }
+    // Empty state writes the same source header with count zero. A prior
+    // alert file must not survive a later save with no active alerts.
+    directory->CreateDirectory("\\SysMapSaveload");
+    if (!directory->SetCurrentDirectory("\\SysMapSaveload"))
+        throw std::runtime_error("Native system-map save cannot enter its record directory");
+    DAFILEDESC descriptor("SysMap");
+    descriptor.lpImplementation = "DOS";
+    descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+    descriptor.dwShareMode = 0;
+    descriptor.dwCreationDistribution = CREATE_ALWAYS;
+    COMPTR<IFileSystem> file;
+    if (directory->CreateInstance(&descriptor, file) != GR_OK || !file)
+        throw std::runtime_error("Native system-map save cannot create its alert record");
+    WriteNativeMapExact(file, &map.lastAnimID, sizeof(U32));
+    WriteNativeMapExact(file, &count, sizeof(U32));
+    for (const auto *anim = map.missionAnimList; anim; anim = anim->next)
+    {
+        WriteNativeMapExact(file, &anim->animID, sizeof(U32));
+        WriteNativeMapExact(file, &anim->systemID, sizeof(U32));
+        WriteNativeMapExact(file, &anim->pos, sizeof(GRIDVECTOR));
+    }
+}
+}
+
+void SysMap::LoadChecked(IFileSystem *directory, bool requireRecord)
+{
+    if (!directory) throw std::runtime_error("Native system-map load requires its file owner");
+    if (!directory->SetCurrentDirectory("\\SysMapSaveload"))
+    {
+        if (requireRecord)
+            throw std::runtime_error("Native saved Terran mission is missing its system-map alert record");
+        // Original retail maps and accepted legacy training saves can have
+        // no persisted alerts. Their absence must clear a previous map state.
+        FlushMissionAnims();
+        lastAnimID = 0;
+        return;
+    }
+    DAFILEDESC descriptor("SysMap");
+    descriptor.lpImplementation = "DOS";
+    descriptor.dwDesiredAccess = GENERIC_READ;
+    descriptor.dwCreationDistribution = OPEN_EXISTING;
+    COMPTR<IFileSystem> file;
+    if (directory->CreateInstance(&descriptor, file) != GR_OK || !file)
+        throw std::runtime_error("Native system-map load cannot open its existing alert record");
+    DWORD high = 0;
+    const DWORD size = file->GetFileSize(0, &high);
+    if (high || size == (std::numeric_limits<DWORD>::max)() || size < 2U * sizeof(U32))
+        throw std::runtime_error("Native system-map alert record has invalid extent");
+    U32 nextIdentifier = 0, count = 0;
+    ReadNativeMapExact(file, &nextIdentifier, sizeof(U32));
+    ReadNativeMapExact(file, &count, sizeof(U32));
+    if ((size - 2U * sizeof(U32)) % NativeMapRecordBytes ||
+        count != (size - 2U * sizeof(U32)) / NativeMapRecordBytes)
+        throw std::runtime_error("Native system-map alert count does not match its exact record extent");
+    std::vector<std::unique_ptr<MissionAnim>> pending;
+    std::unordered_set<U32> identifiers;
+    MissionAnim *head = nullptr;
+    for (U32 record = 0; record < count; ++record)
+    {
+        auto anim = std::make_unique<MissionAnim>();
+        ReadNativeMapExact(file, &anim->animID, sizeof(U32));
+        ReadNativeMapExact(file, &anim->systemID, sizeof(U32));
+        ReadNativeMapExact(file, &anim->pos, sizeof(GRIDVECTOR));
+        if (anim->systemID == 0 || anim->systemID > MAX_SYSTEMS ||
+            anim->animID >= nextIdentifier || !identifiers.insert(anim->animID).second)
+            throw std::runtime_error("Native system-map alert record has invalid system or identifier");
+        // Retain the original loader's prepending order, not a normalized sort.
+        anim->next = head;
+        head = anim.get();
+        pending.push_back(std::move(anim));
+    }
+    // No live state changes until all records have been read and validated.
+    FlushMissionAnims();
+    missionAnimList = head;
+    lastAnimID = nextIdentifier;
+    for (auto &anim : pending) anim.release();
+}
+#endif
+
 void SysMap::Save(struct IFileSystem * outFile)
 {
+#if defined(_WIN32)
 	if(missionAnimList)
 	{
 		COMPTR<IFileSystem> file;
@@ -1918,11 +2044,15 @@ void SysMap::Save(struct IFileSystem * outFile)
 			anim = anim->next;
 		}
 	}
+#else
+    SaveNativeSystemMapRecord(*this, outFile);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void SysMap::Load(struct IFileSystem * inFile)
 {
+#if defined(_WIN32)
 	MT_SECTOR_SAVELOAD load;
 
 	DAFILEDESC fdesc = "SysMap";
@@ -1950,7 +2080,196 @@ void SysMap::Load(struct IFileSystem * inFile)
 		file->ReadFile(0,&(anim->systemID),sizeof(U32),&dwRead);
 		file->ReadFile(0,&(anim->pos),sizeof(GRIDVECTOR),&dwRead);
 	}
+#else
+    LoadChecked(inFile, false);
+#endif
 }
+#if !defined(_WIN32)
+namespace FrontierX
+{
+void LoadNativeSystemMap(ISystemMap *interface, IFileSystem *directory, bool requireRecord)
+{
+    auto *owner = dynamic_cast<SysMap *>(interface);
+    if (!owner) throw std::runtime_error("Native system-map load requires its production owner");
+    owner->LoadChecked(directory, requireRecord);
+}
+
+// TM1 StartAlertAnim(Beacon) reaches this owner. Previously no Mission save
+// caller wrote its records. The existing shell fixture exercises the actual
+// source list, filesystem, exact writes/reads and failed-load ownership;
+// generated records protect that integration without injecting mission goals.
+bool CheckNativeSystemMapPersistence(IFileSystem *directory, IUserDefaults *defaults)
+{
+    if (!directory || !defaults) return false;
+    IFileSystem *parent = directory;
+    DAFILEDESC archiveDescriptor("MapRegression.mission");
+    archiveDescriptor.lpImplementation = "UTF";
+    archiveDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+    archiveDescriptor.dwCreationDistribution = CREATE_ALWAYS;
+    COMPTR<IFileSystem> archive;
+    if (parent->CreateInstance(&archiveDescriptor, archive) != GR_OK || !archive)
+    {
+        std::fputs("Native map regression cannot create its scoped UTF archive\n", stderr);
+        return false;
+    }
+    directory = archive;
+
+    struct DefaultsScope
+    {
+        IUserDefaults *previous;
+        explicit DefaultsScope(IUserDefaults *value) : previous(DEFAULTS) { DEFAULTS = value; }
+        ~DefaultsScope() { DEFAULTS = previous; }
+    } defaultsScope(defaults);
+    auto *owner = new DAComponent<SysMap>;
+    struct OwnerScope
+    {
+        DAComponent<SysMap> *owner;
+        ~OwnerScope() { owner->Release(); }
+    } ownerScope{owner};
+    const auto fail = [](const char *step) {
+        std::fprintf(stderr, "Native source system-map persistence predicate failed: %s\n", step);
+        return false;
+    };
+    try
+    {
+        if (directory->SetCurrentDirectory("\\SysMapSaveload"))
+            throw std::runtime_error("Native map regression requires an empty scoped directory");
+        const auto openRecord = [directory](U32 access, U32 disposition) {
+            if (!directory->SetCurrentDirectory("\\SysMapSaveload"))
+                throw std::runtime_error("Native map regression cannot enter its record directory");
+            DAFILEDESC descriptor("SysMap");
+            descriptor.lpImplementation = "DOS";
+            descriptor.dwDesiredAccess = access;
+            descriptor.dwCreationDistribution = disposition;
+            COMPTR<IFileSystem> file;
+            if (directory->CreateInstance(&descriptor, file) != GR_OK || !file)
+                throw std::runtime_error("Native map regression cannot open its generated record");
+            return file;
+        };
+        const auto expectLoadFailure = [owner, directory]() {
+            MissionAnim *previous = owner->missionAnimList;
+            const U32 nextIdentifier = owner->lastAnimID;
+            bool rejected = false;
+            try { LoadNativeSystemMap(owner, directory, true); }
+            catch (const std::runtime_error &error)
+            {
+                const std::string message(error.what());
+                if (message.find("Native system-map") != 0 &&
+                    message != "Native saved Terran mission is missing its system-map alert record") throw;
+                rejected = true;
+            }
+            return rejected && owner->missionAnimList == previous && owner->lastAnimID == nextIdentifier;
+        };
+        const GRIDVECTOR firstPosition = GRIDVECTOR::Create(Vector(12500, 21250, 0));
+        const GRIDVECTOR secondPosition = GRIDVECTOR::Create(Vector(37500, 21250, 0));
+        const U32 first = owner->CreateMissionAnim(2, firstPosition);
+        const U32 second = owner->CreateMissionAnim(3, secondPosition);
+        owner->Save(directory);
+        {
+            auto file = openRecord(GENERIC_READ, OPEN_EXISTING);
+            if (file->GetFileSize() != 8U + 2U * NativeMapRecordBytes) return fail("canonical saved extent");
+            bool rejected = false;
+            try { WriteNativeMapExact(file, &first, sizeof(first)); }
+            catch (const std::runtime_error &error)
+            {
+                if (std::string(error.what()).find("Native system-map alert record write") != 0) throw;
+                rejected = true;
+            }
+            if (!rejected || file->GetFileSize() != 8U + 2U * NativeMapRecordBytes) return fail("read-only write rejection and unchanged extent");
+        }
+        COMPTR<IUTFWriter> writer;
+        if (archive->QueryInterface("IUTFWriter", writer) != GR_OK || !writer)
+            return fail("actual UTF writer binding");
+        writer->Flush();
+        writer = 0;
+        DAFILEDESC readerDescriptor("MapRegression.mission");
+        readerDescriptor.lpImplementation = "UTF";
+        readerDescriptor.dwDesiredAccess = GENERIC_READ;
+        readerDescriptor.dwCreationDistribution = OPEN_EXISTING;
+        COMPTR<IFileSystem> persisted;
+        if (parent->CreateInstance(&readerDescriptor, persisted) != GR_OK || !persisted)
+            return fail("physical saved UTF archive reopen");
+        owner->FlushMissionAnims();
+        LoadNativeSystemMap(owner, persisted, true);
+        persisted = 0;
+        const auto *loaded = owner->missionAnimList;
+        if (!loaded || loaded->animID != first || loaded->systemID != 2 || loaded->pos != firstPosition ||
+            !loaded->next || loaded->next->animID != second || loaded->next->systemID != 3 ||
+            loaded->next->pos != secondPosition || loaded->next->next || owner->lastAnimID != second + 1U)
+            return fail("restored alert values/order/counter");
+        MissionAnim *restoredHead = owner->missionAnimList;
+        owner->OnNativeInterfaceMapChange(true);
+        if (owner->missionAnimList != restoredHead || owner->lastAnimID != second + 1U)
+            return fail("resource initialization preserves restored alerts");
+        if (owner->CreateMissionAnim(4, firstPosition) != second + 1U) return fail("next identifier");
+        const auto corruptRecord = [&](U32 count, bool writeRecords, bool duplicate, U32 system) {
+            auto file = openRecord(GENERIC_READ | GENERIC_WRITE, CREATE_ALWAYS);
+            const U32 nextIdentifier = owner->lastAnimID;
+            WriteNativeMapExact(file, &nextIdentifier, sizeof(U32));
+            WriteNativeMapExact(file, &count, sizeof(U32));
+            if (writeRecords)
+                for (U32 record = 0; record < count; ++record)
+                {
+                    const U32 identifier = duplicate ? first : record;
+                    WriteNativeMapExact(file, &identifier, sizeof(U32));
+                    WriteNativeMapExact(file, &system, sizeof(U32));
+                    WriteNativeMapExact(file, &firstPosition, sizeof(GRIDVECTOR));
+                }
+        };
+        corruptRecord(1, false, false, 2); // Truncated actual record.
+        if (!expectLoadFailure()) return fail("truncated transactional load");
+        corruptRecord((std::numeric_limits<U32>::max)(), false, false, 2);
+        if (!expectLoadFailure()) return fail("huge count transactional load");
+        corruptRecord(2, true, true, 2);
+        if (!expectLoadFailure()) return fail("duplicate identifier transactional load");
+        corruptRecord(1, true, false, 0);
+        if (!expectLoadFailure()) return fail("invalid system transactional load");
+        owner->FlushMissionAnims();
+        const U32 emptyNext = owner->lastAnimID;
+        owner->Save(directory); // Canonical empty state replaces old alerts.
+        owner->CreateMissionAnim(2, firstPosition);
+        LoadNativeSystemMap(owner, directory, true);
+        if (owner->missionAnimList || owner->lastAnimID != emptyNext) return fail("empty canonical state replaces alerts");
+        if (!directory->SetCurrentDirectory("\\") ||
+            !directory->DeleteFile("\\SysMapSaveload\\SysMap") ||
+            !directory->RemoveDirectory("\\SysMapSaveload")) return fail("canonical record cleanup");
+        owner->CreateMissionAnim(2, firstPosition);
+        if (!expectLoadFailure()) return fail("required missing record rejected"); // Required state cannot be absent.
+        LoadNativeSystemMap(owner, directory, false); // Legitimate original map absence.
+        if (owner->missionAnimList || owner->lastAnimID != 0) return fail("optional original absence clears alerts");
+        owner->CreateMissionAnim(2, firstPosition);
+        owner->Save(directory);
+        if (!directory->DeleteFile("SysMap") || !directory->CreateDirectory("SysMap")) return fail("save obstruction setup");
+        bool saveRejected = false;
+        try { owner->Save(directory); }
+        catch (const std::runtime_error &error)
+        {
+            const std::string message(error.what());
+            if (message != "Native system-map save cannot create its alert record" &&
+                message != "Native system-map alert record write failed or was short") throw;
+            saveRejected = true;
+        }
+        if (!saveRejected || !owner->missionAnimList ||
+            !directory->SetCurrentDirectory("\\") ||
+            !directory->RemoveDirectory("\\SysMapSaveload\\SysMap") ||
+            !directory->RemoveDirectory("\\SysMapSaveload")) return fail("save failure/state retention/cleanup");
+        owner->OnNativeInterfaceMapChange(false);
+        if (owner->missionAnimList || owner->lastAnimID != 0)
+            return fail("interface teardown clears alerts and next identifier");
+        archive = 0;
+        if (!parent->DeleteFile("MapRegression.mission"))
+            return fail("scoped UTF archive cleanup");
+        return true;
+    }
+    catch (const std::exception &error)
+    {
+        std::fprintf(stderr, "Native source system-map persistence fixture failed: %s\n", error.what());
+        return false;
+    }
+}
+}
+#endif
+
 //--------------------------------------------------------------------------//
 //
 void SysMap::InvalidateMap(U32 systemID)
@@ -3318,8 +3637,24 @@ void SysMap::destroyGDIObjects()
 {
 }
 
+#if !defined(_WIN32)
+void SysMap::OnNativeInterfaceMapChange(bool enable)
+{
+    if (!enable)
+    {
+        FlushMissionAnims();
+        lastAnimID = 0;
+    }
+    // Mission restores saved records before loading the interface. Texture
+    // creation must preserve that restored state; close tears it down first.
+}
+#endif
+
 void SysMap::loadTextures (bool bEnable)
 {
+#if !defined(_WIN32)
+    OnNativeInterfaceMapChange(bEnable);
+#endif
 	if (bEnable)
 	{	
 		U32 i;
@@ -3332,12 +3667,14 @@ void SysMap::loadTextures (bool bEnable)
 				delete bub;
 			}
 		}
+#if defined(_WIN32)
 		while(missionAnimList)
 		{
 			MissionAnim * delMe = missionAnimList;
 			missionAnimList = missionAnimList->next;
 			delete delMe;
 		}
+#endif
 		waypointFrame = 0;
 		bInMapRender = false;
 		backTex = TMANAGER->CreateTextureFromFile("systemmap_bg.tga", TEXTURESDIR, DA::TGA, PF_4CC_DAOT);		// create opaque texture

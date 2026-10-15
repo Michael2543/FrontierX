@@ -1,5 +1,7 @@
 """Process tests for the native SDL shell using synthetic empty data directories."""
 import os
+import ctypes
+import ctypes.util
 from pathlib import Path
 import subprocess
 import struct
@@ -14,6 +16,35 @@ EVENT_MODULE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else ''
 HOTKEY_TABLE = str(Path(sys.argv.pop(1)).resolve()) if len(sys.argv) > 1 else ''
 GPU_ENABLED = sys.argv.pop(1) == '1' if len(sys.argv) > 1 else False
 FONT_FILE = sys.argv.pop(1) if len(sys.argv) > 1 else ''
+VIDEO_ENABLED = sys.argv.pop(1) == '1' if len(sys.argv) > 1 else False
+
+
+def describe_external_face(filename):
+    # FreeType is already required by the optional target. Read its documented
+    # face prefix; no font copying, substitute face or additional Python package.
+    class FacePrefix(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_long) for name in
+                    ('num_faces', 'face_index', 'face_flags', 'style_flags', 'num_glyphs')] + [
+                    ('family_name', ctypes.c_char_p), ('style_name', ctypes.c_char_p)]
+    Face = ctypes.POINTER(FacePrefix)
+    library = ctypes.CDLL(ctypes.util.find_library('freetype'))
+    library.FT_Init_FreeType.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+    library.FT_New_Face.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long,
+                                  ctypes.POINTER(Face)]
+    library.FT_Done_Face.argtypes = [Face]
+    library.FT_Done_FreeType.argtypes = [ctypes.c_void_p]
+    context, face = ctypes.c_void_p(), Face()
+    if library.FT_Init_FreeType(ctypes.byref(context)):
+        raise RuntimeError('external fixture FreeType initialization failed')
+    try:
+        if library.FT_New_Face(context, os.fsencode(filename), 0, ctypes.byref(face)):
+            raise RuntimeError('external fixture face cannot be read')
+        try:
+            return face.contents.family_name.decode('utf-8'), bool(face.contents.style_flags & 2)
+        finally:
+            library.FT_Done_Face(face)
+    finally:
+        library.FT_Done_FreeType(context)
 
 
 class NativeShellTests(unittest.TestCase):
@@ -31,6 +62,9 @@ class NativeShellTests(unittest.TestCase):
             sound.setsampwidth(2)
             sound.setframerate(22050)
             sound.writeframes(b'\0\0' * 220)
+        # Original LFParser framing: header, numeric value, previous-frame marker.
+        (self.data / 'SFX/interface1.txt').write_bytes(
+            b'Frame, phoneme\r\n0, 3\r\n1, <\r\n2, 12\r\n')
         (self.data / 'Profiles/native-smoke.ini').write_text(
             '[NativeSmoke]\nValue = ready\n')
 
@@ -152,6 +186,26 @@ class NativeShellTests(unittest.TestCase):
                                     '--smoke-ms', '1', '--hidden')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             if FONT_FILE:
+                family, bold = describe_external_face(FONT_FILE)
+                weight = 700 if bold else 400
+                good = f'{family},{weight}={FONT_FILE}\n'
+                wrong_family = 'Arial' if ''.join(family.split()).casefold() != 'arial' else 'Arial Narrow'
+                mapping = self.root / 'font-map.txt'
+                for contents, error in [
+                    ('Arial,400 font.ttf\n', 'Expected font mapping Family,weight=filename'),
+                    ('Arial,0=font.ttf\n', 'Invalid font mapping family or weight'),
+                    (good + good, 'Duplicate font family/weight mapping'),
+                    (f'{wrong_family},{weight}={FONT_FILE}\n',
+                     'Mapped face does not match the original font family'),
+                ]:
+                    mapping.write_text(contents)
+                    rejected = self.run_shell('--data-root', self.data,
+                        '--system-profile', profile, '--mission-source', 'Sol_Train.dmission',
+                        '--save-root', save_root, '--skip-notification-cue', '--sfx-smoke',
+                        '--font-smoke', FONT_FILE, '--ui-font-map', mapping,
+                        '--smoke-ms', '1', '--hidden')
+                    self.assertEqual(rejected.returncode, 6, rejected.stdout + rejected.stderr)
+                    self.assertIn('Native external font mapping failed: ' + error, rejected.stderr)
                 self.assertIn('Native source teletype counted string, pause, expiry and flush checked', result.stdout)
                 self.assertIn('subtitle wrapping and release checked', result.stdout)
                 self.assertIn('status/hint/scrolling lifecycle checked', result.stdout)
@@ -163,6 +217,17 @@ class NativeShellTests(unittest.TestCase):
             self.assertIn('Native App parser schema loaded from embedded data.i',
                           result.stdout)
             self.assertIn('Native App mission source opened through SPMAPDIR', result.stdout)
+            if GPU_ENABLED:
+                self.assertIn('Native production player AI save lifecycle checked', result.stdout)
+                self.assertIn('Native source stateless Ping restart validated against real launcher owner',
+                              result.stdout)
+                self.assertIn('Native source Gunboat failed launcher load propagated', result.stdout)
+                self.assertIn('Native source system-map mission animations saved and restored',
+                              result.stdout)
+                self.assertIn('Native source mission records correlated and invalid records rejected',
+                              result.stdout)
+                self.assertIn('Native source mission ability records saved and invalid records rejected',
+                              result.stdout)
             self.assertIn('Native App mission IStreamer initialized with Music and SFX sources',
                           result.stdout)
             self.assertIn('Native App source string resources initialized', result.stdout)
@@ -179,14 +244,21 @@ class NativeShellTests(unittest.TestCase):
             self.assertIn('Native mission loading: 5%', result.stderr)
             self.assertIn('Native App MusicManager initialized', result.stdout)
             self.assertIn('Native ISFX BUTTONPRESS1 preload/open/play/stop checked', result.stdout)
+            self.assertIn('Native source SFX pool/cache ownership and RNG consumption checked',
+                          result.stdout)
+            self.assertIn('Native source builder-drone arrays released by their allocating owners',
+                          result.stdout)
             self.assertIn('Native mission sound retains EOF until actual completion and owner cleanup checked',
                           result.stdout)
+            self.assertIn('Native unit communication unavailable: frontierx-missing-communication.wav; failed opens 1; playback ID 0 (failure)',
+                          result.stderr)
             if GPU_ENABLED:
                 self.assertIn('Native operation storage alignment/copy/load checked', result.stdout)
                 self.assertIn('Native objective storage compaction/state checked', result.stdout)
             self.assertIn('Native App PROFILEDIR CreateProfileParser checked', result.stdout)
             self.assertIn('mission not started', result.stdout)
             (self.data / 'SFX/interface1.wav').unlink()
+            (self.data / 'SFX/interface1.txt').unlink()
             (self.data / 'SFX').rmdir()
             result = self.run_shell('--data-root', self.data,
                                     '--system-profile', profile,
@@ -295,9 +367,16 @@ class NativeShellTests(unittest.TestCase):
                 ('--game-types',), ('--game-types', 'types.db'),
                 ('--animation-object',), ('--animation-object', 'Forger'),
                 ('--mesh-object',), ('--mesh-object', '../Forger'),
+                ('--movie-source',), ('--movie-source', 'movie.mpg'),
+                ('--movie-source', 'movie.mpg', '--skip-movies'),
+                ('--movie-source', 'movie.mpg', '--mission-start', '--mission-campaign'),
+                ('--movie-source', 'movie.mpg', '--mission-start', '--mission-briefing'),
+                ('--movie-source', 'movie.mpg', '--mission-start', '--smoke-ms', '1'),
                 ('--mission-source',), ('--mission-source', '../Sol_Train.dmission'),
                 ('--mission-source', 'Sol_Train.mission'),
-                ('--mission-start',),
+                ('--mission-start',), ('--no-frame-limit',),
+                ('--no-frame-limit', '--no-frame-limit'), ('--frame-stats',),
+                ('--frame-stats', '--frame-stats'),
                 ('--mission-briefing',),
                 ('--mission-briefing', '--mission-briefing'),
                 ('--mission-briefing', '--mission-start', '--hidden'),
@@ -314,6 +393,14 @@ class NativeShellTests(unittest.TestCase):
                 ('--render-smoke', 'vertex.spv'),
                 ('--render-smoke', 'vertex.spv', '--hidden'), ('--unknown',)]:
             self.assertEqual(self.run_shell(*arguments).returncode, 1, arguments)
+        mesh_profile = self.root / 'mesh-path.ini'
+        mesh_profile.write_text('[System]\nIEventSystem\nIWindowManager = WindowManager\n'
+                                '[Engine]\nIAnimation\n')
+        for path in ['/Forger', 'planets/../Forger', 'planets//Forger',
+                     'planets/./Forger', 'planets/Forger/', 'C:Forger', r'planets\Forger']:
+            result = self.run_shell('--data-root', self.data, '--system-profile', mesh_profile,
+                                    '--mesh-object', path, '--smoke-ms', '1', '--hidden')
+            self.assertEqual(result.returncode, 1, (path, result.stdout, result.stderr))
         for arguments in [
                 ('--game-scene',),
                 ('--game-scene', 'materials.utf', 'mesh.utf', 'v.spv',
@@ -347,10 +434,21 @@ class NativeShellTests(unittest.TestCase):
             return
         self.assertIn('Native animation script loaded; scripts: 1; duration: 1',
                       result.stdout)
+        self.assertIn('Native source animation node kinds released with allocated types',
+                      result.stdout)
+        self.assertIn('Native source animation channel stream types released polymorphically',
+                      result.stdout)
         result = self.run_shell('--data-root', self.data, '--system-profile', profile,
                                 '--mesh-object', 'Forger', '--smoke-ms', '1', '--hidden')
         self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
         self.assertIn('Native mesh archetype load failed', result.stderr)
+        (self.data / 'Objects/planets/Forger').mkdir(parents=True)
+        nested = self.run_shell('--data-root', self.data, '--system-profile', profile,
+                                '--mesh-object', 'planets/Forger', '--smoke-ms', '1', '--hidden')
+        self.assertEqual(nested.returncode, 6, nested.stdout + nested.stderr)
+        self.assertIn('Native mesh archetype load failed', nested.stderr)
+        # Accepted relative components still reach the genuine owner and reject
+        # this animation-only fixture as a mesh; no model-load success is faked.
         project_root = Path(__file__).resolve().parents[2]
         result = self.run_shell(
             '--data-root', self.data, '--material-root', project_root / 'Data/mat',
@@ -559,6 +657,11 @@ class NativeShellTests(unittest.TestCase):
                 '[System]\nIEventSystem\n' + component + '\nIWindowManager\n[Engine]\n')
             result = self.run_shell('--data-root', self.data, '--system-profile', profile,
                                     '--smoke-ms', '1', '--hidden')
+            if VIDEO_ENABLED:
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn(component + ' returned [OK]', result.stdout + result.stderr)
+                self.assertIn('Native shell opened; video driver: dummy', result.stdout)
+                continue
             self.assertEqual(result.returncode, 3)
             self.assertIn(component + ' returned [FAILED]', result.stdout + result.stderr)
             self.assertNotIn('IWindowManager returned [OK]', result.stdout + result.stderr)

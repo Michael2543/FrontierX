@@ -19,8 +19,14 @@ bool OpenNativeUtfFileSystemWithParent(const std::filesystem::path & path,
                                       std::string & error);
 // Read-only physical directory views for source material/shader data. Child UTF
 // archives use the same nested factory contract; traversal outside the root fails.
+enum class NativePhysicalFileLimit : U32
+{
+    Standard = 64U * 1024U * 1024U,
+    Movies = 256U * 1024U * 1024U
+};
 bool OpenNativeDirectoryFileSystem(const std::filesystem::path & path,
-                                   IFileSystem ** output, std::string & error);
+                                   IFileSystem ** output, std::string & error,
+                                   NativePhysicalFileLimit limit = NativePhysicalFileLimit::Standard);
 }
 
 #endif

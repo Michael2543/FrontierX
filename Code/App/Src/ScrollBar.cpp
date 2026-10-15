@@ -11,8 +11,24 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "Include/NativeAppImage.h"
+#include "UserDefaults.h"
+#include "MyVertex.h"
+#include <VFX.H>
+#include <algorithm>
+#include <cmath>
+#include <cwchar>
+using namespace FrontierX::NativeAppUi;
+#define __min(a,b) (std::min)((a),(b))
+#define __max(a,b) (std::max)((a),(b))
+#endif
 
 #include "IScrollBar.h"
 #include "IButton2.h"
@@ -23,7 +39,7 @@
 #include "DrawAgent.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <DScrollBar.h>
 
 #include <stdlib.h>
@@ -455,13 +471,19 @@ void ScrollBar::SetViewRange (S32 viewSize)		// sets the view range
 //
 GENRESULT ScrollBar::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+	#if defined(_WIN32)
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==false && bActive == true)
 	switch (message)
 	{
 	case CQE_BUTTON:
-		if (((int)param) == TOP_LEFT_SCROLL_BUTTON_ID)
+		if ((static_cast<int>(reinterpret_cast<std::uintptr_t>(param))) == TOP_LEFT_SCROLL_BUTTON_ID)
 		{
 			if (!bPostMessageBlocked)
 			{
@@ -470,7 +492,7 @@ GENRESULT ScrollBar::Notify (U32 message, void *param)
 			}
 			return GR_GENERIC;
 		}
-		else if (((int)param) == BOTTOM_RIGHT_SCROLL_BUTTON_ID)
+		else if ((static_cast<int>(reinterpret_cast<std::uintptr_t>(param))) == BOTTOM_RIGHT_SCROLL_BUTTON_ID)
 		{
 			if (!bPostMessageBlocked)
 			{
@@ -483,7 +505,7 @@ GENRESULT ScrollBar::Notify (U32 message, void *param)
 
 	case CQE_UPDATE:
 		if(bPagingActive)
-			doPagingRepeat(((U32)param) >> 10);
+			doPagingRepeat((static_cast<U32>(reinterpret_cast<std::uintptr_t>(param))) >> 10);
 		else
 			leftOverTime = 0;
 		bPostMessageBlocked = false;
@@ -987,11 +1009,16 @@ HANDLE ScrollBarFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objC
 		//
 		if (data->shapeFile[0])
 		{
+#if defined(_WIN32)
 			BEGIN_MAPPING(INTERFACEDIR, data->shapeFile);
 				int i;
 				for (i = 0; i < MAX_SCROLLBAR_SHAPES; i++)
 					CreateDrawAgent((VFX_SHAPETABLE *) pImage, i, result->shapes[i]);
 			END_MAPPING(INTERFACEDIR);
+#else
+            for (int i = 0; i < MAX_SCROLLBAR_SHAPES; ++i)
+                CreateDrawAgent(data->shapeFile, INTERFACEDIR, DA::UNKTYPE, i, result->shapes[i]);
+#endif
 		}
 
 		result->bHorizontal = data->bHorizontal;
@@ -1029,7 +1056,11 @@ struct _ScrollBarFactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<ScrollBarFactory>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&factory);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

@@ -127,8 +127,8 @@ public:
         renderState_ = {};
         stateId_ = 0U;
         textureStage_ = {};
-        samplerState_ = {};
-        textureHandle_ = 0U;
+        samplerStates_ = {};
+        textureHandles_ = {};
         modelview_ = {{1.0F, 0.0F, 0.0F, 0.0F,
                        0.0F, 1.0F, 0.0F, 0.0F,
                        0.0F, 0.0F, 1.0F, 0.0F}};
@@ -281,16 +281,21 @@ public:
         }
         if (state == D3DRS_DIFFUSEMATERIALSOURCE)
             return value == D3DMCS_COLOR1 ? GR_OK : GR_NOT_IMPLEMENTED;
-        if (state == D3DRS_ALPHATESTENABLE)
-        {
-            if (!IsRenderBoolean(value)) return GR_INVALID_PARMS;
-            return value == 0U ? GR_OK : GR_NOT_IMPLEMENTED;
-        }
-        if (state == D3DRS_ALPHAREF)
-            return value <= 255U ? GR_OK : GR_INVALID_PARMS;
         RenderStateSnapshot candidate = renderState_;
         switch (state)
         {
+        case D3DRS_ALPHATESTENABLE:
+            if (!IsRenderBoolean(value)) return GR_INVALID_PARMS;
+            candidate.alphaTestEnabled = value;
+            break;
+        case D3DRS_ALPHAFUNC:
+            if (!IsRenderDepthFunction(value)) return GR_INVALID_PARMS;
+            candidate.alphaFunction = value;
+            break;
+        case D3DRS_ALPHAREF:
+            if (value > 255U) return GR_INVALID_PARMS;
+            candidate.alphaReference = value;
+            break;
         case D3DRS_ZENABLE:
             if (!IsRenderBoolean(value)) return GR_INVALID_PARMS;
             candidate.depthEnabled = value;
@@ -353,6 +358,9 @@ public:
         }
         switch (state)
         {
+        case D3DRS_ALPHATESTENABLE: *value = renderState_.alphaTestEnabled; break;
+        case D3DRS_ALPHAFUNC: *value = renderState_.alphaFunction; break;
+        case D3DRS_ALPHAREF: *value = renderState_.alphaReference; break;
         case D3DRS_COLORVERTEX: *value = 1U; break;
         case D3DRS_LIGHTING: *value = 0U; break;
         case D3DRS_DIFFUSEMATERIALSOURCE: *value = D3DMCS_COLOR1; break;
@@ -373,44 +381,46 @@ public:
         U32 stage, D3DTEXTURESTAGESTATETYPE state, U32 value) override
     {
         if (!textureStageCallback_) return GR_NOT_IMPLEMENTED;
-        if (stage >= 1U && stage <= 3U)
+        if (stage >= 2U && stage <= 7U)
         {
             return (state == D3DTSS_COLOROP || state == D3DTSS_ALPHAOP) &&
                            value == D3DTOP_DISABLE
                        ? GR_OK : GR_NOT_IMPLEMENTED;
         }
-        if (stage != 0U) return GR_NOT_IMPLEMENTED;
+        if (stage > 1U) return GR_NOT_IMPLEMENTED;
 
         TextureStageSnapshot candidate = textureStage_;
+        TextureStageValues & selected = stage == 0U ?
+            static_cast<TextureStageValues &>(candidate) : candidate.second;
         switch (state)
         {
         case D3DTSS_COLOROP:
             if (!IsTextureStageOperation(value)) return GR_NOT_IMPLEMENTED;
-            candidate.colorOperation = value;
+            selected.colorOperation = value;
             break;
         case D3DTSS_COLORARG1:
             if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
-            candidate.colorArgument1 = value;
+            selected.colorArgument1 = value;
             break;
         case D3DTSS_COLORARG2:
             if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
-            candidate.colorArgument2 = value;
+            selected.colorArgument2 = value;
             break;
         case D3DTSS_ALPHAOP:
             if (!IsTextureStageOperation(value)) return GR_NOT_IMPLEMENTED;
-            candidate.alphaOperation = value;
+            selected.alphaOperation = value;
             break;
         case D3DTSS_ALPHAARG1:
             if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
-            candidate.alphaArgument1 = value;
+            selected.alphaArgument1 = value;
             break;
         case D3DTSS_ALPHAARG2:
             if (!IsTextureStageArgument(value)) return GR_NOT_IMPLEMENTED;
-            candidate.alphaArgument2 = value;
+            selected.alphaArgument2 = value;
             break;
         case D3DTSS_TEXCOORDINDEX:
             if (value > 1U) return GR_NOT_IMPLEMENTED;
-            candidate.textureCoordinateIndex = value;
+            selected.textureCoordinateIndex = value;
             break;
         default:
             return GR_NOT_IMPLEMENTED;
@@ -424,23 +434,25 @@ public:
     {
         if (!textureStageCallback_) return GR_NOT_IMPLEMENTED;
         if (!value) return GR_INVALID_PARMS;
-        if (stage >= 1U && stage <= 3U)
+        if (stage >= 2U && stage <= 7U)
         {
             if (state != D3DTSS_COLOROP && state != D3DTSS_ALPHAOP)
                 return GR_NOT_IMPLEMENTED;
             *value = D3DTOP_DISABLE;
             return GR_OK;
         }
-        if (stage != 0U) return GR_NOT_IMPLEMENTED;
+        if (stage > 1U) return GR_NOT_IMPLEMENTED;
+        const TextureStageValues & selected = stage == 0U ?
+            static_cast<const TextureStageValues &>(textureStage_) : textureStage_.second;
         switch (state)
         {
-        case D3DTSS_COLOROP: *value = textureStage_.colorOperation; break;
-        case D3DTSS_COLORARG1: *value = textureStage_.colorArgument1; break;
-        case D3DTSS_COLORARG2: *value = textureStage_.colorArgument2; break;
-        case D3DTSS_ALPHAOP: *value = textureStage_.alphaOperation; break;
-        case D3DTSS_ALPHAARG1: *value = textureStage_.alphaArgument1; break;
-        case D3DTSS_ALPHAARG2: *value = textureStage_.alphaArgument2; break;
-        case D3DTSS_TEXCOORDINDEX: *value = textureStage_.textureCoordinateIndex; break;
+        case D3DTSS_COLOROP: *value = selected.colorOperation; break;
+        case D3DTSS_COLORARG1: *value = selected.colorArgument1; break;
+        case D3DTSS_COLORARG2: *value = selected.colorArgument2; break;
+        case D3DTSS_ALPHAOP: *value = selected.alphaOperation; break;
+        case D3DTSS_ALPHAARG1: *value = selected.alphaArgument1; break;
+        case D3DTSS_ALPHAARG2: *value = selected.alphaArgument2; break;
+        case D3DTSS_TEXCOORDINDEX: *value = selected.textureCoordinateIndex; break;
         default: return GR_NOT_IMPLEMENTED;
         }
         return GR_OK;
@@ -448,8 +460,9 @@ public:
     GENRESULT COMAPI set_sampler_state(
         U32 stage, D3DSAMPLERSTATETYPE state, U32 value) override
     {
-        if (!samplerCallback_ || stage != 0U) return GR_NOT_IMPLEMENTED;
-        SamplerStateSnapshot candidate = samplerState_;
+        if (!samplerCallback_ || stage > 1U) return GR_NOT_IMPLEMENTED;
+        SamplerStateSnapshot candidate = samplerStates_[stage];
+        candidate.stage = stage;
         switch (state)
         {
         case D3DSAMP_ADDRESSU:
@@ -481,48 +494,68 @@ public:
             return GR_NOT_IMPLEMENTED;
         }
         const GENRESULT result = samplerCallback_(context_, candidate);
-        if (result == GR_OK) samplerState_ = candidate;
+        if (result == GR_OK) samplerStates_[stage] = candidate;
         return result;
     }
     GENRESULT COMAPI get_sampler_state(
         U32 stage, D3DSAMPLERSTATETYPE state, U32 * value) override
     {
-        if (!samplerCallback_ || stage != 0U) return GR_NOT_IMPLEMENTED;
+        if (!samplerCallback_ || stage > 1U) return GR_NOT_IMPLEMENTED;
         if (!value) return GR_INVALID_PARMS;
         switch (state)
         {
-        case D3DSAMP_ADDRESSU: *value = samplerState_.addressU; break;
-        case D3DSAMP_ADDRESSV: *value = samplerState_.addressV; break;
-        case D3DSAMP_MINFILTER: *value = samplerState_.minFilter; break;
-        case D3DSAMP_MAGFILTER: *value = samplerState_.magFilter; break;
-        case D3DSAMP_MIPFILTER: *value = samplerState_.mipFilter; break;
+        case D3DSAMP_ADDRESSU: *value = samplerStates_[stage].addressU; break;
+        case D3DSAMP_ADDRESSV: *value = samplerStates_[stage].addressV; break;
+        case D3DSAMP_MINFILTER: *value = samplerStates_[stage].minFilter; break;
+        case D3DSAMP_MAGFILTER: *value = samplerStates_[stage].magFilter; break;
+        case D3DSAMP_MIPFILTER: *value = samplerStates_[stage].mipFilter; break;
         default: return GR_NOT_IMPLEMENTED;
         }
         return GR_OK;
     }
     GENRESULT COMAPI set_texture_stage_texture(U32 stage, U32 texture) override
     {
-        if (stage >= 2U && stage <= 3U)
+        if (stage >= 2U && stage <= 7U)
             return texture == 0U ? GR_OK : GR_NOT_IMPLEMENTED;
         if (!textureBindCallback_) return GR_NOT_IMPLEMENTED;
         const GENRESULT result = textureBindCallback_(context_, stage, texture);
-        if (result == GR_OK && stage == 0U) textureHandle_ = texture;
+        if (result == GR_OK && stage <= 1U) textureHandles_[stage] = texture;
         return result;
     }
     GENRESULT COMAPI get_texture_stage_texture(U32 stage, U32 * texture) override
     {
         if (!texture) return GR_INVALID_PARMS;
-        if (stage >= 2U && stage <= 3U)
+        if (stage >= 2U && stage <= 7U)
         {
             *texture = 0U;
             return GR_OK;
         }
         if (!textureBindCallback_) return GR_NOT_IMPLEMENTED;
-        if (stage > 3U) return GR_NOT_IMPLEMENTED;
-        *texture = stage == 0U ? textureHandle_ : 0U;
+        if (stage > 7U) return GR_NOT_IMPLEMENTED;
+        *texture = textureHandles_[stage];
         return GR_OK;
     }
-    GENRESULT COMAPI verify_state() override { return GR_NOT_IMPLEMENTED; }
+    GENRESULT COMAPI verify_state() override
+    {
+        if (!stateCallback_ || !textureStageCallback_ || !samplerCallback_ ||
+            !textureBindCallback_) return GR_NOT_IMPLEMENTED;
+        // Revalidate the accepted fixed-function state against the bound backend.
+        // In particular, a texture may have been destroyed since it was bound.
+        GENRESULT result = stateCallback_(context_, renderState_);
+        if (result != GR_OK) return result;
+        result = textureStageCallback_(context_, textureStage_);
+        if (result != GR_OK) return result;
+        for (U32 stage = 0; stage < 2U; ++stage)
+        {
+            SamplerStateSnapshot sampler = samplerStates_[stage];
+            sampler.stage = stage;
+            result = samplerCallback_(context_, sampler);
+            if (result != GR_OK) return result;
+            result = textureBindCallback_(context_, stage, textureHandles_[stage]);
+            if (result != GR_OK) return result;
+        }
+        return GR_OK;
+    }
 
     GENRESULT COMAPI draw_primitive(D3DPRIMITIVETYPE primitiveType,
                                     U32 vertexFormat,
@@ -720,8 +753,8 @@ private:
     RenderStateSnapshot renderState_{};
     U32 stateId_ = 0U;
     TextureStageSnapshot textureStage_{};
-    SamplerStateSnapshot samplerState_{};
-    U32 textureHandle_ = 0U;
+    std::array<SamplerStateSnapshot, 2> samplerStates_{};
+    std::array<U32, 2> textureHandles_{};
     std::vector<U16> fanIndices_;
     std::vector<RenderVertexP3DiffuseT2> converted_;
     std::vector<RenderVertexP3DiffuseT4> converted2_;

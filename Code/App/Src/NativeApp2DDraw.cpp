@@ -168,4 +168,35 @@ void DA::LineDraw(const PANE * pane, S32 x0, S32 y0, S32 x1, S32 y1,
     PB.End();
     Require2D(BATCH->set_state(RPR_STATE_ID, 0U), "restore batch state");
 }
+void DA::DrawTexture(const PANE *pane, S32 x0, S32 y0, S32 x1, S32 y1,
+                     U32 textureHandle, SINGLE u0, SINGLE v0, SINGLE u1, SINGLE v1)
+{
+    Check2D(pane);
+    if (HiddenUnderToolbar(pane, y0, y1)) return;
+    if (!textureHandle || x0 > x1 || y0 > y1 ||
+        x1 == std::numeric_limits<S32>::max() || y1 == std::numeric_limits<S32>::max())
+    {
+        ICQImage::Bomb("native App texture quad has no valid texture/rectangle");
+        std::abort();
+    }
+    // Original DrawAgent unlocked texture path: identical states, UV and quad order.
+    Require2D(BATCH->set_state(RPR_BATCH, false), "texture batch state");
+    OrthoView(pane);
+    Require2D(BATCH->set_render_state(D3DRS_ALPHABLENDENABLE, FALSE), "texture blending");
+    Require2D(BATCH->set_render_state(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA), "texture source blend");
+    Require2D(BATCH->set_render_state(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA), "texture destination blend");
+    Require2D(BATCH->set_render_state(D3DRS_ZENABLE, false), "texture depth test");
+    Require2D(BATCH->set_render_state(D3DRS_ZWRITEENABLE, false), "texture depth write");
+    SetupDiffuseBlend(textureHandle, false);
+    const std::int64_t offsetX = pane ? pane->x0 : 0;
+    const std::int64_t offsetY = pane ? pane->y0 : 0;
+    PB.Color4ub(255, 255, 255, 255);
+    PB.Begin(PB_QUADS);
+    PB.TexCoord2f(u0, v0); PB.Vertex3f(float(x0 + offsetX), float(y0 + offsetY), 0);
+    PB.TexCoord2f(u1, v0); PB.Vertex3f(float(x1 + offsetX + 1), float(y0 + offsetY), 0);
+    PB.TexCoord2f(u1, v1); PB.Vertex3f(float(x1 + offsetX + 1), float(y1 + offsetY + 1), 0);
+    PB.TexCoord2f(u0, v1); PB.Vertex3f(float(x0 + offsetX), float(y1 + offsetY + 1), 0);
+    PB.End();
+    Require2D(BATCH->set_state(RPR_STATE_ID, 0), "texture restore batch state");
+}
 #endif

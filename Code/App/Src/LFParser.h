@@ -13,7 +13,7 @@
 //--------------------------------------------------------------------------//
 
 #ifndef DACOM_H
-#include <DACOM.h>
+#include <DACOM.H>
 #endif
 
 //--------------------------------------------------------------------------//
@@ -28,6 +28,8 @@ struct DACOM_NO_VTABLE ILFParser : public IDAComponent
 	virtual S32 ParseFile (U32 ** frameArray) = 0;
 
 };
+
+GENRESULT __stdcall CreateLFParser(ILFParser **result);
 
 
 //---------------------------------------------------------------------------//

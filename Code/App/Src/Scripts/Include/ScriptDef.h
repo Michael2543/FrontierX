@@ -73,6 +73,13 @@ extern CQSCRIPTDATADESC g_CQScriptDataDesc;
 // NOTE: we alloc 4 extra bytes to work around a compile problem when savestruct is empty
 //
 
+#if !defined(_WIN32) && defined(FRONTIERX_NATIVE_SCRIPT_NAME)
+void FrontierXRegisterNativeScriptProgram(const char *module, CQSCRIPTENTRY *entry);
+#define CQ_REGISTER_SCRIPT(entry) FrontierXRegisterNativeScriptProgram(FRONTIERX_NATIVE_SCRIPT_NAME, entry)
+#else
+#define CQ_REGISTER_SCRIPT(entry) MScript::RegisterScriptProgram(entry)
+#endif
+
 #define CQSCRIPTPROGRAM(ProgClass, ProgSave, EventFlags)  \
 struct ProgClass : CQBaseProgram, CQ_SCRIPT_SAVE_BASE(ProgSave)  \
 {											\
@@ -108,7 +115,7 @@ struct ___##ProgClass		\
 		entry.saveSize = sizeof(ProgSave);	\
 		entry.eventFlags = EventFlags;		\
 		entry.factory = factory;	\
-		MScript::RegisterScriptProgram(&entry);	\
+		CQ_REGISTER_SCRIPT(&entry);	\
 	}							\
 								\
 	static CQBaseProgram * __cdecl factory (void)	\

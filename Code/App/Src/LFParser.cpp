@@ -13,14 +13,21 @@
 //--------------------------------------------------------------------------//
 
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include <cstdlib>
+#include <cstring>
+#include <cctype>
+#endif
 
 #include "LFParser.h"
 #include "CQTrace.h"
-#include "Resource.h"
+#include "resource.h"
 
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
 #include <TComponent.h>
 
@@ -40,7 +47,9 @@ struct DACOM_NO_VTABLE LFParser : public ILFParser
 	U32 numElements;
 	U32 currentFrame;
 	U32 bytesRead;
+#if defined(_WIN32)
 	OVERLAPPED overlapped;			// used for asynchronous I/O
+#endif
 	HANDLE hFile;
 	bool bIOComplete;
 	//------------------------
@@ -100,7 +109,11 @@ void LFParser::reset (void)
 {
 	if (frameArray)
 	{
+#if defined(_WIN32)
 		VirtualFree(frameArray, 0, MEM_RELEASE);
+#else
+		free(frameArray);
+#endif
 		frameArray = 0;
 	}
 	if (pMemory)
@@ -113,8 +126,10 @@ void LFParser::reset (void)
 	currentFrame = 0;
 	if (hFile != INVALID_HANDLE_VALUE)
 	{
+#if defined(_WIN32)
 		if (bIOComplete==0)	// if waiting on an overlapped read
 			MSPEECHDIR->GetOverlappedResult(hFile, &overlapped, &bytesRead, 1);
+#endif
 		MSPEECHDIR->CloseHandle(hFile);
 		hFile = INVALID_HANDLE_VALUE;
 	}
@@ -130,7 +145,25 @@ bool LFParser::Initialize (const char * fileName)
 
 	reset();
 
-	if ((hFile = MSPEECHDIR->OpenChild(&fdesc)) == INVALID_HANDLE_VALUE)
+	hFile = MSPEECHDIR->OpenChild(&fdesc);
+#if !defined(_WIN32)
+	if (hFile == INVALID_HANDLE_VALUE && !std::strpbrk(fileName, "*?/\\"))
+	{
+		WIN32_FIND_DATA match{}, next{};
+		const HANDLE search = MSPEECHDIR->FindFirstFile(fileName, &match);
+		if (search != INVALID_HANDLE_VALUE)
+		{
+			const bool ambiguous = MSPEECHDIR->FindNextFile(search, &next) != FALSE;
+			const bool closed = MSPEECHDIR->FindClose(search) != FALSE;
+			if (!ambiguous && closed && !(match.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+			{
+				DAFILEDESC actual(match.cFileName);
+				hFile = MSPEECHDIR->OpenChild(&actual);
+			}
+		}
+	}
+#endif
+	if (hFile == INVALID_HANDLE_VALUE)
 	{
 		CQFILENOTFOUND(fdesc.lpFileName);
 	}
@@ -139,9 +172,20 @@ bool LFParser::Initialize (const char * fileName)
 		bufferSize = MSPEECHDIR->GetFileSize(hFile);
 		pMemory = (const char *) malloc(bufferSize);
 
+#if defined(_WIN32)
 		memset(&overlapped, 0, sizeof(overlapped));
+#endif
 		bytesRead = 0;
+#if defined(_WIN32)
 		bIOComplete = (MSPEECHDIR->ReadFile(hFile, const_cast<char *>(pMemory), bufferSize, &bytesRead, &overlapped) != 0);
+#else
+		bIOComplete = (MSPEECHDIR->ReadFile(hFile, const_cast<char *>(pMemory), bufferSize, &bytesRead, nullptr) != 0);
+		if (!bIOComplete || bytesRead != bufferSize)
+		{
+			reset();
+			return false;
+		}
+#endif
 
 		result = true;
 	}
@@ -158,6 +202,7 @@ S32 LFParser::ParseFile (U32 ** ppFrameArray)
 
 	if (bIOComplete == 0)  // still more data to read
 	{
+#if defined(_WIN32)
 		BOOL bOResult = MSPEECHDIR->GetOverlappedResult(hFile, &overlapped, &bytesRead, 0);
 
 		if (bOResult == 0 && MSPEECHDIR->GetLastError() == ERROR_IO_PENDING)
@@ -166,6 +211,9 @@ S32 LFParser::ParseFile (U32 ** ppFrameArray)
 			goto Done;
 		}
 		bIOComplete = true;
+#else
+		return -1;
+#endif
 	}
 
 	if (bytesRead == bufferSize)
@@ -178,8 +226,10 @@ S32 LFParser::ParseFile (U32 ** ppFrameArray)
 
 		if (frameArray && result>0)
 		{
+#if defined(_WIN32)
 			DWORD dwRead = PAGE_READWRITE;
 			VirtualProtect(frameArray, result * sizeof(U32), PAGE_READONLY, &dwRead);
+#endif
 
 			free((void *)pMemory);
 			pMemory = 0;
@@ -191,6 +241,7 @@ S32 LFParser::ParseFile (U32 ** ppFrameArray)
 	}
 	else
 	{
+#if defined(_WIN32)
 		//
 		// test to see if speech is on the CDROM
 		//
@@ -221,6 +272,7 @@ S32 LFParser::ParseFile (U32 ** ppFrameArray)
 				goto Done;
 			}
 		}
+#endif
 	}
 
 Done:
@@ -318,7 +370,11 @@ Top:
 
 BaseCase:
 	if (numElements)
+#if defined(_WIN32)
 		frameArray = (U32 *)VirtualAlloc(0, numElements * sizeof(U32), MEM_COMMIT, PAGE_READWRITE);
+#else
+		frameArray = (U32 *)calloc(numElements, sizeof(U32));
+#endif
 	return numElements;
 }
 //--------------------------------------------------------------------------//

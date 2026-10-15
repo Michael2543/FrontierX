@@ -11,20 +11,38 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "Include/NativeAppImage.h"
+#include "UserDefaults.h"
+#include "MyVertex.h"
+#include <VFX.H>
+#include <algorithm>
+#include <cmath>
+#include <cwchar>
+using namespace FrontierX::NativeAppUi;
+inline constexpr U32 WM_MOUSEWHEEL = FrontierX::LegacyMessage::MouseWheel;
+inline constexpr U32 VK_PRIOR = 0x21, VK_NEXT = 0x22;
+#define __min(a,b) (std::min)((a),(b))
+#define __max(a,b) (std::max)((a),(b))
+#endif
 
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IScrollBar.h"
 #include "Startup.h"
 #include "BaseHotRect.h"
 #include "GenData.h"
-#include <DListbox.h>
+#include <DListBox.h>
 #include <DScrollBar.h>
 #include "DrawAgent.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 #include <stdlib.h>
@@ -323,8 +341,13 @@ struct DACOM_NO_VTABLE Listbox : BaseHotRect, IListbox, IKeyboardFocus, IScrollB
 		if (bDisabled == false)
 		{
 			// make sure we are within the listbox
-			POINT pt = { x , y};
-			if (!PtInRect(&screenRect, pt))
+			#if defined(_WIN32)
+            POINT pt = { x, y };
+            if (!PtInRect(&screenRect, pt))
+#else
+            if (x < screenRect.left || x >= screenRect.right ||
+                y < screenRect.top || y >= screenRect.bottom)
+#endif
 			{
 				return;
 			}
@@ -346,7 +369,7 @@ struct DACOM_NO_VTABLE Listbox : BaseHotRect, IListbox, IKeyboardFocus, IScrollB
 	{
 		if (bPostMessageBlocked==false)
 		{
-			parent->PostMessage(CQE_LIST_SELECTION, (void*)controlID);
+			parent->PostMessage(CQE_LIST_SELECTION, reinterpret_cast<void *>(static_cast<std::uintptr_t>(controlID)));
 			bPostMessageBlocked=true;
 		}
 	}
@@ -354,7 +377,7 @@ struct DACOM_NO_VTABLE Listbox : BaseHotRect, IListbox, IKeyboardFocus, IScrollB
 	void notifyCaretPos (void)
 	{
 		if (parent) 
-			parent->PostMessage(CQE_LIST_CARET_MOVED, (void*)controlID);
+			parent->PostMessage(CQE_LIST_CARET_MOVED, reinterpret_cast<void *>(static_cast<std::uintptr_t>(controlID)));
 	}
 
 	virtual void DrawRect (void)
@@ -508,7 +531,7 @@ void Listbox::EnableListbox (bool bEnable)
 		bDisabled = !bEnable;
 	}
 
-	if (pScrollBar != NULL)
+	if (pScrollBar != 0)
 	{
 		pScrollBar->EnableScrollBar(bEnable);
 	}
@@ -532,7 +555,13 @@ void Listbox::SetVisible (bool bVisible)
 //
 GENRESULT Listbox::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+	#if defined(_WIN32)
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible==false)
 	switch (message)
@@ -700,7 +729,7 @@ void Listbox::draw (void)
 		{
 			const GT_LISTBOX::COLOR & color = pListboxType->colors[(bKeyboardFocus)?GTLBTXT_SELECTED:GTLBTXT_SELECTED_GRAYED];
 
-			if (pScrollBar != NULL && pScrollBar->GetVisible())
+			if (pScrollBar != 0 && pScrollBar->GetVisible())
 			{
 				U32 swidth, sheight;
 				pScrollBar->GetDimensions(swidth, sheight);
@@ -797,7 +826,7 @@ void Listbox::draw (void)
 	//
 	//	draw border around the control
 	//
-	if (!bNoBorder && pListboxType->shape == NULL)
+	if (!bNoBorder && pListboxType->shape == 0)
 	{
 		DA::LineDraw(0, screenRect.left+textArea.left, screenRect.top+textArea.top, screenRect.left+textArea.right, screenRect.top+textArea.top, RGB(100,100,100));
 		DA::LineDraw(0, screenRect.left+textArea.right, screenRect.top+textArea.top, screenRect.left+textArea.right, screenRect.top+textArea.bottom, RGB(100,100,100));
@@ -1666,9 +1695,13 @@ HANDLE ListboxFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objCla
 		//
 		if (data->shapeFile[0])
 		{
-			BEGIN_MAPPING(INTERFACEDIR, data->shapeFile);
-				CreateDrawAgent((VFX_SHAPETABLE *) pImage, 0, result->shape);
-			END_MAPPING(INTERFACEDIR);
+			#if defined(_WIN32)
+            BEGIN_MAPPING(INTERFACEDIR, data->shapeFile);
+                CreateDrawAgent((VFX_SHAPETABLE *) pImage, 0, result->shape);
+            END_MAPPING(INTERFACEDIR);
+#else
+            CreateDrawAgent(data->shapeFile, INTERFACEDIR, DA::UNKTYPE, 0, result->shape);
+#endif
 
 			result->shape->GetDimensions(result->width, result->height);
 		}
@@ -1713,7 +1746,11 @@ struct _ListboxFactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<ListboxFactory>;
+		#if defined(_WIN32)
 		AddToGlobalCleanupList(&factory);
+#else
+		AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

@@ -239,7 +239,11 @@ void CQLight::UpdateLight(bool bUseThisLight)
 		PIPE->set_light(engineID,&d3dl);
 		//	PIPE->set_light_enable(engineID,TRUE);
 #else
-		if (!NATIVE_SKIP_LEGACY_LIGHTING) {
+        // The native original-legacy adapter consumes this BaseLight through
+        // the real scalar LIGHT owner. It submits prelit vertices, so the
+        // D3D fixed-function mirror is unnecessary in that explicit mode.
+        // Other native material paths still require their renderer support.
+		if (!NATIVE_SKIP_LEGACY_LIGHTING && !NATIVE_USE_ORIGINAL_LEGACY_MATERIALS) {
 			std::fputs("Native dynamic light needs IRenderPipeline light-state support\n", stderr);
 			std::abort();
 		}
@@ -1866,6 +1870,9 @@ void Lights::ActivateAmbientLight(const Vector &_spot)
 
 void Lights::ActivateBestLights (const Vector &_spot, int maxLights, float radius)
 {
+    // Native legacy rendering uses the original LIGHT activation below and
+    // submits its calculated vertex colors. Only Windows mirrors those lights
+    // into D3D; native fixed-function light slots remain explicitly unsupported.
 	static bool bSkipLights = 0;
 	if (bSkipLights) return;
 	U64 pretick,posttick;
@@ -1893,7 +1900,9 @@ void Lights::ActivateBestLights (const Vector &_spot, int maxLights, float radiu
 	{
 		if (lightArray[l])
 		{
+#if defined(_WIN32)
 			PIPE->set_light_enable(lightArray[l]->GetEngineID(),FALSE);
+#endif
 		}
 	}
 	
@@ -1903,7 +1912,9 @@ void Lights::ActivateBestLights (const Vector &_spot, int maxLights, float radiu
 	LIGHT->activate_lights ((ILight **)lightArray, bestCount);
 	for (l=0;l<bestCount;l++)
 	{
+#if defined(_WIN32)
 		PIPE->set_light_enable(lightArray[l]->GetEngineID(),TRUE);
+#endif
 	}
 
 
@@ -1921,7 +1932,9 @@ void Lights::DeactivateAllLights()
 	{
 		if (lightArray[l])
 		{
+#if defined(_WIN32)
 			PIPE->set_light_enable(lightArray[l]->GetEngineID(),FALSE);
+#endif
 			lightArray[l] = 0;
 		}
 	}
@@ -1958,7 +1971,9 @@ void Lights::SetAmbientLight (U8 r,U8 g,U8 b)
 #if defined(_WIN32)
 		PIPE->set_render_state(D3DRS_AMBIENT,D3DCOLOR_RGBA(__min(255,r+sys_amb.r),__min(255,g+sys_amb.g),__min(255,b+sys_amb.b),0));
 #else
-		if (!NATIVE_SKIP_LEGACY_LIGHTING) {
+        // Ambient is applied by the original LIGHT owner above and reaches
+        // the native adapter's source diffuse/emission calculation.
+		if (!NATIVE_SKIP_LEGACY_LIGHTING && !NATIVE_USE_ORIGINAL_LEGACY_MATERIALS) {
 			std::fputs("Native ambient light needs IRenderPipeline ambient state\n", stderr);
 			std::abort();
 		}

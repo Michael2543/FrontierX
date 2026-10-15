@@ -20,6 +20,7 @@
 #include <FrontierX/RayGeometry.h>
 #if !defined(_WIN32)
 #include <FrontierX/NativeGameVertexBuffer.h>
+#include <FrontierX/NativeMeshManager.h>
 #endif
 
 #if !defined(_WIN32)
@@ -634,5 +635,16 @@ void COMAPI MeshInstance::on_loop(unsigned int channel_id, Transform & xform, vo
 }
 
 #if !defined(_WIN32)
+}
+#endif
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+std::int32_t GetNativeMeshInstanceIndex(const IMeshInstance *instance)
+{
+	const auto *owner = dynamic_cast<const FrontierXMeshManager::MeshInstance *>(instance);
+	return owner ? owner->instanceIndex : INVALID_INSTANCE_INDEX;
+}
 }
 #endif

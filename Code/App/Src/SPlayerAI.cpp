@@ -10,9 +10,29 @@
 */			    
 //--------------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
+#include <Globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <DNugget.h>
+#include <IUTFWriter.h>
+#include <cstdint>
+#define CQE_OBJECT_PRECAPTURE 0x104C
+#include <TComponent.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cwchar>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#endif
 #include "stdio.h"
-#include <globals.h>
 #include "MGlobals.h"
 #include <CQTrace.h>
 
@@ -25,19 +45,19 @@
 #include "IAttack.h"
 #include "TerrainMap.h"
 #include "MPart.h"
-#include "Resource.h"
-#include "BaseHotrect.h"
+#include "resource.h"
+#include "BaseHotRect.h"
 #include "OpAgent.h"
 #include "IPlanet.h"
 #include "Field.h"
 #include "IJumpGate.h"
 #include "IHarvest.h"
 #include "INugget.h"
-#include "Commpacket.h"
+#include "CommPacket.h"
 #include "ObjSet.h"
 #include "Sector.h"
 #include "GridVector.h"
-#include "CQGAME.h"
+#include "CQGame.h"
 #include "DCQGame.h"
 #include "DResearch.h"
 #include "ScrollingText.h"
@@ -49,7 +69,7 @@
 #include <DPlanet.h>
 
 #include <TSmartPointer.h>
-#include <FileSys.h>
+#include <Filesys.h>
 
 using namespace CQGAMETYPES;
 
@@ -1008,7 +1028,11 @@ GENRESULT SPlayerAI::Notify (U32 message, void *param)
 	case CQE_IDLE_UNIT:
 		if (MGlobals::IsHost())
 		{
+			#if defined(_WIN32)
 			U32 dwMissionID = (U32)param;
+#else
+			U32 dwMissionID = static_cast<U32>(reinterpret_cast<std::uintptr_t>(param));
+#endif
 			if ((dwMissionID & PLAYERID_MASK) == playerID)
 			{
 				IBaseObject *obj = OBJLIST->FindObject(dwMissionID);
@@ -1038,7 +1062,11 @@ GENRESULT SPlayerAI::Notify (U32 message, void *param)
 	case CQE_OBJECT_DESTROYED:
 		if (MGlobals::IsHost())
 		{
+			#if defined(_WIN32)
 			U32 dwMissionID = (U32)param;
+#else
+			U32 dwMissionID = static_cast<U32>(reinterpret_cast<std::uintptr_t>(param));
+#endif
 			U32 whichplayer = (dwMissionID & PLAYERID_MASK);
 			if (whichplayer == playerID)
 			{
@@ -1116,7 +1144,11 @@ GENRESULT SPlayerAI::Notify (U32 message, void *param)
 		/*
 		if (MGlobals::IsHost())
 		{
+			#if defined(_WIN32)
 			U32 dwMissionID = (U32)param;
+#else
+			U32 dwMissionID = static_cast<U32>(reinterpret_cast<std::uintptr_t>(param));
+#endif
 			if ((dwMissionID & PLAYERID_MASK) == playerID)
 			{
 				// i finished a construction site -- remove "to-be-built" info
@@ -1135,7 +1167,11 @@ GENRESULT SPlayerAI::Notify (U32 message, void *param)
 	case CQE_UNIT_UNDER_ATTACK:
 		if (MGlobals::IsHost())
 		{
+			#if defined(_WIN32)
 			U32 dwMissionID = (U32)param;
+#else
+			U32 dwMissionID = static_cast<U32>(reinterpret_cast<std::uintptr_t>(param));
+#endif
 			if ((dwMissionID & PLAYERID_MASK) == playerID)
 			{
 				// my unit has been attacked!
@@ -8547,13 +8583,25 @@ BOOL32 SPlayerAI::Load (struct IFileSystem * inFile)
 	COMPTR<IFileSystem> file;
 	U32 dwRead, numAssignments;
 	BOOL32 result = 0;
+#if defined(_WIN32)
+	const U32 assignmentRecordSize = sizeof(ASSIGNMENT);
+#else
+	const U32 assignmentRecordSize = sizeof(PLAYERAI_ASSIGNMENT_RECORD);
+#endif
 	ASSIGNMENT* curass = NULL;
 
 	fdesc.lpFileName = "StrategicAI";
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0,static_cast<PLAYERAI_SAVELOAD *>(this),sizeof(PLAYERAI_SAVELOAD),&dwRead);
+#else
+	if (file->GetFileSize() != sizeof(PLAYERAI_SAVELOAD) ||
+		!file->ReadFile(0, static_cast<PLAYERAI_SAVELOAD *>(this), sizeof(PLAYERAI_SAVELOAD), &dwRead) ||
+		dwRead != sizeof(PLAYERAI_SAVELOAD))
+		goto Done;
+#endif
 
 	if (m_StrategicTargetID)
 		OBJLIST->FindObject(m_StrategicTargetID, playerID, m_StrategicTarget, IBaseObjectID);
@@ -8565,8 +8613,8 @@ BOOL32 SPlayerAI::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
-	numAssignments = file->GetFileSize() / sizeof(ASSIGNMENT);
-	if ((file->GetFileSize() % sizeof(ASSIGNMENT)) != 0)
+	numAssignments = file->GetFileSize() / assignmentRecordSize;
+	if ((file->GetFileSize() % assignmentRecordSize) != 0)
 		goto Done;		// structure size changed!
 
 	while(numAssignments)
@@ -8574,7 +8622,28 @@ BOOL32 SPlayerAI::Load (struct IFileSystem * inFile)
 		curass = new ASSIGNMENT;
 		curass->Init();
 
+#if defined(_WIN32)
 		file->ReadFile(0,curass,sizeof(ASSIGNMENT),&dwRead);
+#else
+		PLAYERAI_ASSIGNMENT_RECORD record;
+		if (!file->ReadFile(0, &record, sizeof(record), &dwRead) || dwRead != sizeof(record) ||
+			record.set.numObjects > MAX_SELECTED_UNITS || record.type < NOASSIGNMENT || record.type > REPAIR_ASS)
+		{
+			delete curass;
+			curass = NULL;
+			goto Done;
+		}
+		curass->type = record.type;
+		curass->maxUnits = record.maxUnits;
+		curass->targetID = record.targetID;
+		curass->set = record.set;
+		curass->systemID = record.systemID;
+		curass->militaryPower = record.militaryPower;
+		curass->uStallTime = record.uStallTime;
+		curass->bHasAdmiral = record.bHasAdmiral;
+		curass->bFabricator = record.bFabricator;
+		curass->supships = record.supships;
+#endif
 		
 		curass->pNext = pAssignments;
 		pAssignments = curass;
@@ -8607,7 +8676,13 @@ BOOL32 SPlayerAI::Save (struct IFileSystem * outFile)
 	if (outFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->WriteFile(0,static_cast<PLAYERAI_SAVELOAD *>(this),sizeof(PLAYERAI_SAVELOAD),&dwWritten);
+#else
+	if (!file->WriteFile(0, static_cast<PLAYERAI_SAVELOAD *>(this), sizeof(PLAYERAI_SAVELOAD), &dwWritten) ||
+		dwWritten != sizeof(PLAYERAI_SAVELOAD))
+		goto Done;
+#endif
 
 	fdesc.lpFileName = "Assignments";
 	if (outFile->CreateInstance(&fdesc, file) != GR_OK)
@@ -8615,7 +8690,24 @@ BOOL32 SPlayerAI::Save (struct IFileSystem * outFile)
 
 	while(node)
 	{
+#if defined(_WIN32)
 		file->WriteFile(0,node,sizeof(ASSIGNMENT),&dwWritten);
+#else
+		PLAYERAI_ASSIGNMENT_RECORD record;
+		std::memset(&record, 0, sizeof(record));
+		record.type = node->type;
+		record.maxUnits = node->maxUnits;
+		record.targetID = node->targetID;
+		record.set = node->set;
+		record.systemID = node->systemID;
+		record.militaryPower = node->militaryPower;
+		record.uStallTime = node->uStallTime;
+		record.bHasAdmiral = node->bHasAdmiral;
+		record.bFabricator = node->bFabricator;
+		record.supships = node->supships;
+		if (!file->WriteFile(0, &record, sizeof(record), &dwWritten) || dwWritten != sizeof(record))
+			goto Done;
+#endif
 		node = node->pNext;
 	}
 
@@ -8800,3 +8892,95 @@ void SPlayerAI::Activate (bool bOnOff)
 //---------------------------------------------------------------------------//
 //---------------------------END SPlayerAI.cpp-------------------------------//
 //---------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+// Exercises the production serializer on synthetic state. This protects the
+// mission's active AI assignments against native pointer-width corruption.
+bool CheckNativePlayerAISaveLifecycle(IFileSystem *directory)
+{
+	if (!directory) return false;
+	DAFILEDESC archiveDescriptor("AIRegression.mission");
+	archiveDescriptor.lpImplementation = "UTF";
+	archiveDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	archiveDescriptor.dwCreationDistribution = CREATE_ALWAYS;
+	COMPTR<IFileSystem> archive;
+	if (directory->CreateInstance(&archiveDescriptor, archive) != GR_OK) return false;
+	COMPTR<ISPlayerAI> sourceInterface;
+	auto *source = new DAComponent<SPlayerAI>;
+	sourceInterface = static_cast<ISPlayerAI *>(source);
+	source->Release();
+	std::memset(static_cast<PLAYERAI_SAVELOAD *>(source), 0, sizeof(PLAYERAI_SAVELOAD));
+	source->strategy = MANTIS_FRIGATE_RUSH;
+	source->m_nRace = M_MANTIS;
+	source->m_Gas = 231;
+	source->m_AttackWaveSize = 7;
+	source->pAssignments = new ASSIGNMENT;
+	ASSIGNMENT *assignment = source->pAssignments;
+	assignment->Init();
+	assignment->type = ATTACK;
+	assignment->targetID = 0x2002;
+	assignment->systemID = 2;
+	assignment->militaryPower = 137;
+	assignment->uStallTime = 9;
+	assignment->bHasAdmiral = true;
+	assignment->supships = 2;
+	assignment->set.numObjects = 2;
+	assignment->set.objectIDs[0] = 0x1002;
+	assignment->set.objectIDs[1] = 0x1102;
+	if (!source->Save(archive)) return false;
+
+	DAFILEDESC descriptor("Assignments");
+	COMPTR<IFileSystem> file;
+	if (archive->CreateInstance(&descriptor, file) != GR_OK ||
+		file->GetFileSize() != sizeof(PLAYERAI_ASSIGNMENT_RECORD)) return false;
+	PLAYERAI_ASSIGNMENT_RECORD disk;
+	U32 bytes = 0;
+	if (!file->ReadFile(0, &disk, sizeof(disk), &bytes) || bytes != sizeof(disk) ||
+		disk.unusedLink != 0 || disk.type != ATTACK || disk.set.numObjects != 2 ||
+		disk.set.objectIDs[1] != 0x1102 || disk.targetID != 0x2002) return false;
+	file = 0;
+
+	COMPTR<ISPlayerAI> loadedInterface;
+	auto *loaded = new DAComponent<SPlayerAI>;
+	loadedInterface = static_cast<ISPlayerAI *>(loaded);
+	loaded->Release();
+	if (!loaded->Load(archive) || loaded->strategy != MANTIS_FRIGATE_RUSH ||
+		loaded->m_Gas != 231 || loaded->m_AttackWaveSize != 7 ||
+		std::strcmp(loaded->getSaveLoadName(), "MANTIS_FRIGATE_RUSH") != 0 ||
+		!loaded->pAssignments || loaded->pAssignments->pNext ||
+		loaded->pAssignments->systemID != 2 || loaded->pAssignments->militaryPower != 137 ||
+		loaded->pAssignments->uStallTime != 9 || !loaded->pAssignments->bHasAdmiral ||
+		loaded->pAssignments->supships != 2 || loaded->pAssignments->set != assignment->set)
+		return false;
+
+	// Invalid persistent counts must fail before entering assignment logic.
+	descriptor.lpImplementation = "DOS";
+	descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	descriptor.dwCreationDistribution = CREATE_ALWAYS;
+	if (archive->CreateInstance(&descriptor, file) != GR_OK) return false;
+	disk.set.numObjects = MAX_SELECTED_UNITS + 1;
+	if (!file->WriteFile(0, &disk, sizeof(disk), &bytes) || bytes != sizeof(disk)) return false;
+	file = 0;
+	if (loaded->Load(archive)) return false;
+
+	if (!source->Save(archive)) return false;
+	descriptor.lpFileName = "StrategicAI";
+	if (archive->CreateInstance(&descriptor, file) != GR_OK) return false;
+	const U32 truncated = 0;
+	if (!file->WriteFile(0, &truncated, sizeof(truncated), &bytes) || bytes != sizeof(truncated)) return false;
+	file = 0;
+	if (loaded->Load(archive)) return false;
+	if (!source->Save(archive)) return false;
+	COMPTR<IUTFWriter> writer;
+	if (archive->QueryInterface(IID_IUTFWriter, writer) != GR_OK) return false;
+	writer->Flush();
+	writer.free();
+	archive.free();
+	archiveDescriptor.dwDesiredAccess = GENERIC_READ;
+	archiveDescriptor.dwCreationDistribution = OPEN_EXISTING;
+	if (directory->CreateInstance(&archiveDescriptor, archive) != GR_OK ||
+		!loaded->Load(archive) || !loaded->pAssignments ||
+		loaded->pAssignments->set != assignment->set || loaded->m_Gas != 231) return false;
+	return true;
+}
+#endif

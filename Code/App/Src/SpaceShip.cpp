@@ -16,6 +16,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeShipVisualTransform.h"
 #include "Include/CQTrace.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
@@ -455,10 +456,14 @@ void SpaceShip<SaveStruct,InitStruct>::PostRender (void)
 template <class SaveStruct, class InitStruct>
 void SpaceShip<SaveStruct,InitStruct>::renderSpaceShip (void)
 {
+#if defined(_WIN32)
 	Transform modelAxisCorrection;
 	modelAxisCorrection.set_identity();
 	modelAxisCorrection.rotate_about_i(90*MUL_DEG_TO_RAD);
 	modelAxisCorrection.rotate_about_j(180*MUL_DEG_TO_RAD);
+#else
+	const Transform modelAxisCorrection = NativeShipModelAxisCorrection();
+#endif
 
 	if (admiralID)
 	{
@@ -472,6 +477,17 @@ void SpaceShip<SaveStruct,InitStruct>::renderSpaceShip (void)
 	if (!bSpecialRender)
 	{
 		LIGHTS->ActivateAmbientLight(GetPosition());
+#if !defined(_WIN32)
+        if (this->GetNativeConstructionMeshTree())
+        {
+            MeshChain &construction = this->GetMeshChain();
+            if (instanceMesh && CQEFFECTS.bFastRender != 0)
+                TreeRender(construction.mi, construction.numChildren);
+            else
+                TreeRender(construction.mi, construction.numChildren, modelAxisCorrection);
+        }
+        else
+#endif
 		if (warpStage != WS_NONE)
 		{
 			Transform trans = Transform(scaleTrans.get_orientation(), -scaleTrans.get_position()) * Transform (scaleTrans.get_position());
@@ -510,6 +526,13 @@ void SpaceShip<SaveStruct,InitStruct>::renderSpaceShip (void)
 	// temporarily draw special highlight
 	if (!bSpecialHighlight)
 		return;
+
+#if !defined(_WIN32)
+	OBJBOX markerBox;
+	NativeShipSelectionBounds(this->box, !bSpecialRender &&
+		(instanceMesh == NULL || CQEFFECTS.bFastRender == 0), markerBox);
+	const SINGLE *const box = markerBox;
+#endif
 
 	BATCH->set_state(RPR_BATCH,TRUE);
 	BATCH->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
@@ -550,9 +573,14 @@ void SpaceShip<SaveStruct,InitStruct>::renderSpaceShip (void)
 		PB.End();
 */
 	SINGLE Z = min(H1, H2) - 100;
+#if defined(_WIN32)
 	Vector ctr((W2+W1)/2.0f, 0, (L2+L1)/2.0f);
 
 	Vector end(W1, 0, L1);
+#else
+	Vector ctr((W2+W1)/2.0f, (L2+L1)/2.0f, 0);
+	Vector end(W1, L1, 0);
+#endif
 	Vector dif = end - ctr;
 	SINGLE radius = dif.fast_magnitude();
 	
@@ -560,7 +588,13 @@ void SpaceShip<SaveStruct,InitStruct>::renderSpaceShip (void)
 	static SINGLE theta = 0;
 	SINGLE osc = sin(theta+=0.05f);	
 
+#if defined(_WIN32)
 	tf.rotate_about_j(osc);
+#else
+	tf = TRANSFORM(NativeShipSpeakerMarkerTransform(transform, Vector(ctr.x, ctr.y, Z), osc));
+	ctr.zero();
+	Z = 0;
+#endif
 
 	Vector v[4];
 	v[0].x = ctr.x - radius;	v[0].y = ctr.y + radius;
@@ -984,7 +1018,12 @@ BOOL32 SpaceShip<SaveStruct,InitStruct>::Save (struct IFileSystem * inFile)
 	if (save.mission.hullPoints == 0)
 		save.mission.hullPoints = 1;		// prevent pending dead objects from coming up a zombie
 
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+		goto Done;
+#endif
 	
 	result = 1;
 
@@ -1014,8 +1053,13 @@ BOOL32 SpaceShip<SaveStruct,InitStruct>::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol(fdesc.lpFileName, buffer, &load);
+#else
+	if (!LoadNativeMissionRecord(MISSION, fdesc.lpFileName, file, &load, sizeof(load)))
+		goto Done;
+#endif
 	FRAME_load(load);
 
 	if (systemID && systemID <= MAX_SYSTEMS)
@@ -1576,6 +1620,16 @@ template struct SpaceShip<FABRICATOR_SAVELOAD, FABRICATOR_INIT>;
 template struct SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>;
 template struct SpaceShip<HARVEST_SAVELOAD, HARVEST_INIT>;
 template struct SpaceShip<SUPPLYSHIP_SAVELOAD, SUPPLYSHIP_INIT>;
+template struct SpaceShip<MINELAYER_SAVELOAD, MINELAYER_INIT>;
+
+bool IsNativePersistentSpaceShip(IBaseObject *object)
+{
+	return dynamic_cast<SpaceShip<FABRICATOR_SAVELOAD, FABRICATOR_INIT> *>(object) ||
+		dynamic_cast<SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT> *>(object) ||
+		dynamic_cast<SpaceShip<HARVEST_SAVELOAD, HARVEST_INIT> *>(object) ||
+		dynamic_cast<SpaceShip<SUPPLYSHIP_SAVELOAD, SUPPLYSHIP_INIT> *>(object) ||
+		dynamic_cast<SpaceShip<MINELAYER_SAVELOAD, MINELAYER_INIT> *>(object);
+}
 #endif
 
 //------------------------End SpaceShip.cpp----------------------------------

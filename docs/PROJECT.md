@@ -1,274 +1,80 @@
 # FrontierX Project Charter
 
-Latest M3 evidence (2026-10-13): **NOT ACCEPTED**. Completed protected CI
-[run38426508626](https://github.com/Michael2543/frontierX/actions/runs/38426508626)
-at `b24115686c0f733f3d22a7ee852f638dd26cd205` fails overall. Its six Linux
-CPU scopes and both explicit GPU jobs pass; native observer export, mission,
-sanitizer and comparison gates fail. Follow-up
-[run38439947717](https://github.com/Michael2543/frontierX/actions/runs/38439947717)
-at `b6ca3dd2051703764cbf0144516bce22b6442f16` is still running. Both GPU jobs
-pass; native Debug/Final rebuilds and ABI execute successfully, but the job
-fails afterward in the launch-helper regression. Windows mission is skipped.
-GCC measured mission sanitizers expose an unaligned Planetoid sync store after
-the preceding OpAgent correction. Working-tree follow-up is supplementary,
-not executed CI proof. The user confirms the separate Steam executable is
-unmodified retail; its runtime has not yet been compared. Retail behavior is
-the preferred corroborating reference, rather than the restored conversation
-failure. Full state/RNG, repeatability and Save/Reload continuation remain open.
-See [the current evidence](M3_SIMULATION_COMPARISON.md#retail-reference-and-next-sync-boundary-2026-10-13).
+## Current direction (2026-10-13)
 
-Earlier updates below are dated historical snapshots.
+The immediate goal is a playable native Linux single-player campaign. Prepare
+builds and repeatable technical checks in CI wherever practical; the user can
+perform the required real playtests. The active delivery sequence and acceptance
+rules are in [PORT_READINESS.md](PORT_READINESS.md#active-plan-playable-single-player-first-2026-10-13).
 
-Latest M3 working update (2026-10-13):b241156 CI run38426508626 actually passes
-both explicit X11 GPU jobs; its introduced native observer export and mission
-sanitizer gates fail. Working corrections retain sound through real completion,
-fix the Linux variable-length sync append and expand declared global/world
-state at complete physical boundaries. Native comparison fixtures and private
-SSH cross-platform plus production RandomGen vector jobs are prepared; their
-corrected complete CI execution is pending. Same-build live speech/script and
-Save/Reload continuation still differ; M3 remains **NOT ACCEPTED**. The current
-[evidence/normalization ledger](M3_SIMULATION_COMPARISON.md#post-physical-state-and-sound-lifetime-follow-up-working-tree-2026-10-13)
-supersedes older pending-run summaries below.
+M2 Sol_Train is accepted in its documented scope: original training objectives,
+controls/combat, save/load and victory/return execute under GCC and Clang with
+explicit media/provider limits. See [M2 evidence](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12).
+The next gameplay milestone is the first regular Terran campaign mission through
+normal result, reload and next-mission entry. P1a connects original campaign
+selection and Script01 loading with bounded source-loop/close execution; the user
+judged it sufficient to proceed. P1b is completed by explicit user acceptance
+on 2026-10-15; P1c is the next active step. See
+[first Terran integration](NATIVE_TERRAN_CAMPAIGN.md).
 
-Current M3 update (2026-10-13): **NOT ACCEPTED**. Completed protected Actions
-[run38386971218](https://github.com/Michael2543/frontierX/actions/runs/38386971218)
-atd089a15 passes six Linux CPU build scopes and native Windows Debug/Final/ABI;
-GPU/mission/sanitizer/compatibility gates fail. Run38384161068 was cancelled.
-Current Linux working-tree follow-up corrects typed Field factory access and
-RandomGen's original Win32 default domain, excludes uncontrolled host input
-through a narrow fixture, uses the original player move event and expands
-semantic script/operation observations. Explicit X11 GPU preparation is moved
-after first presentation. Supplementary results do not replace CI; full
-physics/RNG coverage, repeatability, equivalent Save/Reload continuation and
-retail/visible/audible corroboration remain open. Windows product repair remains
-out of scope. See [the current owner/evidence ledger](M3_SIMULATION_COMPARISON.md#completed-d089a15-ci-and-next-owner-corrections-2026-10-13).
-Earlier pending-run statements below are historical snapshots.
+The user completed the first-Terran run, reported original victory and save/load,
+and explicitly accepted P1b after the presentation corrections. Retain unresolved
+colorful effect artifacts, missing Harvester depletion speech, strict font mapping
+and whole-process mission leaks as documented follow-ups. Actual CI and native
+Windows/ABI checks remain unexecuted; M3 remains separate. Original victory
+teardown, result/progress and next-mission/retry coverage belong to P1c. This
+status decision adds no new execution evidence. Earlier implementation checkpoints
+below describe the work before acceptance.
 
-Current Sol_Train milestone, M2, 2026-10-12: **Linux gameplay complete in
-the agreed scope**. Original selector/briefing, all23 training goals, required
-HUD/commands/map, pause, early/later F7/F8, actual victory/Continue and repeated
-entry/load/close execute under GCC/Clang on lawful external data. GCC full
-fresh gameplay and Clang's own early-save continuation/user completion are
-separate from latest bounded lifecycle repeats. Current GCC/Clang/ASan end/
-restart/reload closes check original hints idle and live mission streams0.
-ASan reports no invalid-memory/UBSan error in the observed path; whole LSan
-still fails on3156B/7 host NVIDIA/PipeWire/DBus allocations. Explicit media
-exclusions, unavailable optional nontraining providers and ordinary Wayland
-probe resize remain documented limitations, not success placeholders.
+The earlier P1b increment restores original schema migration and full compound
+geometry checks, and normal early/active-movement reload after repairing an unnamed saved
+ship union. These are bounded checks; full mission acceptance remains open. The genuine optional MPEG movie owner and original MovieScreen caller now
+execute synthetic decode/ownership checks and actual external intro playback
+through normal Esc and natural EOF. Full user presentation acceptance remains
+open, including strict original-family fonts and audible synchronization.
 
-The active composition uses original App/Engine/event/resource/gameplay owners,
-the existing native render/font/audio adapters and original command processing.
-No replacement training, altered objectives, simulation/RNG order or save
-format is introduced. Default font/decoder-free builds compile/check; full
-visible M2 uses the optional external font/shared decoder configuration.
-M3 comparison/determinism is now in progress, with supplementary native
-Windows Debug/Final full rebuilds and same-build campaign ABI execution.
-Actions run38368454837 at62662a1 passes Linux GCC/Clang default/optional/
-sanitizer jobs and native Windows Debug/Final plus same-build ABI. Host/GPU/
-mission and CRT compatibility comparisons fail. The user's restored Windows
-skips conversations in all missions; further Windows repairs are out of scope,
-and that path is not the Linux behavior specification. Current Linux work adds
-original frame/checkpoint test access and corrects native UTF sibling order;
-complete semantic/RNG/script/order capture and equivalent Save/Reload continuation
-remain open, as do retail/visible/audible checks. See
-[M3 comparison evidence](M3_SIMULATION_COMPARISON.md).
-Current Actions run38384161068 tests118efae. A Linux-only Camera startup
-return-contract fix and opt-in workflow `gpu_host_setup=hyprland-x11` prepare
-corrected startup/GPU checks; their runtime/CI proof remains pending. The GPU
-setup changes only owned test windows, with no persistent desktop rules.
-The next acceptance milestone remains M3 comparison/determinism. Windows/module ABI and actual
-retail comparison are explicitly assigned there by the user; no current
-Windows or parity pass is inferred. Details: [final M2 evidence](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12)
-and [current next step](PORT_READINESS.md).
+User-reported weapon direction, missing construction/placement graphics and
+misaligned exhaust/cargo attachments require renewed P1b presentation checks.
+Native receiver-state corrections, render-only authored ship-axis alignment and
+original Terran construction hookups have focused automated evidence and bounded
+HQ reload/completion execution. Actual weapon/free-space-preview verification and
+the bundled feedback candidate remain in progress. Source and synthetic checks do
+not replace the user's visible and audible assessment; see the focused campaign,
+media and material records.
 
-Current original gameplay Hintbox checkpoint, M1, 2026-10-11: normal SDL
-mouse hover now reaches original FieldManager/HintResource in Sol_Train.
-Separate visible GCC/Clang runs show Cygnus and medium asteroid hints from
-original resources, target switching/removal, new hover after source reload,
-and clear text/timers/ownership on actual mission close. Original edge-scroll
-camera access is enabled without toolbar/hot-rectangle UI. Selection,
-movement, training objectives, source text/voices and moved-state save/reload
-remain demonstrated. Existing focused lifecycle and Clang ASan/UBSan checks
-passed; sanitizer scope excludes full mission execution and leak checking.
-M1's selected Linux gameplay acceptance is demonstrated; native Windows
-Debug/Final and module-ABI execution are an external open gate, not a success.
-Next: execute that gate on the supported host, then M2's original controls
-for the next Sol_Train multiple-selection/control-group/command objective.
-No full UI, cross-compiler determinism or retail parity is claimed. See
-[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-gameplay-hintbox-checkpoint-m1-2026-10-11).
-Older entries below are historical.
+Full-media candidate configuration enables `FRONTIERX_BUILD_NATIVE_FONTS`,
+`FRONTIERX_BUILD_FFMPEG_AUDIO` and `FRONTIERX_BUILD_FFMPEG_VIDEO`, with
+`CMAKE_PREFIX_PATH=/external/lgpl-prefix` pointing to the reviewed shared-LGPL
+MPEG/IAC/swscale/parser closure. Default builds keep these optional dependencies
+off. Original-family faces are supplied externally through `--ui-font-map FILE`;
+see [exact playtest commands](LINUX_PLAYTEST_CI.md).
 
-Current UnitComm alert checkpoint, 2026-10-11: original alert history,
-colors and expiry now reach the optional native font/render adapter. Explicit
-`--mission-alert-smoke` invokes original `MScript::AlertMessage` on the
-selected external-data Forger; visible GCC/Clang runs drew its cyan warning
-and red Teletype, retained normal movement/objectives and passed source
-save/reload. This controlled source call is not a naturally triggered combat
-alert. Focused lifecycle and Clang ASan/UBSan checks passed with leak checking
-disabled. Map pings remain explicitly excluded by `--skip-sector-map`.
-Gameplay Hintbox hover remains unverified (zero draws); next is its real
-caller/resource ownership and the needed original UI closure. Windows/ABI,
-full mission sanitizers and retail parity remain open. See
-[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-unitcomm-alert-rendering-checkpoint-2026-10-11).
-Older entries below are historical.
+Latest feedback adds native original mouse-wheel handling and Harvester muzzle
+alignment. Idle-safe GPU buffer reuse reaches approximately60 source FPS in
+bounded quiet initial/loaded full-media scenes through the optional original
+`--no-frame-limit` at normal game speed0; standard limiting remains30 FPS.
+`--frame-stats` provides optional diagnostics. Complete user harvesting/combat/
+mission and presentation acceptance remain open; see [render evidence](GAME_MATERIAL_PATH.md).
 
-Current status and unit-text checkpoint, 2026-10-11: original StatusBar and
-ScrollingText now draw through the optional FreeType adapter during the
-selected native mission. UnitComm selection/movement text and voices run
-alongside original training speech subtitles. Separate visible GCC/Clang
-Wayland/Vulkan runs passed normal input, objectives and moved-state source
-save/reload; a GCC capture shows status, unit text and speech together.
-Original Hintbox passed synthetic timing/font lifecycle checks, but no
-visible gameplay hint executed. Focused Clang ASan/UBSan passed with leak
-checking disabled. Next: UnitComm alerts and real gameplay hint callers.
-Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
-remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-status-and-unit-scrolling-text-checkpoint-2026-10-11).
-Older entries below are historical.
+P1b requires the complete presentation/media scope of the selected mission:
+all models, textures, material/shader paths, lighting, background, effects, HUD
+and audio, including working animated selection/communication portraits that
+switch correctly and work after reload. Both minimaps must work, including the second minimap
+showing system connections and its original interactions after save/load.
+These are acceptance requirements, not implemented-capability claims or P3 work.
+See [mandatory P1b scope](PORT_READINESS.md#p1b-mandatory-presentation-and-media-acceptance-2026-10-13).
 
-Current mission subtitle checkpoint, 2026-10-11: original `Subtitle.cpp`
-now owns selected training speech subtitles through EventSystem and the
-optional FreeType font/render adapter. Separate visible GCC/Clang
-Wayland/Vulkan runs passed multiline subtitle draws, normal selection/movement
-and source moved-state save/reload. Training speech is enabled; portraits
-and UnitComm voice/text remain explicitly excluded in this combination.
-Focused source lifecycle and Clang ASan/UBSan checks passed with leak checking
-disabled. Next: original status/hint/scrolling text, including UnitComm text.
-Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
-remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-mission-speech-subtitles-checkpoint-2026-10-11).
-Older entries below are historical.
+M3 remains incomplete and is deferred as a separate comparison/determinism track.
+Retain its proven fixes and focused tests. Complete bitwise state equality is not
+a prerequisite for adding playable missions; concrete crashes, bad memory access,
+lost orders or damaged saves still require fixes. Preserve simulation semantics,
+fixed serialized layouts and affected Windows builds/ABI checks. No comparison
+failure is converted to a pass. [Historical M3 evidence](M3_SIMULATION_COMPARISON.md)
+remains available when a concrete discrepancy needs investigation.
 
-Current in-window teletype checkpoint, 2026-10-10: original `Teletype.cpp`
-now owns selected training objective text, reveal/caret and expiry through
-EventSystem and the existing native App render boundary. An optional
-FreeType `IFontDrawAgent` uses an explicitly external face and source pixel
-height; default builds remain FreeType-free. Separate visible GCC/Clang
-Wayland/Vulkan mission runs passed text, normal selection/movement, unit
-voices and source save/reload. The original owner lifecycle check also
-passed under Clang ASan/UBSan with leak checking disabled. Next: status,
-hint/scrolling text and subtitles through their production owners.
-Windows font/ABI, full mission sanitizers and retail parity remain open.
-See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-in-window-mission-teletype-checkpoint-2026-10-10).
-Older entries below are historical.
-
-Current unit voice checkpoint, 2026-10-10: original UnitComm and StringData
-now connect normal selection/movement in the selected external `Sol_Train`
-mission to native ISoundManager and production IStreamer. Separate visible
-Wayland/Vulkan GCC/Clang optional-FFmpeg Debug runs started two unit voices,
-completed one, stopped one and retained no active stream; both preserved
-movement, objectives and source mission save/reload and exited zero.
-This requires the reviewed external shared-LGPL IAC decoder and explicit
-unit-alert/subtitle and mission-SFX exclusions. Next: restore in-window
-text/teletype through the original owners. Windows/ABI, full mission
-sanitizers, audible comparison and retail parity remain unverified. See
-[the focused voice record](NATIVE_SINGLEPLAYER_SLICE.md#original-unit-voice-mission-checkpoint-2026-10-10).
-Older entries below are historical.
-
-Current native modal mission checkpoint, 2026-10-10: the selected external
-`Sol_Train` mission now enters source `CQDoModal` after startup. Its source
-event, frame-time, render, simulation and GameSystem update order runs through
-the existing `IRenderPipeline`/SDL GPU backend. A source `CQE_PLAYER_QUIT`
-event returns modal result 4; the shell then saves/reloads the moved Forger
-and objectives and closes the mission. Separate 15-second visible
-Wayland/Vulkan GCC and Clang runs passed with normal mouse selection and
-movement. A no-duration run also exited cleanly after a normal window close.
-Native menu hot rectangles, CPU framebuffer locking and the explicitly
-excluded media/UI paths remain open; Windows, ABI and retail parity are
-unverified. See [the focused modal record](NATIVE_SINGLEPLAYER_SLICE.md#source-modal-mission-integration-2026-10-10).
-Older status entries below are historical.
-
-Current native frame-boundary checkpoint, 2026-10-10: the selected mission
-now uses production `IRenderPipeline` clear/begin/end/swap backed by SDL GPU.
-GCC and Clang CPU checks and separate visible X11/Vulkan synthetic GPU
-runs passed; visible Wayland mission runs completed selection, movement,
-training objectives and moved-state save/reload. Full-target color/depth
-clear is supported; partial/stencil operations remain explicit failures.
-The default desktop GPU CTest resize failed under Wayland tiling; separate
-floating X11 runs passed. Next: link the source `CQDoModal` event/timing/UI
-closure, then restore excluded in-game media. Windows and retail parity
-remain unverified. See [the focused frame record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-frame-lifecycle-checkpoint-2026-10-10).
-Earlier status entries below are historical.
-
-Current native playable-slice status (2026-10-10): GCC and Clang Linux
-x86_64 Debug builds load lawful external `Sol_Train` data, present the
-player-owned Forger through the production Engine/SDL/Vulkan path, accept
-normal left-click selection and right-click movement through original
-offline operation owners, advance source simulation to training objectives
-1 and 2, and round-trip the moved unit and objectives through source
-mission save/reload. Both visible integrated runs exited zero; full native
-CTest trees passed. Required `IStreamer` remains active. Full-screen
-`IVideoSystem` and other incomplete optional media/UI paths were excluded
-only by explicit flags. This bounded checkpoint is not complete gameplay
-or Windows retail parity; Windows Debug/Final, ABI and unit-bearing Windows
-mission comparison remain open. See
-[the focused acceptance record](NATIVE_SINGLEPLAYER_SLICE.md#playable-solarian-training-checkpoint-2026-10-10).
-The status snapshots below are historical.
-
-Native mission-map status (2026-09-27): the selected external
-`Sol_Train.dmission` has no saved system-map child. A bounded native
-`ISystemMap` owner now executes that fresh-load branch and is linked
-into the shell, but the App mission still cannot link or run; see
-[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-system-map-fresh-load-gate-2026-09-27).
-
-Native selected-script status (2026-09-27): the original `Sol_T.rc`
-now builds into checked native objective/subtitle resources with
-`llvm-rc`; the source training program and production `MScript` owner
-compile under GCC/Clang. The lawful external mission names `Sol_T.dll`
-and has a zero update count, matching the bounded fresh-load contract.
-The native shell still does not link or execute the script or mission;
-see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-localization-and-fresh-loader-gate-2026-09-27).
-The Linux Debug presets require Python 3 and `llvm-rc` for this
-source-resource target in addition to SDL3 and `glslc`.
-
-Native operation-owner status (2026-09-27): production `OpAgent.cpp`
-now builds under GCC and Clang with its required event callback and
-native millisecond clock contracts, but the App mission link still
-lacks player/host and packet services. No mission operation or unit
-movement has run; see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-operation-owner-native-build-gate-2026-09-27).
-
-Native App startup contract status (2026-09-27): the original
-`GlobalComponent` registration and cleanup functions now compile once
-for Windows `Trim` and native Linux, and link into the GCC/Clang shell.
-A focused check executed their order across 30 registrars. The mission
-and object owners still do not link into that shell, so no mission has
-started; see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#shared-app-global-startup-and-cleanup-owner-2026-09-27).
-
-Native animation-data status (2026-09-27): the production `IAnimation` and
-`IChannel2` owners loaded the external Forger `Sc_build` script through the
-mounted Steam `objects` archive under GCC and Clang (one script, 1.6 seconds).
-This does not create an object instance or run the mission; see
-[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-channel-and-forger-animation-data-2026-09-27).
-
-Native startup status (2026-09-27): the unchanged source `Conquest.ini`
-completes production `GameSystem::startup` with source-profile Optics under
-GCC and Clang on lawfully
-external Steam archives with explicit full-screen movie skip. This is a
-bounded SDL dummy-window startup, not App global-owner initialization or
-mission gameplay. The next production gate is the post-startup App sequence
-in `Conquest.cpp`; see [the focused startup record](NATIVE_SINGLEPLAYER_SLICE.md#production-animation-and-hardpoint-startup-2026-09-27).
-
-Native audio status (2026-09-27): the existing window-manager check now also
-executes `IStreamer` PCM playback and notifications. Retail training speech
-executes with the optional external shared-LGPL FFmpeg IAC decoder; see [the audio contract](NATIVE_AUDIO_STREAMER.md).
-This is not mission execution. For IAC, configure either Linux preset with
-`-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON -DCMAKE_PREFIX_PATH=/external/lgpl-prefix`
-after building the reviewed dependency as documented there. The default stays
-SDL-only and rejects IAC; GPL-enabled FFmpeg libraries are rejected at configure.
-Existing build/test commands are unchanged.
-The explicit `--skip-movies` option excludes full-screen cinematics for the
-training checkpoint through the existing App flag; it preserves audio and
-animation requirements. The source profile now completes `GameSystem::startup`.
-
-Status: incremental native bring-up, 2026-09-27. The supported VS2022 Win32 Debug and Final
-no-deploy builds were rebuilt on physical Windows 11, including the 18 campaign modules.
-Fresh modules passed the original campaign import check. On the physical Windows host, the
-restored Final D3D9 path reached the main menu, first Terran campaign briefing and a visible,
-scrollable game scene with external installed data and repository-built TextureLibrary. The first
-Terran mission currently shows the background and HUD but no running mission or units; the user
-separately reported two visible ships in the Celareon campaign. The repository-owned rendering
-fixture now also executes and captures through the supported Windows D3D9 path. Its 64-by-64 P6
-image passes the documented one-pixel-tolerant comparison with the visible Linux SDL/Vulkan
-capture; this is synthetic cross-backend runtime evidence, not retail gameplay parity. See
-[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
+The protected CI workflow now separates technical preparation from M3
+comparison acceptance; actual CI execution remains pending. CI prepares
+candidates; user playtests accept gameplay and complete presentation.
 
 ## Mission
 
@@ -300,13 +106,24 @@ FrontierX is successful when:
 3. A legitimate retail installation can supply all required media without copying that media into
    this repository or its release artifacts.
 4. Campaign loading, gameplay, saves, maps, and other supported retail data remain compatible.
-5. Simulation behavior remains deterministic across supported builds.
+5. Original simulation semantics are preserved; complete cross-build determinism is a separate
+   validation milestone, not a prerequisite for initial single-player mission acceptance.
 6. The retail acceptance matrix has Linux evidence comparable to the Windows baseline.
 
 Multiplayer, additional architectures, and other operating systems are later milestones. They must
 not broaden the first Linux bring-up.
 
 ## Ordered Strategy
+
+P0 workflow implementation now separates technical playtest preparation from
+strict deferred M3 diagnostics, using existing protected runners and private
+candidate handoffs. Actual CI execution remains pending; see
+[Linux playtest CI](LINUX_PLAYTEST_CI.md) for commands and local evidence.
+
+The active post-M2 sequence is CI preparation, first regular campaign mission,
+mission-by-mission expansion and single-player completion. The foundational
+strategy below remains architectural guidance, not an instruction to repeat
+completed bring-up or block playable content on full M3 comparisons.
 
 1. **Protect the baseline.** Record source provenance, preserve the working Win32 build, retain ABI
    and layout checks, and establish small executable tests where possible.
@@ -320,8 +137,8 @@ not broaden the first Linux bring-up.
    Compare a representative scene with Windows and replace unsupported D3DX9 facilities explicitly.
 5. **Port content services.** Address audio and video after startup, data loading, input, and basic
    rendering are measurable. Network transport comes after deterministic single-player behavior.
-6. **Package last.** Release packaging starts only after license, dependency provenance, retail-data
-   separation, and runtime acceptance checks are automated.
+6. **Package last.** Release packaging requires license/dependency review, automated retail-data
+   separation checks and runtime acceptance that includes documented user playtests.
 
 Each phase must leave a testable result. Avoid broad mechanical rewrites that mix build-system,
 platform, renderer, ABI, and gameplay changes in one step.
@@ -602,7 +419,7 @@ permission is obtained. Raw retail binaries, disassembly projects, decompiler ou
 extracted media stay outside the repository.
 ## Port readiness follow-up
 
-See [Linux port readiness](PORT_READINESS.md) for the first proposed layout-probe milestone,
+See [Linux port readiness](PORT_READINESS.md) for the active campaign delivery plan,
 initial blocker inventory, ABI tool parameters and pending validation. The layout probe and isolated
 TinyXML library are implemented; there is no native game build. The ABI scripts are parameterized,
 reject non-Windows hosts, and still require native Windows execution with `dumpbin`.
@@ -743,3 +560,278 @@ and Sol_Train.dmission uses the original selector/briefing. M2 Linux training
 and winning return are accepted in the documented optional runtime scope;
 other campaigns, host leak/resize limits and M3 comparisons remain outside
 that acceptance. Commands and limits: [native singleplayer evidence](NATIVE_SINGLEPLAYER_SLICE.md).
+
+## Historical status snapshots before the priority reset
+
+The dated entries below preserve earlier evidence. Their next-step instructions
+are superseded by the current direction and active readiness plan above.
+
+Latest M3 evidence (2026-10-13): **NOT ACCEPTED**. Completed protected CI
+[run38426508626](https://github.com/Michael2543/frontierX/actions/runs/38426508626)
+at `b24115686c0f733f3d22a7ee852f638dd26cd205` fails overall. Its six Linux
+CPU scopes and both explicit GPU jobs pass; native observer export, mission,
+sanitizer and comparison gates fail. Follow-up
+[run38439947717](https://github.com/Michael2543/frontierX/actions/runs/38439947717)
+at `b6ca3dd2051703764cbf0144516bce22b6442f16` is still running. Both GPU jobs
+pass; native Debug/Final rebuilds and ABI execute successfully, but the job
+fails afterward in the launch-helper regression. Windows mission is skipped.
+GCC measured mission sanitizers expose an unaligned Planetoid sync store after
+the preceding OpAgent correction. Working-tree follow-up is supplementary,
+not executed CI proof. The user confirms the separate Steam executable is
+unmodified retail; its runtime has not yet been compared. The user subsequently reports that conversations also fail in the unchanged
+Steam installation on this host. Its audio runtime is therefore not a valid
+oracle; codecs/environment are a user hypothesis, with cause still unproved. Full state/RNG, repeatability and Save/Reload continuation remain open.
+See [the current evidence](M3_SIMULATION_COMPARISON.md#retail-reference-and-next-sync-boundary-2026-10-13).
+
+Earlier updates below are dated historical snapshots.
+
+Latest M3 working update (2026-10-13):b241156 CI run38426508626 actually passes
+both explicit X11 GPU jobs; its introduced native observer export and mission
+sanitizer gates fail. Working corrections retain sound through real completion,
+fix the Linux variable-length sync append and expand declared global/world
+state at complete physical boundaries. Native comparison fixtures and private
+SSH cross-platform plus production RandomGen vector jobs are prepared; their
+corrected complete CI execution is pending. Same-build live speech/script and
+Save/Reload continuation still differ; M3 remains **NOT ACCEPTED**. The current
+[evidence/normalization ledger](M3_SIMULATION_COMPARISON.md#post-physical-state-and-sound-lifetime-follow-up-working-tree-2026-10-13)
+supersedes older pending-run summaries below.
+
+Current M3 update (2026-10-13): **NOT ACCEPTED**. Completed protected Actions
+[run38386971218](https://github.com/Michael2543/frontierX/actions/runs/38386971218)
+atd089a15 passes six Linux CPU build scopes and native Windows Debug/Final/ABI;
+GPU/mission/sanitizer/compatibility gates fail. Run38384161068 was cancelled.
+Current Linux working-tree follow-up corrects typed Field factory access and
+RandomGen's original Win32 default domain, excludes uncontrolled host input
+through a narrow fixture, uses the original player move event and expands
+semantic script/operation observations. Explicit X11 GPU preparation is moved
+after first presentation. Supplementary results do not replace CI; full
+physics/RNG coverage, repeatability, equivalent Save/Reload continuation and
+retail/visible/audible corroboration remain open. Windows product repair remains
+out of scope. See [the current owner/evidence ledger](M3_SIMULATION_COMPARISON.md#completed-d089a15-ci-and-next-owner-corrections-2026-10-13).
+Earlier pending-run statements below are historical snapshots.
+
+Current Sol_Train milestone, M2, 2026-10-12: **Linux gameplay complete in
+the agreed scope**. Original selector/briefing, all23 training goals, required
+HUD/commands/map, pause, early/later F7/F8, actual victory/Continue and repeated
+entry/load/close execute under GCC/Clang on lawful external data. GCC full
+fresh gameplay and Clang's own early-save continuation/user completion are
+separate from latest bounded lifecycle repeats. Current GCC/Clang/ASan end/
+restart/reload closes check original hints idle and live mission streams0.
+ASan reports no invalid-memory/UBSan error in the observed path; whole LSan
+still fails on3156B/7 host NVIDIA/PipeWire/DBus allocations. Explicit media
+exclusions, unavailable optional nontraining providers and ordinary Wayland
+probe resize remain documented limitations, not success placeholders.
+
+The active composition uses original App/Engine/event/resource/gameplay owners,
+the existing native render/font/audio adapters and original command processing.
+No replacement training, altered objectives, simulation/RNG order or save
+format is introduced. Default font/decoder-free builds compile/check; full
+visible M2 uses the optional external font/shared decoder configuration.
+M3 comparison/determinism is now in progress, with supplementary native
+Windows Debug/Final full rebuilds and same-build campaign ABI execution.
+Actions run38368454837 at62662a1 passes Linux GCC/Clang default/optional/
+sanitizer jobs and native Windows Debug/Final plus same-build ABI. Host/GPU/
+mission and CRT compatibility comparisons fail. The user's restored Windows
+skips conversations in all missions; further Windows repairs are out of scope,
+and that path is not the Linux behavior specification. Current Linux work adds
+original frame/checkpoint test access and corrects native UTF sibling order;
+complete semantic/RNG/script/order capture and equivalent Save/Reload continuation
+remain open, as do retail/visible/audible checks. See
+[M3 comparison evidence](M3_SIMULATION_COMPARISON.md).
+Current Actions run38384161068 tests118efae. A Linux-only Camera startup
+return-contract fix and opt-in workflow `gpu_host_setup=hyprland-x11` prepare
+corrected startup/GPU checks; their runtime/CI proof remains pending. The GPU
+setup changes only owned test windows, with no persistent desktop rules.
+The next acceptance milestone remains M3 comparison/determinism. Windows/module ABI and actual
+retail comparison are explicitly assigned there by the user; no current
+Windows or parity pass is inferred. Details: [final M2 evidence](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12)
+and [current next step](PORT_READINESS.md).
+
+Current original gameplay Hintbox checkpoint, M1, 2026-10-11: normal SDL
+mouse hover now reaches original FieldManager/HintResource in Sol_Train.
+Separate visible GCC/Clang runs show Cygnus and medium asteroid hints from
+original resources, target switching/removal, new hover after source reload,
+and clear text/timers/ownership on actual mission close. Original edge-scroll
+camera access is enabled without toolbar/hot-rectangle UI. Selection,
+movement, training objectives, source text/voices and moved-state save/reload
+remain demonstrated. Existing focused lifecycle and Clang ASan/UBSan checks
+passed; sanitizer scope excludes full mission execution and leak checking.
+M1's selected Linux gameplay acceptance is demonstrated; native Windows
+Debug/Final and module-ABI execution are an external open gate, not a success.
+Next: execute that gate on the supported host, then M2's original controls
+for the next Sol_Train multiple-selection/control-group/command objective.
+No full UI, cross-compiler determinism or retail parity is claimed. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-gameplay-hintbox-checkpoint-m1-2026-10-11).
+Older entries below are historical.
+
+Current UnitComm alert checkpoint, 2026-10-11: original alert history,
+colors and expiry now reach the optional native font/render adapter. Explicit
+`--mission-alert-smoke` invokes original `MScript::AlertMessage` on the
+selected external-data Forger; visible GCC/Clang runs drew its cyan warning
+and red Teletype, retained normal movement/objectives and passed source
+save/reload. This controlled source call is not a naturally triggered combat
+alert. Focused lifecycle and Clang ASan/UBSan checks passed with leak checking
+disabled. Map pings remain explicitly excluded by `--skip-sector-map`.
+Gameplay Hintbox hover remains unverified (zero draws); next is its real
+caller/resource ownership and the needed original UI closure. Windows/ABI,
+full mission sanitizers and retail parity remain open. See
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-unitcomm-alert-rendering-checkpoint-2026-10-11).
+Older entries below are historical.
+
+Current status and unit-text checkpoint, 2026-10-11: original StatusBar and
+ScrollingText now draw through the optional FreeType adapter during the
+selected native mission. UnitComm selection/movement text and voices run
+alongside original training speech subtitles. Separate visible GCC/Clang
+Wayland/Vulkan runs passed normal input, objectives and moved-state source
+save/reload; a GCC capture shows status, unit text and speech together.
+Original Hintbox passed synthetic timing/font lifecycle checks, but no
+visible gameplay hint executed. Focused Clang ASan/UBSan passed with leak
+checking disabled. Next: UnitComm alerts and real gameplay hint callers.
+Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
+remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-status-and-unit-scrolling-text-checkpoint-2026-10-11).
+Older entries below are historical.
+
+Current mission subtitle checkpoint, 2026-10-11: original `Subtitle.cpp`
+now owns selected training speech subtitles through EventSystem and the
+optional FreeType font/render adapter. Separate visible GCC/Clang
+Wayland/Vulkan runs passed multiline subtitle draws, normal selection/movement
+and source moved-state save/reload. Training speech is enabled; portraits
+and UnitComm voice/text remain explicitly excluded in this combination.
+Focused source lifecycle and Clang ASan/UBSan checks passed with leak checking
+disabled. Next: original status/hint/scrolling text, including UnitComm text.
+Windows/ABI, font/audio comparison, full mission sanitizers and retail parity
+remain open. See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-mission-speech-subtitles-checkpoint-2026-10-11).
+Older entries below are historical.
+
+Current in-window teletype checkpoint, 2026-10-10: original `Teletype.cpp`
+now owns selected training objective text, reveal/caret and expiry through
+EventSystem and the existing native App render boundary. An optional
+FreeType `IFontDrawAgent` uses an explicitly external face and source pixel
+height; default builds remain FreeType-free. Separate visible GCC/Clang
+Wayland/Vulkan mission runs passed text, normal selection/movement, unit
+voices and source save/reload. The original owner lifecycle check also
+passed under Clang ASan/UBSan with leak checking disabled. Next: status,
+hint/scrolling text and subtitles through their production owners.
+Windows font/ABI, full mission sanitizers and retail parity remain open.
+See [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#original-in-window-mission-teletype-checkpoint-2026-10-10).
+Older entries below are historical.
+
+Current unit voice checkpoint, 2026-10-10: original UnitComm and StringData
+now connect normal selection/movement in the selected external `Sol_Train`
+mission to native ISoundManager and production IStreamer. Separate visible
+Wayland/Vulkan GCC/Clang optional-FFmpeg Debug runs started two unit voices,
+completed one, stopped one and retained no active stream; both preserved
+movement, objectives and source mission save/reload and exited zero.
+This requires the reviewed external shared-LGPL IAC decoder and explicit
+unit-alert/subtitle and mission-SFX exclusions. Next: restore in-window
+text/teletype through the original owners. Windows/ABI, full mission
+sanitizers, audible comparison and retail parity remain unverified. See
+[the focused voice record](NATIVE_SINGLEPLAYER_SLICE.md#original-unit-voice-mission-checkpoint-2026-10-10).
+Older entries below are historical.
+
+Current native modal mission checkpoint, 2026-10-10: the selected external
+`Sol_Train` mission now enters source `CQDoModal` after startup. Its source
+event, frame-time, render, simulation and GameSystem update order runs through
+the existing `IRenderPipeline`/SDL GPU backend. A source `CQE_PLAYER_QUIT`
+event returns modal result 4; the shell then saves/reloads the moved Forger
+and objectives and closes the mission. Separate 15-second visible
+Wayland/Vulkan GCC and Clang runs passed with normal mouse selection and
+movement. A no-duration run also exited cleanly after a normal window close.
+Native menu hot rectangles, CPU framebuffer locking and the explicitly
+excluded media/UI paths remain open; Windows, ABI and retail parity are
+unverified. See [the focused modal record](NATIVE_SINGLEPLAYER_SLICE.md#source-modal-mission-integration-2026-10-10).
+Older status entries below are historical.
+
+Current native frame-boundary checkpoint, 2026-10-10: the selected mission
+now uses production `IRenderPipeline` clear/begin/end/swap backed by SDL GPU.
+GCC and Clang CPU checks and separate visible X11/Vulkan synthetic GPU
+runs passed; visible Wayland mission runs completed selection, movement,
+training objectives and moved-state save/reload. Full-target color/depth
+clear is supported; partial/stencil operations remain explicit failures.
+The default desktop GPU CTest resize failed under Wayland tiling; separate
+floating X11 runs passed. Next: link the source `CQDoModal` event/timing/UI
+closure, then restore excluded in-game media. Windows and retail parity
+remain unverified. See [the focused frame record](NATIVE_SINGLEPLAYER_SLICE.md#native-mission-frame-lifecycle-checkpoint-2026-10-10).
+Earlier status entries below are historical.
+
+Current native playable-slice status (2026-10-10): GCC and Clang Linux
+x86_64 Debug builds load lawful external `Sol_Train` data, present the
+player-owned Forger through the production Engine/SDL/Vulkan path, accept
+normal left-click selection and right-click movement through original
+offline operation owners, advance source simulation to training objectives
+1 and 2, and round-trip the moved unit and objectives through source
+mission save/reload. Both visible integrated runs exited zero; full native
+CTest trees passed. Required `IStreamer` remains active. Full-screen
+`IVideoSystem` and other incomplete optional media/UI paths were excluded
+only by explicit flags. This bounded checkpoint is not complete gameplay
+or Windows retail parity; Windows Debug/Final, ABI and unit-bearing Windows
+mission comparison remain open. See
+[the focused acceptance record](NATIVE_SINGLEPLAYER_SLICE.md#playable-solarian-training-checkpoint-2026-10-10).
+The status snapshots below are historical.
+
+Native mission-map status (2026-09-27): the selected external
+`Sol_Train.dmission` has no saved system-map child. A bounded native
+`ISystemMap` owner now executes that fresh-load branch and is linked
+into the shell, but the App mission still cannot link or run; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-system-map-fresh-load-gate-2026-09-27).
+
+Native selected-script status (2026-09-27): the original `Sol_T.rc`
+now builds into checked native objective/subtitle resources with
+`llvm-rc`; the source training program and production `MScript` owner
+compile under GCC/Clang. The lawful external mission names `Sol_T.dll`
+and has a zero update count, matching the bounded fresh-load contract.
+The native shell still does not link or execute the script or mission;
+see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#selected-sol_t-localization-and-fresh-loader-gate-2026-09-27).
+The Linux Debug presets require Python 3 and `llvm-rc` for this
+source-resource target in addition to SDL3 and `glslc`.
+
+Native operation-owner status (2026-09-27): production `OpAgent.cpp`
+now builds under GCC and Clang with its required event callback and
+native millisecond clock contracts, but the App mission link still
+lacks player/host and packet services. No mission operation or unit
+movement has run; see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-operation-owner-native-build-gate-2026-09-27).
+
+Native App startup contract status (2026-09-27): the original
+`GlobalComponent` registration and cleanup functions now compile once
+for Windows `Trim` and native Linux, and link into the GCC/Clang shell.
+A focused check executed their order across 30 registrars. The mission
+and object owners still do not link into that shell, so no mission has
+started; see [the focused record](NATIVE_SINGLEPLAYER_SLICE.md#shared-app-global-startup-and-cleanup-owner-2026-09-27).
+
+Native animation-data status (2026-09-27): the production `IAnimation` and
+`IChannel2` owners loaded the external Forger `Sc_build` script through the
+mounted Steam `objects` archive under GCC and Clang (one script, 1.6 seconds).
+This does not create an object instance or run the mission; see
+[the focused record](NATIVE_SINGLEPLAYER_SLICE.md#production-channel-and-forger-animation-data-2026-09-27).
+
+Native startup status (2026-09-27): the unchanged source `Conquest.ini`
+completes production `GameSystem::startup` with source-profile Optics under
+GCC and Clang on lawfully
+external Steam archives with explicit full-screen movie skip. This is a
+bounded SDL dummy-window startup, not App global-owner initialization or
+mission gameplay. The next production gate is the post-startup App sequence
+in `Conquest.cpp`; see [the focused startup record](NATIVE_SINGLEPLAYER_SLICE.md#production-animation-and-hardpoint-startup-2026-09-27).
+
+Native audio status (2026-09-27): the existing window-manager check now also
+executes `IStreamer` PCM playback and notifications. Retail training speech
+executes with the optional external shared-LGPL FFmpeg IAC decoder; see [the audio contract](NATIVE_AUDIO_STREAMER.md).
+This is not mission execution. For IAC, configure either Linux preset with
+`-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON -DCMAKE_PREFIX_PATH=/external/lgpl-prefix`
+after building the reviewed dependency as documented there. The default stays
+SDL-only and rejects IAC; GPL-enabled FFmpeg libraries are rejected at configure.
+Existing build/test commands are unchanged.
+The explicit `--skip-movies` option excludes full-screen cinematics for the
+training checkpoint through the existing App flag; it preserves audio and
+animation requirements. The source profile now completes `GameSystem::startup`.
+
+Status: incremental native bring-up, 2026-09-27. The supported VS2022 Win32 Debug and Final
+no-deploy builds were rebuilt on physical Windows 11, including the 18 campaign modules.
+Fresh modules passed the original campaign import check. On the physical Windows host, the
+restored Final D3D9 path reached the main menu, first Terran campaign briefing and a visible,
+scrollable game scene with external installed data and repository-built TextureLibrary. The first
+Terran mission currently shows the background and HUD but no running mission or units; the user
+separately reported two visible ships in the Celareon campaign. The repository-owned rendering
+fixture now also executes and captures through the supported Windows D3D9 path. Its 64-by-64 P6
+image passes the documented one-pixel-tolerant comparison with the visible Linux SDL/Vulkan
+capture; this is synthetic cross-backend runtime evidence, not retail gameplay parity. See
+[WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).

@@ -6,6 +6,10 @@ struct ICOManager;
 namespace FrontierX
 {
 bool RegisterNativeEngine(ICOManager *manager);
+
+// Native static owners distinguish a failed declared component from absence.
+// The legacy BOOL32 component interface cannot express that distinction.
+struct NativeArchetypeLoadFailure {};
 }
 
 #endif

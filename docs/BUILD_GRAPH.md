@@ -1,3 +1,294 @@
+2026-10-14 speaking-marker follow-up: all five standard/full-media GCC/Clang
+Debug and strict Clang sanitizer graphs rebuild/link. The existing focused
+layout, batcher header/runtime, three material variants and native shell checks
+execute7/7 per configuration without failures/skips, including the added
+four-phase stable-anchor/quad-height regression. Fatal ASan/UBSan with leak
+detection is clean in this synthetic scope; historical whole-process mission
+leaks remain open. Renewed visible speech-marker/user, actual GitHub CI and
+native Windows Debug/Final/module ABI execution remain pending. No full mission
+is automated. Commands and render contract are in GAME_MATERIAL_PATH.
+
+2026-10-14 selection/warp/communication feedback final snapshot: all five
+existing standard/full-media GCC16.2.1/Clang22.1.8 Debug and full-media strict
+Clang sanitizer graphs rebuild/link completely after the selection header fix.
+The exact focused set (layout, batcher header/runtime, three material variants
+and native shell lifecycle) executes7/7 in each configuration, zero failures
+or skips. ASan leak detection and fatal ASan/UBSan are enabled for that focused
+run; this does not supersede the historical whole-process mission LSan failure.
+The first full-graph attempts exposed a missing CQEFFECTS declaration in shared
+nonship callers; the owning native DEffectOpts include fixes it, and failed logs
+remain external. No assertion was weakened. Existing CI helper regressions
+execute17/17. Original bounded fresh campaign/warp and checkpoint/render/close
+runs execute locally; colorful hit artifacts and normal victory teardown remain
+unverified. Actual CI and native Windows Debug/Final/module ABI remain pending.
+Detailed production contracts/evidence: GAME_MATERIAL_PATH and
+NATIVE_AUDIO_STREAMER. Previous wider graph/GPU results below are historical
+validation scopes, not rerun counts for this narrower increment.
+
+2026-10-14 final wheel/Harvester/FPS feedback snapshot: all five native graphs
+build and link. Standard and full-media GCC16.2.1/Clang22.1.8 Debug each execute
+53 non-host checks without failures/skips; strict Clang ASan/UBSan executes19
+focused checks without reports/skips. Both final full-media X11/Vulkan fixture
+pairs execute2/2, including real buffer reuse, indexed/direct growth/shrink,
+three equal images, cache pressure, map/movie retirement and resize. The final
+SDL fixture now ends with additional combined geometry; both compilers agree
+on3426834067934165649/3072 changed pixels. Do not compare that final-scene checksum
+to the older scene. Actual CLI early-failure/speed-guard runs preserve preference
+flags/speed under GCC, Clang and strict sanitizers. Bounded normal-input Wayland
+T1/F8/wheel/close reaches approximately60 source FPS without media exclusions;
+full gameplay remains user-operated. Current GPU/CPU evidence is local; native
+Windows Debug/Final/module ABI and actual CI are unperformed. Whole-process
+mission2988-byte LSan and other historical failures remain open. Detailed
+commands/contracts/limits are in GAME_MATERIAL_PATH and LINUX_PLAYTEST_CI.
+
+2026-10-14 current cursor/cache feedback snapshot: standard GCC16.2.1 and
+Clang22.1.8 Debug, plus both FreeType/IAC/VIDEOon configurations, rebuild and
+execute53 non-host checks each without failures/skips. The additional check
+protects original cursor-resource decoding. Strict Clang ASan/UBSan executes19
+focused checks without reports/skips. Both optional compilers execute the real
+X11/Vulkan SDL/game-material fixture pair, including exact-state pipeline cache
+pressure/readback. Actual27-ID cursor Wayland checks pass under GCC, Clang and
+strict Clang sanitizers. These are local runs; actual CI, native Windows Debug/
+Final and affected module ABI remain unexecuted. Bounded retail ready-HQ F8/
+close and low11.2 FPS are detailed in GAME_MATERIAL_PATH; prior mission LSan
+failures remain failures. The final native Platform ambient-script repair also rebuilds/links all five
+graphs and retains the four53-check and strict19-check results. This is
+compilation/regression evidence; actual named ambient motion/reload remains
+unverified. No GPU/cursor repeat is needed for this unchanged-backend follow-up.
+
+2026-10-14 post-reboot recovery (current execution): repository source changes
+survive; temporary external builds, dependency prefixes, captures and genuine
+mission checkpoints do not. Fresh durable external GCC16.2.1 and Clang22.1.8
+standard Debug and optional FreeType/IAC/VIDEOon graphs build successfully.
+Each executes 52 non-host checks without failures or skips. The restored
+optional Clang ASan/UBSan graph executes 19 focused checks with leak detection
+and fatal sanitizer settings, without reports or skips. Reviewed unmodified
+FFmpeg9.0.1 is rebuilt as the documented external shared-LGPL closure.
+Both restored optional compiler configurations now execute the existing
+`portability.game_material_gpu` and `portability.sdl3_gpu` pair on X11/Vulkan,
+without failures or skips. Real resize, captured resource retirement and
+readback execute; corresponding image checksums agree between compilers.
+Genuine mission checkpoints have since been recreated as recorded below;
+earlier runtime observations below remain historical evidence. The previous
+whole-mission leak and offscreen-window failures remain unresolved. No current
+whole-mission sanitizer, user acceptance, actual CI or native Windows/module-ABI
+pass is inferred from these rebuilt CPU checks.
+
+Final build-cursor correction: all four standard/full-media GCC/Clang graphs
+rebuild and execute52 non-host checks each without failures/skips; Clang's
+strict sanitizer graph executes19 selected checks without reports/skips.
+The existing `portability.app_cursor` real-host check executes under GCC,
+Clang and strict Clang sanitizers, including original BUILD127 acceptance
+and failed-request state preservation. Actual optional Clang Terran ready-HQ
+F8/Turret preview/close executes2035 source frames and returns0; detailed
+green/red mesh/material evidence is in GAME_MATERIAL_PATH. The earlier
+recreated full flow closes normally after12753 source frames. Whole-process
+sanitizer continuation is recorded below; native Windows/ABI and actual CI remain open.
+
+Actual strict Clang sanitizer continuation now executes original active-HQ
+F8 from the unchanged2167/3500 checkpoint,20 seconds of source continuation,
+F7 and normal close. It records830 source frames, return4, audio0 and idle hints,
+but the whole process fails LeakSanitizer:2988 bytes/seven allocations, exit1.
+No preceding invalid-memory or UBSan report is observed. The earlier manual
+attempt fails its180-second watchdog and has no normal-close/final-LSan result.
+Both failures remain failures; different leak totals are not normalized away.
+Full mission playthroughs/presentation acceptance remain user-operated.
+
+2026-10-14 active-construction sanitizer follow-up: original F8 reload exposes
+an actual asteroid-background squared-distance5.17852e10 conversion to U32;
+UBSan halts before close. Native checked floored IEEE32 keys now retain original
+RadixSort stable integer-floor ordering without that conversion. All four full
+graphs rebuild and pass their non-host suites; both focused sanitizer scopes
+pass, including genuine original-radix bounded/large/invalid-input cases. A first
+source-fixed host retry fails through an offscreen window/watchdog, without
+observed F8 completion, normal close or final LSan result. Corrected on-output
+retail execution is pending. Neither failed run is a sanitizer pass or a
+reclassification of the older external-library leak report.
+
+2026-10-14 final user-feedback source snapshot: four full GCC16.2.1/Clang22.1.8
+Debug graphs (standard and optional FreeType/IAC/VIDEOon) build; each executes
+52 non-host checks without errors or skips. Both complete optional sanitizer
+graphs build and execute19 selected strict ASan/UBSan checks without reports or
+skips. The connected material fixture covers scoped placement green/red and
+alpha128, success/exception dispatch restoration and ten original weapon pitch
+formula cases (five target directions with horizontal/elevated initial sight).
+It uses proper typed camera and existing native VB owners. Initial missing
+camera/VB fixture closures and the GPU-only CPU-recorder assertion fail are
+retained as failed attempts; no source assertions were weakened.
+
+Both compiler configurations execute the existing SDL GPU and game-material
+GPU pair2/2 on X11/Vulkan. Captured uploads, presentation/readback, repeated
+frames, retirement and unchanged resize checks pass with the new scoped GPU
+idle guard. Actual optional Clang VIDEOon complete HQ F8 executes real Sc_build
+restoration, extended Fabricator wings and original combat: four Bolt and two
+Plasma samples align their physical velocity with the actual target displacement
+(direction cosine effectively1); both original render owners execute. After
+user release, normal F7/close returnsQUIT4/native0 after2559 source frames.
+No source state, target or goal is manufactured. Active-construction full-process
+sanitizer continuation subsequently failed as recorded above; its previous leak failure is not
+reclassified. Complete user outcomes/presentation, training gatling, actual
+GitHub Actions and native Windows Debug/Final/module ABI remain open.
+The captured-upload performance correction has no controlled post-fix FPS claim.
+
+Previous feedback checkpoints follow.
+
+2026-10-14 user-feedback correction checkpoint: the four GCC16.2.1/Clang22.1.8
+Debug graphs (default and optional FreeType/IAC/VIDEOon) rebuild the native
+RenderBatcher, ship attachments and original Terran construction integration.
+Each executes all 52 non-host checks without failures or skips. Both optional
+VIDEOon ASan/UBSan graphs execute 19 selected checks with strict leak detection
+and halt enabled, without reports or skips. The existing Batcher fixture now
+registers its genuine scalar math provider and checks receiver transforms,
+transactional failures and all four projection/viewport transitions. A preserved
+pre-fix owner fails these same predicates. The earlier missing-provider crash
+and invalid fixture matrix indexing are recorded as failed fixture attempts;
+neither is a game runtime failure or a pass.
+
+Actual optional Clang VIDEOon original F8 resumes the existing HQ construction.
+Read-only comparison of the unchanged 524-byte record observes hull1068/3500,
+ready0, timeSpent27.4667 becoming3500/3500, ready1, timeSpent90 through the source
+completion path. Normal F7/F8 and close execute with native exit0. A separate
+tracked original reload/close executes1596 source frames,1311 GirderRender calls
+and455 construction texture-channel calls. The selected channel uses55 vertices
+and60 indices with the authored construction texture. These are bounded original
+construction execution checks. Ordinary host inputs outside the observer recipe
+also occurred; resulting Refinery/full-Harvester state is not attributed to a
+controlled test sequence. Private captures show corrected glow placement and
+cargo alignment, but lack a controlled original-image comparison.
+
+Actual weapon direction, free-space green placement preview and shipyard
+construction still require targeted execution. Planet-attached green preview
+is not free-space evidence. New GPU fixture runs and whole-mission sanitizer
+reload/close remain pending for this source snapshot; the preceding whole-process
+LeakSanitizer failure remains open. Actual GitHub Actions, native Windows
+Debug/Final/module ABI, full user audiovisual/gameplay acceptance and separate
+M3 comparisons are not claimed passed.
+
+Previous checkpoint follows.
+
+2026-10-14 current technical checkpoint: complete default GCC16.2.1/Clang22.1.8
+and optional FreeType/IAC/VIDEOon GCC/Clang graphs build. Each executes all 52
+non-host checks without failures or skips. Both complete optional VIDEOon
+ASan/UBSan graphs execute 19 selected checks with leak detection and halt
+enabled, without reports or skips. Existing SDL GPU and game-material GPU
+checks execute on the available X11/Vulkan host under both compilers, including
+captured-texture retirement, strict stale/bound rejection and image preservation.
+The genuine pooled RenderBatcher regression verifies both stages and rejects
+stale ownership. Native MovieScreen and its source-defined first-time Terran
+intro request are compiled only in the optional movie configuration.
+
+Actual optional Clang VIDEOon Terran enters through the original selector,
+animated briefing and Start without presentation exclusion flags. Normal early,
+active-movement and original-group/scouting F7/F8 execute three save/load pairs;
+3375 source frames end through QUIT4 with native exit0. An interim single font
+still prevents complete typography acceptance. Original physical records prove
+all 64 dynamic actors load; the original header's 67 is stale progress metadata,
+and is not rewritten. A subsequent original-control continuation naturally triggers the first Mantis
+encounter, damage/kills, Fabricator arrival and real HQ construction with source
+resource costs. Encounter/damaged and active-HQ F7/F8 return success; 4064 source
+frames close through QUIT4/native exit0 with audio0/hint idle. A separate normal F8/25-second/F7 continuation advances the original saved HQ
+hull394 to1068 of3500, with ready0 and no inserted orders; 149 source frames
+close normally. HQ completion, later combat/AI, victory/defeat and complete user
+presentation remain open. The gray planet output was traced to reversed extended/game shader arguments
+in the playtest helper, not missing assets. A corrected same-build F8/system-map
+retry shows colored continents/cloud structure and HQ textures, then closes
+through QUIT4/native0 after 179 source frames. The exact shader-order regression
+and refreshed handoff are recorded in the CI document. Earlier full source
+state/load checks did not prove correct pixels under that faulty launch.
+
+The latest optional VIDEOon Clang ASan/UBSan two-second actual Terran smoke,
+with corrected shader order, executes 37 original mission frames and normal
+source close with idle hint/audio owners. It fails process exit1: LeakSanitizer
+reports 3316 bytes in eight allocations. The preceding wrong-order smoke failed
+3396 bytes/nine allocations; these distinct snapshots are not normalized away.
+No invalid-memory or UBSan report precedes close. No leak suppression is used;
+cleanup responsibility remains unresolved and neither is a sanitizer pass.
+The earlier failed initial-load attempt is retained in the focused history.
+The launch-only helper correction executes17 existing regression cases and both
+registered CI gate/comparison checks; C++ graphs are unchanged and the complete
+matrix is not repeated for that command composition fix.
+
+The genuine VIDEOon provider fixture executes 25 synthetic MPEG pictures,
+exact colored-frame seeks, numeric decoded PCM, dummy-audio pause/EOF/loop and
+strict owner negatives under both compilers and sanitizers. Actual original
+MovieScreen displays external cq_intro through Wayland/Vulkan and closes
+normally through Esc and through complete natural EOF (185.02 seconds including
+initial decode, native exit0). Earlier 64-MiB file rejection and captured-texture
+release SIGABRT are retained in the focused ledger; their exact owner fixes
+pass. Actual audible sync, visual reference and complete user play remain open.
+Actual GitHub Actions and affected native Windows Debug/Final/module ABI remain
+unexecuted. Full M3 comparisons remain a separate deferred track.
+
+Historical checkpoints follow.
+
+2026-10-14 completed technical snapshot before the latest compound correction:
+four default/optional GCC/Clang graphs build and each executes 52 non-host
+checks with zero failures/skips; both GCC and Clang ASan/UBSan execute 18 focused
+checks with no reports. Fresh optional GCC executes both existing GPU checks
+on the explicit X11/Vulkan fixture host, including required-material rejection,
+opaque/alpha mip metadata, actual material pass verification and restoration.
+Initial outdated state-material assertions failed and were corrected to require
+failure on missing assets/null materials, retaining all positive predicates.
+A fresh strict Terran retail load then crashed on a null HybridCenter mesh
+after missing required maps. The subsequent native Engine/RenderMgr failure
+propagation and exact MeshManager compound-library preload fix that observed
+path: a rebuilt optional Clang Wayland/Vulkan retail retry requests all seven
+missing maps, runs 132 source frames and closes normally without those owner
+errors. Connected regression extensions and affected reruns remain in progress.
+This bounded load/close does not accept complete gameplay or presentation.
+Actual CI, Windows/ABI and full user P1b acceptance remain pending.
+
+2026-10-14 later P1b integration snapshot (validation in progress): the root
+optional Clang shell builds after typed drone ownership and new map/Ping hooks.
+The strict actual two-second mission retry reaches source loop/normal close
+without ASan allocation-mismatch or UBSan errors, but LeakSanitizer still fails
+(3396 bytes/nine allocations; deeper-unwind repeat 3556 bytes/eleven).
+Private executable mappings identify NVIDIA glcore and PipeWire/DBus allocation
+callers; cleanup responsibility remains under review and neither run passes.
+New native PolyMesh state checks expose missing CPU fixture backend callbacks,
+and the new map fixture initially fails. These failures are being fixed at
+their owners; previous completed suites below do not cover this unfinished
+increment. Actual CI, affected Windows/ABI and full P1b acceptance remain open.
+
+2026-10-14 P1b source SFX/texture checkpoint (local dirty working tree):
+independent optional GCC16.2.1, Clang22.1.8 and Clang ASan/UBSan build and
+execute native_shell, native_window_manager, render_pipeline and
+render_submission. Checks require the actual source AI UTF Save/Load and
+SFX pool/cache/RNG markers, strict original-family font-map negative cases
+and exact RGB5/A1 bytes/alpha threshold. The focused Clang instrumented
+scope executes17 checks with leaks/halt enabled and no failures/skips.
+Independent optional GCC and root Clang complete the existing sdl3_gpu CTest
+on the explicit hyprland-x11 SDL/Vulkan host, including authored nine-level
+TextureLibrary minification/change/restore, stage-one/alpha predicates,
+opaque primary frames, unchanged resize and repeated scenes. Ordinary Wayland
+resize remains failed. A later increment enables the original legacy material
+path for the regular mission: actual source light/material values, emissive
+UV2 and repeated split fixtures pass CPU GCC/Clang/focused Clang sanitizers,
+and the existing Clang game-material GPU check executes on X11/Vulkan.
+Four refreshed default/optional non-host suites pass before the newest
+animation/launcher/persistence increment. Actual strict mission sanitizers
+expose source ownership errors separately recorded in the CI document; no
+whole-mission sanitizer pass is claimed. Actual CI, affected Windows/ABI and
+full user P1b acceptance remain pending. Focused evidence: [renderer](RENDERER_BACKEND_PROTOTYPE.md),
+[technical CI](LINUX_PLAYTEST_CI.md), [campaign](NATIVE_TERRAN_CAMPAIGN.md).
+
+2026-10-13 P0 CI preparation, local dirty-working-tree supplement on Linux x86_64:
+clean GCC16.2.1/Clang22.1.8 default and optional FreeType2.14.3/shared-LGPL-audio
+Debug graphs build. After moving the existing display-dependent cursor CTest to
+an explicit host label, all four non-host suites execute51 tests with zero
+failures/skips (initial cursor skips correctly failed the CI report checker).
+Clean optional GCC/Clang ASan/UBSan graphs execute15 selected production-owner
+regressions each with leaks enabled and zero failures/skips; sandbox ptrace
+configure failures are retained and fresh approved unsandboxed runs succeed.
+Visible new optional GCC/Clang technical mission load/move/Save/Reload/close each
+executes with exit0 and source checkpoint/close markers. Ordinary Clang host
+cursor/material-GPU checks pass; SDL-GPU resize still fails. Clang instrumented
+mission reaches checkpoint/close but exits1 with LSan3924B/12alloc (no invalid
+ASan access/UBSan report in that run); exact leak ownership stays unresolved. Actual updated CI,
+native Windows rebuild/ABI and full user playtests remain pending. Commands,
+configuration, input provenance and further instrumented host results:
+[Linux playtest CI](LINUX_PLAYTEST_CI.md). No source layout/ABI/gameplay change.
+
 2026-10-13 M3 current supplementary validation (no CI execution): default
 GCC/Clang, optional font/shared-decoder GCC/Clang and optional Clang ASan/UBSan
 Debug graphs build and each executes52 non-GPU CTests with zero failures/skips
@@ -2454,3 +2745,25 @@ at62662a1 actually passes six Linux build/sanitizer jobs; its host/GPU/mission
 failures remain explicit. New fixed-period/exact256/512 Save/Load and private
 cross-build jobs require CI execution of the overlay. See the focused
 [M3 record](M3_SIMULATION_COMPARISON.md) for job IDs and exact runtime limits.
+
+
+## P1b technical snapshot (2026-10-13)
+
+Independent Linux x86_64 validation built complete default (font/FFmpeg OFF)
+and optional (font/FFmpeg ON) Debug graphs with GCC16.2.1 and Clang22.1.8.
+All four non-host CTest suites executed52 checks with no failures or skips;
+strict JUnit checking confirmed actual execution. The optional Clang ASan/UBSan
+focused suite executed16 checks successfully with `detect_leaks=1`,
+`halt_on_error=1` and UBSan halting with stack traces. This includes source AI
+UTF Save/Load/malformed input, Script01 schema/layout, UTF view-root, sound
+completion/highlight/lip parsing and renderer ownership checks. This CPU result
+does not accept whole-process retail mission leaks or full gameplay.
+
+The ordinary Wayland GPU CTest still fails its unchanged resize assertion.
+The existing explicit `hyprland-x11` host fixture separately passed the entire
+Clang `portability.sdl3_gpu` CTest after floating only its owned Xwayland window.
+Its new alpha-test discard/restore and stage-one ADD/independent UV and wrapped-
+vs-clamped sampler readbacks, existing resize/presentation and repeated scene
+checks actually executed. No persistent desktop configuration was changed.
+Native Windows Debug/Final/affected ABI, actual protected CI execution, full
+mission user acceptance and further evolving P1b media changes remain open.

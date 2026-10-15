@@ -37,6 +37,16 @@
 #include "IBuild.h"
 #endif
 
+#if !defined(_WIN32)
+#include "MeshRender.h"
+#include <stdexcept>
+namespace FrontierX
+{
+bool IsNativeTerranBuildEffect(const IBaseObject *effect);
+void ConfigureNativeTerranBuildVisual(IBaseObject *effect, bool directEngineShipHull);
+}
+#endif
+
 #ifndef FILESYS_H
 #include <Filesys.h>
 #endif
@@ -168,6 +178,37 @@ struct _NO_VTABLE ObjectBuild : public Base, IBuild, BUILD_SAVELOAD
 #endif
 	//----------------------------------	
 	OBJPTR<IBuildEffect> buildEffectObj;
+
+#if !defined(_WIN32)
+	// Borrow the original extent tree; its owner and serialized state stay unchanged.
+	IMeshInfoTree *GetNativeConstructionMeshTree()
+	{
+		return NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && building &&
+			FrontierX::IsNativeTerranBuildEffect(buildEffectObj.Ptr())
+			? this->GetMeshInfoTree() : nullptr;
+	}
+	void setupNativeTerranBuild(IFabricator *fabricator, bool restoring, bool reverse)
+	{
+		if (!NATIVE_USE_ORIGINAL_LEGACY_MATERIALS || this->race != M_TERRAN) return;
+		IBaseObject *effect = fabricator->GetBuildEffectObj();
+		if (!effect || !effect->QueryInterface(IBuildEffectID, buildEffectObj, NONSYSVOLATILEPTR) ||
+			!FrontierX::IsNativeTerranBuildEffect(buildEffectObj.Ptr()))
+			throw std::runtime_error("Native Terran construction requires the original build effect owner");
+		IMeshInfoTree *tree = this->GetMeshInfoTree();
+		if (!tree || !this->GetMeshChain().numChildren)
+			throw std::runtime_error("Native Terran construction requires the original extent mesh tree");
+		OBJPTR<IBaseObject> fabObject;
+		if (!fabricator->QueryInterface(IBaseObjectID, fabObject, NONSYSVOLATILEPTR))
+			throw std::runtime_error("Native Terran construction requires the original fabricator object");
+		FrontierX::ConfigureNativeTerranBuildVisual(buildEffectObj.Ptr(),
+			objClass == OC_SPACESHIP && !(this->instanceMesh && CQEFFECTS.bFastRender));
+		U32 buildTime = (pInitData->buildTime*(1.0-MGlobals::GetAIBonus(playerID)));
+		buildEffectObj->SetupMesh(fabObject.Ptr(), this, tree, this->instanceIndex,
+			buildTime ? buildTime : 1.0);
+		if (restoring || reverse)
+			buildEffectObj->SetBuildPercent(reverse ? 1.0 : (buildTime ? timeSpent/buildTime : 1.0));
+	}
+#endif
 	
 	SINGLE emitterPause;
 	bool emissiveMask:1;
@@ -312,6 +353,15 @@ void ObjectBuild< Base >::Build (IFabricator *_fab)
 		}
 	}
 */
+#if !defined(_WIN32)
+	setupNativeTerranBuild(fab, false, false);
+	if (buildEffectObj)
+	{
+		buildEffectObj->AddFabricator(_fab);
+		U32 buildTime = (pInitData->buildTime*(1.0-MGlobals::GetAIBonus(playerID)));
+		buildEffectObj->SetBuildRate(buildTime ? 1.0/buildTime : 1.0);
+	}
+#endif
 	SetVisibilityFlags(fab.Ptr()->GetVisibilityFlags());
 	emissiveMask = true;
 }
@@ -339,6 +389,11 @@ void ObjectBuild< Base >::AddFabToBuild (IFabricator * _fab)
 		}
 	}
 */	
+#if !defined(_WIN32)
+	// Assist-building shares the already initialized primary effect. Reload
+	// reconstructs it once; another assisting fabricator must not reset its tree.
+	if (!buildEffectObj) setupNativeTerranBuild(fab, true, false);
+#endif
 	if (buildEffectObj)
 	{
 		buildEffectObj->AddFabricator(_fab);
@@ -599,7 +654,16 @@ void ObjectBuild< Base>::BeginDismantle(IBaseObject * _fab)
 				buildEffectObj->SetBuildPercent(1.0);
 			}
 		}
-*/	}
+*/
+#if !defined(_WIN32)
+		setupNativeTerranBuild(fab, false, true);
+		if (buildEffectObj)
+		{
+			buildEffectObj->AddFabricator(fab);
+			buildEffectObj->SetBuildRate(buildTime ? -REVERSE_SPEED_FACTOR/buildTime : -1.0);
+		}
+#endif
+	}
 	
 //	SetupMesh(buildRate/(pInitData->buildCost*REALTIME_FRAMERATE));
 //	ReBuild();

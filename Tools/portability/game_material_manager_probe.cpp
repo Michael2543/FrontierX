@@ -4,6 +4,9 @@
 #include "FrontierX/GameTextureManager.h"
 #include "FrontierX/NativeEngine.h"
 #include "FrontierX/NativeHardpoint.h"
+#include "FrontierX/NativeMeshManager.h"
+#include "FrontierX/NativeAnimation.h"
+#include "FrontierX/NativeChannel.h"
 #include "FrontierX/LegacyRenderSubmission.h"
 #include "FrontierX/NativeGameVertexBuffer.h"
 #include "FrontierX/NativeGameIndexBuffer.h"
@@ -16,15 +19,27 @@
 #include "FrontierX/NativeUtfFileSystem.h"
 #include "FrontierX/UtfMetadata.h"
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeShipVisualTransform.h"
+#include "Include/NativeShipWarpInTransform.h"
+#include "Include/NativeWeaponOrientation.h"
+#include "Include/NativeAsteroidDistanceOrder.h"
+#include "BRadix.h"
+#include <DEffectOpts.h>
 #include "MeshRender.h"
 #include "MyVertex.h"
 #include "IVertexBuffer.h"
 #include "3dmath.h"
 #include "FDump.h"
 #include "ICamera.h"
+#include "Camera.h"
 #include "IHardPoint.h"
+#include "IAnim.h"
+#include "IMeshManager.h"
+#include "SysConsumerDesc.h"
+#include "SYSTEM.H"
 #include "HPEnum.h"
 #include "ENGINE.H"
+#include "anim2d.h"
 #include "IMaterialManager.h"
 #include "IImageReader.h"
 #include "IProfileParser.h"
@@ -32,6 +47,8 @@
 #include "lightman.h"
 #include "IRenderPrimitive.h"
 #include "renderer.h"
+#include "ArchHolder.h"
+#include "corners.h"
 #include "IRenderComponent.h"
 #include "RPUL/MTPrimitiveBuilder.h"
 #include "PolyMeshFixture.h"
@@ -55,6 +72,7 @@
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 void COMAPI CreateTGAReader(IImageReader **reader);
@@ -254,8 +272,11 @@ GENRESULT DestroyTexture(void *context, U32 handle)
 unsigned gameDrawCalls = 0;
 unsigned gameMeshDrawCalls = 0;
 unsigned gameStandardDrawCalls = 0;
+unsigned nativeLegacyDrawCalls = 0;
+std::vector<FrontierX::RenderVertexP3DiffuseT4> nativeLegacyVertices;
 std::size_t gameMeshIndices = 0U;
 bool gameMeshSecondUvMatches = false;
+bool acceptPolyMeshCpuDraw = false;
 std::vector<U32> gameMeshDiffuse;
 std::vector<FrontierX::RenderVertexP3N3DiffuseT5> gameStandardVertices;
 std::vector<U16> gameStandardIndices;
@@ -290,7 +311,7 @@ GENRESULT DACOM_CDECL CaptureGameMeshDraw(
             submission.vertices[index].u2 == submission.vertices[index].u &&
             submission.vertices[index].v2 == submission.vertices[index].v;
     }
-    return GR_NOT_IMPLEMENTED;
+    return acceptPolyMeshCpuDraw ? GR_OK : GR_NOT_IMPLEMENTED;
 }
 
 GENRESULT DACOM_CDECL CaptureGameStandardDraw(
@@ -304,6 +325,39 @@ GENRESULT DACOM_CDECL CaptureGameStandardDraw(
                                submission.indices + submission.indexCount);
     return GR_OK;
 }
+bool rejectNativeLegacyDraw = false;
+GENRESULT DACOM_CDECL CaptureNativeLegacyDraw(
+    void *, const FrontierX::RenderSubmissionView2 &submission)
+{
+    if (!submission.IsValid()) return GR_INVALID_PARMS;
+    ++nativeLegacyDrawCalls;
+    nativeLegacyVertices.assign(submission.vertices,
+                               submission.vertices + submission.vertexCount);
+    return rejectNativeLegacyDraw ? GR_GENERIC : GR_OK;
+}
+// The checked native primitive validates each state before forwarding to this
+// CPU receiver. The old VB fixture had no state receiver; the original legacy
+// caller now requires an explicit executable backend for those source states.
+FrontierX::RenderStateSnapshot capturedLegacyState;
+FrontierX::TextureStageSnapshot capturedLegacyStage;
+FrontierX::SamplerStateSnapshot capturedLegacySampler[2];
+U32 capturedLegacyTextures[2]{};
+unsigned capturedLegacyStateCalls = 0U;
+bool cpuMaterialBackendLive = false;
+unsigned rejectCpuStageCall = 0U;
+GENRESULT DACOM_CDECL CaptureLegacyState(void *, const FrontierX::RenderStateSnapshot &state)
+{ if (!cpuMaterialBackendLive) return GR_NOT_IMPLEMENTED;
+  capturedLegacyState = state; ++capturedLegacyStateCalls; return GR_OK; }
+GENRESULT DACOM_CDECL CaptureLegacyStage(void *, const FrontierX::TextureStageSnapshot &state)
+{ if (!cpuMaterialBackendLive) return GR_NOT_IMPLEMENTED;
+  if (rejectCpuStageCall && --rejectCpuStageCall == 0U) return GR_GENERIC;
+  capturedLegacyStage = state; return GR_OK; }
+GENRESULT DACOM_CDECL CaptureLegacySampler(void *, const FrontierX::SamplerStateSnapshot &state)
+{ if (!cpuMaterialBackendLive) return GR_NOT_IMPLEMENTED;
+  capturedLegacySampler[state.stage] = state; return GR_OK; }
+GENRESULT DACOM_CDECL CaptureLegacyTexture(void *, U32 stage, U32 texture)
+{ if (!cpuMaterialBackendLive) return GR_NOT_IMPLEMENTED;
+  capturedLegacyTextures[stage] = texture; return GR_OK; }
 struct GameTransformCapture
 {
     unsigned modelviewCalls = 0U;
@@ -313,6 +367,10 @@ struct GameTransformCapture
 #if defined(FRONTIERX_GAME_GPU)
     FrontierX::SdlGpuRenderer * gpu = nullptr;
     bool submitAppGpu = false;
+    bool submitNativeLegacyGpu = false;
+    bool capturePolyMeshGpu = false;
+    FrontierX::SdlGpuReadback polyMeshImage;
+    FrontierX::SdlGpuReadback nativeLegacyImage;
     unsigned rejectStageAfter = 0U;
     IRenderPrimitive * primitive = nullptr;
     bool appStateAtSubmit = false;
@@ -323,6 +381,18 @@ struct GameTransformCapture
 };
 
 #if defined(FRONTIERX_GAME_GPU)
+GENRESULT DACOM_CDECL SubmitNativeLegacyGpu(
+    void *context, const FrontierX::RenderSubmissionView2 &submission)
+{
+    const GENRESULT result = CaptureNativeLegacyDraw(context, submission);
+    if (result != GR_OK) return result;
+    auto *capture = static_cast<GameTransformCapture *>(context);
+    if (!capture || !capture->submitNativeLegacyGpu || !capture->gpu) return GR_OK;
+    const GENRESULT submitted = capture->gpu->Submit(submission);
+    if (submitted != GR_OK) return submitted;
+    return capture->gpu->Readback64(capture->nativeLegacyImage, capture->appGpuError)
+        ? GR_OK : GR_GENERIC;
+}
 GENRESULT DACOM_CDECL SubmitGameStandardGpu(
     void * context, const FrontierX::RenderSubmissionView4 & submission)
 {
@@ -361,7 +431,11 @@ GENRESULT DACOM_CDECL SubmitGameMeshGpu(
     const GENRESULT captured = CaptureGameMeshDraw(context, submission);
     if (captured == GR_INVALID_PARMS) return captured;
     auto * capture = static_cast<GameTransformCapture *>(context);
-    return capture && capture->gpu ? capture->gpu->Submit(submission) : GR_INVALID_PARMS;
+    if (!capture || !capture->gpu) return GR_INVALID_PARMS;
+    const GENRESULT result = capture->gpu->Submit(submission);
+    if (result != GR_OK || !capture->capturePolyMeshGpu) return result;
+    return capture->gpu->Readback64(capture->polyMeshImage, capture->appGpuError)
+        ? GR_OK : GR_GENERIC;
 }
 
 GENRESULT DACOM_CDECL ApplyGameStateGpu(
@@ -513,6 +587,62 @@ struct ProbeCamera final : ICamera
     }
 };
 
+// Typed receiver for TreeRender's original CAMERA position query. Unsupported
+// interface slots fail explicitly; it does not stand in for gameplay Camera.
+struct PreviewCameraPosition final : IBaseCamera
+{
+    const ProbeCamera &source;
+    mutable unsigned positionQueries = 0;
+    explicit PreviewCameraPosition(const ProbeCamera &camera) : source(camera) {}
+    GENRESULT COMAPI QueryInterface(const C8 *, void **out) override
+    { if (out) *out = nullptr; return GR_INTERFACE_UNSUPPORTED; }
+    U32 COMAPI AddRef() override { std::abort(); }
+    U32 COMAPI Release() override { std::abort(); }
+    _pane *COMAPI GetPane() const override { return nullptr; }
+    BOOL32 COMAPI SetPane(_pane *, BOOL32) override { return FALSE; }
+    BOOL32 COMAPI SetPaneRef(_pane *, BOOL32) override { return FALSE; }
+    BOOL32 COMAPI SetInterfaceBarHeight(U32) override { return FALSE; }
+    const Transform *COMAPI GetTransform() const override { return &source.transform; }
+    const Transform *COMAPI GetModelTransform() const override { return nullptr; }
+    const Transform *COMAPI GetInverseTransform() const override { return &source.inverse; }
+    const Transform *COMAPI GetInverseWorldTransform() const override { return nullptr; }
+    const Transform *COMAPI GetWorldTransform() const override { return nullptr; }
+    const Transform *COMAPI GetInverseSectorTransform() const override { return nullptr; }
+    const Transform *COMAPI GetSectorTransform() const override { return nullptr; }
+    SINGLE COMAPI GetHorizontalFOV() const override { return source.get_fovx(); }
+    BOOL32 COMAPI SetHorizontalFOV(SINGLE, BOOL32) override { return FALSE; }
+    SINGLE COMAPI GetVerticalFOV() const override { return source.get_fovy(); }
+    BOOL32 COMAPI SetVerticalFOV(SINGLE, BOOL32) override { return FALSE; }
+    BOOL32 COMAPI SetOrbitPosition() override { return FALSE; }
+    BOOL32 COMAPI SetWorldRotation(SINGLE, BOOL32) override { return FALSE; }
+    BOOL32 COMAPI SetWorldRotationPitchRoll(SINGLE, SINGLE, SINGLE, BOOL32) override { return FALSE; }
+    SINGLE COMAPI GetWorldRotation() const override { std::abort(); }
+    void COMAPI GetOrientation(SINGLE *, SINGLE *, SINGLE *) const override { std::abort(); }
+    BOOL32 COMAPI SetOrientation(SINGLE, SINGLE, SINGLE, BOOL32) override { return FALSE; }
+    Vector COMAPI GetPosition() const override { ++positionQueries; return source.position; }
+    BOOL32 COMAPI SetRotatedPosition(const Vector *, BOOL32) override { return FALSE; }
+    Vector COMAPI GetRotatedPosition() const override { std::abort(); }
+    BOOL32 COMAPI SetPosition(const Vector *, BOOL32) override { return FALSE; }
+    BOOL32 COMAPI MoveForward(SINGLE, BOOL32) override { return FALSE; }
+    BOOL32 COMAPI AddToPitch(SINGLE, BOOL32) override { return FALSE; }
+    TRANSRESULT COMAPI PointToScreen(const Vector &, S32 *, S32 *, const Transform *) const override { return OUT_PANE; }
+    BOOL32 COMAPI PaneToPoints(Vector &, Vector &, Vector &, Vector &) const override { return FALSE; }
+    BOOL32 COMAPI ScreenToPoint(SINGLE &, SINGLE &, SINGLE) const override { return FALSE; }
+    U32 COMAPI GetStateInfo(CAMERA_DATA *) const override { return 0; }
+    BOOL32 COMAPI SetStateInfo(const CAMERA_DATA *, BOOL32) override { return FALSE; }
+    GENRESULT COMAPI SetPerspective() override { return GR_NOT_IMPLEMENTED; }
+    GENRESULT COMAPI SetModelView(const Transform *) override { return GR_NOT_IMPLEMENTED; }
+    BOOL32 COMAPI SetLookAtPosition(const Vector &) override { return FALSE; }
+    Vector COMAPI GetLookAtPosition() const override { return source.look; }
+    BOOL32 COMAPI SnapToTargetRotation() override { return FALSE; }
+    SINGLE COMAPI GetCameraLOD() override { std::abort(); }
+    bool SphereInFrustrum(const Vector &, float, float &, float &, float &, float &) override { return false; }
+    bool SphereInFrustrumFast(const Vector &, float) override { return false; }
+    void ShakeCamera(SINGLE, SINGLE) override { std::abort(); }
+    void COMAPI SetCameraDefaults(CAMERA_DATA &) const override { std::abort(); }
+    void COMAPI SetCameraToDefaults() override { std::abort(); }
+};
+
 void Word(std::vector<unsigned char> &bytes, U32 value)
 {
     for (unsigned shift = 0; shift < 32; shift += 8)
@@ -520,6 +650,54 @@ void Word(std::vector<unsigned char> &bytes, U32 value)
 }
 
 // MaterialManager consumes the same generated input from unpacked source data.
+// Required Cloud/Stasis/Mine/Harvest graphics use this production ANM owner.
+// Existing timing/RNG checks cannot detect unresolved frames or malformed UV IO.
+bool WriteAnim2DFixture(const std::filesystem::path &path, unsigned mode)
+{
+    constexpr U32 recordSize = 44U, headerSize = 56U;
+    const bool flat = mode >= 6U;
+    const U32 recordCount = flat ? 5U : 6U;
+    const char *labels[6] = {"/", "Frequency", "UV Set", "Texture names", "UV Rects", "Texture library"};
+    if (flat) { labels[2] = mode == 7U ? "Missing texture names" : "Texture names";
+        labels[3] = "UV Rects"; labels[4] = "Texture library"; }
+    std::string names;
+    U32 offsets[6]{};
+    for (U32 i = 0; i < recordCount; ++i) { offsets[i] = U32(names.size()); names.append(labels[i], std::strlen(labels[i]) + 1U); }
+    std::vector<unsigned char> data, bytes;
+    const auto word = [](std::vector<unsigned char> &out, U32 value) {
+        for (unsigned shift = 0; shift < 32; shift += 8) out.push_back(static_cast<unsigned char>(value >> shift));
+    };
+    const auto scalar = [&](float value) { U32 bits; std::memcpy(&bits, &value, sizeof(bits)); word(data, bits); };
+    scalar(12.0F);
+    const std::string texture = mode == 1U ? "RequiredAnim2DMissing" : "AnimSharedTile";
+    for (unsigned name = 0U; name < (mode == 5U ? 65U : 1U); ++name)
+    {
+        data.insert(data.end(), texture.begin(), texture.end());
+        if (mode != 4U) data.push_back(0);
+    }
+    const U32 nameLength = U32(data.size()) - 4U;
+    const U32 uvOffset = U32(data.size());
+    word(data, mode == 2U ? 1U : 0U);
+    scalar(0.125F); scalar(0.25F); scalar(0.875F); scalar(0.75F);
+    if (mode == 3U) data.pop_back();
+    const U32 uvLength = U32(data.size()) - uvOffset;
+    for (U32 value : {0x20465455U, 0x101U, headerSize, recordCount * recordSize,
+        0U, recordSize, headerSize + recordCount * recordSize, U32(names.size()), U32(names.size()),
+        headerSize + recordCount * recordSize + U32(names.size()), 0U, 0U, 0U, 0U}) word(bytes, value);
+    const auto record = [&](U32 i, U32 next, bool directory, U32 child, U32 size) {
+        for (U32 value : {next * recordSize, offsets[i], directory ? 0x10U : 0U, 0U,
+            child, size, size, size, 0U, 0U, 0U}) word(bytes, value);
+    };
+    record(0,0,true,recordSize,0); record(1,2,false,0,4);
+    if (flat) { record(2,3,false,4,nameLength); record(3,4,false,uvOffset,uvLength); record(4,0,true,0,0); }
+    else { record(2,0,true,3U * recordSize,0); record(3,4,false,4,nameLength);
+        record(4,5,false,uvOffset,uvLength); record(5,0,true,0,0); }
+    bytes.insert(bytes.end(), names.begin(), names.end()); bytes.insert(bytes.end(), data.begin(), data.end());
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output.write(reinterpret_cast<const char *>(bytes.data()), std::streamsize(bytes.size()));
+    return bool(output);
+}
+
 bool WriteDirectoryFixture(const std::filesystem::path &archive, const std::filesystem::path &root)
 {
     std::string error;
@@ -726,6 +904,52 @@ extern bool RegisterNativeLightManager(ICOManager *manager);
 
 int main(int argc, char **argv)
 {
+    // Original asteroid background sorting floors nonnegative distances and
+    // keeps original index order for ties. The real F8 camera exposed a key
+    // above U32 range; compare bounded behavior with the actual old radix owner.
+    const std::array<float, 8> boundedDistances{{9.9F, 0.9F, 9.1F, 2.2F,
+                                                0.1F, 2.9F, 4000000.0F, 1.5F}};
+    const auto untouchedDistances = boundedDistances;
+    std::array<U32, 8> oldKeys{};
+    for (std::size_t i = 0; i < oldKeys.size(); ++i)
+        oldKeys[i] = static_cast<U32>(boundedDistances[i]);
+    RadixSort::set_sort_size(static_cast<U32>(oldKeys.size()));
+    RadixSort::sort(oldKeys.data(), static_cast<U32>(oldKeys.size()));
+    const std::vector<std::uint32_t> oldOrder(RadixSort::index_list,
+                                             RadixSort::index_list + oldKeys.size());
+    RadixSort::free_arrays();
+    auto sourceAsteroidOrder = [](const auto &distances) {
+        std::vector<U32> keys;
+        for (float distance : distances) keys.push_back(NativeAsteroidDistanceKey(distance));
+        RadixSort::set_sort_size(static_cast<U32>(keys.size()));
+        RadixSort::sort(keys.data(), static_cast<U32>(keys.size()));
+        const std::vector<U32> order(RadixSort::index_list, RadixSort::index_list + keys.size());
+        RadixSort::free_arrays();
+        return order;
+    };
+    const auto asteroidOrder = sourceAsteroidOrder(boundedDistances);
+    if (!Expect(asteroidOrder == oldOrder && boundedDistances == untouchedDistances &&
+                asteroidOrder == std::vector<U32>({1U, 4U, 7U, 3U, 5U, 0U, 2U, 6U}),
+                "native asteroid keys retain actual original radix integer-floor ties without mutating distances"))
+        return 1;
+    const std::array<float, 9> largeDistances{{5.17852e10F, 2.9F,
+        std::numeric_limits<float>::max(), 5.17852e10F, 2.1F, 4294967296.0F, 0.0F, -0.0F, 0.99F}};
+    if (!Expect(sourceAsteroidOrder(largeDistances) ==
+                    std::vector<U32>({6U, 7U, 8U, 1U, 4U, 5U, 0U, 3U, 2U}) &&
+                NativeAsteroidDistanceKey(0.0F) == NativeAsteroidDistanceKey(-0.0F),
+                "genuine radix preserves large finite asteroid distance order and original floor/zero ties")) return 1;
+    for (float invalidDistance : {-1.0F, std::numeric_limits<float>::infinity(),
+                                  -std::numeric_limits<float>::infinity(),
+                                  std::numeric_limits<float>::quiet_NaN()})
+    {
+        U32 unchangedKey = 0xABCD1234U;
+        bool rejected = false;
+        try { unchangedKey = NativeAsteroidDistanceKey(invalidDistance); }
+        catch (const std::runtime_error &) { rejected = true; }
+        if (!Expect(rejected && unchangedKey == 0xABCD1234U,
+                    "invalid asteroid distance rejects before publishing a key")) return 1;
+    }
+    std::cout << "Original asteroid radix floor/ties and large-distance failure boundaries checked\n";
     PixelFormat opaqueFormat;
     opaqueFormat.awidth = std::numeric_limits<int>::min();
     DDPIXELFORMAT rgbx{};
@@ -854,6 +1078,9 @@ int main(int argc, char **argv)
                 FrontierX::RegisterNativePolyMesh(components) &&
                 FrontierX::RegisterNativeEngine(components) &&
                 FrontierX::RegisterNativeHardpoint(components) &&
+                FrontierX::RegisterNativeMeshManager(components) &&
+                FrontierX::RegisterNativeAnimation(components) &&
+                FrontierX::RegisterNativeChannel(components) &&
                 FrontierX::RegisterNativeRenderManager(components),
                 "production game material manager registration")) return 1;
     const Transform mathLeft(Vector(1.0F, 2.0F, 3.0F));
@@ -864,6 +1091,105 @@ int main(int argc, char **argv)
                 mathCombined.translation.y == 7.0F &&
                 mathCombined.translation.z == 9.0F,
                 "production math provider composes engine transforms")) return 1;
+    // Ship hulls, hardpoint glows and Harvester tanks share the original direct
+    // Engine Rx90/Ry180 model space. Check basis/attachment numerically so a
+    // mirrored helper call alone cannot conceal perpendicular cargo or offset
+    // exhaust; simulation world transforms must remain unchanged.
+    Transform shipWorld;
+    shipWorld.d[0][0] = 0; shipWorld.d[0][1] = -1; shipWorld.d[0][2] = 0;
+    shipWorld.d[1][0] = 1; shipWorld.d[1][1] = 0; shipWorld.d[1][2] = 0;
+    shipWorld.d[2][0] = 0; shipWorld.d[2][1] = 0; shipWorld.d[2][2] = 1;
+    shipWorld.translation = Vector(10,20,30);
+    const Transform originalWorld = shipWorld;
+    const Transform visualWorld = NativeShipVisualTransform(shipWorld, true);
+    const Transform uncorrectedWorld = NativeShipVisualTransform(shipWorld, false);
+    const float expectedVisual[3][3] = {{0,0,-1},{-1,0,0},{0,1,0}};
+    bool shipBasisValid = true;
+    for (unsigned row = 0; row < 3; ++row)
+        for (unsigned column = 0; column < 3; ++column)
+            shipBasisValid &= std::fabs(visualWorld.d[row][column] - expectedVisual[row][column]) < 1e-5F;
+    Transform authoredAttachment(Vector(1,2,3));
+    const Transform attached = visualWorld * authoredAttachment;
+    Vector cargoLongAxis;
+    MATH_ENGINE()->rotate(cargoLongAxis, visualWorld, Vector(0,0,1));
+    if (!Expect(shipBasisValid && std::memcmp(&shipWorld, &originalWorld, sizeof(shipWorld)) == 0 &&
+                std::memcmp(&uncorrectedWorld, &originalWorld, sizeof(shipWorld)) == 0 &&
+                visualWorld.translation.x == 10 && visualWorld.translation.y == 20 && visualWorld.translation.z == 30 &&
+                std::fabs(attached.translation.x - 7) < 1e-5F &&
+                std::fabs(attached.translation.y - 19) < 1e-5F &&
+                std::fabs(attached.translation.z - 32) < 1e-5F &&
+                std::fabs(cargoLongAxis.x + 1) < 1e-5F &&
+                std::fabs(cargoLongAxis.y) < 1e-5F && std::fabs(cargoLongAxis.z) < 1e-5F,
+                "original ship visual axes align attachment and cargo without mutating simulation or nondirect hull")) return 1;
+    // Harvester hp_tractor is a model-space muzzle. A model-Z displacement
+    // must follow the corrected hull axis instead of lowering the beam in world Z.
+    // Keep the original endpoint/transform available to simulation and fast hulls.
+    // Regression: ObjectWarp::startWarpIn feeds this basis directly into
+    // ObjectControl and the corrected Engine hull. The prior legacy basis
+    // pitches current controls by 90 degrees; asset-load checks miss that.
+    for (const SINGLE heading : {0.0F, 0.73F, -1.21F, 3.14159265F})
+    {
+        const Vector gate(13, -27, 9);
+        const TRANSFORM warpWorld = NativeShipWarpInTransform(heading, gate);
+        const Transform warpHull = NativeShipVisualTransform(warpWorld, true);
+        const Vector hullUp = warpHull.get_j();
+        const Vector hullForward = -warpHull.get_k();
+        const SINGLE yawDifference = warpWorld.get_yaw() - heading;
+        const SINGLE wrappedDifference = std::atan2(std::sin(yawDifference), std::cos(yawDifference));
+        const Vector handedness = cross_product(warpWorld.get_i(), warpWorld.get_j());
+        TRANSFORM legacyWarp;
+        const Vector facing(std::sin(heading), std::cos(heading), 0);
+        legacyWarp.set_i(Vector(facing.y, -facing.x, 0));
+        legacyWarp.set_j(Vector(0, 0, 1));
+        legacyWarp.set_k(-facing);
+        if (!Expect(std::fabs(wrappedDifference) < 1e-5F &&
+                    std::fabs(warpWorld.get_pitch()) < 1e-5F &&
+                    std::fabs(warpWorld.get_roll()) < 1e-5F &&
+                    std::fabs(hullUp.x) < 1e-5F && std::fabs(hullUp.y) < 1e-5F &&
+                    std::fabs(hullUp.z - 1) < 1e-5F &&
+                    std::fabs(hullForward.x - facing.x) < 1e-5F &&
+                    std::fabs(hullForward.y - facing.y) < 1e-5F &&
+                    std::fabs(hullForward.z) < 1e-5F &&
+                    std::fabs(handedness.z - 1) < 1e-5F &&
+                    warpWorld.translation.x == gate.x && warpWorld.translation.y == gate.y &&
+                    warpWorld.translation.z == gate.z &&
+                    std::fabs(legacyWarp.get_pitch()) > 1.5F,
+                    "warp-in current control basis preserves heading, level hull and gate position; rejects legacy basis")) return 1;
+    }
+    // SpaceShip's speaking marker must spin around its own below-hull center,
+    // not tilt about the navigation J axis and swing that offset sideways.
+    // Use asymmetric offsets and actual production math across the full phase.
+    for (const float angle : {-1.0F, 0.0F, 0.7F, 1.0F})
+    {
+        TRANSFORM marker(shipWorld);
+        marker = TRANSFORM(NativeShipSpeakerMarkerTransform(
+            shipWorld, Vector(2, 3, -4), angle));
+        bool planar = true;
+        for (const Vector corner : {Vector(-5, -5, 0), Vector(-5, 5, 0),
+                                    Vector(5, -5, 0), Vector(5, 5, 0)})
+            planar &= std::fabs((marker * corner).z - 26) < 1e-5F;
+        if (!Expect(planar && std::fabs(marker.translation.x - 7) < 1e-5F &&
+                    std::fabs(marker.translation.y - 22) < 1e-5F &&
+                    std::fabs(marker.translation.z - 26) < 1e-5F &&
+                    std::fabs(marker.get_k().z - 1) < 1e-5F &&
+                    std::memcmp(&shipWorld, &originalWorld, sizeof(shipWorld)) == 0,
+                    "speaking marker phase keeps below-hull center and plane fixed without modifying ship")) return 1;
+    }
+    const Vector authoredMuzzle(2, 5, -11);
+    const Vector renderedMuzzle = visualWorld * authoredMuzzle;
+    const Vector originalMuzzle = shipWorld * authoredMuzzle;
+    const Vector fastHullMuzzle = uncorrectedWorld * authoredMuzzle;
+    if (!Expect(std::fabs(renderedMuzzle.x - 21) < 1e-5F &&
+                std::fabs(renderedMuzzle.y - 18) < 1e-5F &&
+                std::fabs(renderedMuzzle.z - 35) < 1e-5F &&
+                std::fabs(originalMuzzle.x - 5) < 1e-5F &&
+                std::fabs(originalMuzzle.y - 22) < 1e-5F &&
+                std::fabs(originalMuzzle.z - 19) < 1e-5F &&
+                fastHullMuzzle.x == originalMuzzle.x &&
+                fastHullMuzzle.y == originalMuzzle.y &&
+                fastHullMuzzle.z == originalMuzzle.z &&
+                std::memcmp(&shipWorld, &originalWorld, sizeof(shipWorld)) == 0,
+                "Harvester rendered muzzle follows hull axes while original/fast endpoints remain intact")) return 1;
     RendCompDesc polyMeshDescriptor;
     polyMeshDescriptor.interface_name = "PolyMesh";
     IRenderComponent *polyMesh = nullptr;
@@ -1047,6 +1373,46 @@ int main(int argc, char **argv)
                         "production TGA owner uploads every RGBA pixel")) return 1;
         }
     }
+    // get_texture_id may supply an unresolved-name placeholder. The actual
+    // material/XMesh owner must reject it before it becomes drawable geometry.
+    // Material::set_texture_library queries its aggregate outer, as in Engine.
+    outer.textureLibrary = textures;
+    for (unsigned failureMode = 0U; failureMode < 3U; ++failureMode)
+    {
+        const auto failurePath = meshPath.parent_path() /
+            ("required_material_failure_" + std::to_string(failureMode) + ".utf");
+        IFileSystem *failureArchive = nullptr;
+        IFileSystem *failureDirectory = nullptr;
+        if (!Expect(FrontierXTest::WriteRequiredMaterialFailureFixture(failurePath, failureMode) &&
+                    FrontierX::OpenNativeUtfFileSystem(failurePath, &failureArchive, error) &&
+                    failureArchive->CreateInstance(&meshDirectoryDescriptor,
+                        reinterpret_cast<void **>(&failureDirectory)) == GR_OK,
+                    "required material failure fixture opens through production UTF view")) return 1;
+        const unsigned before = gameMeshDrawCalls;
+        bool accepted = false;
+        {
+            XMesh rejected;
+            try
+            {
+                accepted = rejected.read(failureDirectory, textures, materials, 0U);
+            }
+            catch (const std::runtime_error &failure)
+            {
+                if (std::string(failure.what()).find("Native material required texture") != 0U)
+                    throw;
+                accepted = false;
+            }
+            if (accepted) std::cerr << "required material result legacy_count=" << rejected.material_cnt
+                << " cq2_count=" << rejected.imaterial_cnt << " legacy_owner=" << static_cast<void *>(rejected.material_list) << '\n';
+            if (accepted && rejected.material_list) std::cerr << "required material texture ref="
+                << rejected.material_list[0].diffuse_texture_ref << " handle=" << rejected.material_list[0].texture_id << '\n';
+        }
+        failureDirectory->Release();
+        failureArchive->Release();
+        if (accepted) std::cerr << "required material failure unexpectedly accepted mode=" << failureMode << '\n';
+        if (!Expect(!accepted && gameMeshDrawCalls == before,
+                    "original material owner rejects missing legacy/nested map or incomplete declared entry before draw")) return 1;
+    }
     IRP_VERTEXBUFFERHANDLE materialBuffer = 0U;
     void * materialBytes = nullptr;
     U32 materialCapacity = 0U;
@@ -1195,12 +1561,13 @@ int main(int argc, char **argv)
     if (gpuMode) transformCapture.gpu = &gpu.renderer;
 #endif
     FrontierX::NativeRenderPrimitiveDesc primitiveDescriptor(
-        RejectGameDraw, &transformCapture, nullptr, nullptr, nullptr, nullptr,
-        nullptr, nullptr, CaptureGameModelview, CaptureGameProjection,
-        CaptureGameMeshDraw, CaptureGameStandardDraw);
+        RejectGameDraw, &transformCapture, CaptureNativeLegacyDraw, CaptureLegacyState, nullptr, nullptr,
+        CaptureLegacyStage, CaptureLegacyTexture, CaptureGameModelview, CaptureGameProjection,
+        CaptureGameMeshDraw, CaptureGameStandardDraw, CaptureLegacySampler);
 #if defined(FRONTIERX_GAME_GPU)
     if (gpuMode)
     {
+        primitiveDescriptor.callback2 = SubmitNativeLegacyGpu;
         primitiveDescriptor.callback3 = SubmitGameMeshGpu;
         primitiveDescriptor.callback4 = SubmitGameStandardGpu;
         primitiveDescriptor.state = ApplyGameStateGpu;
@@ -1264,6 +1631,103 @@ int main(int argc, char **argv)
     if (!Expect(engine->load_engine_components(&outer) == GR_OK &&
                 engine->enumerate_engine_components(nullptr) == 2,
                 "production engine loads RenderMgr and PolyMesh from profile")) return 1;
+    // A failed declared compound previously fell back to its simple mesh and
+    // silently omitted required submodels. Use real UTF parts and Fix joints.
+    const auto absentArchetype = [engine](const char *name) {
+        const auto index = engine->get_archetype_by_name(name);
+        if (index != INVALID_ARCHETYPE_INDEX) engine->release_archetype(index);
+        return index == INVALID_ARCHETYPE_INDEX;
+    };
+    const auto locatorPath = meshPath.parent_path() / "hardpoint_only_fixture.utf";
+    IFileSystem *locatorArchive = nullptr;
+    IHardpoint *claimHardpoints = nullptr;
+    if (!Expect(FrontierXTest::WriteRendererClaimGameMeshFixture(locatorPath, false) &&
+                FrontierX::OpenNativeUtfFileSystem(locatorPath, &locatorArchive, error) &&
+                engine->QueryInterface(IID_IHardpoint, reinterpret_cast<void **>(&claimHardpoints)) == GR_OK,
+                "genuine hardpoint-only fixture binds the original Engine component")) return 1;
+    const auto locatorIndex = engine->create_archetype("hardpoint_only.3db", locatorArchive);
+    locatorArchive->Release();
+    HardpointInfo locatorInfo{};
+    if (!Expect(locatorIndex != INVALID_ARCHETYPE_INDEX &&
+                claimHardpoints->retrieve_hardpoint_info(locatorIndex, "Locator", locatorInfo) &&
+                locatorInfo.type == JT_FIXED && locatorInfo.point.x == 0.25F &&
+                locatorInfo.point.y == 0.5F && locatorInfo.point.z == 0.75F &&
+                locatorInfo.orientation.d[0][0] == 1.0F && locatorInfo.orientation.d[1][1] == 1.0F &&
+                locatorInfo.orientation.d[2][2] == 1.0F,
+                "legitimate no-mesh node retains its genuine source hardpoint claim")) return 1;
+    const auto locatorInstance = engine->create_instance2(locatorIndex, nullptr);
+    if (!Expect(locatorInstance != INVALID_INSTANCE_INDEX,
+                "legitimate hardpoint-only archetype creates an original instance")) return 1;
+    engine->destroy_instance(locatorInstance);
+    engine->release_archetype(locatorIndex);
+    if (!Expect(absentArchetype("hardpoint_only.3db"), "released hardpoint-only node retains no archetype")) return 1;
+    for (const unsigned mode : {0U, 6U, 1U, 2U, 3U, 4U, 5U})
+    {
+        const auto compoundPath = meshPath.parent_path() /
+            ("required_compound_" + std::to_string(mode) + ".utf");
+        const std::string name = "required_compound_" + std::to_string(mode) + ".cmp";
+        IFileSystem *compoundArchive = nullptr;
+        if (!Expect(FrontierXTest::WriteCompoundGameMeshFixture(compoundPath, mode) &&
+                    FrontierX::OpenNativeUtfFileSystem(compoundPath, &compoundArchive, error),
+                    "original compound fixture opens real nested UTF parts")) return 1;
+        const unsigned before = gameMeshDrawCalls;
+        const auto index = engine->create_archetype(name.c_str(), compoundArchive);
+        compoundArchive->Release();
+        if (mode == 0U || mode == 6U)
+        {
+            unsigned partCount = 0U, jointCount = 0U;
+            const auto count = [](ARCHETYPE_INDEX, ARCHETYPE_INDEX, void *context) {
+                ++*static_cast<unsigned *>(context);
+                return true;
+            };
+            if (!Expect(index != INVALID_ARCHETYPE_INDEX && engine->is_archetype_compound(index) &&
+                        engine->enumerate_archetype_parts(index, count, &partCount) == GR_OK && partCount == 2U &&
+                        engine->enumerate_archetype_joints(index, count, &jointCount) == GR_OK && jointCount == 1U,
+                        "original Engine compound retains both required parts and the authored Fix joint")) return 1;
+            if (mode == 6U)
+            {
+                const auto rootIndex = engine->get_archetype_by_name("CompoundRoot.3db");
+                const bool actualLocator = rootIndex != INVALID_ARCHETYPE_INDEX &&
+                    claimHardpoints->retrieve_hardpoint_info(rootIndex, "Locator", locatorInfo);
+                if (rootIndex != INVALID_ARCHETYPE_INDEX) engine->release_archetype(rootIndex);
+                if (!Expect(actualLocator, "compound permits a genuine hardpoint-only locator root with rendered child")) return 1;
+            }
+            const auto instance = engine->create_instance2(index, nullptr);
+            const auto child = engine->get_instance_child_next(instance, EN_DONT_RECURSE, INVALID_INSTANCE_INDEX);
+            if (!Expect(instance != INVALID_INSTANCE_INDEX && child != INVALID_INSTANCE_INDEX &&
+                        engine->get_instance_parent(child) == instance &&
+                        std::strcmp(engine->get_instance_part_name(instance), "Root") == 0 &&
+                        std::strcmp(engine->get_instance_part_name(child), "Child") == 0 &&
+                        engine->get_joint_info(child) != nullptr,
+                        "original compound instance connects the actual root and child production meshes")) return 1;
+            engine->destroy_instance(instance);
+            const auto remainingChild = engine->get_instance_archetype(child);
+            if (remainingChild != INVALID_ARCHETYPE_INDEX) engine->release_archetype(remainingChild);
+            engine->release_archetype(index);
+            if (!Expect(remainingChild == INVALID_ARCHETYPE_INDEX,
+                        "compound destruction releases the connected child instance")) return 1;
+        }
+        else if (!Expect(index == INVALID_ARCHETYPE_INDEX,
+                         "missing or failed declared compound root/part rejects despite other component claims"))
+        {
+            std::cerr << "required compound unexpectedly accepted mode=" << mode << '\n';
+            return 1;
+        }
+        if (!Expect(absentArchetype(name.c_str()) && absentArchetype("CompoundRoot.3db") &&
+                    absentArchetype("CompoundChild.3db") && gameMeshDrawCalls == before,
+                    "failed or released compound retains no acquired part archetypes or draws")) return 1;
+    }
+    const auto failedClaimPath = meshPath.parent_path() / "declared_mesh_and_hardpoint_failure.utf";
+    IFileSystem *failedClaimArchive = nullptr;
+    if (!Expect(FrontierXTest::WriteRendererClaimGameMeshFixture(failedClaimPath, true) &&
+                FrontierX::OpenNativeUtfFileSystem(failedClaimPath, &failedClaimArchive, error),
+                "declared mesh failure with genuine other component fixture opens")) return 1;
+    const auto failedClaimIndex = engine->create_archetype("declared_mesh_failure.3db", failedClaimArchive);
+    failedClaimArchive->Release();
+    claimHardpoints->Release();
+    if (!Expect(failedClaimIndex == INVALID_ARCHETYPE_INDEX && absentArchetype("declared_mesh_failure.3db"),
+                "failed declared renderer cannot become a successful hardpoint-only archetype")) return 1;
+    std::cout << "Original compound required parts, connected instances and failed-load ownership checked\n";
     const auto legacyMeshPath = meshPath.parent_path() / "legacy_game_mesh_fixture.utf";
     IFileSystem *legacyMeshArchive = nullptr;
     if (!Expect(FrontierXTest::WriteLegacyGameMeshFixture(legacyMeshPath, gpuMode) &&
@@ -1308,6 +1772,46 @@ int main(int argc, char **argv)
     if (!Expect(hardpointInstance != INVALID_INSTANCE_INDEX && hardpointInstance != engineArchetype &&
                 hardpoints->set_hardpoint_info(engineArchetype, "hp_fixture", fixtureHardpoint),
                 "hardpoint fixture separates instance from archetype IDs")) return 1;
+    // Original ObjectSelection::initSelection uses ComputeCorners. Instance
+    // IDs must resolve their actual archetype before the renderer bounds query.
+    // This existing Engine closure already allocates divergent IDs; passing an
+    // instance straight to RenderMgr otherwise selects unrelated/missing bounds.
+    std::array<float, 6> selectionBounds{}, authoredBounds{};
+    engine->update_instance(hardpointInstance, 0.0F, 0U);
+    ComputeCorners(selectionBounds.data(), hardpointInstance);
+    if (!Expect(renderer->get_archetype_bounding_box(engineArchetype, 1.0F,
+                    authoredBounds.data()), "selection fixture resolves authored renderer bounds")) return 1;
+    for (std::size_t axis = 0; axis < authoredBounds.size(); ++axis)
+        authoredBounds[axis] = axis % 2U == 0U ? (std::max)(0.0F, authoredBounds[axis]) :
+            (std::min)(0.0F, authoredBounds[axis]);
+    if (!Expect(selectionBounds == authoredBounds && selectionBounds[0] > selectionBounds[1] &&
+                selectionBounds[2] > selectionBounds[3] &&
+                instanceHasArchetype(hardpointInstance, engineArchetype),
+                "production selection corners use held archetype bounds for divergent instance IDs")) return 1;
+    // Direct SpaceShip hulls render model Z along world Y. The marker's
+    // unchanged corner-width rule must use that footprint, not thin model Y.
+    const std::array<float, 6> asymmetricBounds{{7, -3, 1, -2, 30, -10}};
+    const auto unchangedBounds = asymmetricBounds;
+    std::array<float, 6> visualBounds{}, ordinaryBounds{};
+    NativeShipSelectionBounds(asymmetricBounds.data(), true, visualBounds.data());
+    NativeShipSelectionBounds(asymmetricBounds.data(), false, ordinaryBounds.data());
+    const std::array<float, 6> correctedBounds{{3, -7, 30, -10, 1, -2}};
+    bool selectionAxesValid = true;
+    for (std::size_t axis = 0; axis < visualBounds.size(); ++axis)
+        selectionAxesValid &= std::fabs(visualBounds[axis] - correctedBounds[axis]) < 1e-4F;
+    if (!Expect(selectionAxesValid && asymmetricBounds == unchangedBounds &&
+                ordinaryBounds == asymmetricBounds &&
+                std::fabs((visualBounds[2] - visualBounds[3]) - 40.0F) < 1e-4F &&
+                asymmetricBounds[2] - asymmetricBounds[3] == 3.0F,
+                "selection draw footprint matches corrected hull axes without widening cached gameplay bounds")) return 1;
+    std::array<float, 6> engineVisualBounds{};
+    NativeShipSelectionBounds(selectionBounds.data(), true, engineVisualBounds.data());
+    if (!Expect(std::fabs(engineVisualBounds[0] + selectionBounds[1]) < 1e-4F &&
+                std::fabs(engineVisualBounds[1] + selectionBounds[0]) < 1e-4F &&
+                std::fabs(engineVisualBounds[2] - selectionBounds[4]) < 1e-4F &&
+                std::fabs(engineVisualBounds[3] - selectionBounds[5]) < 1e-4F,
+                "production ComputeCorners bounds feed the same direct-hull visual footprint")) return 1;
+    std::cout << "Selection bounds: original held-archetype corners; direct-hull X/Z footprint; cached bounds unchanged\n";
     HARDPOINT = hardpoints;
     S32 foundHardpoint = INVALID_INSTANCE_INDEX;
     HardpointInfo foundHardpointInfo{};
@@ -1386,6 +1890,7 @@ int main(int argc, char **argv)
             return 1;
         }
     }
+    cpuMaterialBackendLive = true;
     engine->render_instance(&camera, engineInstance, EN_DONT_RECURSE, 1.0F,
         RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
     const std::vector<U32> fullAmbientDiffuse = gameMeshDiffuse;
@@ -1447,6 +1952,7 @@ int main(int argc, char **argv)
     }
 #endif
     ProbeAppVertexBufferManager appBuffers;
+    cpuMaterialBackendLive = false;
     VertexConstantCapture appVertexConstants;
 #if defined(FRONTIERX_GAME_GPU)
     if (gpuMode) appVertexConstants.gpu = &gpu.renderer;
@@ -1458,6 +1964,66 @@ int main(int argc, char **argv)
     REND = renderer;
     PIPE = appPipeline;
     TEXLIB = textures;
+    const auto animTexturesPath = std::filesystem::path(meshPath.string() + ".anim-shared-textures");
+    IFileSystem *animTexturesArchive = nullptr;
+    if (!Expect(FrontierXTest::WriteAnim2DSharedTextureFixture(animTexturesPath) &&
+                FrontierX::OpenNativeUtfFileSystem(animTexturesPath, &animTexturesArchive, error) &&
+                textures->load_library(animTexturesArchive, nullptr) == GR_OK,
+                "Anim2D shared fixture loads actual production texture library")) return 1;
+    animTexturesArchive->Release();
+    U32 heldAnimTexture = 0U;
+    if (!Expect(textures->get_texture_id("AnimSharedTile", &heldAnimTexture) == GR_OK && heldAnimTexture,
+                "shared animation fixture retains its genuine texture owner across source archetypes")) return 1;
+    // Shared texture resolution must produce a real current frame. Required
+    // malformed records fail with the original directory restored, no draw.
+    for (unsigned animMode = 0U; animMode < 8U; ++animMode)
+    {
+        const auto animPath = std::filesystem::path(meshPath.string() + ".anim" + std::to_string(animMode));
+        IFileSystem *animArchive = nullptr;
+        if (!Expect(WriteAnim2DFixture(animPath, animMode) &&
+                    FrontierX::OpenNativeUtfFileSystem(animPath, &animArchive, error),
+                    "generated required Anim2D archive opens")) return 1;
+        const unsigned before = gameMeshDrawCalls + gameStandardDrawCalls;
+        bool rejected = false;
+        std::string rejection;
+        auto *anim = new AnimArchetype;
+        try { anim->load(animArchive); }
+        catch (const std::runtime_error &failure) { rejected = true; rejection = failure.what(); std::cerr << "Anim2D mode=" << animMode << " rejection: " << rejection << '\n'; }
+        if (animMode == 0U || animMode == 6U)
+        {
+            U32 tile = 0U;
+            ITL_TEXTUREFRAME_IRP frame{};
+            if (!Expect(!rejected && textures->get_texture_id("AnimSharedTile", &tile) == GR_OK &&
+                        textures->get_texture_frame(tile, ITL_FRAME_FIRST, &frame) == GR_OK &&
+                        frame.rp_texture_id && anim->frame_cnt == 1U && anim->texCnt == 1U &&
+                        anim->frames[0].texture == frame.rp_texture_id &&
+                        anim->frames[0].x0 == 0.125F && anim->frames[0].y0 == 0.25F &&
+                        anim->frames[0].x1 == 0.875F && anim->frames[0].y1 == 0.75F,
+                        "original Anim2D resolves shared texture and exact authored frame UVs")) return 1;
+            if (!Expect(textures->release_texture_id(tile) == GR_OK,
+                        "Anim2D fixture releases its independently acquired frame lookup")) return 1;
+        }
+        else
+        {
+            const char *expectedErrors[6] = {"Native Anim2D required frame texture unavailable",
+                "Native Anim2D frame references invalid texture index", "Native Anim2D frame record extent invalid",
+                "Native Anim2D texture-name record invalid", "Native Anim2D texture-name count exceeds source array",
+                "Native Anim2D flat animation record missing"};
+            if (!Expect(rejected && rejection == expectedErrors[animMode == 7U ? 5U : animMode - 1U],
+                        "required Anim2D frame, index, extent or names bounds fail at the exact owner check")) return 1;
+        }
+        delete anim;
+        DAFILEDESC frequency("Frequency");
+        HANDLE restoredRoot = animArchive->OpenChild(&frequency);
+        if (!Expect(restoredRoot != INVALID_HANDLE_VALUE &&
+                    before == gameMeshDrawCalls + gameStandardDrawCalls,
+                    "original Anim2D failed/loaded owner restores directory and submits no fake draw")) return 1;
+        animArchive->CloseHandle(restoredRoot);
+        animArchive->Release();
+    }
+    if (!Expect(textures->release_texture_id(heldAnimTexture) == GR_OK,
+                "shared animation fixture releases its original texture ownership")) return 1;
+    std::cout << "Original Anim2D shared frames resolved and malformed required frames rejected with clean ownership\n";
     MATMAN = materials;
     vb_mgr = &appBuffers;
     CQFLAGS.b3DEnabled = -1;
@@ -1599,6 +2165,434 @@ int main(int argc, char **argv)
                 "bounded production App P6 capture")) return 1;
     }
 #endif
+    // The full Terran material adapter must use the already cooked FG1 geometry:
+    // changing factory/cook would alter source vertex ordering and RNG draws.
+    const int cookedPositions = appRender->pos_cnt;
+    const int cookedFaces = appRender->face_cnt;
+    IRenderPrimitive *legacyPrimitive = primitive;
+    FrontierX::NativeRenderPipeline *legacyPipeline = nullptr;
+    if (!gpuMode)
+    {
+        FrontierX::NativeRenderPrimitiveDesc legacyDescriptor(
+            RejectGameDraw, &transformCapture, CaptureNativeLegacyDraw, CaptureLegacyState,
+            nullptr, nullptr, CaptureLegacyStage, CaptureLegacyTexture,
+            CaptureGameModelview, CaptureGameProjection, nullptr, nullptr,
+            CaptureLegacySampler);
+        if (!Expect(components->CreateInstance(&legacyDescriptor,
+                    reinterpret_cast<void **>(&legacyPrimitive)) == GR_OK,
+                    "checked original material CPU backend creation")) return 1;
+        legacyPipeline = new FrontierX::NativeRenderPipeline(legacyPrimitive);
+        PIPE = legacyPipeline;
+    }
+    auto &legacyMaterial = appTree->GetMeshInfo()->fgi[0];
+    const LightRGB_U8 originalEmission = legacyMaterial.emissive;
+    const U8 originalLegacyAlpha = legacyMaterial.a;
+    const U32 originalEmissiveTexture = legacyMaterial.emissive_texture_id;
+    LIGHT = lights;
+    BATCH = legacyPrimitive;
+    MAINCAM = &camera;
+    NATIVE_USE_ORIGINAL_LEGACY_MATERIALS = true;
+    cpuMaterialBackendLive = true;
+    U32 textureStages = 0U, textureCoordinates = 0U;
+    U32 blendMatrix[6] = {0xABCDEF01U, 0U, 0U, 0U, 0U, 0x12345678U};
+    U32 multiplySource = 0U, multiplyDestination = 0U;
+    U32 addSource = 0U, addDestination = 0U, alphaSource = 0U, alphaDestination = 0U;
+    if (!Expect(PIPE->query_device_ability(RP_A_TEXTURE_STAGES, &textureStages) == GR_OK && textureStages == 2U &&
+                PIPE->query_device_ability(RP_A_TEXTURE_COORDINATES, &textureCoordinates) == GR_OK && textureCoordinates == 2U &&
+                PIPE->query_device_ability(RP_A_BLEND_MATRIX, &blendMatrix[1]) == GR_OK &&
+                blendMatrix[0] == 0xABCDEF01U && blendMatrix[5] == 0x12345678U &&
+                blendMatrix[1] == 0xFFFFFFFFU && blendMatrix[2] == 0xFFFFFFFFU &&
+                blendMatrix[3] == 0xFFFFFFFFU && blendMatrix[4] == 0xFU &&
+                PIPE->query_device_ability(RP_A_BLEND_MUL_SRC, &multiplySource) == GR_OK && multiplySource == D3DBLEND_ZERO &&
+                PIPE->query_device_ability(RP_A_BLEND_MUL_DST, &multiplyDestination) == GR_OK && multiplyDestination == D3DBLEND_SRCCOLOR &&
+                PIPE->query_device_ability(RP_A_BLEND_ADD_SRC, &addSource) == GR_OK && addSource == D3DBLEND_ONE &&
+                PIPE->query_device_ability(RP_A_BLEND_ADD_DST, &addDestination) == GR_OK && addDestination == D3DBLEND_ONE &&
+                PIPE->query_device_ability(RP_A_BLEND_TRANSPARENCY_SRC, &alphaSource) == GR_OK && alphaSource == D3DBLEND_SRCALPHA &&
+                PIPE->query_device_ability(RP_A_BLEND_TRANSPARENCY_DST, &alphaDestination) == GR_OK && alphaDestination == D3DBLEND_INVSRCALPHA,
+                "native selected PolyMesh caps retain four-word blend matrix bounds and implemented blend pairs")) return 1;
+    FrontierX::NativeRenderPipeline unboundPipeline;
+    U32 unavailableAbility = 99U;
+    if (!Expect(unboundPipeline.query_device_ability(RP_A_TEXTURE_STAGES, &unavailableAbility) == GR_NOT_IMPLEMENTED &&
+                unavailableAbility == 0U && unboundPipeline.query_device_ability(RP_A_BLEND_MATRIX, &unavailableAbility) == GR_NOT_IMPLEMENTED,
+                "unbound native pipeline rejects material capabilities")) return 1;
+    legacyMaterial.emissive_texture_id = 0U;
+    legacyMaterial.a = 127U;
+    legacyMaterial.emissive = {7U, 11U, 13U};
+    lights->set_ambient_light(32, 48, 64);
+    std::srand(947U);
+    const int nextWithoutRender = std::rand();
+    std::srand(947U);
+    const unsigned nativeDrawsBefore = nativeLegacyDrawCalls;
+    const unsigned legacyStateCallsBefore = capturedLegacyStateCalls;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode) transformCapture.submitNativeLegacyGpu = true;
+#endif
+    appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+    const int nextAfterRender = std::rand();
+    const U32 expectedLegacyColor = FrontierX::PackDiffuseBgra(
+        static_cast<U8>(((U32(legacyMaterial.diffuse.r) * 32U) >> 8) + 7U),
+        static_cast<U8>(((U32(legacyMaterial.diffuse.g) * 48U) >> 8) + 11U),
+        static_cast<U8>(((U32(legacyMaterial.diffuse.b) * 64U) >> 8) + 13U),
+        legacyMaterial.a);
+    bool originalLegacyColors = nativeLegacyDrawCalls == nativeDrawsBefore + 1U &&
+        nativeLegacyVertices.size() == 6U;
+    for (const auto &vertex : nativeLegacyVertices)
+        originalLegacyColors &= vertex.diffuseBgra == expectedLegacyColor &&
+            vertex.u2 == vertex.u && vertex.v2 == vertex.v;
+    if (!gpuMode && !Expect(capturedLegacyStateCalls > legacyStateCallsBefore &&
+                capturedLegacyState.depthEnabled == 1U &&
+                capturedLegacyState.depthFunction == D3DCMP_LESSEQUAL &&
+                capturedLegacyState.cullMode == D3DCULL_NONE &&
+                capturedLegacyState.alphaTestEnabled == 0U &&
+                capturedLegacyState.alphaBlendEnabled == 1U &&
+                capturedLegacyState.sourceBlend == D3DBLEND_SRCALPHA &&
+                capturedLegacyState.destinationBlend == D3DBLEND_INVSRCALPHA &&
+                capturedLegacyStage.colorOperation == D3DTOP_SELECTARG2 &&
+                capturedLegacyStage.colorArgument2 == D3DTA_DIFFUSE &&
+                capturedLegacyStage.alphaOperation == D3DTOP_MODULATE &&
+                capturedLegacyStage.second.colorOperation == D3DTOP_DISABLE &&
+                capturedLegacyStage.second.alphaOperation == D3DTOP_DISABLE &&
+                capturedLegacySampler[0].minFilter == D3DTEXF_LINEAR &&
+                capturedLegacySampler[1].mipFilter == D3DTEXF_LINEAR &&
+                capturedLegacyTextures[0] == 0U && capturedLegacyTextures[1] == 0U,
+                "original legacy material executes checked source depth/blend/texture/sampler states"))
+    {
+        std::cerr << "legacy state depth=" << capturedLegacyState.depthEnabled
+                  << " cull=" << capturedLegacyState.cullMode
+                  << " blend=" << capturedLegacyState.alphaBlendEnabled
+                  << " color=" << capturedLegacyStage.colorOperation
+                  << " alpha=" << capturedLegacyStage.alphaOperation
+                  << " textures=" << capturedLegacyTextures[0] << ',' << capturedLegacyTextures[1]
+                  << " material alpha=" << unsigned(legacyMaterial.a) << '\n';
+        return 1;
+    }
+    if (!Expect(originalLegacyColors && nextWithoutRender == nextAfterRender &&
+                appRender->pos_cnt == cookedPositions &&
+                appRender->face_cnt == cookedFaces,
+                "original legacy material preserves cooked geometry/RNG and source ambient/diffuse/emission/alpha/UV2"))
+        return 1;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        const auto dimImage = transformCapture.nativeLegacyImage;
+        lights->set_ambient_light(255, 255, 255);
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+        const auto litImage = transformCapture.nativeLegacyImage;
+        lights->set_ambient_light(32, 48, 64);
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+        const auto restoredImage = transformCapture.nativeLegacyImage;
+        if (!Expect(dimImage.rgbValid && dimImage.changedPixels > 0U &&
+                    litImage.rgbValid && litImage.checksum != dimImage.checksum &&
+                    restoredImage.rgbValid && restoredImage.checksum == dimImage.checksum,
+                    "original legacy source lighting visibly changes and restores textured pixels"))
+            return 1;
+        std::cout << "native_legacy_lighting_gpu dim=" << dimImage.checksum
+                  << " lit=" << litImage.checksum
+                  << " restored=" << restoredImage.checksum << '\n';
+    }
+#endif
+    const auto seamPath = meshPath.parent_path() / "legacy_uv2_seam_fixture.utf";
+    IFileSystem *seamArchive = nullptr;
+    if (!Expect(FrontierXTest::WriteLegacySeamGameMeshFixture(seamPath, true) &&
+                FrontierX::OpenNativeUtfFileSystem(seamPath, &seamArchive, error),
+                "authored legacy second-UV seam fixture")) return 1;
+    const auto seamArchetype = engine->create_archetype("legacy_seam.3db", seamArchive);
+    const auto seamInstance = engine->create_instance2(seamArchetype, nullptr);
+    if (!Expect(seamArchetype != INVALID_ARCHETYPE_INDEX &&
+                seamInstance != INVALID_INSTANCE_INDEX,
+                "production mesh loads independently authored UV2 seam")) return 1;
+    Mesh *seamMesh = renderer->get_instance_mesh(seamInstance, nullptr);
+    if (!Expect(seamMesh && seamMesh->material_list && seamMesh->material_cnt == 1,
+                "production PolyMesh exposes authored emissive material")) return 1;
+    auto &polyMaterial = seamMesh->material_list[0];
+    if (!Expect(polyMaterial.texture_id != 0U && polyMaterial.emissive_texture_id != 0U,
+                "production authored seam resolves both diffuse and emissive texture frames")) return 1;
+    acceptPolyMeshCpuDraw = true;
+#if defined(FRONTIERX_GAME_GPU)
+    transformCapture.capturePolyMeshGpu = gpuMode;
+#endif
+    const unsigned polyDrawsBefore = gameMeshDrawCalls;
+    polyMaterial.num_passes = 0;
+    engine->render_instance(&camera, seamInstance, EN_DONT_RECURSE, 1.0F,
+                           RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
+    if (!Expect(gameMeshDrawCalls == polyDrawsBefore + 1U && polyMaterial.num_passes == 1,
+                "production two-texture PolyMesh validates and submits exactly one combined pass")) return 1;
+    const unsigned drawsBeforeReject = gameMeshDrawCalls;
+    if (!Expect(primitive->set_texture_stage_state(2U, D3DTSS_COLOROP, D3DTOP_ADD) == GR_NOT_IMPLEMENTED &&
+                gameMeshDrawCalls == drawsBeforeReject,
+                "unsupported third texture stage rejects before any draw")) return 1;
+    if (!gpuMode)
+    {
+        cpuMaterialBackendLive = false;
+        if (!Expect(primitive->verify_state() == GR_NOT_IMPLEMENTED && gameMeshDrawCalls == drawsBeforeReject,
+                    "verification rejects a currently unavailable material receiver before drawing")) return 1;
+        cpuMaterialBackendLive = true;
+        rejectCpuStageCall = 1U;
+        if (!Expect(primitive->verify_state() == GR_GENERIC && rejectCpuStageCall == 0U &&
+                    gameMeshDrawCalls == drawsBeforeReject,
+                    "verification propagates a real current texture-state receiver rejection")) return 1;
+        if (!Expect(primitive->verify_state() == GR_OK,
+                    "verification revalidates the restored checked material receiver")) return 1;
+    }
+    const U32 originalSecondDiffuse = polyMaterial.second_diffuse_texture_id;
+    polyMaterial.second_diffuse_texture_id = polyMaterial.texture_id;
+    polyMaterial.num_passes = 0;
+    engine->render_instance(&camera, seamInstance, EN_DONT_RECURSE, 1.0F,
+                           RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
+    if (!Expect(gameMeshDrawCalls == drawsBeforeReject,
+                "production PolyMesh required third texture stage fails before any draw")) return 1;
+    polyMaterial.second_diffuse_texture_id = originalSecondDiffuse;
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        const auto addImage = transformCapture.polyMeshImage;
+        const U32 emissiveTexture = polyMaterial.emissive_texture_id;
+        polyMaterial.emissive_texture_id = 0U;
+        polyMaterial.num_passes = 0;
+        engine->render_instance(&camera, seamInstance, EN_DONT_RECURSE, 1.0F,
+                               RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
+        const auto baseImage = transformCapture.polyMeshImage;
+        polyMaterial.emissive_texture_id = emissiveTexture;
+        polyMaterial.num_passes = 0;
+        engine->render_instance(&camera, seamInstance, EN_DONT_RECURSE, 1.0F,
+                               RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
+        const auto restoredImage = transformCapture.polyMeshImage;
+        if (!Expect(addImage.rgbValid && baseImage.rgbValid && restoredImage.rgbValid &&
+                    addImage.checksum != baseImage.checksum && restoredImage.checksum == addImage.checksum,
+                    "single-pass PolyMesh emissive combination visibly changes and restores authored UV2 pixels")) return 1;
+        std::cout << "polymesh_single_pass_gpu add=" << addImage.checksum << " base=" << baseImage.checksum
+                  << " restored=" << restoredImage.checksum << '\n';
+        // Keep the primitive's accepted binding while destroying its real GPU
+        // owner: verify_state must detect the now-stale handle before drawing.
+        U32 staleTexture = 0U;
+        const std::uint8_t stalePixel[4] = {19U, 31U, 47U, 255U};
+        const unsigned drawsBeforeStale = gameMeshDrawCalls;
+        if (!Expect(gpu.renderer.CreateTexture(1U, 1U, staleTexture) == GR_OK &&
+                    gpu.renderer.ReplaceTexture(staleTexture, {stalePixel, 1U, 1U, 4U}) == GR_OK &&
+                    primitive->set_texture_stage_texture(1U, staleTexture) == GR_OK &&
+                    primitive->verify_state() == GR_OK &&
+                    gpu.renderer.BindTexture(1U, 0U) == GR_OK &&
+                    gpu.renderer.DestroyTexture(staleTexture) == GR_OK &&
+                    primitive->verify_state() != GR_OK && gameMeshDrawCalls == drawsBeforeStale,
+                    "material verification rejects a destroyed real GPU texture binding before drawing")) return 1;
+        if (!Expect(primitive->set_texture_stage_texture(1U, 0U) == GR_OK &&
+                    primitive->verify_state() == GR_OK,
+                    "material verification succeeds after explicitly restoring a valid GPU binding")) return 1;
+        std::cout << "Production material verification rejects stale GPU texture bindings\n";
+        transformCapture.capturePolyMeshGpu = false;
+    }
+#endif
+    acceptPolyMeshCpuDraw = false;
+    ProbeAppVertexBufferManager seamBuffers;
+    vb_mgr = &seamBuffers;
+    IMeshRender *seamRender = CreateMeshRender();
+    seamRender->AddRef();
+    seamRender->Init(seamArchetype);
+    IMeshInfoTree *seamTree = CreateMeshInfoTree(seamInstance);
+    seamRender->SetupMeshInfo(seamTree->GetMeshInfo());
+    if (!Expect((seamTree->GetMeshInfo()->fgi[0].texture_flags & TF_F_HAS_ALPHA) == 0U &&
+                (seamTree->GetMeshInfo()->fgi[0].emissive_texture_flags & TF_F_HAS_ALPHA) == 0U,
+                "original material flags retain authored opaque diffuse and emissive texture classification")) return 1;
+    seamRender->Render(seamTree->GetMeshInfo(), camera.inverse);
+    bool zeroCornerBase = false;
+    bool zeroCornerSeam = false;
+    for (const auto &vertex : nativeLegacyVertices)
+    {
+        if (vertex.x == 0.0F && vertex.y == 0.0F && vertex.z == 0.0F &&
+            vertex.u == 0.0F && vertex.v == 0.0F)
+        {
+            zeroCornerBase |= vertex.u2 == 0.0F && vertex.v2 == 0.0F;
+            zeroCornerSeam |= vertex.u2 == 1.0F && vertex.v2 == 1.0F;
+        }
+    }
+    if (!Expect(zeroCornerBase && zeroCornerSeam,
+                "legacy FG1 cooking preserves independent per-corner emissive UV seam"))
+    {
+        for (const auto &vertex : nativeLegacyVertices)
+            std::cerr << "legacy corner " << vertex.x << ',' << vertex.y << ',' << vertex.z
+                      << " uv=" << vertex.u << ',' << vertex.v
+                      << " uv2=" << vertex.u2 << ',' << vertex.v2 << '\n';
+        return 1;
+    }
+#if defined(FRONTIERX_GAME_GPU)
+    if (gpuMode)
+    {
+        const auto noEmissiveImage = transformCapture.nativeLegacyImage;
+        const auto previousEmissiveEffect = CQEFFECTS.bEmissiveTextures;
+        auto &seamMaterial = seamTree->GetMeshInfo()->fgi[0];
+        seamMaterial.emissive_texture_id = seamMaterial.texture_id;
+        CQEFFECTS.bEmissiveTextures = GlobalEffectsOptions::on;
+        seamRender->Render(seamTree->GetMeshInfo(), camera.inverse);
+        const auto emissiveImage = transformCapture.nativeLegacyImage;
+        seamTree->GetMeshInfo()->bSuppressEmissive = true;
+        seamRender->Render(seamTree->GetMeshInfo(), camera.inverse);
+        const auto suppressedImage = transformCapture.nativeLegacyImage;
+        if (!Expect(noEmissiveImage.rgbValid && noEmissiveImage.changedPixels > 0U &&
+                    emissiveImage.rgbValid && emissiveImage.checksum != noEmissiveImage.checksum &&
+                    suppressedImage.rgbValid && suppressedImage.checksum == noEmissiveImage.checksum,
+                    "original legacy second-UV emissive texture ADD visibly changes and suppression restores pixels"))
+            return 1;
+        std::cout << "native_legacy_emissive_gpu base=" << noEmissiveImage.checksum
+                  << " add=" << emissiveImage.checksum
+                  << " suppressed=" << suppressedImage.checksum << '\n';
+        seamMaterial.emissive_texture_id = 0U;
+        CQEFFECTS.bEmissiveTextures = previousEmissiveEffect;
+    }
+#endif
+    // MeshExplode uses this exact owner for debris. Check the authored UV seam
+    // at a cut edge and after another cut, without changing source split ratios.
+    {
+        MeshInfo firstHalf, secondHalf;
+        if (!Expect(CanSplitMesh(*seamTree->GetMeshInfo()),
+                    "original seam mesh is eligible for production explosion split")) return 1;
+        SplitMeshInfo(*seamTree->GetMeshInfo(), firstHalf, secondHalf,
+                      0.5F, Vector(1.0F, 0.0F, 0.0F));
+        firstHalf.instanceIndex = secondHalf.instanceIndex = seamInstance;
+        std::vector<FrontierX::RenderVertexP3DiffuseT4> splitVertices;
+        auto renderSplit = [&](MeshInfo &part) {
+            const unsigned callsBefore = nativeLegacyDrawCalls;
+            part.mr->Render(&part, camera.inverse);
+            if (nativeLegacyDrawCalls != callsBefore)
+                splitVertices.insert(splitVertices.end(), nativeLegacyVertices.begin(),
+                                     nativeLegacyVertices.end());
+        };
+        auto cutSeamPreserved = [&]() {
+            bool primaryCorner = false, secondaryCorner = false;
+            for (const auto &vertex : splitVertices)
+            {
+                if (vertex.y == 0.0F && vertex.z == 0.0F)
+                {
+                    primaryCorner |= vertex.x == 0.5F &&
+                        vertex.u2 == vertex.u && vertex.v2 == vertex.v;
+                    // Source splitEdge returns (v2.x-d)/(v2.x-v1.x),
+                    // hence 1.5 here, not the geometric plane coordinate.
+                    // Preserve that source ratio for geometry and UV2 alike.
+                    secondaryCorner |= vertex.x == 1.5F &&
+                        vertex.u2 == 1.0F && vertex.v2 == 1.0F;
+                }
+            }
+            return primaryCorner && secondaryCorner;
+        };
+        renderSplit(firstHalf);
+        renderSplit(secondHalf);
+        if (!Expect(firstHalf.mr->face_cnt + secondHalf.mr->face_cnt == 6 &&
+                    cutSeamPreserved(),
+                    "original explosion split preserves both authored secondary-UV edge values"))
+        {
+            std::cerr << "split faces=" << firstHalf.mr->face_cnt << ',' << secondHalf.mr->face_cnt << '\n';
+            for (const auto &vertex : splitVertices)
+                std::cerr << "split corner " << vertex.x << ',' << vertex.y
+                          << " uv=" << vertex.u << ',' << vertex.v
+                          << " uv2=" << vertex.u2 << ',' << vertex.v2 << '\n';
+            return 1;
+        }
+        splitVertices.clear();
+        for (MeshInfo *half : {&firstHalf, &secondHalf})
+        {
+            MeshInfo repeated0, repeated1;
+            SplitMeshInfo(*half, repeated0, repeated1, 0.5F, Vector(0.0F, 1.0F, 0.0F));
+            repeated0.instanceIndex = repeated1.instanceIndex = seamInstance;
+            renderSplit(repeated0);
+            renderSplit(repeated1);
+        }
+        if (!Expect(cutSeamPreserved(),
+                    "repeated original explosion split retains independently interpolated corner UV2"))
+            return 1;
+    }
+    DestroyMeshInfoTree(seamTree);
+    seamRender->Release();
+    if (!Expect(seamBuffers.adds == 7U && seamBuffers.deletes == 7U &&
+                seamBuffers.owner == nullptr,
+                "independent legacy seam mesh releases its cooked vertex owner"))
+    {
+        std::cerr << "seam buffers adds=" << seamBuffers.adds << " deletes="
+                  << seamBuffers.deletes << " owner=" << seamBuffers.owner << '\n';
+        return 1;
+    }
+    vb_mgr = &appBuffers;
+    std::cout << "Original legacy source material colors, states, UV2 seam and repeated explosion splits checked\n";
+    engine->destroy_instance(seamInstance);
+    engine->release_archetype(seamArchetype);
+    seamArchive->Release();
+    // UnbornMeshList's placement preview needs source fgi colors even when
+    // training leaves the global full-mission legacy mode disabled.
+    NATIVE_USE_ORIGINAL_LEGACY_MATERIALS = false;
+    PreviewCameraPosition previewCamera(camera);
+    IBaseCamera *previousCamera = CAMERA;
+    CAMERA = &previewCamera;
+    MeshChain previewChain;
+    previewChain.numChildren = 1;
+    previewChain.mi[0] = appTree->GetMeshInfo();
+    const auto previewDiffuse = legacyMaterial.diffuse;
+    legacyMaterial.emissive = {0U, 0U, 0U};
+    legacyMaterial.emissive_texture_id = 0U;
+    legacyMaterial.a = 128U;
+    lights->set_ambient_light(255, 255, 255);
+    auto renderOrdinaryAfterPreview = [&] {
+        IRenderPipeline *previewPipeline = PIPE;
+        IRenderPrimitive *previewBatch = BATCH;
+        PIPE = appPipeline;
+        BATCH = primitive;
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+        PIPE = previewPipeline;
+        BATCH = previewBatch;
+    };
+    for (bool validPlacement : {true, false})
+    {
+        legacyMaterial.diffuse = validPlacement ? LightRGB_U8{0U, 255U, 0U}
+                                               : LightRGB_U8{255U, 0U, 0U};
+        const unsigned beforePreview = nativeLegacyDrawCalls;
+        TreeRenderNativeLegacyPreview(previewChain);
+        const U32 expectedPreview = FrontierX::PackDiffuseBgra(
+            validPlacement ? 0U : 254U, validPlacement ? 254U : 0U, 0U, 128U);
+        bool exactPreview = nativeLegacyDrawCalls == beforePreview + 1U &&
+            !nativeLegacyVertices.empty() && !NATIVE_USE_ORIGINAL_LEGACY_MATERIALS;
+        for (const auto &vertex : nativeLegacyVertices)
+            exactPreview &= vertex.diffuseBgra == expectedPreview;
+        U32 previewBlend = 0U, previewSource = 0U, previewDestination = 0U;
+        if (!Expect(exactPreview &&
+                    PIPE->get_render_state(D3DRS_ALPHABLENDENABLE, &previewBlend) == GR_OK && previewBlend == TRUE &&
+                    PIPE->get_render_state(D3DRS_SRCBLEND, &previewSource) == GR_OK && previewSource == D3DBLEND_SRCALPHA &&
+                    PIPE->get_render_state(D3DRS_DESTBLEND, &previewDestination) == GR_OK && previewDestination == D3DBLEND_INVSRCALPHA,
+                    "scoped placement preview uses exact green/red source fgi and alpha128 without enabling global legacy mode"))
+            return 1;
+        const unsigned afterPreview = nativeLegacyDrawCalls;
+        renderOrdinaryAfterPreview();
+        if (!Expect(nativeLegacyDrawCalls == afterPreview,
+                    "successful placement preview restores ordinary material dispatch")) return 1;
+    }
+    rejectNativeLegacyDraw = true;
+    bool previewRejected = false;
+    try { TreeRenderNativeLegacyPreview(previewChain); }
+    catch (const std::runtime_error &) { previewRejected = true; }
+    rejectNativeLegacyDraw = false;
+    const unsigned afterRejectedPreview = nativeLegacyDrawCalls;
+    renderOrdinaryAfterPreview();
+    if (!Expect(previewRejected && !NATIVE_USE_ORIGINAL_LEGACY_MATERIALS &&
+                nativeLegacyDrawCalls == afterRejectedPreview,
+                "rejected placement preview restores scope before ordinary dispatch")) return 1;
+    CAMERA = previousCamera;
+    if (!Expect(previewCamera.positionQueries == 3U, "scoped preview queries typed original camera position")) return 1;
+    legacyMaterial.diffuse = previewDiffuse;
+    std::cout << "Scoped placement preview source colors and exception restoration checked\n";
+#if defined(FRONTIERX_GAME_GPU)
+    transformCapture.submitNativeLegacyGpu = false;
+#endif
+    legacyMaterial.emissive = originalEmission;
+    legacyMaterial.a = originalLegacyAlpha;
+    legacyMaterial.emissive_texture_id = originalEmissiveTexture;
+    lights->set_ambient_light(255, 255, 255);
+    NATIVE_USE_ORIGINAL_LEGACY_MATERIALS = false;
+    cpuMaterialBackendLive = false;
+    LIGHT = nullptr;
+    BATCH = nullptr;
+    MAINCAM = nullptr;
+    if (legacyPipeline)
+    {
+        PIPE = appPipeline;
+        legacyPipeline->Release();
+        legacyPrimitive->Release();
+    }
     DAFILEDESC effectDirectoryDescriptor("shaders");
     IFileSystem * effectDirectory = nullptr;
     if (!Expect(archive->CreateInstance(&effectDirectoryDescriptor,
@@ -1943,7 +2937,9 @@ int main(int argc, char **argv)
     BATCH = appPrimitive;
     SetupDiffuseBlend(64U, true);
     const bool clampedDiffuseState = appState.texture == 64U &&
-        appState.stageCalls == 6U && appState.samplerCalls == 5U &&
+        appState.stageCalls == 10U && appState.samplerCalls == 5U &&
+        appState.stage.second.colorOperation == D3DTOP_DISABLE &&
+        appState.stage.second.alphaOperation == D3DTOP_DISABLE &&
         appState.stage.colorOperation == D3DTOP_MODULATE &&
         appState.stage.colorArgument1 == D3DTA_TEXTURE &&
         appState.stage.colorArgument2 == D3DTA_DIFFUSE &&
@@ -1978,6 +2974,35 @@ int main(int argc, char **argv)
         if (std::fabs(look.x - std::sin(heading)) > 1.0e-5F ||
             std::fabs(look.y - std::cos(heading)) > 1.0e-5F) return 1;
     }
+    // Projectile/PlasmaBolt retain their original pitch-correction formula.
+    // Their turret sight is -K-forward, so the J-forward navigation getter
+    // must not redirect a real world target into a nearly vertical shot.
+    for (const Vector goal : {Vector(1, 1, 0), Vector(-1, 1, 1),
+                             Vector(1, -1, -1), Vector(-1, -1, 0.5F),
+                             Vector(-2557, -4436, -389)})
+    {
+        for (const float initialPitch : {0.0F, 0.23F})
+        {
+            TRANSFORM sight;
+            sight.rotate_about_i(90 * MUL_DEG_TO_RAD);
+            sight.rotate_about_j(get_angle(goal.x, goal.y));
+            sight.rotate_about_i(initialPitch);
+            TRANSFORM oldSight = sight;
+            const float desiredPitch = get_angle(goal.z,
+                std::sqrt(goal.x * goal.x + goal.y * goal.y));
+            oldSight.rotate_about_i(desiredPitch - oldSight.get_pitch());
+            sight.rotate_about_i(desiredPitch - FrontierX::NativeWeaponSightPitch(sight));
+            const Vector actual = -sight.get_k();
+            const Vector old = -oldSight.get_k();
+            const float scale = goal.magnitude();
+            const float alignment = (actual.x * goal.x + actual.y * goal.y + actual.z * goal.z) / scale;
+            const float oldAlignment = (old.x * goal.x + old.y * goal.y + old.z * goal.z) / scale;
+            if (!Expect(std::fabs(alignment - 1.0F) < 1.0e-5F && oldAlignment < 0.5F,
+                        "original projectile pitch formula follows horizontal/elevated -K sight rather than navigation J"))
+                return 1;
+        }
+    }
+    std::cout << "Original projectile sight-axis pitch correction checked\n";
 
     bool app2dSubmitted = false;
     {
@@ -2026,6 +3051,117 @@ int main(int argc, char **argv)
                 appBuffers.deletes == 3U && appBuffers.owner == nullptr &&
                 instanceHasArchetype(engineInstance, engineArchetype),
                 "production App mesh ownership and CQ2 effect draw")) return 1;
+    // Selected CMP resources live at the owning file's root, outside its part
+    // UTFs. Exercise the original MeshManager caller, not an ancestor scanner.
+    {
+        IFileSystem *objects = nullptr;
+        IDAComponent *animationInner = nullptr, *meshManagerInner = nullptr;
+        IAggregateComponent *animationAggregate = nullptr, *meshManagerAggregate = nullptr;
+        IAnimation *animation = nullptr;
+        IMeshManager *meshManager = nullptr;
+        ISystemComponent *meshSystem = nullptr;
+        IHardpoint *meshHardpoints = nullptr;
+        SYSCONSUMERDESC animationDescriptor("IAnimation");
+        animationDescriptor.outer = engine;
+        animationDescriptor.system = &outer;
+        animationDescriptor.inner = &animationInner;
+        void *rawAnimation = nullptr;
+        AGGDESC meshManagerDescriptor("IMeshManager");
+        meshManagerDescriptor.outer = &outer;
+        meshManagerDescriptor.inner = &meshManagerInner;
+        void *rawMeshManager = nullptr;
+        if (!Expect(FrontierX::OpenNativeDirectoryFileSystem(meshPath.parent_path(), &objects, error) &&
+                    components->CreateInstance(&animationDescriptor, &rawAnimation) == GR_OK && animationInner &&
+                    animationInner->QueryInterface(IID_IAggregateComponent,
+                        reinterpret_cast<void **>(&animationAggregate)) == GR_OK &&
+                    animationAggregate->Initialize() == GR_OK &&
+                    animationInner->QueryInterface(IID_IAnimation, reinterpret_cast<void **>(&animation)) == GR_OK &&
+                    components->CreateInstance(&meshManagerDescriptor, &rawMeshManager) == GR_OK && meshManagerInner &&
+                    meshManagerInner->QueryInterface(IID_IAggregateComponent,
+                        reinterpret_cast<void **>(&meshManagerAggregate)) == GR_OK &&
+                    meshManagerAggregate->Initialize() == GR_OK &&
+                    meshManagerInner->QueryInterface(IID_IMeshManager, reinterpret_cast<void **>(&meshManager)) == GR_OK &&
+                    meshManagerInner->QueryInterface(IID_ISystemComponent, reinterpret_cast<void **>(&meshSystem)) == GR_OK &&
+                    engine->QueryInterface(IID_IHardpoint, reinterpret_cast<void **>(&meshHardpoints)) == GR_OK,
+                    "original MeshManager and Animation owners initialize with real Engine and source directory")) return 1;
+        IMeshManager::InitInfo meshInit{};
+        meshInit.ENGINE = engine;
+        meshInit.ANIM = animation;
+        meshInit.OBJDIR = objects;
+        meshInit.REND = renderer;
+        meshInit.PIPE = pipeline;
+        meshInit.CAMERA = &camera;
+        meshInit.HARDPOINT = meshHardpoints;
+        meshInit.MATMAN = materials;
+        meshManager->InitManager(meshInit);
+        for (const unsigned mode : {0U, 6U, 7U, 8U})
+        {
+            const std::string name = "shared_compound_" + std::to_string(mode) + ".cmp";
+            if (!Expect(FrontierXTest::WriteCompoundGameMeshFixture(meshPath.parent_path() / name, mode),
+                        "owning compound shared-library fixture created independently of child libraries")) return 1;
+            const unsigned before = gameMeshDrawCalls;
+            IMeshArchetype *arch = meshManager->CreateMeshArch(name.c_str());
+            if (mode == 0U || mode == 6U || mode == 7U)
+            {
+                const U32 expectedGroups = mode == 6U ? 1U : 2U;
+                if (!Expect(arch && arch->GetNumFaceGroups() == expectedGroups &&
+                            (mode != 7U || textures->has_texture_id("CompoundSharedTile") == GR_OK),
+                            "actual MeshManager preloads the owning CMP library before required part materials")) return 1;
+                std::vector<ARCHETYPE_INDEX> parts;
+                const auto collect = [](ARCHETYPE_INDEX, ARCHETYPE_INDEX child, void *context) {
+                    static_cast<std::vector<ARCHETYPE_INDEX> *>(context)->push_back(child);
+                    return true;
+                };
+                const auto compound = arch->GetEngineArchtype();
+                if (!Expect(engine->enumerate_archetype_parts(compound, collect, &parts) == GR_OK && parts.size() == 2U,
+                            "actual MeshManager retains both required compound part archetypes")) return 1;
+                if (mode == 6U && !Expect(renderer->get_archetype_mesh(compound, 0U) == nullptr &&
+                        renderer->get_archetype_mesh(parts[0], 0U) == nullptr &&
+                        renderer->get_archetype_mesh(parts[1], 0U) != nullptr,
+                        "genuine hardpoint-only root has no local mesh while full compound retains child geometry")) return 1;
+                if (mode == 7U) for (const auto part : parts)
+                {
+                    const Mesh *mesh = renderer->get_archetype_mesh(part, 0U);
+                    PixelFormat format;
+                    if (!Expect(mesh && mesh->material_list && mesh->material_list[0].texture_id != 0U &&
+                                pipeline->get_texture_format(mesh->material_list[0].texture_id, &format) == GR_OK &&
+                                !format.has_alpha_channel(),
+                                "both original part materials resolve actual opaque texture frames from the outer library")) return 1;
+                }
+                const auto instance = engine->create_instance2(compound, nullptr);
+                if (!Expect(instance != INVALID_INSTANCE_INDEX,
+                            "shared-resource compound creates its original connected instances")) return 1;
+                cpuMaterialBackendLive = true;
+                acceptPolyMeshCpuDraw = true;
+                engine->render_instance(&camera, instance, static_cast<EngineFlags>(0), 1.0F,
+                                       RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES, nullptr);
+                acceptPolyMeshCpuDraw = false;
+                cpuMaterialBackendLive = false;
+                if (!Expect(gameMeshDrawCalls == before + expectedGroups,
+                            "outer-library textures reach both original production part draws")) return 1;
+                engine->destroy_instance(instance);
+                meshManager->ReleaseArch(arch);
+            }
+            else if (!Expect(!arch && !meshManager->FindMeshArch(name.c_str()) &&
+                             textures->has_texture_id("CompoundMissingTile") != GR_OK && gameMeshDrawCalls == before,
+                             "missing required outer map rejects actual MeshManager load without cached archetype or draw")) return 1;
+            if (!Expect(absentArchetype(name.c_str()) && absentArchetype("CompoundRoot.3db") &&
+                        absentArchetype("CompoundChild.3db"),
+                        "actual MeshManager compound release/failure retains no acquired Engine archetype")) return 1;
+        }
+        if (!Expect(meshSystem->ShutdownAggregate() == GR_OK,
+                    "actual MeshManager releases its Engine and Animation references")) return 1;
+        meshManager->Release();
+        meshSystem->Release();
+        meshManagerAggregate->Release();
+        meshManagerInner->Release();
+        animation->Release();
+        animationAggregate->Release();
+        animationInner->Release();
+        meshHardpoints->Release();
+        objects->Release();
+        std::cout << "Original MeshManager owning compound shared textures loaded and required missing maps rejected\n";
+    }
     renderer->Release();
     engine->set_instance_handler(engineInstance, nullptr);
     if (!Expect(instanceHasArchetype(engineInstance, engineArchetype),

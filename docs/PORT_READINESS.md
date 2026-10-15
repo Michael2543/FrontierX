@@ -1,5 +1,419 @@
 # Linux Port Readiness Plan
 
+## Active plan: playable single-player first (2026-10-13)
+
+User-approved priority reset: deliver a playable native Linux Conquest campaign,
+prepare as much as practical in CI, and use user-operated playtests for real
+mission acceptance. This section supersedes the older milestone ordering and
+all historical “next M3” instructions below. It does not turn failed comparisons
+into passes or retract confirmed defects.
+
+**Next gameplay milestone (P1): one regular Terran campaign mission from the
+original entry through victory/defeat, normal save/load and transition to the
+next mission.** The first campaign mission is the default target; identify its
+original script/resource and required production owners before implementation.
+The user has reached first-Terran victory and exercised save/load. P1b is
+completed by explicit user acceptance on 2026-10-15, with the follow-ups below
+retained. P1c is the next active delivery step.
+
+### P1b completed by user acceptance (2026-10-15)
+
+The user explicitly requested that P1b be marked completed after the full
+first-Terran mission run, reported original victory and save/load, and the
+subsequent presentation fixes. Record this as user acceptance of the delivered
+Linux mission scope. The next active delivery step is P1c: original result/
+return/progress, next-mission entry and defeat/retry/restart/teardown.
+
+This milestone decision does not turn unresolved defects or unexecuted checks
+into passes. Retain the colorful impact/explosion artifact investigation,
+unavailable Harvester depletion voices, strict original-family font mapping
+and whole-process mission LeakSanitizer finding as explicit follow-ups. Actual
+GitHub CI and native Windows Debug/Final/module ABI execution remain pending;
+M3 remains separate and unaccepted. Normal victory teardown and detailed defeat/
+retry evidence have not been independently established and remain P1c work.
+No additional gameplay, runtime, build or test execution is claimed by this
+documentation-only status update. Earlier dated open/P1b-blocker statements below
+record the implementation history; this acceptance entry supersedes their
+milestone status, not their unresolved technical findings.
+
+### Starting point and concrete gaps
+
+Latest narrow feedback (2026-10-14): the speaking unit's red half-circle symbol
+swings below the hull. Native SpaceShip marker drawing now anchors to the
+corrected hull footprint and oscillates in its own plane about K, preserving
+original media/state/lifecycle and Windows. The complete standard/full-media GCC/Clang and strict sanitizer graphs build,
+and focused material/math, layout, batcher and shell checks pass without skips.
+Visible stability remains a short user check. Other P1b effect/media blockers are
+not closed by this correction. See [marker evidence](GAME_MATERIAL_PATH.md).
+
+
+Latest user mission run (2026-10-14):
+
+The user reports completing the first Terran mission with its regular victory
+and exercising save/load. The precise production/combat save timing and regular
+defeat were not separately confirmed. The user reports small selection corners,
+keel-up emergence after wormhole jumps, and brief very colorful impact/explosion
+artifacts. These remain presentation checks, not accepted passes.
+
+The window disappearance is a confirmed SIGABRT in native unit communication,
+not verified regular victory teardown. The core identifies a Harvester request
+for a speech filename absent from the supplied retail archives. Native missing
+communication now returns the original Windows failure ID0 with an explicit
+diagnostic; mandatory scripted speech remains strict. The missing depletion
+voices remain an open media requirement; no alternate recording is substituted.
+See [audio diagnosis](NATIVE_AUDIO_STREAMER.md).
+
+Native new warp-ins now use the current ship-control axes rather than the old
+CQ2 -K-forward/J-up initializer. This intentionally repairs initial runtime
+orientation and the corresponding saved orientation; layout, heading, gate
+position, timers, velocity formulas, call order/RNG and Windows remain unchanged.
+Already-active faulty jumps in earlier saves are not normalized. Focused math
+checks do not replace a fresh visible jump/user retest. Selection investigation
+has disproved the initial instance/archetype-ID suspicion: HARCH already performs
+the conversion. No bounding-box ownership change is justified by that suspicion.
+The final integrated build passes the focused checks in all five configurations;
+a bounded original fresh entry/jump/selection/zoom/close executes with all media
+requested. Native selection corners now use the corrected direct-hull footprint
+without altering cached gameplay bounds or original width/cap. A fingerprinted
+private handoff supplies a short selection/fresh-jump/effect/close checklist.
+The brief capture retry has not reproduced the colorful artifacts; their cause
+and visible acceptance remain open. Complete P1b acceptance is not declared.
+
+
+
+Latest user round (2026-10-14): the user judges presentation very good and names
+wheel zoom, the Harvester muzzle and frame rate as the three remaining reported
+issues. Native original wheel handling and render-only muzzle alignment are
+repaired. Measured resource churn is reduced without content exclusions or
+weakened assertions; the bounded quiet scene reaches the original30-FPS cap and
+approximately60 FPS through its original uncapped option at normal speed.
+Renewed user harvesting, combat smoothness and full mission acceptance remain
+open. Detailed commands, methodology and limits are in
+[render evidence](GAME_MATERIAL_PATH.md).
+
+
+Latest bounded feedback work (2026-10-14): original context/map/edge cursor
+coverage expands to27 checked source resources. Native platform ambient
+scripts now use their genuine MeshArch script set; actual Turret radar and
+Mantis production animation/reload inspection remain pending. Exact-state native GPU pipeline
+reuse passes real GCC/Clang captured-lifetime/readback checks. The same ready-HQ
+save still measures only11.2 FPS; smoothness remains open. User tests of weapon
+flight, Fabricator wings and other reported presentation defects are pending.
+Standalone strict SDL/GPU/audio counterchecks reproduce the2908-byte DBus leak
+class, while the actual mission's additional80 bytes remain unattributed; no
+whole-process leak pass is claimed. Full mission gameplay and audiovisual
+acceptance remain user-operated. See [current render evidence](GAME_MATERIAL_PATH.md)
+and [media blockers](NATIVE_TERRAN_MEDIA.md).
+
+
+Post-reboot recovery (2026-10-14): source fixes survive, but temporary external
+test builds and authentic mission checkpoints are lost. Durable external
+standard and optional GCC/Clang builds and focused Clang sanitizers are
+restored; actual mission continuation must be recreated through original
+controls. Earlier runtime evidence is historical, not execution after reboot.
+The host journal does not establish the cause of the reported machine freeze.
+P1b acceptance and the whole-process sanitizer failures remain open.
+
+The recreated original flow now reaches the encounter, Fabricator and HQ;
+genuine early/group/encounter/active-HQ/ready-HQ saves are durably retained.
+Ready-HQ original F8/close succeeds. A proven additional free-preview blocker
+is fixed in NativeAppCursor: accepting the original source-owned BUILD cursor
+restores the unchanged Unborn gate. Actual Turret green/red preview and normal
+close now execute; original cursor completeness and user fidelity remain open.
+A30-second loaded-HQ interval still measures about10.9 FPS; no controlled
+performance gain is claimed. See [render evidence](GAME_MATERIAL_PATH.md).
+
+Strict active-HQ F8/short continuation/F7/normal close now executes without
+observed invalid-access/UBSan diagnostics, but whole-process LeakSanitizer
+fails2988 bytes/seven allocations. The prior watchdog attempt also remains
+failed. Complete mission runs and presentation acceptance remain user-operated,
+as reaffirmed2026-10-14; these bounded owner checks do not accept P1b.
+
+User feedback follow-up (2026-10-14): weapon direction, ship/platform build
+animation, green free-space preview, exhaust placement and Harvester cargo-tank
+orientation require correction and renewed visible tests. The user confirms
+the restored building construction looks correct, but reports
+weapon flight still wrong, missing Fabricator opening wings and low frame rate.
+The original wing scriptset hookup, scoped preview material draw and native
+Bolt/PlasmaBolt hardpoint-pitch extraction are corrected at source; renewed
+visible verification remains pending. A debugger-free bounded run measures
+approximately10 frames/second before removing redundant per-draw GPU idle waits.
+Performance improvement remains unmeasured; required contents remain enabled.
+The actual active-construction F8 sanitizer additionally finds a large-distance
+asteroid sort conversion overflow. Its native key-only owner correction passes
+focused radix/sanitizer checks; a corrected host retail retry is pending after
+an offscreen-window attempt. Required source failures are not suppressed. Native world/HUD
+batch barriers and transactional camera state, original build-effect hookups
+and shared source model-axis presentation are implemented and under bounded
+runtime validation. The full P1b requirements remain open; see the focused
+[campaign](NATIVE_TERRAN_CAMPAIGN.md), [media](NATIVE_TERRAN_MEDIA.md) and
+[render contracts](GAME_MATERIAL_PATH.md). No pending user check is a pass.
+
+Current P1b checkpoint (2026-10-14): focused GCC/Clang/default/optional and
+sanitizer checks pass as recorded in [the build graph](BUILD_GRAPH.md).
+Exact original global-schema migration and unnamed-union matching restore a
+bounded retail source loop, original Blackwell jump and normal early/active-
+movement F7/F8/close. The full-tree geometry guard admits genuine initial
+ship/platform models without required-geometry diagnostics. Strict negative
+schema fixtures execute under GCC/Clang and both sanitizers. These are bounded checks,
+not complete gameplay or presentation acceptance. The VIDEOon original selector,
+animated briefing and Start also execute without presentation exclusions, with
+three early/movement/scouting save/load pairs and normal close. The single-font
+interim scope still lacks original Arial Narrow. Original victory/defeat, full
+active production/combat continuation, all visual/audio events and user acceptance
+remain open. The optional movie owner displays the original intro and closes
+through Esc and natural EOF; user audiovisual fidelity remains unaccepted.
+The latest corrected-shader actual VIDEOon Clang sanitizer load/close runs37
+source frames but fails LeakSanitizer (3316 bytes/eight allocations). The previous
+wrong-order run failed3396 bytes/nine allocations; focused checks do not erase
+either unresolved whole-process failure.
+A further normal-control continuation reaches the original first encounter,
+damage/kills and source Fabricator/HQ production; encounter/damaged and active
+HQ F7/F8 return success and normal close executes. A short subsequent
+normal F8/wait/F7 interval demonstrates genuine HQ construction advancement
+after load. HQ completion, later combat/AI, full victory/defeat and full
+presentation remain open.
+The gray planet was traced to the launch helper's reversed extended/game
+vertex shaders. Corrected same-build F8/system-map execution visibly restores
+colored continents/cloud structure and HQ textures and closes normally. This
+closes that specific configuration defect; full media/user acceptance remains
+open.
+
+- M2 Sol_Train is accepted in its documented Linux scope: all 23 objectives,
+  required controls, combat, normal save/load, victory/return and repeated close.
+  See [executed M2 evidence](NATIVE_SINGLEPLAYER_SLICE.md#m2-acceptance-in-the-agreed-linux-scope-2026-10-12).
+- P1a now connects original Terran campaign/mission selection and Script01
+  briefing/mission binding; a bounded first-mission source loop and normal close
+  executed on external data. The user judged this sufficient to proceed to P1b.
+  Complete gameplay and presentation remain unaccepted; see
+  [first Terran integration evidence](NATIVE_TERRAN_CAMPAIGN.md).
+- Script01 explicitly requests `MANTIS_FRIGATE_RUSH`. Its original AI and the
+  complete required gameplay/media closure are now P1b integration work.
+- Existing M3 work has useful UTF ordering, RNG-domain, sound-lifetime and
+  alignment fixes. Retain these fixes and their focused regression checks.
+- Full state comparisons, equivalent external-event replay and cross-platform
+  determinism remain incomplete. [M3 evidence](M3_SIMULATION_COMPARISON.md) is a
+  separate diagnostic backlog, not a prerequisite for expanding playable content.
+- Excluded media, optional providers, host leaks and display limits remain
+  explicit in the M2 evidence. P1b must restore all presentation and media used by
+  its selected mission, including the second minimap showing system connections.
+  Only features outside that mission may remain subsequent audiovisual work.
+
+### Ordered delivery plan
+
+| Step | Work and owner boundary | Exit evidence |
+|---|---|---|
+| P0 — CI preparation | Reuse existing build/test drivers; separate technical readiness jobs from M3 comparison acceptance. Provide a reproducible developer playtest build and launch recipe with external data/font/decoder inputs. | GCC/Clang default and playable optional configurations build; relevant CPU/layout/regression checks execute; focused sanitizer checks execute; a revision/configuration and exact launch instructions can be handed to the user. |
+| P1a — Original campaign entry | Follow `Menu_campaign` → original mission selector, briefing, script/resource loading and GameProgress. Identify the first Terran mission and add only its missing production dependencies. | CI compiles/checks the integration; a bounded load/close smoke executes where lawful external data is available; user can enter the real mission through original controls. |
+| P1b — Complete that mission **(completed: user acceptance 2026-10-15)** | Integrate required gameplay/save owners and the complete mission presentation/media scope specified below, including both minimaps and all required asset/material/shader paths. | User reaches original victory and verifies defeat, early/active-state save/load and continued play; complete visuals, audio and the system-connections minimap work before and after reload. No debug completion, fabricated saves or presentation exclusions qualify for full P1b acceptance. |
+| P1c — Continue and repeat **(next active step)** | Connect original result/return/progress and next-mission loading; check defeat/retry, restart and teardown. | User reaches the next mission after victory, exercises defeat/retry and closes/re-enters normally. Targeted automation protects any reproduced lifecycle/save regression. This completes P1, not the entire campaign. |
+| P2 — Broaden the campaign | Advance mission by mission; group checks around newly required factions, AI, abilities and persistent state. | Maintain a compact mission matrix of untested/blocked/passed with tested revision, configuration, limitations and user result. No campaign-wide claim from one mission. |
+| P3 — Complete the single-player experience | Restore remaining gameplay-relevant providers and audiovisual features outside already accepted mission scopes; improve launch/settings usability. Add skirmish only as a separately scoped follow-up requiring the real player AI. | Representative campaign playthroughs, usable launch flow and documented feature coverage. Packaging/release still requires legal, dependency and data-separation review. |
+| Later M3 — Compatibility and determinism | Reuse existing observers for a concrete discrepancy; plan controlled external events before demanding identical traces. Expand full-state/Windows/retail comparisons separately. | Explicit comparison evidence under a defined protocol. Multiplayer remains later and requires its own determinism/network acceptance. |
+
+P0 prepares the delivery loop; it must not grow into a new infrastructure project
+before P1a starts. Reuse the current runners, adapters and tests. Each code change
+must name a selected mission blocker or a reproduced regression it resolves.
+Do not broaden state observers or add probes merely to increase completeness.
+
+### P1b mandatory presentation and media acceptance (2026-10-13)
+
+By explicit user instruction, complete presentation is required for P1b, not
+optional polish deferred to P3. Scope includes every asset and production path
+used throughout the selected mission, including later spawns, construction,
+combat, abilities, destruction and restored saved states:
+
+- All models, submodels, attachments, turrets and animations.
+- All textures, required texture formats, mip levels and texture stages.
+- All required material/shader/effect techniques and render passes, with original
+  texture combinations, transparency, blending, depth behavior and culling.
+- Intended lighting, material colors, shading, space background and other
+  mission background elements.
+- Weapons, projectiles, beams, particles, hits, explosions, shields, engine
+  effects and ability effects.
+- Complete mission HUD, icons, selection/target indicators, text, animated
+  portraits and both minimaps.
+- Intended mission speech, music, spatial sound effects and briefing/mission media.
+
+**Working portraits are also a mandatory P1b feature.** Show the correct original
+unit/character portraits for selection and mission communications wherever the
+original mission uses them. Implement intended animations and speech-driven
+portrait behavior, correct switching/clearing when selection or speaker changes,
+and proper restoration after save/load. Verify these during the user playtest;
+a static substitute for an animated portrait, an empty panel or
+`--skip-animated-portraits` does not satisfy final acceptance. Preserve original
+speech/script completion semantics while integrating portrait playback.
+
+**The second minimap showing connections between systems is a mandatory P1b
+feature.** It must show the systems and their connections according to original
+mission discovery/visibility rules, update as those states change, and support
+the original map interactions and current-system indication. Verify it alongside
+the local-system minimap during normal play, system changes and save/load. A
+static diagram, empty panel or only the local-system minimap does not satisfy
+this criterion. Follow original behavior; do not reveal undiscovered links or
+invent new map controls to make the check pass.
+
+Inventory asset and renderer requirements against original resources and real
+callers; clarify uncertain intended appearance with suitable reference evidence.
+Successful loading alone does not establish correct rendering. Use existing
+technical checks where practical and user inspection of actual visible/audible
+output, including the second minimap, for gameplay acceptance.
+
+Review `--base-textures-only`, `--skip-legacy-lighting`,
+`--skip-space-background`, `--skip-animated-portraits`, `--skip-mission-sfx`,
+`--skip-mission-music`, `--skip-movies` and any HUD/map exclusion such as
+`--skip-sector-map`. The final P1b launch must not use flags that hide intended
+content or simplify required rendering for this mission. Missing assets,
+substitute materials, omitted render passes/effects or a nonfunctional second
+minimap remain P1b blockers. Reduced intermediate candidates may be tested with
+explicit limitations, but cannot receive full P1b acceptance. Assets unused by
+this mission do not have to be ported before its acceptance.
+
+Roles: the lead agent coordinates dependencies, integration and handoff; a
+Gameplay agent owns required gameplay and saves; a Presentation/Media agent owns
+assets, renderer/media paths and both map displays; a Validation agent reviews
+changes and CI/regression/layout/ABI evidence independently. Delegate with clear
+file/component ownership and coordinate shared interfaces before editing. The
+user performs full mission playtests and assesses visuals, audio and map use.
+This role allocation authorizes delegation for P1b implementation; it does not
+claim that implementation or user testing has occurred.
+
+P1b is completed by explicit user acceptance on 2026-10-15. The original
+requirements and role allocation above remain recorded; the acceptance entry
+identifies retained follow-ups without inventing capability or test evidence.
+Executed evidence is recorded in [the mission integration document](NATIVE_TERRAN_CAMPAIGN.md).
+
+P1b required compound-library repair, 2026-10-14: a fresh original mission load
+first failed required planet/platform textures, accepted a partial compound and
+crashed on the Hybrid Center's null mesh. Failure propagation now rejects failed
+declared render models and compound parts. Resource inspection identified the
+seven missing maps in outer compound libraries; native MeshManager now loads
+that exact owning file's libraries before Engine creates its parts, matching
+the original compound viewer's ordering. The optional Clang Wayland/Vulkan
+retail retry requests all seven maps without texture/material errors, runs 132
+source mission frames and closes through original QUIT with no audio handles
+and idle hints. This is a bounded load/close pass, not a complete model census,
+visible rendering acceptance. A subsequent fresh original-control run executes
+F7 three times and F8 four times, selects/moves Blackwell and resumes its saved
+active movement (original 464-byte Gunboat record, active path). The canonical
+empty SysMap record is eight bytes. It runs 1783 source frames and closes with
+idle audio/hint ownership. Active production/combat/AI continuation, original
+victory/defeat and full user mission/presentation acceptance remain open.
+
+Earlier bounded P1b checkpoint, 2026-10-14 (still open): original-control HQ and refinery
+construction complete with source costs, capacity changes and instructions.
+Bounded actual F7/F8 restores active construction and continued production.
+The source HQ-in-progress attack trigger and real damage execute. Strategic AI,
+active-combat continuation and original victory/defeat are still unverified.
+Source communication portraits advance after reload; this is not visible/audible
+user acceptance.
+
+The existing synthetic GPU checks execute authored palette mip chains,
+stage-one ADD/independent UV2, alpha rejection and opaque primary-frame
+presentation on the explicit X11/Vulkan host. The original App legacy mesh
+path now executes native source lighting, material colors and emissive textures;
+fixtures verify shared-corner UV seams, repeated source explosion splits and
+unchanged cooking/RNG. It is enabled for the regular mission when legacy
+lighting is not explicitly skipped. Bounded mission load/reload/close succeeds
+with background, mip levels, lighting, portraits, SFX, notification cue and
+music enabled. These checks do not establish complete visual or audible parity.
+
+Strict actual mission sanitizers exposed incorrect animation-node and channel-
+stream destruction; native ownership fixes pass focused regressions. The next
+actual retry exposed a builder-drone array allocator mismatch. Native typed
+array ownership now passes the existing GCC/Clang/focused sanitizer regression;
+the actual mission retry now reaches source loop/normal close without those
+ASan mismatches or UBSan errors, but still fails LeakSanitizer. Concrete
+NVIDIA/PipeWire/DBus allocation callers are identified; cleanup remains open. No sanitizer suppression or skip counts as success. Complete later
+combat/explosion presentation, both maps and intended media remain blockers.
+Original Arial/Narrow faces and suitable selection-portrait/movie references
+remain missing. Current candidates still use an explicitly bounded font and
+movie exclusion. Actual updated CI and affected native Windows/ABI checks are
+pending. Detailed executed evidence and limitations are in the focused
+[campaign](NATIVE_TERRAN_CAMPAIGN.md), [media](NATIVE_TERRAN_MEDIA.md) and
+[technical CI](LINUX_PLAYTEST_CI.md) documents.
+
+### CI and human responsibilities
+
+CI should do all practical repeatable preparation. The implementation target is:
+
+| Check | Placement and acceptance rule |
+|---|---|
+| GCC and Clang builds, default/optional configurations | Technical readiness. Preserve font/decoder-free default coverage and the font/decoder configuration used for actual play. |
+| Existing CPU, schema/layout and relevant regressions | Technical readiness. Use synthetic/repository-owned fixtures on runners without retail data. Extend existing tests for actual defects. |
+| ASan/UBSan on affected owners | Technical readiness. Use bounded real mission runs on an authorized host when needed; invalid memory access/UB must be fixed, not hidden. |
+| Windows Debug/Final and ABI/layout | Required for affected shared production/module contracts. Keep the Windows baseline viable; no Windows product-repair expansion. Missing execution stays explicitly pending. |
+| Existing GPU/load/save/close smokes | Run on available controlled hosts when relevant. If hardware/data is unavailable, record “not run” and cover the actual path in the user's test; a skip is never a pass. |
+| Full mission play, visuals, audible speech, usability, victory/defeat | User-operated acceptance on a documented candidate. Automated bounded smokes supplement this and do not require a new full-mission input bot. |
+| Full M3 exact-state/CRT/platform comparisons | Separate diagnostic track. Preserve actual failures and strict assertions; they do not serve as the aggregate P1 readiness gate. Investigate immediately when they expose a concrete gameplay, memory or save defect. |
+
+A candidate is **ready for user playtest** after applicable technical checks pass,
+with unavailable host checks and remaining limitations stated. It is **gameplay
+accepted** only after the requested user test succeeds for its stated scope.
+A user may test while an unavailable Windows check is pending, but that does not
+close an affected Windows/ABI requirement. Known corrupting save bugs, crashes or
+invalid memory accesses on the target path must not be relabeled as acceptable.
+Third-party process-global leak reports stay visible and separate from mission
+resource ownership; no blanket suppression or weakened assertions is authorized.
+
+The [.github/workflows/m3.yml](../.github/workflows/m3.yml) now provides independent
+`technical` (default) and `m3` dispatch tracks on the existing protected jobs and
+runners. Technical preparation has its own required build/regression/Windows gate;
+full M3 acceptance stays separately executable and blocked. Optional private
+candidate records and the ordinary user launcher implement the handoff without
+binary/runtime uploads. Explicit absent host scopes remain **NOT RUN / UNTESTED**.
+Local clean GCC/Clang build/CPU/focused-sanitizer checks and bounded ordinary
+mission smokes execute; ordinary GPU resize and instrumented whole-process
+mission leaks remain failures. No all-host readiness pass is claimed.
+Implementation, exact recipes, limits and local/CI evidence:
+[Linux playtest CI preparation](LINUX_PLAYTEST_CI.md). Actual corrected CI runs
+and full user playtests remain pending.
+Prepare the candidate as far as possible in CI, including build provenance and
+launch instructions. A developer binary bundle is conditional on dependency and
+license review and must contain no retail media, saves, traces, credentials or
+private paths. If upload is not cleared, provide a reproducible build/launch
+recipe and use the controlled build location instead. This documentation change
+does not publish artifacts, dispatch CI, change remote configuration or commit code.
+
+### User playtest handoff
+
+For each candidate, provide one concise checklist rather than requesting repeated
+full playthroughs after every small change:
+
+1. Identify the source revision, compiler/configuration, build location, required
+   external inputs and one exact launch command; list known exclusions.
+2. Name the mission and specific changes to verify. Batch related changes into
+   one candidate. Request a full run only for initial mission acceptance or a
+   change that warrants it; otherwise use a genuine user-owned checkpoint.
+3. Ask for entry, relevant commands/objectives, early and active-state save/load,
+   continued play, full models/textures/materials/effects/background/audio, both
+   minimaps (especially system connections and their interactions after reload),
+   correct selection/speaker portraits with animation and reload behavior,
+   result/next entry or retry, and normal close as applicable.
+4. User reports pass/fail, the last completed objective, expected/observed behavior
+   and reproducible steps. Keep genuine saves/raw logs/media outside the repository;
+   store only bounded findings and provenance in the mission evidence ledger.
+5. Fix a reported blocker at its owner, execute the narrowest useful regression,
+   and hand back a corrected candidate with only the necessary retest scope.
+
+While awaiting a user test, continue independent builds, source review and next
+owner preparation. Do not invent user results, mark pending gameplay accepted,
+or replace a missing playtest with increasingly broad synthetic comparisons.
+
+### Documentation validation for this reset
+
+2026-10-13: documentation/source review only on the Linux workspace. No executable,
+build configuration, CI workflow, serialized format or module ABI changed. Local
+link/anchor checks and `git diff --check` validate the documentation edit. No new
+GCC/Clang build, GPU/mission run, Windows rebuild/ABI or retail comparison was
+performed. Historical runtime results remain attributable to their original runs.
+
+## Historical plan and validation ledger
+
+Everything below is retained evidence and earlier planning, not the active work
+queue. Older “next”, “required before acceptance” and M3 ordering statements are
+superseded by the active plan above; technical failures remain recorded failures.
+
 Latest M3 evidence (2026-10-13): **NOT ACCEPTED**. Completed protected CI
 [run38426508626](https://github.com/Michael2543/frontierX/actions/runs/38426508626)
 at `b24115686c0f733f3d22a7ee852f638dd26cd205` fails overall. Its six Linux
@@ -12,9 +426,9 @@ fails afterward in the launch-helper regression. Windows mission is skipped.
 GCC measured mission sanitizers expose an unaligned Planetoid sync store after
 the preceding OpAgent correction. Working-tree follow-up is supplementary,
 not executed CI proof. The user confirms the separate Steam executable is
-unmodified retail; its runtime has not yet been compared. Retail behavior is
-the preferred corroborating reference, rather than the restored conversation
-failure. Full state/RNG, repeatability and Save/Reload continuation remain open.
+unmodified retail; its runtime has not yet been compared. The user subsequently reports that conversations also fail in the unchanged
+Steam installation on this host. Its audio runtime is therefore not a valid
+oracle; codecs/environment are a user hypothesis, with cause still unproved. Full state/RNG, repeatability and Save/Reload continuation remain open.
 See [the current evidence](M3_SIMULATION_COMPARISON.md#retail-reference-and-next-sync-boundary-2026-10-13).
 
 Earlier updates below are dated historical snapshots.

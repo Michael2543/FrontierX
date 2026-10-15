@@ -46,6 +46,9 @@
 #endif
 
 #define ObjectGlow _Cog
+#if !defined(_WIN32)
+#include "Include/NativeShipVisualTransform.h"
+#endif
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 template <class Base=IBaseObject> 
@@ -68,6 +71,7 @@ struct _NO_VTABLE ObjectGlow : public Base
 	using typename Base::RenderProc;
 	using typename Base::InitProc;
 	using Base::instanceIndex;
+	using Base::instanceMesh;
 	using Base::bExploding;
 	using Base::bCloaked;
 	using Base::bSpecialRender;
@@ -304,6 +308,10 @@ void ObjectGlow< Base >::glowPostRender (void)
 			
 			CAMERA->SetModelView();
 			PB.Color3ub(r*glow,g*glow,b*glow);
+#if !defined(_WIN32)
+			const Transform visualTransform = NativeShipVisualTransform(transform,
+				instanceMesh == NULL || CQEFFECTS.bFastRender == 0);
+#endif
 			
 			//	PB.Begin(PB_QUADS);
 			for (int c=0;c<MAX_ENGINE_GLOWS;c++)
@@ -312,10 +320,18 @@ void ObjectGlow< Base >::glowPostRender (void)
 				{
 					Vector cpos (CAMERA->GetPosition());
 					
+#if defined(_WIN32)
 					Vector look (transform*glowPt[c] - cpos);
+#else
+					Vector look (visualTransform*glowPt[c] - cpos);
+#endif
 					
 					Vector worldDir;// (look.y, -look.x, 0);
+#if defined(_WIN32)
 					worldDir = transform.rotate(glowDir[c]);
+#else
+					worldDir = visualTransform.rotate(glowDir[c]);
+#endif
 					
 					/*#define TOLERANCE 1e-5
 					if (fabs (i.x) < TOLERANCE && fabs (i.y) < TOLERANCE)
@@ -346,7 +362,11 @@ void ObjectGlow< Base >::glowPostRender (void)
 					v0 = 0;
 					v1 = 1;
 					
+#if defined(_WIN32)
 					trans.translation = transform*glowPt[c];
+#else
+					trans.translation = visualTransform*glowPt[c];
+#endif
 					
 					//long part
 					p[0].set(0,-size,0);

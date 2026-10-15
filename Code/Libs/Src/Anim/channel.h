@@ -72,6 +72,11 @@ namespace Channel
 
 			Object (IChannel2* arch);
 			Object (IVirtualChannel * _ctrl);
+#if !defined(_WIN32)
+            // Script owns polymorphic channel streams and releases Object*.
+            // Keep the supported Windows class/vtable unchanged.
+            virtual ~Object() = default;
+#endif
 
 			float get_current_time (void) const;
 			virtual bool set_current_time (float nu_t);

@@ -4,6 +4,10 @@
 
 #ifndef MATERIAL_H
 #define MATERIAL_H
+#if !defined(_WIN32)
+#include <stdexcept>
+#include <string>
+#endif
 
 //
 
@@ -317,23 +321,47 @@ inline void Material::update( float dt )
 	ITL_TEXTUREFRAME_IRP frame;
 	
 	if( SUCCEEDED( texturelib->get_texture_ref_frame( diffuse_texture_ref, ITL_FRAME_CURRENT, &frame ) ) ) {
+#if !defined(_WIN32)
+        if (diffuse_texture_ref != ITL_INVALID_REF_ID && !frame.rp_texture_id)
+            throw std::runtime_error("Native material required texture frame has no render handle");
+#endif
 		texture_id = frame.rp_texture_id;
 	}
 	else {
+#if !defined(_WIN32)
+        if (diffuse_texture_ref != ITL_INVALID_REF_ID)
+            throw std::runtime_error("Native material required texture frame is unavailable");
+#endif
 		texture_id = 0;
 	}
 
 	if( SUCCEEDED( texturelib->get_texture_ref_frame( second_diffuse_texture_ref, ITL_FRAME_CURRENT, &frame ) ) ) {
+#if !defined(_WIN32)
+        if (second_diffuse_texture_ref != ITL_INVALID_REF_ID && !frame.rp_texture_id)
+            throw std::runtime_error("Native material required texture frame has no render handle");
+#endif
 		second_diffuse_texture_id = frame.rp_texture_id;
 	}
 	else {
+#if !defined(_WIN32)
+        if (second_diffuse_texture_ref != ITL_INVALID_REF_ID)
+            throw std::runtime_error("Native material required texture frame is unavailable");
+#endif
 		second_diffuse_texture_id = 0;
 	}
 
 	if( SUCCEEDED( texturelib->get_texture_ref_frame( emissive_texture_ref, ITL_FRAME_CURRENT, &frame ) ) ) {
+#if !defined(_WIN32)
+        if (emissive_texture_ref != ITL_INVALID_REF_ID && !frame.rp_texture_id)
+            throw std::runtime_error("Native material required texture frame has no render handle");
+#endif
 		emissive_texture_id = frame.rp_texture_id;
 	}
 	else {
+#if !defined(_WIN32)
+        if (emissive_texture_ref != ITL_INVALID_REF_ID)
+            throw std::runtime_error("Native material required texture frame is unavailable");
+#endif
 		emissive_texture_id = 0;
 	}
 
@@ -396,16 +424,35 @@ inline HRESULT Material::load_property_from_filesystem( IFileSystem *parent, con
 					PixelFormat pf;
 
 					if( SUCCEEDED( texturelib->get_texture_id( map_name, &tid ) ) ) {
+#if defined(_WIN32)
 						texturelib->add_ref_texture_id( tid, out_map_ref_id );
+#else
+                        if (FAILED(texturelib->add_ref_texture_id(tid, out_map_ref_id)) ||
+                            *out_map_ref_id == ITL_INVALID_REF_ID)
+                        {
+                            texturelib->release_texture_id(tid);
+                            throw std::runtime_error("Native material required texture reference failed");
+                        }
+#endif
 						
 						if( SUCCEEDED( texturelib->get_texture_format( tid, 0, &pf ) ) ) {
 							if( pf.has_alpha_channel() ) {
 								*out_map_flags |= TF_F_HAS_ALPHA;
 							}
 						}
-						
+#if !defined(_WIN32)
+                        else
+                        {
+                            texturelib->release_texture_id(tid);
+                            throw std::runtime_error(std::string("Native material required texture format is unavailable: ") + map_name);
+                        }
+#endif
 						texturelib->release_texture_id( tid );
 					}
+#if !defined(_WIN32)
+                    else if (map_name[0])
+                        throw std::runtime_error(std::string("Native material required texture is unavailable: ") + map_name);
+#endif
 
 					float fps;
 					if( SUCCEEDED( read_type( parent, "FPS", &fps ) ) ) {
@@ -539,15 +586,32 @@ inline HRESULT Material::load_from_filesystem_old( IFileSystem *parent )
 		bool has_format = false;
 
 		if( SUCCEEDED( texturelib->get_texture_id( map_name, &tid ) ) ) {
+#if defined(_WIN32)
 			texturelib->add_ref_texture_id( tid, &diffuse_texture_ref );
-
+#else
+            if (FAILED(texturelib->add_ref_texture_id(tid, &diffuse_texture_ref)) ||
+                diffuse_texture_ref == ITL_INVALID_REF_ID)
+            {
+                texturelib->release_texture_id(tid);
+                throw std::runtime_error("Native material required texture reference failed");
+            }
+#endif
 			if( FAILED( texturelib->get_texture_format( tid, 0, &pf ) ) ) {
+#if defined(_WIN32)
 				pf.init( 16, 5,6,5,0 );	// pulling this out of my ass.
+#else
+                texturelib->release_texture_id(tid);
+                throw std::runtime_error(std::string("Native material required texture format is unavailable: ") + map_name);
+#endif
 			}
 			has_format = true;
 
 			texturelib->release_texture_id( tid );
 		}
+#if !defined(_WIN32)
+        else
+            throw std::runtime_error(std::string("Native material required texture is unavailable: ") + map_name);
+#endif
 
 		float fps;
 		if( SUCCEEDED( read_type( parent, "FPS", &fps ) ) ) {

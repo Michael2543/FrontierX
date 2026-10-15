@@ -31,6 +31,8 @@
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
+#include <memory>
+#include <IUTFWriter.h>
 struct IDrawAgent;
 #include "MyVertex.h"
 #include <algorithm>
@@ -1029,6 +1031,11 @@ bool RepellentCloud::IsActive()
 }
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+static_assert(sizeof(BASE_REPELLENTCLOUD_SAVELOAD) == 204, "Original BASE_REPELLENTCLOUD_SAVELOAD record extent");
+static_assert(sizeof(REPELLENTCLOUD_SAVELOAD) == 348, "Original REPELLENTCLOUD_SAVELOAD record extent");
+#endif
+
 BOOL32 RepellentCloud::Save (struct IFileSystem * inFile)
 {
 	DAFILEDESC fdesc = "REPELLENTCLOUD_SAVELOAD";
@@ -1051,7 +1058,14 @@ BOOL32 RepellentCloud::Save (struct IFileSystem * inFile)
 
 	FRAME_save(save);
 
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (save.numSquares > MAX_REPEL_SQUARES || save.numTargets > MAX_REPEL_TARGETS ||
+		save.lastSent > MAX_REPEL_TARGETS) goto Done;
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) ||
+		dwWritten != sizeof(save)) goto Done;
+#endif
 
 	result = 1;
 
@@ -1073,9 +1087,27 @@ BOOL32 RepellentCloud::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	if (file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0) == 0)
 		goto Done;
 	MISSION->CorrelateSymbol("REPELLENTCLOUD_SAVELOAD", buffer, &load);
+#else
+	if (file->GetFileSize() != sizeof(load) ||
+		!file->ReadFile(0, buffer, sizeof(load), &dwRead, 0) || dwRead != sizeof(load))
+		goto Done;
+	{
+		// Exact canonical record layout is established above; reject unsafe counts
+		// before correlation or any frame/runtime state is applied.
+		REPELLENTCLOUD_SAVELOAD encoded;
+		std::memcpy(&encoded, buffer, sizeof(encoded));
+		if (encoded.numSquares > MAX_REPEL_SQUARES || encoded.numTargets > MAX_REPEL_TARGETS ||
+			encoded.lastSent > MAX_REPEL_TARGETS) goto Done;
+	}
+	if (!MISSION || MISSION->CorrelateSymbol("REPELLENTCLOUD_SAVELOAD", buffer, &load) != GR_OK)
+		goto Done;
+	if (load.numSquares > MAX_REPEL_SQUARES || load.numTargets > MAX_REPEL_TARGETS ||
+		load.lastSent > MAX_REPEL_TARGETS) goto Done;
+#endif
 
 	FRAME_load(load);
 
@@ -1088,6 +1120,68 @@ Done:
 }
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+bool CheckNativeRepellentCloudPersistence(IFileSystem *directory)
+{
+	// The shell regression has no active mission or simulation. Exercise this
+	// real source writer and reject damaged records without a fake Mission loader.
+	if (!directory || !HEAP || !OBJLIST || MISSION) return false;
+	DAFILEDESC descriptor = "RepellentCloudRegression.mission";
+	descriptor.lpImplementation = "UTF";
+	descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	descriptor.dwCreationDistribution = CREATE_ALWAYS;
+	COMPTR<IFileSystem> archive;
+	if (directory->CreateInstance(&descriptor, archive) != GR_OK) return false;
+	auto object = std::unique_ptr<IBaseObject>(new ObjectImpl<RepellentCloud>);
+	auto *source = static_cast<RepellentCloud *>(object.get());
+	source->numSquares = MAX_REPEL_SQUARES;
+	source->numTargets = MAX_REPEL_TARGETS;
+	if (!source->Save(archive)) return false;
+	COMPTR<IUTFWriter> writer;
+	if (archive->QueryInterface(IID_IUTFWriter, writer) != GR_OK) return false;
+	writer->Flush();
+	writer.free();
+	descriptor.dwDesiredAccess = GENERIC_READ;
+	descriptor.dwCreationDistribution = OPEN_EXISTING;
+	COMPTR<IFileSystem> reopened;
+	if (directory->CreateInstance(&descriptor, reopened) != GR_OK || source->Save(reopened))
+		return false;
+	descriptor = "REPELLENTCLOUD_SAVELOAD";
+	descriptor.lpImplementation = "DOS";
+	COMPTR<IFileSystem> payload;
+	REPELLENTCLOUD_SAVELOAD saved;
+	U32 count = 0;
+	if (reopened->CreateInstance(&descriptor, payload) != GR_OK ||
+		payload->GetFileSize() != sizeof(saved) ||
+		!payload->ReadFile(0, &saved, sizeof(saved), &count, 0) || count != sizeof(saved) ||
+		saved.numSquares != MAX_REPEL_SQUARES || saved.numTargets != MAX_REPEL_TARGETS) return false;
+	payload.free();
+	auto writeRecord = [&](const void *data, U32 bytes)
+	{
+		descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+		descriptor.dwCreationDistribution = CREATE_ALWAYS;
+		COMPTR<IFileSystem> damaged;
+		U32 written = 0;
+		return archive->CreateInstance(&descriptor, damaged) == GR_OK &&
+			damaged->WriteFile(0, data, bytes, &written, 0) && written == bytes;
+	};
+	if (!writeRecord(&saved, sizeof(saved)-1) || source->Load(archive)) return false;
+	U8 oversized[sizeof(saved)+1] = {};
+	std::memcpy(oversized, &saved, sizeof(saved));
+	if (!writeRecord(oversized, sizeof(oversized)) || source->Load(archive)) return false;
+	// Malformed fixed-width counts must fail before the real Mission callback.
+	saved.numTargets = MAX_REPEL_TARGETS+1;
+	if (!writeRecord(&saved, sizeof(saved)) || source->Load(archive)) return false;
+	saved.numTargets = MAX_REPEL_TARGETS;
+	saved.numSquares = MAX_REPEL_SQUARES+1;
+	if (!writeRecord(&saved, sizeof(saved)) || source->Load(archive)) return false;
+	saved.numSquares = MAX_REPEL_SQUARES;
+	saved.lastSent = MAX_REPEL_TARGETS+1;
+	if (!writeRecord(&saved, sizeof(saved)) || source->Load(archive)) return false;
+	return true;
+}
+#endif
+
 void RepellentCloud::ResolveAssociations()
 {
 	OBJLIST->FindObject(ownerID, NONSYSVOLATILEPTR, owner);
@@ -1438,6 +1532,20 @@ HANDLE RepellentCloudFactory::CreateArchetype (const char *szArchname, OBJCLASS 
 			
 			repelMesh.sprayType = ARCHLIST->LoadArchetype("BLAST!!RepellentCloud");
 			repelMesh.dammageType = ARCHLIST->LoadArchetype("BLAST!!RepellentCloudDamage");
+#if !defined(_WIN32)
+			if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS &&
+				(!repelMesh.tex1ID || !repelMesh.tex2ID ||
+				 !repelMesh.sprayType || !repelMesh.dammageType))
+			{
+				std::fprintf(stderr, "Native required RepellentCloud media missing: cloud=%u nebula=%u spray=%d damage=%d\n",
+					repelMesh.tex1ID, repelMesh.tex2ID, repelMesh.sprayType != NULL, repelMesh.dammageType != NULL);
+				if (repelMesh.tex1ID) TMANAGER->ReleaseTextureRef(repelMesh.tex1ID);
+				if (repelMesh.tex2ID) TMANAGER->ReleaseTextureRef(repelMesh.tex2ID);
+				repelMesh.tex1ID = repelMesh.tex2ID = 0;
+				delete result;
+				return NULL;
+			}
+#endif
 
 			goto Done;
 		}

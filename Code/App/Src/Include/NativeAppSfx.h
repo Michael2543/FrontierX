@@ -8,6 +8,7 @@ namespace FrontierX
 // Bind the source SFX ID table to the initialized native IStreamer.
 // Caller owns one DACOM reference.
 ISFX *CreateNativeSfxManager();
+bool CheckNativeSfxPool();
 }
 
 #endif

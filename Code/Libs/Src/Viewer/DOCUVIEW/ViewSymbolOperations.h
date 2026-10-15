@@ -87,4 +87,17 @@ inline bool HasVariableViewSymbolSize(SYMBOL symbol)
 	}
 }
 
+#if !defined(_WIN32)
+struct IViewConstructor2;
+// Exposes the original provider's actual correlation result without changing
+// its legacy void virtual interface or accepting a substitute implementation.
+bool CorrelateNativeViewSymbols(IViewConstructor2 *provider, SYMBOL oldSymbol,
+	const void *oldData, SYMBOL newSymbol, void *newData);
+// Original fixed-width Globals only: permit the proven absent legacy lobby
+// metadata nibble and the exact absent retail SLOT difficulty field, while
+// preserving checked correlation of every other field.
+bool CorrelateNativeMissionGlobals(IViewConstructor2 *provider, SYMBOL oldSymbol,
+	const void *oldData, SYMBOL newSymbol, void *newData);
+#endif
+
 #endif

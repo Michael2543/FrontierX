@@ -90,6 +90,16 @@ bool IsRgbx8(const PixelFormat & format)
         value.dwRGBAlphaBitMask == 0U;
 }
 
+bool IsRgb5A1(const PixelFormat &format)
+{
+    const auto &value = format.ddpf;
+    return value.dwSize == sizeof(DDPIXELFORMAT) &&
+        value.dwFlags == (DDPF_RGB | DDPF_ALPHAPIXELS) &&
+        value.dwRGBBitCount == 16U && value.dwRBitMask == 0x7c00U &&
+        value.dwGBitMask == 0x03e0U && value.dwBBitMask == 0x001fU &&
+        value.dwRGBAlphaBitMask == 0x8000U;
+}
+
 bool IsOpaqueClass(const PixelFormat & format)
 {
     return format.ddpf.dwFlags == DDPF_FOURCC &&
@@ -159,13 +169,13 @@ public:
         if (!active_ || pass != 0U || passActive_ || !target_ || poisoned_)
             return false;
         std::array<U32, 2U> samplerBefore{};
-        std::array<U32, 6U> stageBefore{};
+        std::array<U32, 8U> stageBefore{};
         for (std::size_t index = 0U; index < samplerBefore.size(); ++index)
             if (target_->get_sampler_state(0U, kSamplerStates[index],
                                            &samplerBefore[index]) != GR_OK)
                 return false;
         for (std::size_t index = 0U; index < stageBefore.size(); ++index)
-            if (target_->get_texture_stage_state(0U, kStageStates[index],
+            if (target_->get_texture_stage_state(index < 6U ? 0U : 1U, kStageStates[index],
                                                  &stageBefore[index]) != GR_OK)
                 return false;
 
@@ -180,22 +190,13 @@ public:
                 return false;
             }
         for (; stageApplied < kStageStates.size(); ++stageApplied)
-            if (target_->set_texture_stage_state(0U, kStageStates[stageApplied],
+            if (target_->set_texture_stage_state(stageApplied < 6U ? 0U : 1U, kStageStates[stageApplied],
                                                  kStageValues[stageApplied]) != GR_OK)
             {
                 poisoned_ = !Restore(samplerBefore, stageBefore,
                                      samplerApplied, stageApplied);
                 return false;
             }
-        if (target_->set_texture_stage_state(1U, D3DTSS_COLOROP,
-                                             D3DTOP_DISABLE) != GR_OK ||
-            target_->set_texture_stage_state(1U, D3DTSS_ALPHAOP,
-                                             D3DTOP_DISABLE) != GR_OK)
-        {
-            poisoned_ = !Restore(samplerBefore, stageBefore,
-                                 samplerApplied, stageApplied);
-            return false;
-        }
         passActive_ = true;
         return true;
     }
@@ -216,7 +217,7 @@ public:
 
 private:
     bool Restore(const std::array<U32, 2U> & samplers,
-                 const std::array<U32, 6U> & stages,
+                 const std::array<U32, 8U> & stages,
                  std::size_t samplerCount, std::size_t stageCount)
     {
         bool restored = true;
@@ -224,7 +225,7 @@ private:
         {
             --stageCount;
             restored &= target_->set_texture_stage_state(
-                0U, kStageStates[stageCount], stages[stageCount]) == GR_OK;
+                stageCount < 6U ? 0U : 1U, kStageStates[stageCount], stages[stageCount]) == GR_OK;
         }
         while (samplerCount)
         {
@@ -237,12 +238,14 @@ private:
 
     static constexpr std::array<D3DSAMPLERSTATETYPE, 2U> kSamplerStates{
         D3DSAMP_ADDRESSU, D3DSAMP_ADDRESSV};
-    static constexpr std::array<D3DTEXTURESTAGESTATETYPE, 6U> kStageStates{
+    static constexpr std::array<D3DTEXTURESTAGESTATETYPE, 8U> kStageStates{
         D3DTSS_COLOROP, D3DTSS_COLORARG1, D3DTSS_COLORARG2,
-        D3DTSS_ALPHAOP, D3DTSS_ALPHAARG1, D3DTSS_ALPHAARG2};
-    static constexpr std::array<U32, 6U> kStageValues{
+        D3DTSS_ALPHAOP, D3DTSS_ALPHAARG1, D3DTSS_ALPHAARG2,
+        D3DTSS_COLOROP, D3DTSS_ALPHAOP};
+    static constexpr std::array<U32, 8U> kStageValues{
         D3DTOP_MODULATE, D3DTA_TEXTURE, D3DTA_DIFFUSE,
-        D3DTOP_MODULATE, D3DTA_TEXTURE, D3DTA_DIFFUSE};
+        D3DTOP_MODULATE, D3DTA_TEXTURE, D3DTA_DIFFUSE,
+        D3DTOP_DISABLE, D3DTOP_DISABLE};
     IRenderPrimitive * target_ = nullptr;
     bool active_ = false;
     bool passActive_ = false;
@@ -453,7 +456,41 @@ GENRESULT NativeRenderPipeline::query_device_ability(RPDEVICEABILITY ability,
         return GR_INVALID_PARMS;
     }
     *outAnswer = 0U;
-    return ability == RP_A_DEPTH_BIAS ? GR_OK : GR_NOT_IMPLEMENTED;
+    if (ability == RP_A_DEPTH_BIAS) return GR_OK;
+    if (!drawTarget_) return GR_NOT_IMPLEMENTED;
+    U32 supported = 0;
+    if (ability == RP_A_TEXTURE_STAGES || ability == RP_A_TEXTURE_COORDINATES)
+    {
+        const GENRESULT result = drawTarget_->get_texture_stage_state(
+            1U, D3DTSS_COLOROP, &supported);
+        if (result != GR_OK) return result;
+        *outAnswer = 2U;
+        return GR_OK;
+    }
+    if (drawTarget_->get_render_state(D3DRS_SRCBLEND, &supported) != GR_OK)
+        return GR_NOT_IMPLEMENTED;
+    switch (ability)
+    {
+    case RP_A_BLEND_MUL_SRC: *outAnswer = D3DBLEND_ZERO; break;
+    case RP_A_BLEND_MUL_DST: *outAnswer = D3DBLEND_SRCCOLOR; break;
+    case RP_A_BLEND_ADD_SRC:
+    case RP_A_BLEND_ADD_DST: *outAnswer = D3DBLEND_ONE; break;
+    case RP_A_BLEND_TRANSPARENCY_SRC: *outAnswer = D3DBLEND_SRCALPHA; break;
+    case RP_A_BLEND_TRANSPARENCY_DST: *outAnswer = D3DBLEND_INVSRCALPHA; break;
+    case RP_A_BLEND_MATRIX:
+        // rendpipeline.h defines four words for the first ten blend factors.
+        // These are the factors implemented by the native SDL blend mapping.
+        outAnswer[0] = outAnswer[1] = outAnswer[2] = outAnswer[3] = 0U;
+        for (U32 source = D3DBLEND_ZERO; source <= D3DBLEND_INVDESTCOLOR; ++source)
+            for (U32 destination = D3DBLEND_ZERO; destination <= D3DBLEND_INVDESTCOLOR; ++destination)
+            {
+                const U32 bit = (source - 1U) * 10U + destination - 1U;
+                outAnswer[bit / 32U] |= 1U << (bit % 32U);
+            }
+        break;
+    default: return GR_NOT_IMPLEMENTED;
+    }
+    return GR_OK;
 }
 
 GENRESULT NativeRenderPipeline::set_modelview(const Transform & modelview)
@@ -621,29 +658,45 @@ GENRESULT NativeRenderPipeline::create_texture(int width, int height,
 {
     handle = 0U;
     if (!textures_.create || !textures_.destroy) return GR_NOT_IMPLEMENTED;
-    if ((!IsRgba8(format) && !IsRgbx8(format) && !IsRgba8Class(format) && !IsOpaqueClass(format)) ||
-        lodCount < 0 || lodCount > 1 || flags != 0U)
+    if ((!IsRgba8(format) && !IsRgbx8(format) && !IsRgb5A1(format) && !IsRgba8Class(format) && !IsOpaqueClass(format)) ||
+        lodCount < 0 || flags != 0U)
         return GR_NOT_IMPLEMENTED;
     if (width <= 0 || height <= 0 ||
         static_cast<U32>(width) > std::numeric_limits<U32>::max() / 4U ||
         static_cast<U32>(height) >
             std::numeric_limits<U32>::max() / (static_cast<U32>(width) * 4U))
         return GR_INVALID_PARMS;
+    U32 maxLevels = 1U;
+    for (U32 dimension = static_cast<U32>((std::max)(width, height)); dimension > 1U;
+         dimension >>= 1U) ++maxLevels;
+    const U32 levels = static_cast<U32>((std::max)(1, lodCount));
+    if (levels > maxLevels) return GR_INVALID_PARMS;
+    if (levels > 1U && (!textures_.createMips || !textures_.uploadMips))
+        return GR_NOT_IMPLEMENTED;
     OwnedTexture owned;
     owned.opaque = IsOpaqueClass(format) || IsRgbx8(format);
+    owned.rgb5a1 = IsRgb5A1(format);
     owned.width = static_cast<U32>(width);
     owned.height = static_cast<U32>(height);
     try
     {
         owned.pixels.resize(static_cast<std::size_t>(width) * height * 4U);
+        for (U32 level = 1; level < levels; ++level)
+        {
+            const U32 mipWidth = (std::max)(1U, owned.width >> level);
+            const U32 mipHeight = (std::max)(1U, owned.height >> level);
+            owned.mips.push_back(TextureMip{mipWidth, mipHeight,
+                std::vector<std::uint8_t>(static_cast<std::size_t>(mipWidth) * mipHeight * 4U)});
+        }
     }
     catch (const std::bad_alloc &)
     {
         return GR_OUT_OF_MEMORY;
     }
     U32 candidate = 0U;
-    const GENRESULT result = textures_.create(
-        textures_.context, static_cast<U32>(width), static_cast<U32>(height), candidate);
+    const GENRESULT result = levels > 1U ?
+        textures_.createMips(textures_.context, owned.width, owned.height, levels, candidate) :
+        textures_.create(textures_.context, owned.width, owned.height, candidate);
     if (result != GR_OK) return result;
     if (!candidate) return GR_GENERIC;
     if (candidate > kMaxTextureStateId)
@@ -709,34 +762,79 @@ GENRESULT NativeRenderPipeline::release_texture_dc(U32 handle, HDC dc)
     return result;
 }
 
-GENRESULT NativeRenderPipeline::lock_texture(U32 handle, int level, RPLOCKDATA * lockData)
+GENRESULT NativeRenderPipeline::UploadTexture(U32 handle, const OwnedTexture &texture,
+    int overrideLevel, const std::vector<std::uint8_t> *overridePixels)
+{
+    if (texture.mips.empty())
+        return textures_.upload ? textures_.upload(textures_.context, handle,
+            overridePixels ? overridePixels->data() : texture.pixels.data(), texture.width,
+            texture.height, texture.pixels.size()) : GR_NOT_IMPLEMENTED;
+    if (!textures_.uploadMips) return GR_NOT_IMPLEMENTED;
+    try
+    {
+        std::vector<NativeTextureLevel> levels;
+        levels.push_back({overrideLevel == 0 ? overridePixels->data() : texture.pixels.data(),
+                          texture.width, texture.height, texture.pixels.size()});
+        for (std::size_t index = 0; index < texture.mips.size(); ++index)
+        {
+            const auto &mip = texture.mips[index];
+            levels.push_back({overrideLevel == static_cast<int>(index + 1) ?
+                overridePixels->data() : mip.pixels.data(), mip.width, mip.height, mip.pixels.size()});
+        }
+        return textures_.uploadMips(textures_.context, handle, levels.data(),
+                                    static_cast<U32>(levels.size()));
+    }
+    catch (const std::bad_alloc &) { return GR_OUT_OF_MEMORY; }
+}
+
+GENRESULT NativeRenderPipeline::lock_texture(U32 handle, int level, RPLOCKDATA *lockData)
 {
     if (!lockData) return GR_INVALID_PARMS;
     const auto found = ownedTextures_.find(handle);
-    if (found == ownedTextures_.end() || level != 0) return GR_INVALID_PARMS;
-    OwnedTexture & texture = found->second;
-    if (texture.locked || !textures_.upload) return GR_GENERIC;
-    lockData->width = texture.width;
-    lockData->height = texture.height;
-    lockData->pitch = texture.width * 4U;
-    lockData->pixels = texture.pixels.data();
+    if (found == ownedTextures_.end() || level < 0 ||
+        static_cast<std::size_t>(level) > found->second.mips.size()) return GR_INVALID_PARMS;
+    auto &texture = found->second;
+    if (texture.locked || (!textures_.upload && !textures_.uploadMips)) return GR_GENERIC;
+    lockData->width = level ? texture.mips[level - 1].width : texture.width;
+    lockData->height = level ? texture.mips[level - 1].height : texture.height;
+    lockData->pitch = lockData->width * 4U;
+    lockData->pixels = level ? texture.mips[level - 1].pixels.data() : texture.pixels.data();
     lockData->pf = texture.opaque ? OpaqueRgbx8() : PixelFormat(PF_RGBA8);
     texture.locked = true;
+    texture.lockedLevel = level;
     return GR_OK;
+}
+
+void NativeRenderPipeline::ApplyTexturePrecision(const OwnedTexture &texture,
+                                                std::vector<std::uint8_t> &pixels)
+{
+    for (std::size_t index = 0U; index < pixels.size(); index += 4U)
+    {
+        if (texture.rgb5a1)
+        {
+            // Match packing into the source RGB5/A1 target before expanding
+            // into the native backend's normalized RGBA8 storage.
+            for (std::size_t channel = 0U; channel < 3U; ++channel)
+            {
+                const auto value = pixels[index + channel] >> 3U;
+                pixels[index + channel] = static_cast<std::uint8_t>((value << 3U) | (value >> 2U));
+            }
+            pixels[index + 3U] = pixels[index + 3U] & 0x80U ? 255U : 0U;
+        }
+        if (texture.opaque) pixels[index + 3U] = 255U;
+    }
 }
 
 GENRESULT NativeRenderPipeline::unlock_texture(U32 handle, int level)
 {
     const auto found = ownedTextures_.find(handle);
-    if (found == ownedTextures_.end() || level != 0 || !found->second.locked || found->second.dc)
-        return GR_INVALID_PARMS;
-    OwnedTexture & texture = found->second;
-    if (texture.opaque)
-        for (std::size_t index = 3U; index < texture.pixels.size(); index += 4U)
-            texture.pixels[index] = 255U;
-    const GENRESULT result = textures_.upload(textures_.context, handle,
-        texture.pixels.data(), texture.width, texture.height, texture.pixels.size());
-    if (result == GR_OK) texture.locked = false;
+    if (found == ownedTextures_.end() || !found->second.locked ||
+        found->second.lockedLevel != level || found->second.dc) return GR_INVALID_PARMS;
+    auto &texture = found->second;
+    auto &pixels = level ? texture.mips[level - 1].pixels : texture.pixels;
+    ApplyTexturePrecision(texture, pixels);
+    const GENRESULT result = UploadTexture(handle, texture);
+    if (result == GR_OK) { texture.locked = false; texture.lockedLevel = -1; }
     return result;
 }
 
@@ -747,11 +845,15 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
 {
     if (!textures_.upload) return GR_NOT_IMPLEMENTED;
     const auto found = ownedTextures_.find(handle);
-    if (found == ownedTextures_.end() || level != 0 || width <= 0 || height <= 0 ||
-        static_cast<U32>(width) != found->second.width ||
-        static_cast<U32>(height) != found->second.height || found->second.locked ||
+    if (found == ownedTextures_.end() || level < 0 || static_cast<std::size_t>(level) > found->second.mips.size() ||
+        width <= 0 || height <= 0 || found->second.locked ||
         !pixels || width > std::numeric_limits<int>::max() / 4)
         return GR_NOT_IMPLEMENTED;
+    const auto &texture = found->second;
+    const U32 expectedWidth = level ? texture.mips[level - 1].width : texture.width;
+    const U32 expectedHeight = level ? texture.mips[level - 1].height : texture.height;
+    if (static_cast<U32>(width) != expectedWidth || static_cast<U32>(height) != expectedHeight)
+        return GR_INVALID_PARMS;
     const bool rgba8 = IsRgba8(format) || IsRgbx8(format);
     const bool indexed8 = format.is_indexed() && format.ddpf.dwRGBBitCount == 8;
     const bool rgb565 = format.ddpf.dwRGBBitCount == 16 &&
@@ -819,9 +921,10 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
     }
     if (found->second.opaque || IsRgbx8(format))
         for (std::size_t index = 3U; index < rgba.size(); index += 4U) rgba[index] = 255U;
-    const GENRESULT result = textures_.upload(textures_.context, handle, rgba.data(),
-        static_cast<U32>(width), static_cast<U32>(height), byteCount);
-    if (result == GR_OK) found->second.pixels.swap(rgba);
+    ApplyTexturePrecision(found->second, rgba);
+    const GENRESULT result = UploadTexture(handle, found->second, level, &rgba);
+    if (result == GR_OK)
+        (level ? found->second.mips[level - 1].pixels : found->second.pixels).swap(rgba);
     return result;
 }
 
@@ -868,8 +971,8 @@ GENRESULT NativeRenderPipeline::blit_texture(U32 destination, U32 destinationLev
     {
         return GR_OUT_OF_MEMORY;
     }
-    const GENRESULT result = textures_.upload(textures_.context, destination,
-        copy.data(), to.width, to.height, copy.size());
+    ApplyTexturePrecision(to, copy);
+    const GENRESULT result = UploadTexture(destination, to, 0, &copy);
     if (result == GR_OK) to.pixels.swap(copy);
     return result;
 }
@@ -890,7 +993,7 @@ GENRESULT NativeRenderPipeline::get_texture_dim(U32 handle, U32 * width, U32 * h
     if (found == ownedTextures_.end()) return GR_INVALID_PARMS;
     *width = found->second.width;
     *height = found->second.height;
-    *lodCount = 1U;
+    *lodCount = static_cast<U32>(found->second.mips.size() + 1U);
     return GR_OK;
 }
 

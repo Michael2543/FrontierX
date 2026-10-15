@@ -195,7 +195,7 @@ void Menu_campaign::setStateInfo (void)
 	if (buttonSolarian) buttonSolarian->InitButton(data.buttonSolarian, this);
 	if (buttonBack)     buttonBack->InitButton(data.buttonBack, this);
 #if !defined(_WIN32)
-	if (buttonTerran) buttonTerran->EnableButton(false);
+
 	if (buttonMantis) buttonMantis->EnableButton(false);
 #endif
 
@@ -229,11 +229,7 @@ void Menu_campaign::setStateInfo (void)
 			break;
 
 		default:
-#if defined(_WIN32)
 			if (buttonTerran) setFocus(buttonTerran);
-#else
-			if (buttonSolarian) setFocus(buttonSolarian);
-#endif
 			break;
 		}
 	}
@@ -305,7 +301,6 @@ void Menu_campaign::init (void)
 //
 void Menu_campaign::onButtonTerran (void)
 {
-#if defined(_WIN32)
 	MISSION->SetSinglePlayerRace(M_TERRAN);
 
 	// is this our first time playing the game as this player??
@@ -318,6 +313,10 @@ void Menu_campaign::onButtonTerran (void)
 		bSkipToMisisonOne = true;
 		MUSICMANAGER->PlayMusic(NULL);
 //		MovieScreen(this, "cq_intro.mpg", 640, 272);
+#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)
+		if (!CQFLAGS.bSkipMovies)
+			MovieScreen(this, "cq_intro.mpg");
+#endif
 		GAMEPROGRESS->SetMovieSeen(0);
 		bSkipMissionMenu = true;
 	}
@@ -346,9 +345,7 @@ void Menu_campaign::onButtonTerran (void)
 	}
 	Notify(CQE_SET_FOCUS, 0);
 	bModalUp = false;
-#else
-	throw std::runtime_error("Native Terran campaign is not integrated");
-#endif
+
 }
 //--------------------------------------------------------------------------//
 //

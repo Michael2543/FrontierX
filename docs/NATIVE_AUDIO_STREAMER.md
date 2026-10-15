@@ -1,5 +1,47 @@
 # Native IStreamer contract
 
+## User-run communication abort diagnosis (2026-10-14)
+
+The user reported reaching the first Terran mission's victory and checking
+save/load, followed by the game window closing. The system core confirms
+`SIGABRT` in native `NativeMissionSound::Play`, called by the real
+`UnitComm::update` communication queue. Its speaker is a Harvester; its
+communication index is the source `planetDepleted` slot. This is a failed
+speech open, not evidence of a completed normal victory teardown.
+
+Source/resource review of the lawfully external StringPack and speech archives
+identifies `HARVEST!!T_Harvester`'s depletion and redeployment requests as
+`0108.wav` and `0119.wav`. Neither entry exists in the supplied speech or
+mission-speech archive. The existing external-input window-manager probe
+also fails actual lookup of `0108.wav` in both archives, before decoding.
+No replacement name or substitute voice has been selected. Both missing
+voices remain open P1b media blockers; similar-looking filenames are not
+proof of the intended content. Raw core and retail records remain external.
+
+The original Windows `SoundMan::PlayCommMessage` returns playback ID zero
+when `IStreamer::Open` fails. The native owner incorrectly aborted instead.
+Its communication path now retains that original failure result and emits
+an explicit unavailable-communication diagnostic and failed-open counter.
+It creates no stream, success ID or speaker highlight. Required scripted
+audio and animated-message paths retain their strict failed-open handling.
+There is no change to the Windows owner, public interfaces, serialized
+records, simulation or RNG consumption.
+
+Automated synthetic execution: rebuilt `frontierx_native_shell` in the
+existing full-media Debug GCC 16.2.1, Clang 22.1.8 and Clang ASan/UBSan
+graphs (native fonts, FFmpeg audio and video enabled). The existing
+`portability.native_shell` CTest passes under each compiler/configuration.
+Its generated-PCM sound lifecycle now explicitly checks that an absent
+communication returns zero, allocates no stream or ID, records exactly one
+failure and prints the failure diagnostic before successful real PCM
+playback. The sanitizer run uses
+`ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`, without a report or skip.
+This bounded owner check does not reproduce the user's complete mission
+or establish that later victory/return paths are safe. Native Windows
+Debug/Final, actual CI execution and renewed user victory-exit verification
+remain pending.
+
 Current unit voice checkpoint, 2026-10-10: original UnitComm and StringData
 now connect normal selection/movement in the selected external `Sol_Train`
 mission to native ISoundManager and production IStreamer. Separate visible

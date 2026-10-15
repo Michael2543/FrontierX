@@ -2470,7 +2470,13 @@ void Sector::GetScreenCoords(S32 *mx,S32 *my,S32 wx,S32 wy)
 
 void Sector::Render()
 {
+#if defined(_WIN32)
 	if (!CQFLAGS.bFullScreenMap) return;
+#else
+	// The native toolbar retains the original sector-map rectangle in normal
+	// play. Draw its production visibility-filtered texture there as well.
+	if (CQFLAGS.bNoGDI) return;
+#endif
 	BATCH->set_state(RPR_BATCH,false);
 	BATCH->set_render_state(D3DRS_CULLMODE,D3DCULL_NONE);
 	BATCH->set_render_state(D3DRS_ZWRITEENABLE,FALSE);

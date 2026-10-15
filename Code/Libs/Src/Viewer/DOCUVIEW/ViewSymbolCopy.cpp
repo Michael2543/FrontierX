@@ -117,9 +117,33 @@ BOOL32 CopyViewSymbolValue(SYMBOL source, U32 sourceModifiers,
 			oldEntry = oldEntry->link;
 		if (!oldEntry)
 		{
-			if (!source->bit_count)
-				std::memcpy(destinationData, sourceData, copySize);
+			// The original nonpacked invalid-value contract retains raw bytes.
+			// A packed unknown value has no supported name conversion: report
+			// failure instead of width-only success with no output.
+			if (source->bit_count) return 0;
+			std::memcpy(destinationData, sourceData, copySize);
 			return equalSize;
+		}
+		if (destinationType->kind == BASICTYPE)
+		{
+			// DataViewer::CopySymValue renders a known enum as its symbolic
+			// identifier, then SetSymValue parses an integer via strtoul.
+			// A C/C++ enum identifier therefore converts to zero, not its
+			// numeric enum value. Preserve that supported Windows behavior.
+			if (!equalSize || destinationType->basicdt == REAL ||
+				destinationType->basicdt == STRINGTYPE ||
+				(destinationSize != 1 && destinationSize != 2 &&
+				 destinationSize != 4 && destinationSize != 8) ||
+				!oldEntry->name || !((oldEntry->name[0] >= 'A' && oldEntry->name[0] <= 'Z') ||
+				 (oldEntry->name[0] >= 'a' && oldEntry->name[0] <= 'z') || oldEntry->name[0] == '_'))
+				return 0;
+			if (destination->bit_count)
+			{
+				if (!ValidBits(destination, destinationSize <= 4 ? 32 : 64)) return 0;
+				WriteBits(destinationData, destination->bit_offset, destination->bit_count, 0);
+			}
+			else WriteUnsigned(destinationData, destinationSize, 0);
+			return 1;
 		}
 		for (SYMBOL newEntry = destinationType->datatype; newEntry;
 			newEntry = newEntry->link)

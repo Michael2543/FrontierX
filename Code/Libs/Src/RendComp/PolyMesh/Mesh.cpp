@@ -9,6 +9,7 @@
 #else
 #include "FrontierX/LegacyFileTypes.h"
 #include <cstdint>
+#include <cstdio>
 #endif
 #include <stdlib.h>
 
@@ -939,12 +940,25 @@ HRESULT XMesh::read_material_library( IFileSystem *parent, ITextureLibrary *text
 					}
 					else
 					{
+#if defined(_WIN32)
 						GENERAL_WARNING( TEMPSTR( "Unable to find CQ2 material '%s'", MatSearchData.cFileName ) );
+#else
+                        parent->FindClose(hMatSearch);
+                        parent->SetCurrentDirectory("..");
+                        return E_FAIL;
+#endif
 					}
 					material_entry++;
 				} while( parent->FindNextFile( hMatSearch, &MatSearchData ) );
 				parent->FindClose(hMatSearch);
 			}
+#if !defined(_WIN32)
+            if (material_entry != imaterial_cnt)
+            {
+                parent->SetCurrentDirectory("..");
+                return E_FAIL;
+            }
+#endif
 		}
 		parent->SetCurrentDirectory( ".." );
 		return S_OK;
@@ -980,12 +994,25 @@ HRESULT XMesh::read_material_library( IFileSystem *parent, ITextureLibrary *text
 						material_entry++;
 					}
 					else {
+#if defined(_WIN32)
 						GENERAL_WARNING( TEMPSTR( "Unable to read material '%s'", MatSearchData.cFileName ) );
+#else
+                        parent->FindClose(hMatSearch);
+                        parent->SetCurrentDirectory("..");
+                        return E_FAIL;
+#endif
 					}
 				}
 				while( parent->FindNextFile( hMatSearch, &MatSearchData ) );
 				parent->FindClose(hMatSearch);
 			}
+#if !defined(_WIN32)
+            if (material_entry != material_cnt)
+            {
+                parent->SetCurrentDirectory("..");
+                return E_FAIL;
+            }
+#endif
 		}
 
 		parent->SetCurrentDirectory( ".." );
@@ -1016,7 +1043,24 @@ HRESULT XMesh::read_material( IFileSystem *parent, ITextureLibrary *texturelib, 
 		material->initialize();
 		material->set_name( material_name );
 		material->set_texture_library( texturelib );
+#if defined(_WIN32)
 		material->load_from_filesystem( parent );
+#else
+        HRESULT materialResult = E_FAIL;
+        try { materialResult = material->load_from_filesystem(parent); }
+        catch (const std::runtime_error &error)
+        {
+            if (std::string(error.what()).find("Native material ") != 0) throw;
+            std::fprintf(stderr, "%s\n", error.what());
+            parent->SetCurrentDirectory("..");
+            return E_FAIL;
+        }
+        if (FAILED(materialResult))
+        {
+            parent->SetCurrentDirectory("..");
+            return materialResult;
+        }
+#endif
 
 		parent->SetCurrentDirectory( ".." );
 		return S_OK;

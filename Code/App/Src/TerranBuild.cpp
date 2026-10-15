@@ -11,8 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "IBuild.h"
 #include "ObjList.h"
@@ -32,7 +63,11 @@
 #include <TSmartPointer.h>
 #include <IConnection.h>
 //#include <ITextureLibrary.h>
-#include <FileSys.h>
+#include <Filesys.h>
+#if !defined(_WIN32)
+#include <stdexcept>
+#include "Include/NativeShipVisualTransform.h"
+#endif
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 
@@ -137,6 +172,9 @@ struct _NO_VTABLE TerranBuild : public IBuildEffect
 //	U32 systemID;
 
 	TerranBuildArchetype *arch;
+#if !defined(_WIN32)
+	bool nativeDirectShipHull = false;
+#endif
 	
 	U32 frames;
 
@@ -218,6 +256,22 @@ struct _NO_VTABLE TerranBuild : public IBuildEffect
 	ITerranDrone * getNextDrone ();
 	void resetDrones();
 };
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool IsNativeTerranBuildEffect(const IBaseObject *effect)
+{
+	return dynamic_cast<const TerranBuild *>(effect) != nullptr;
+}
+void ConfigureNativeTerranBuildVisual(IBaseObject *effect, bool directEngineShipHull)
+{
+	auto *owner = dynamic_cast<TerranBuild *>(effect);
+	if (!owner) throw std::runtime_error("Native construction visual configuration requires the Terran owner");
+	owner->nativeDirectShipHull = directEngineShipHull;
+}
+}
+#endif
 
 //---------------------------------------------------------------------------
 //
@@ -344,7 +398,7 @@ void TerranBuild::SetupMesh (IBaseObject *fab,IBaseObject *obj,struct IMeshInfoT
 		{
 			mc[c]->bWhole = FALSE;
 			//this depends on 100% LOD here
-			girderBuildAhead[c] = min(MAX_GIRDER_FACES,mc[c]->mr->face_cnt);
+			girderBuildAhead[c] = __min(MAX_GIRDER_FACES,mc[c]->mr->face_cnt);
 			//every mesh now has the "new child" time associated with it
 			totalClicks += NEW_CHILD;
 			totalClicks += (girderBuildAhead[c]+mc[c]->mr->face_cnt)*ONE_FACE;
@@ -390,7 +444,7 @@ void TerranBuild::SetupMesh (IBaseObject *fab,IMeshInfoTree *mesh_info,SINGLE _t
 		{
 			mc[c]->bWhole = FALSE;
 			//this depends on 100% LOD here
-			girderBuildAhead[c] = min(MAX_GIRDER_FACES,mc[c]->mr->face_cnt);
+			girderBuildAhead[c] = __min(MAX_GIRDER_FACES,mc[c]->mr->face_cnt);
 			//every mesh now has the "new child" time associated with it
 			totalClicks += NEW_CHILD;
 			totalClicks += (girderBuildAhead[c]+mc[c]->mr->face_cnt)*ONE_FACE;
@@ -451,7 +505,7 @@ void TerranBuild::ReBuild ()
 				//in actual faces or girders
 				S32 nextFace = (thisClicks-childTimes[c]-NEW_CHILD-girderBuildAhead[c]*ONE_FACE)/ONE_FACE;
 				CQASSERT(nextFace <= mc[c]->mr->face_cnt);
-				S32 invisibleFace = min(nextFace+girderBuildAhead[c],mc[c]->mr->face_cnt);
+				S32 invisibleFace = __min(nextFace+girderBuildAhead[c],mc[c]->mr->face_cnt);
 				S32 i;
 				for (i=0;i<nextFace;i++)
 				{
@@ -502,7 +556,7 @@ void TerranBuild::ReBuild ()
 				S32 nextFace = (thisClicks-childTimes[c]-NEW_CHILD-girderBuildAhead[c]*ONE_FACE)/ONE_FACE;
 				
 				//find first still invisible face
-				S32 invisibleFace = min(nextFace+girderBuildAhead[c],mc[c]->mr->face_cnt);
+				S32 invisibleFace = __min(nextFace+girderBuildAhead[c],mc[c]->mr->face_cnt);
 				int i;
 				for (i=max(0,nextFace);i<invisibleFace;i++)
 				{
@@ -532,10 +586,19 @@ void TerranBuild::sendDrones(U32 child,U32 faceID)
 		droneMoveTime -= DRONE_UPDATE_TIME;
 		const FaceLookup &face = faceLookup[child][faceID];
 		Vector bob = mc[child]->mr->pos_list[face.pos_offset+face.group->index_list[face.index*3]];
+#if !defined(_WIN32)
+		const Transform visualTransform = NativeShipVisualTransform(trans, nativeDirectShipHull);
+		bob = visualTransform.rotate_translate(bob);
+#else
 		bob = trans.rotate_translate(bob);
+#endif
 		Vector nBob = face.group->src_norms[face.group->index_list[face.index*3]];
 
+#if !defined(_WIN32)
+		nBob = visualTransform.rotate(nBob);
+#else
 		nBob = trans.rotate(nBob);
+#endif
 		
 		ITerranDrone * drone = getNextDrone();
 		if(drone)
@@ -1017,6 +1080,18 @@ HANDLE TerranBuildFactory::CreateArchetype (const char *szArchname, OBJCLASS obj
 			result->buildTex = TMANAGER->CreateTextureFromFile(fname, TEXTURESDIR, DA::TGA, PF_4CC_DAA4);
 			
 			result->pWeldType = ARCHLIST->LoadArchetype("BLAST!!Weld");
+#if !defined(_WIN32)
+			if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS &&
+				(!result->buildTex || !result->pWeldType))
+			{
+				if (result->buildTex) TMANAGER->ReleaseTextureRef(result->buildTex);
+				result->buildTex = 0;
+				// The archetype has not acquired a reference to the weld owner yet.
+				result->pWeldType = nullptr;
+				delete result;
+				throw std::runtime_error("Native Terran construction requires tinnards.tga and BLAST!!Weld");
+			}
+#endif
 			CQASSERT(result->pWeldType);
 			ARCHLIST->AddRef(result->pWeldType, OBJREFNAME);
 		}

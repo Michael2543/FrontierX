@@ -1363,6 +1363,12 @@ HRESULT TextureLibrary::choose_texture_format( ITL_TEXTUREIMAGEDATA *data, Pixel
 		data->format.ddpf.dwGBitMask == 0x07e0 &&
 		data->format.ddpf.dwBBitMask == 0x001f) ) {
 		out_pf->init( PF_RGBA8 );
+		if (!data->format.has_alpha_channel() && data->alphas == NULL) {
+			// Storage remains four bytes per pixel, but original material pass
+			// selection queries authored alpha, not the backend storage width.
+			out_pf->ddpf.dwFlags = DDPF_RGB;
+			out_pf->ddpf.dwRGBAlphaBitMask = 0;
+		}
 		return S_OK;
 	}
 	TL_LOGF("native unsupported image format: bits=%u masks=%08x/%08x/%08x/%08x alpha-plane=%d\n",
@@ -1644,8 +1650,27 @@ HRESULT TextureLibrary::load_texture_image( IFileSystem *IFS, ITL_TEXTUREIMAGEDA
 		}
 	}
 
+#if defined(_WIN32)
 	U8 dummy;
 	if( SUCCEEDED( read_type<U8>( IFS, txm_alpha8bit, &dummy ) ) ) {
+#else
+	// A present authored alpha plane must match this mip exactly. Probing only
+	// its first byte would silently omit an empty/truncated existing plane.
+	{
+	DAFILEDESC alphaDescriptor(txm_alpha8bit);
+	HANDLE alphaHandle = IFS->OpenChild(&alphaDescriptor);
+	bool hasAlphaPlane = alphaHandle != INVALID_HANDLE_VALUE;
+	if (hasAlphaPlane) {
+		DWORD high = 0;
+		DWORD alphaExtent = IFS->GetFileSize(alphaHandle, &high);
+		IFS->CloseHandle(alphaHandle);
+		TL_LOGF("native authored alpha plane: extent=%u high=%u expected=%u\n",
+			alphaExtent, high, img->width * img->height);
+		if (high || alphaExtent != img->width * img->height)
+			goto load_texture_image_failed;
+	}
+	if (hasAlphaPlane) {
+#endif
 		U32 alpha_size = img->width * img->height;
 		if( (img->alphas = new char[alpha_size]) == NULL ) {
 			goto load_texture_image_failed;
@@ -1656,6 +1681,9 @@ HRESULT TextureLibrary::load_texture_image( IFileSystem *IFS, ITL_TEXTUREIMAGEDA
 		}
 	}
 
+#if !defined(_WIN32)
+	}
+#endif
 	if( (img->colors = new char[image_size]) == NULL ) {
 		goto load_texture_image_failed;
 	}

@@ -19,6 +19,7 @@ struct SDL_GPUDepthStencilTargetInfo;
 
 namespace FrontierX
 {
+struct NativeTextureLevel;
 struct SdlGpuTextureView
 {
     const std::uint8_t * rgba8 = nullptr;
@@ -36,6 +37,7 @@ struct SdlGpuReadback
     std::size_t changedPixels = 0U;
     bool structureValid = false;
     bool rgbValid = false;
+    bool opaquePixels = false;
 };
 
 class SdlGpuRenderer
@@ -67,6 +69,12 @@ public:
     GENRESULT SetTextureStageState(const TextureStageSnapshot & state);
     GENRESULT SetSamplerState(const SamplerStateSnapshot & state);
     GENRESULT RegisterTexture(SdlGpuTextureView texture, std::uint32_t & handle);
+    GENRESULT RegisterMipTexture(const NativeTextureLevel *levels, std::uint32_t count,
+                                  std::uint32_t &handle);
+    GENRESULT ReplaceMipTexture(std::uint32_t handle, const NativeTextureLevel *levels,
+                                 std::uint32_t count);
+    GENRESULT CreateMipTexture(std::uint32_t width, std::uint32_t height,
+                                std::uint32_t count, std::uint32_t &handle);
     GENRESULT CreateTexture(std::uint32_t width, std::uint32_t height,
                             std::uint32_t & handle);
     GENRESULT ReplaceTexture(std::uint32_t handle, SdlGpuTextureView texture);
@@ -113,10 +121,25 @@ public:
                                             const std::uint8_t * pixels,
                                             std::uint32_t width, std::uint32_t height,
                                             std::size_t byteCount);
+    static GENRESULT TextureCreateMipsCallback(void *, std::uint32_t, std::uint32_t,
+                                                std::uint32_t, std::uint32_t &);
+    static GENRESULT TextureUploadMipsCallback(void *, std::uint32_t,
+                                                const NativeTextureLevel *, std::uint32_t);
     static GENRESULT TextureDestroyCallback(void * context, std::uint32_t handle);
 
+    // Optional CPU wall time, including driver waits; not GPU timestamp time.
+    struct Timings
+    {
+        double submissions = 0, samplers = 0, retirement = 0, presentation = 0;
+        std::uint64_t submissionCount = 0, samplerChanges = 0;
+        double acquisition = 0, drawing = 0, queueSubmit = 0;
+        std::uint64_t reusedUploads = 0;
+    };
+    void EnableTimings(bool enabled);
+    Timings GetTimings() const;
     const std::string & LastError() const;
     const char * DriverName() const;
+    const char * PresentModeName() const;
     std::uint32_t DepthWidth() const;
     std::uint32_t DepthHeight() const;
     std::uint32_t DepthRecreations() const;

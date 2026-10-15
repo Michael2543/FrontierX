@@ -11,8 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "TObjTrans.h"
 #include "TObjFControl.h"
@@ -21,27 +52,27 @@
 #include "IBuildShip.h"  //ITerranDrone
 #include <DShipSave.h>
 #include "TObject.h"
-#include "Objlist.h"
-#include <DSpaceShip.h>
+#include "ObjList.h"
+#include <DSpaceship.h>
 #include "Startup.h"
 #include "Mission.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IAnim.h"
 #include "IExplosion.h"
 #include "IBlast.h"
 #include "anim2d.h"
-#include "archHolder.h"
+#include "ArchHolder.h"
 #include "Sector.h"
 #include "Camera.h"
 #include "UserDefaults.h"
 #include "MGlobals.h"
-#include "Fogofwar.h"
+#include "FogOfWar.h"
 #include "MPart.h"
 
 #include "CQLight.h"
 
 #include <IHardPoint.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TSmartPointer.h>
 #include <TComponent.h>
@@ -60,12 +91,16 @@ enum TDAction
 
 struct TERRANDRONE_INIT : BUILDSHIP_INIT
 {
+#if defined(_WIN32)
 	struct EngineTerranDrone *engineTerranDrones;
+#else
+	ObjectImpl<struct EngineTerranDrone> *engineTerranDrones;
+#endif
 	const BT_BUILDERSHIP_DATA * pData;
 	PARCHETYPE pArchetype;
 	//	PARCHETYPE pEngineArchetype;
 	S32 archIndex;
-	S32 animArchetype;
+	SCRIPT_SET_ARCH animArchetype;
 	IMeshArchetype * meshArch;
 	
 	PARCHETYPE pExplosion;
@@ -148,7 +183,11 @@ struct _NO_VTABLE TerranDrone : public ObjectFControl<ObjectTransform<ObjectFram
 	_INTERFACE_ENTRY(IBuildShip)
 	END_MAP()
 
+#if defined(_WIN32)
 	EngineTerranDrone *engineTerranDrones;
+#else
+	ObjectImpl<EngineTerranDrone> *engineTerranDrones;
+#endif
 
 	HardpointInfo  hardpointinfo;
 	INSTANCE_INDEX dockIndex;
@@ -496,7 +535,7 @@ TRANSFORM TerranDrone::getStartPos()
 	if(dockIndex != -1)
 	{
 		TRANSFORM result;
-		result.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+		result = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
 		result = ENGINE->get_transform(dockIndex).multiply(result);
 		return result;
 	}
@@ -581,7 +620,11 @@ struct DACOM_NO_VTABLE TerranDroneFactory : public IObjectFactory, IBuildShipFac
 	struct ShipNode
 	{
 		struct ShipNode *next;
+#if defined(_WIN32)
 		struct TerranDrone *drones;
+#else
+		ObjectImpl<struct TerranDrone> *drones;
+#endif
 		U8 numDrones;
 		bool bTaken;
 		PARCHETYPE pArchetype;
@@ -876,6 +919,22 @@ void TerranDroneFactory::ReleaseShips (const IBuildShip * firstShip)
 		node->bTaken = false;
 	}
 }
+#if !defined(_WIN32)
+namespace FrontierX
+{
+// Exercise the production array owners without external archetype resources.
+bool CheckNativeTerranDroneArrayRelease()
+{
+    auto *archetype = new TerranDroneFactory::OBJTYPE;
+    archetype->engineTerranDrones = new ObjectImpl<EngineTerranDrone>[3];
+    delete archetype;
+    auto *pool = new TerranDroneFactory::ShipNode{};
+    pool->drones = new ObjectImpl<TerranDrone>[3];
+    delete pool;
+    return true;
+}
+}
+#endif
 //---------------------------------------------------------------------------
 //---------------------------GLOBAL STARTUP----------------------------------
 //---------------------------------------------------------------------------

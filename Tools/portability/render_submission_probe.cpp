@@ -966,13 +966,17 @@ int main()
                                                          D3DTOP_DISABLE) == GR_OK &&
                     nativeOwner->set_texture_stage_texture(2U, 0U) == GR_OK &&
                     nativeOwner->set_texture_stage_texture(3U, 0U) == GR_OK &&
+                    nativeOwner->set_texture_stage_state(4U, D3DTSS_COLOROP, D3DTOP_DISABLE) == GR_OK &&
+                    nativeOwner->set_texture_stage_state(7U, D3DTSS_ALPHAOP, D3DTOP_DISABLE) == GR_OK &&
+                    nativeOwner->get_texture_stage_state(7U, D3DTSS_ALPHAOP, &stateValue) == GR_OK &&
+                    stateValue == D3DTOP_DISABLE &&
                     nativeOwner->get_texture_stage_texture(3U, &stateValue) == GR_OK &&
                     stateValue == 0U,
                 "native unused texture stages remain disabled") ||
         !Expect(nativeOwner->set_texture_stage_state(2U, D3DTSS_COLOROP,
                                                      D3DTOP_MODULATE) == GR_NOT_IMPLEMENTED &&
                     nativeOwner->set_texture_stage_texture(2U, 1U) == GR_NOT_IMPLEMENTED &&
-                    nativeOwner->set_texture_stage_state(4U, D3DTSS_COLOROP,
+                    nativeOwner->set_texture_stage_state(8U, D3DTSS_COLOROP,
                                                          D3DTOP_DISABLE) == GR_NOT_IMPLEMENTED,
                 "native unused texture stages reject active values") ||
         !Expect(nativeOwner->get_sampler_state(0U, D3DSAMP_MINFILTER,
@@ -994,7 +998,7 @@ int main()
                     ownerCapture.samplerState.addressU == D3DTADDRESS_WRAP &&
                     ownerCapture.samplerState.addressV == D3DTADDRESS_WRAP,
                 "native sampler maps linear filtering and wrapping") ||
-        !Expect(nativeOwner->set_sampler_state(1U, D3DSAMP_MINFILTER,
+        !Expect(nativeOwner->set_sampler_state(2U, D3DSAMP_MINFILTER,
                                                D3DTEXF_LINEAR) == GR_NOT_IMPLEMENTED &&
                     nativeOwner->set_sampler_state(0U, D3DSAMP_MINFILTER,
                                                    999U) == GR_NOT_IMPLEMENTED &&

@@ -10,8 +10,24 @@
 */			    
 //--------------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
-#include <globals.h>
+#include <Globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <TComponent.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cwchar>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#endif
 #include "MGlobals.h"
 #include <CQTrace.h>
 
@@ -19,20 +35,20 @@
 #include "ObjList.h"
 #include "IObject.h"
 #include "MPart.h"
-#include "Resource.h"
-#include "BaseHotrect.h"
+#include "resource.h"
+#include "BaseHotRect.h"
 #include "OpAgent.h"
-#include "Mpart.h"
+#include "MPart.h"
 #include "IPlanet.h"
-#include "Commpacket.h"
+#include "CommPacket.h"
 #include "ObjSet.h"
 #include "Sector.h"
 #include "GridVector.h"
 
 #include <DPlatform.h>
 
-#include <Eventsys.h>
-#include <Heapobj.h>
+#include <EventSys.h>
+#include <HeapObj.h>
 #include <TSmartPointer.h>
 
 struct MRush : public DAComponent<SPlayerAI>

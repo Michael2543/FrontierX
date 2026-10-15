@@ -1085,3 +1085,91 @@ register-to-uniform boundary, not production CQ2 effect execution. The
 and same-input D3D9 checks were not run for this change. Exact commands
 and the production-owner distinction are in
 [GAME_MATERIAL_PATH.md](GAME_MATERIAL_PATH.md).
+
+
+## Mission background alpha and second texture stage (2026-10-13)
+
+Named P1b blockers: active `SpaceEnv::Render3db` requires alpha testing at
+reference8, while selected ship materials have independently authored emissive
+UV2 maps requiring the original legacy two-texture combine path. The former
+native owner rejected those states. Existing single-stage image checks cannot
+disprove an ignored second texture or discarded alpha state, so the existing
+GPU probe is extended. The source SpaceEnv high-background RPVERTEX2/stage-one
+branch is commented out in this snapshot; it is a reviewed source contract,
+not active mission execution or proof that its extra StarBk pass is required.
+Its intended retail setting remains a reference question.
+
+Native RenderPrimitive now retains and transactionally forwards two texture-
+combine stages, independent texture handles and sampler states. The SDL owner
+binds both textures/samplers, snapshots them for captured frames and protects
+both against premature destruction or replacement. The fragment shader handles
+SELECTARG1/2, MODULATE, ADD and stage disable with the preceding CURRENT value;
+it applies all eight alpha comparison functions to the final texture alpha.
+Invalid values remain rejected without changing prior state. This is a native
+runtime contract; no serialized format or Windows interface slot is widened.
+
+Automated synthetic GPU execution under optional Debug Clang22.1.8 and
+independent GCC16.2.1 on the visible Linux SDL/Vulkan host observed actual
+all-fragment rejection, source-threshold output restoration, and differing
+stage-one ADD images from the second UV pair. Existing captured-map replacement
+and other renderer fixture predicates executed before the unchanged resize
+failure (`1261x688` remained `1261x688`). The entire GPU CTest therefore remains
+FAILED; these observations do not establish a full host pass or correctly
+rendered retail mission background. Clang `portability.render_submission` and
+the three `game_material_manager` variants executed successfully after the
+supported-stage callback expectations were updated to match the real source
+calls and assert disabled stage-one color/alpha state. Fresh complete suites,
+sanitizers, native Windows Debug/Final, affected ABI checks and actual mission
+background inspection remain open until separately recorded.
+
+
+Follow-up execution: the existing explicit `hyprland-x11` GPU host fixture
+passed the entire current Clang `portability.sdl3_gpu` CTest. Only the test's
+mapped descendant Xwayland window was floated before real renderer startup;
+all resize and repeat assertions remained intact. Stage-one UV2 at2.0 repeats
+the0.0 sample under WRAP and matches the1.0 sample under CLAMP, with distinct
+images between those modes. Ordinary Wayland resize remains a separate failed
+host mode. The selected mission's visible background is still not accepted.
+
+
+## Authored mip levels, background precision and opaque primary frames (2026-10-14)
+
+Named P1b blockers: mission ship textures contain authored palette MIP0 through
+MIP8, while the prior native owner accepted only one level; SpaceEnvironment
+requests `StarBk.tga` as RGB5/A1. Loading only the base texture or silently
+returning a zero background texture is insufficient. The existing texture/GPU
+fixtures now exercise these actual production interfaces with independently
+generated data. No retail textures or extracted inventories are included.
+
+NativeRenderPipeline retains separate checked CPU levels, forwards complete
+chains to the SDL texture owner, and supports per-level upload and lock/unlock.
+SDL uploads every authored level and retains transactional replacement and
+captured-frame texture lifetimes. The generated 256-square palette texture has
+nine distinct levels; production TextureLibrary resolves it, a selected mip's
+mutation changes actual minified output, and restoration recovers the exact
+previous checksum. Invalid levels remain rejected. Legacy native `lodCount=0`
+continues to mean one level; higher-level blits and general D3D texture API
+parity are not claimed.
+
+The explicit RGB5/A1 target preserves source packing precision before normalized
+RGBA8 backend storage. The existing CPU check asserts exact quantized RGB
+bytes and alpha127/128 endpoints for both data upload and locked TGA conversion.
+A failed required StarBk load now raises a native mission error at SpaceEnv;
+the original Windows branch remains unchanged. This check does not establish
+correct appearance of the external background asset.
+
+The production D3D9 primary buffer is X8R8G8B8 (`Direct3D_pipe.cpp`,
+`create_buffers`). Native primary frame clears now retain alpha1 and RGB-only
+color writes, while source alpha still participates in fragment rejection and
+RGB blending. The existing GPU alpha fixture asserts fully opaque readback
+after both rejected and restored draws. This policy is limited to current
+primary-frame targets; future ARGB render-to-texture support must preserve
+its own stored alpha rather than inherit it.
+
+Executed: optional Debug Clang22.1.8 `portability.render_pipeline` passed exact
+RGB5/A1 bytes; the complete existing `portability.sdl3_gpu` CTest passed on the
+explicit `hyprland-x11` SDL/Vulkan host, including nine-level minification,
+alpha/stage-one predicates, unchanged resize and repeated-scene assertions.
+Independent refreshed GCC/Clang/sanitizer validation is ongoing. Ordinary
+Wayland resize remains a failed host mode; native Windows/ABI, actual CI and
+full mission visual/audio user acceptance remain unperformed.

@@ -2,7 +2,10 @@
 #define TPLATFORM_H
 #ifndef _WIN32
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
+#include <stdexcept>
+#include <string>
 #endif
 //--------------------------------------------------------------------------//
 //                                                                          //
@@ -679,7 +682,12 @@ BOOL32 Platform<SaveStruct,InitStruct>::Save (struct IFileSystem * inFile)
 	FRAME_save(save);
 	if (save.mission.hullPoints == 0)
 		save.mission.hullPoints = 1;		// prevent pending dead objects from coming up a zombie
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+		goto Done;
+#endif
 	
 	result = 1;
 
@@ -710,8 +718,13 @@ BOOL32 Platform<SaveStruct,InitStruct>::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol(fdesc.lpFileName, buffer, &load);
+#else
+	if (!LoadNativeMissionRecord(MISSION, fdesc.lpFileName, file, &load, sizeof(load)))
+		goto Done;
+#endif
 
 	firstNuggetID = load.firstNuggetID;
 	buildSlot = load.buildSlot;		// 10 bit bitfield (0 means no build slot)
@@ -1929,6 +1942,11 @@ void Platform<SaveStruct,InitStruct>::Render (void)
 				// materials (black/white faces and unrelated striped textures).
 				// Keep instanceMesh alive for animation, effects, hardpoints, and
 				// team modifiers, but use the retail renderer for the visible mesh.
+				#if !defined(_WIN32)
+				if (this->GetNativeConstructionMeshTree())
+					TreeRender(this->GetMeshChain());
+				else
+				#endif
 				if(instanceIndex != INVALID_INSTANCE_INDEX)
 					ENGINE->render_instance(MAINCAM, instanceIndex,0,LODPERCENT,0,0);
 				else if(instanceMesh)
@@ -1967,6 +1985,11 @@ void Platform<SaveStruct,InitStruct>::Render (void)
 				{*/
 				if (!bSpecialRender)
 				{
+					#if !defined(_WIN32)
+					if (this->GetNativeConstructionMeshTree())
+						TreeRender(this->GetMeshChain());
+					else
+					#endif
 					if(instanceIndex != INVALID_INSTANCE_INDEX)
 						ENGINE->render_instance(MAINCAM, instanceIndex,0,LODPERCENT,0,0);
 					else if(instanceMesh)
@@ -3078,7 +3101,17 @@ void Platform<SaveStruct,InitStruct>::initPlatform (const InitStruct & data)
 
 	if (objData->ambient_animation[0])
 	{
+#if defined(_WIN32)
 		ambientAnimIndex = ANIM->create_script_inst(data.animArchetype, instanceIndex, objData->ambient_animation);
+#else
+		// MeshManager owns the script set; the obsolete S32 init field stays invalid.
+		const SCRIPT_SET_ARCH scriptSet = data.meshArch ?
+			data.meshArch->GetAnimArchtype() : INVALID_SCRIPT_SET_ARCH;
+		ambientAnimIndex = ANIM->create_script_inst(scriptSet, instanceIndex, objData->ambient_animation);
+		if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && ambientAnimIndex == INVALID_SCRIPT_INST)
+			throw std::runtime_error(std::string("Native platform required ambient animation unavailable: ") +
+				objData->fileName + " -> " + objData->ambient_animation);
+#endif
 		ANIM->script_start(ambientAnimIndex, Animation::LOOP, Animation::BEGIN);
 	}
 	bSetCommandPoints = false;
@@ -3264,6 +3297,27 @@ bool PLATFORM_INIT<BT_TYPE>::loadPlatformArchetype (BT_TYPE * data, PARCHETYPE _
 			}
 		}
 	}
+
+#if !defined(_WIN32)
+	if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+	{
+		const auto requireMedia = [this](bool present, const char *resource) {
+			if (!present)
+				std::fprintf(stderr, "Native required platform media missing: %s (%s)\n", resource, pData->fileName);
+			return present;
+		};
+		if (!requireMedia(meshArch != NULL && archIndex != INVALID_ARCHETYPE_INDEX &&
+			meshArch->GetNumFaceGroups() != 0, "required model geometry") ||
+			!requireMedia(!pData->explosionType[0] || pExplosionType != NULL, pData->explosionType) ||
+			!requireMedia(!pData->shieldHitType[0] || pShieldHitType != NULL, pData->shieldHitType) ||
+			!requireMedia(pSparkBlast != NULL, "BLAST!!Spark") ||
+			!requireMedia(smoke_archID != -1, "smoke.pte") ||
+			!requireMedia(damageTexID != 0, fname) ||
+			!requireMedia(!pData->blinkers.textureName[0] || !pData->blinkers.light_script[0] || blinkTex != 0, pData->blinkers.textureName) ||
+			!requireMedia(pBuildEffect != NULL && pExtBuildEffect != NULL, "race platform construction effect"))
+			return false;
+	}
+#endif
 
 	result = true;
 

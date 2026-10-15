@@ -10,8 +10,12 @@
 #include "TComponent.h"
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <atomic>
+#include <cstdio>
 #include <cmath>
 #include <memory>
+#include <map>
+#include <string>
 #include <vector>
 
 namespace FrontierX
@@ -29,13 +33,27 @@ std::uintptr_t nextHandle = 1;
 std::uint32_t diagnosticTick = 0;
 char interfaceName[] = "IStreamer";
 
-class NativeStreamer : public ISystemComponent, public IStreamer
+void ApplyStereoPan(float *samples, std::size_t count, S32 pan)
+{
+    const float attenuation = std::abs(pan) == 10000 ? 0.0F :
+        std::pow(10.0F, -static_cast<float>(std::abs(pan)) / 2000.0F);
+    const float left = pan > 0 ? attenuation : 1.0F;
+    const float right = pan < 0 ? attenuation : 1.0F;
+    for (std::size_t i = 0; i + 1 < count; i += 2)
+    {
+        samples[i] *= left;
+        samples[i + 1] *= right;
+    }
+}
+
+class NativeStreamer : public ISystemComponent, public IStreamer, public INativeSpatialAudio
 {
 public:
     BEGIN_DACOM_MAP_INBOUND(NativeStreamer)
     DACOM_INTERFACE_ENTRY(ISystemComponent)
     DACOM_INTERFACE_ENTRY(IAggregateComponent)
     DACOM_INTERFACE_ENTRY(IStreamer)
+    DACOM_INTERFACE_ENTRY(INativeSpatialAudio)
     DACOM_INTERFACE_ENTRY2(IID_ISystemComponent, ISystemComponent)
     DACOM_INTERFACE_ENTRY2(IID_IAggregateComponent, IAggregateComponent)
     DACOM_INTERFACE_ENTRY2(IID_IStreamer, IStreamer)
@@ -45,12 +63,17 @@ public:
     {
         SDL_AudioStream * audio = nullptr;
         std::vector<Uint8> pcm;
+        SDL_AudioSpec inputSpec{};
         HSTREAM handle = nullptr;
         STATUS status = STOPPED;
         S32 volume = 0;
         bool looping = false;
         bool notifyInit = true;
         bool eofSent = false;
+        std::atomic<S32> pan{0};
+        std::atomic<bool> unsupportedSpatialFormat{false};
+        std::atomic<Uint64> consumedMicroseconds{0};
+        Uint64 durationMicroseconds = 0;
         Uint64 drainedAt = 0;
         Uint64 tailMilliseconds = 0;
         ~Stream() { if (audio) SDL_DestroyAudioStream(audio); }
@@ -59,6 +82,7 @@ public:
     {
         owners.erase(std::remove(owners.begin(), owners.end(), this), owners.end());
         streams.clear();
+        samples.clear();
         if (device) SDL_CloseAudioDevice(device);
         if (audioInitialized) SDL_QuitSubSystem(SDL_INIT_AUDIO);
     }
@@ -86,6 +110,10 @@ public:
         if (!device || !parent || !filename || !*filename ||
             (flags & ~(STRMFL_PLAY | STRMFL_LOOPING)) || streams.size() >= 64 || !nextHandle)
             return nullptr;
+        const auto cached = samples.find({parent, filename});
+        if (cached != samples.end())
+            return OpenDecoded(cached->second->spec, cached->second->pcm.data(),
+                               static_cast<Uint32>(cached->second->pcm.size()), flags);
         DAFILEDESC descriptor(filename);
         HANDLE file = parent->OpenChild(&descriptor);
         if (file == INVALID_HANDLE_VALUE && !std::strpbrk(filename, "*?/\\"))
@@ -144,7 +172,19 @@ public:
         }
         M3StreamerJournal().Write("pcm-decoded", 0, length, filename);
         if (!length || length > 256U * 1024U * 1024U) return nullptr;
+        return OpenDecoded(spec, pcm, length, flags);
+    }
+    catch (const std::bad_alloc &) { return nullptr; }
+
+    HSTREAM OpenDecoded(const SDL_AudioSpec &spec, const Uint8 *pcm, Uint32 length, DWORD flags)
+    {
+        const unsigned sampleBytes = SDL_AUDIO_BYTESIZE(spec.format);
+        if (spec.freq <= 0 || spec.channels <= 0 || !sampleBytes ||
+            !length || length % (sampleBytes * spec.channels)) return nullptr;
         auto stream = std::make_unique<Stream>();
+        stream->inputSpec = spec;
+        stream->durationMicroseconds = (1000000ULL * length) /
+            (static_cast<Uint64>(spec.freq) * sampleBytes * spec.channels);
         stream->audio = SDL_OpenAudioDeviceStream(device, &spec, nullptr, nullptr);
         if (!stream->audio) return nullptr;
         SDL_AudioSpec output{};
@@ -168,7 +208,61 @@ public:
         streams.push_back(std::move(stream));
         return handle;
     }
-    catch (const std::bad_alloc &) { return nullptr; }
+
+    struct CachedSample
+    {
+        IFileSystem *source = nullptr;
+        SDL_AudioSpec spec{};
+        std::vector<Uint8> pcm;
+        ~CachedSample() { if (source) source->Release(); }
+    };
+
+    BOOL32 PreloadSample(const char *filename, IFileSystem *source) override try
+    {
+        if (!filename || !*filename || !source) return FALSE;
+        const auto key = std::make_pair(source, std::string(filename));
+        if (samples.find(key) != samples.end()) return TRUE;
+        const HSTREAM handle = Open(filename, source, 0);
+        if (!handle) return FALSE;
+        struct HandleGuard
+        {
+            NativeStreamer &owner;
+            HSTREAM handle;
+            ~HandleGuard()
+            {
+                if (!owner.CloseHandle(handle))
+                {
+                    std::fputs("Native sample-cache stream close failed\n", stderr);
+                    std::abort();
+                }
+            }
+        } guard{*this, handle};
+        const auto *stream = Find(handle);
+        auto sample = std::make_unique<CachedSample>();
+        sample->spec = stream->inputSpec;
+        sample->pcm = stream->pcm;
+        source->AddRef();
+        sample->source = source;
+        return samples.emplace(key, std::move(sample)).second;
+    }
+    catch (const std::bad_alloc &) { return FALSE; }
+
+    void ForgetSamples(IFileSystem *source) override
+    {
+        for (auto it = samples.begin(); it != samples.end();)
+            if (it->first.first == source) it = samples.erase(it);
+            else ++it;
+    }
+
+    BOOL32 GetPlaybackFraction(HSTREAM handle, SINGLE *fraction) const override
+    {
+        const auto *stream = Find(handle);
+        if (!stream || !fraction || !stream->durationMicroseconds) return FALSE;
+        *fraction = std::min(1.0F, static_cast<SINGLE>(
+            static_cast<double>(stream->consumedMicroseconds.load(std::memory_order_relaxed)) /
+            stream->durationMicroseconds));
+        return TRUE;
+    }
     BOOL32 CloseHandle(HSTREAM handle) override
     {
         const auto found = std::find_if(streams.begin(), streams.end(),
@@ -203,6 +297,34 @@ public:
         s->volume = volume;
         return TRUE;
     }
+    static void SDLCALL PanCallback(void *context, const SDL_AudioSpec *spec,
+                                    float *samples, int bytes)
+    {
+        auto &stream = *static_cast<Stream *>(context);
+        if (!spec || spec->channels != 2 || spec->freq <= 0 || bytes < 0 ||
+            bytes % (2 * sizeof(float)) != 0)
+        {
+            stream.unsupportedSpatialFormat.store(true, std::memory_order_relaxed);
+            return;
+        }
+        ApplyStereoPan(samples, static_cast<std::size_t>(bytes) / sizeof(float),
+                       stream.pan.load(std::memory_order_relaxed));
+        stream.consumedMicroseconds.fetch_add(
+            (1000000ULL * static_cast<Uint64>(bytes)) /
+                (sizeof(float) * 2U * static_cast<Uint64>(spec->freq)),
+            std::memory_order_relaxed);
+    }
+    BOOL32 SetPan(HSTREAM handle, S32 pan) override
+    {
+        Stream *stream = Find(handle);
+        if (!stream || pan < -10000 || pan > 10000) return FALSE;
+        SDL_AudioSpec spec{};
+        const SDL_AudioDeviceID logicalDevice = SDL_GetAudioStreamDevice(stream->audio);
+        if (!SDL_GetAudioDeviceFormat(logicalDevice, &spec, nullptr) || spec.channels != 2)
+            return FALSE;
+        stream->pan.store(pan, std::memory_order_relaxed);
+        return SDL_SetAudioPostmixCallback(logicalDevice, PanCallback, stream);
+    }
     BOOL32 GetVolume(HSTREAM handle, S32 * volume) const override
     {
         const Stream * s = Find(handle);
@@ -223,6 +345,13 @@ public:
         {
             Stream * s = Find(handle);
             if (!s) continue;
+            if (s->unsupportedSpatialFormat.exchange(false, std::memory_order_relaxed))
+            {
+                std::fputs("Native spatial audio requires stereo output\n", stderr);
+                s->status = INVALID;
+                Notify(handle, INVALID);
+                continue;
+            }
             if (s->notifyInit)
             {
                 s->notifyInit = false;
@@ -273,6 +402,7 @@ private:
                                         reinterpret_cast<LegacyLParam>(handle));
     }
     std::vector<std::unique_ptr<Stream>> streams;
+    std::map<std::pair<IFileSystem *, std::string>, std::unique_ptr<CachedSample>> samples;
     SDL_AudioDeviceID device = 0;
     HWND window = 0;
     UINT message = 0;
@@ -287,6 +417,19 @@ bool RegisterNativeStreamer(ICOManager * manager)
     const GENRESULT result = manager->RegisterComponent(factory, interfaceName);
     factory->Release();
     return result == GR_OK;
+}
+bool CheckNativeStereoPan()
+{
+    float right[] = {0.5F, -0.25F, -0.5F, 0.25F};
+    float left[] = {0.5F, -0.25F, -0.5F, 0.25F};
+    ApplyStereoPan(right, 4, 6000);
+    ApplyStereoPan(left, 4, -6000);
+    if (std::abs(right[0] - 0.0005F) > 0.000001F || right[1] != -0.25F ||
+        std::abs(left[1] + 0.00025F) > 0.000001F || left[0] != 0.5F) return false;
+    ApplyStereoPan(right, 4, 10000);
+    ApplyStereoPan(left, 4, -10000);
+    return right[0] == 0.0F && right[2] == 0.0F &&
+        left[1] == 0.0F && left[3] == 0.0F;
 }
 void UpdateNativeStreamers()
 {

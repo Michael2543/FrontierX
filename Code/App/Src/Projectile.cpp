@@ -18,6 +18,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeWeaponOrientation.h"
 #include "Include/CQTrace.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
@@ -313,7 +314,11 @@ void Bolt::InitWeapon (IBaseObject * owner, const class TRANSFORM & orientation,
 	SINGLE curPitch, desiredPitch, relPitch;
 	Vector goal = (pos)? *pos : _target->GetPosition();
 
+#if defined(_WIN32)
 	curPitch = orient.get_pitch();
+#else
+	curPitch = FrontierX::NativeWeaponSightPitch(orient);
+#endif
 	//goal -= ENGINE->get_position(barrelIndex);
 	goal -= orient.get_position();
 

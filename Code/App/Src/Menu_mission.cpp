@@ -12,14 +12,32 @@
 // New player dialog
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "Include/NativeAppImage.h"
+#include "UserDefaults.h"
+#include "MyVertex.h"
+#include <VFX.H>
+#include <algorithm>
+#include <cmath>
+#include <cwchar>
+using namespace FrontierX::NativeAppUi;
+struct NativeMissionPoint { S32 x, y; };
+using POINT = NativeMissionPoint;
+#define __min(a,b) (std::min)((a),(b))
+#define __max(a,b) (std::max)((a),(b))
+#endif
 #include <wchar.h>
 
 #include "Frame.h"
 #include "IButton2.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IAnimate.h"
 #include "Mission.h"
 #include "IGameProgress.h"
@@ -218,7 +236,7 @@ void Menu_mission::onMouseMove (S16 x, S16 y)
 
 	for (int i = 0; i < NUM_MISSIONS_MAX; i++)
 	{
-		if (buttonMissions[i] != NULL && buttonMissions[i]->IsMouseOver(x, y))
+		if (buttonMissions[i] != 0 && buttonMissions[i]->IsMouseOver(x, y))
 		{
 			if (i != currMissionSelection)
 			{
@@ -241,7 +259,7 @@ void Menu_mission::onMouseMove (S16 x, S16 y)
 
 	for (int i = 0; i < NUM_MOVIES_MAX; i++)
 	{
-		if (buttonMovies[i] != NULL && buttonMovies[i]->IsMouseOver(x, y))
+		if (buttonMovies[i] != 0 && buttonMovies[i]->IsMouseOver(x, y))
 		{
 			if (i != currMovieSelection)
 			{
@@ -271,7 +289,13 @@ void Menu_mission::onMouseMove (S16 x, S16 y)
 //
 GENRESULT Menu_mission::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+	#if defined(_WIN32)
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	switch (message)
 	{
@@ -429,7 +453,7 @@ void Menu_mission::onListSelection (S32 listID)
 //
 void Menu_mission::addFile (const WIN32_FIND_DATA & data)
 {
-	if (data.cFileName[0] != TCHAR('.'))
+	if (data.cFileName[0] != '.')
 	{
 		wchar_t buffer[256];
 
@@ -458,7 +482,7 @@ void Menu_mission::initList (void)
 
 	list->ResetContent();
 
-	if (mapDir == NULL || (handle = mapDir->FindFirstFile("*.*", &data)) == INVALID_HANDLE_VALUE)
+	if (mapDir == 0 || (handle = mapDir->FindFirstFile("*.*", &data)) == INVALID_HANDLE_VALUE)
 		return;
 
 	addFile(handle);		// recursion
@@ -838,7 +862,11 @@ void Menu_mission::onButtonPressed (U32 buttonID)
 		wchar_t szMission[64];
 	
 		// first look for *.dmission then *.qmission
+		#if defined(_WIN32)
 		swprintf(szMission, L"T_Mission%d.dmission", testID+1);
+#else
+		std::swprintf(szMission, sizeof(szMission)/sizeof(szMission[0]), L"T_Mission%d.dmission", testID+1);
+#endif
 		GAMEPROGRESS->SetMissionsSeen(testID);
 		if (list->FindStringExact(szMission) > -1)
 		{
@@ -846,7 +874,11 @@ void Menu_mission::onButtonPressed (U32 buttonID)
 		}
 		else
 		{
-			swprintf(szMission, L"T_Mission%d.qmission", testID+1);
+			#if defined(_WIN32)
+		swprintf(szMission, L"T_Mission%d.qmission", testID+1);
+#else
+		std::swprintf(szMission, sizeof(szMission)/sizeof(szMission[0]), L"T_Mission%d.qmission", testID+1);
+#endif
 			onSelection(szMission);
 		}
 		return;

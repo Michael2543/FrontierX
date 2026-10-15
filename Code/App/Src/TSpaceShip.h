@@ -40,6 +40,9 @@
 #include "IBlinkers.h"
 #include "TManager.h"
 #include "SysMap.h"
+#if !defined(_WIN32)
+#include <cstdio>
+#endif
 
 #if !defined(_WIN32)
 namespace FrontierX
@@ -585,6 +588,35 @@ bool SPACESHIP_INIT<BT_TYPE>::loadSpaceshipArchetype (BT_TYPE * _pData, PARCHETY
 		shipMapTex = SYSMAP->RegisterPlayerIcon("SysMap\\ship.bmp");
 	}
 	++shipMapTexRef;
+
+#if !defined(_WIN32)
+	if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+	{
+		const auto requireMedia = [this](bool present, const char *resource) {
+			if (!present)
+				std::fprintf(stderr, "Native required ship media missing: %s (%s)\n", resource, pData->fileName);
+			return present;
+		};
+		// These owners are consumed by original destruction, low-hull damage,
+		// trails and selected-unit rendering. Never turn a missing owner into
+		// an invisible successful draw in the complete mission configuration.
+		if (!requireMedia(meshArch != NULL && archIndex != INVALID_ARCHETYPE_INDEX &&
+			meshArch->GetNumFaceGroups() != 0, "required model geometry") ||
+			!requireMedia(meshArch != NULL && archIndex != -1, pData->fileName) ||
+			!requireMedia(!pData->explosionType[0] || pExplosionType != NULL, pData->explosionType) ||
+			!requireMedia(!pData->trailType[0] || pTrailType != NULL, pData->trailType) ||
+			!requireMedia(pSparkBlast != NULL, "BLAST!!Spark") ||
+			!requireMedia(smoke_archID != -1, "smoke.pte") ||
+			!requireMedia(!pData->engineGlow.engine_texture_name[0] || engineTex != 0, pData->engineGlow.engine_texture_name) ||
+			!requireMedia(!pData->blinkers.textureName[0] || !pData->blinkers.light_script[0] || blinkTex != 0, pData->blinkers.textureName) ||
+			!requireMedia(hiliteTex != 0, "comm.tga") ||
+			!requireMedia(!pData->billboard.billboardTexName[0] || billboardTex != 0, pData->billboard.billboardTexName) ||
+			!requireMedia(damageTexID != 0, fname) ||
+			!requireMedia(!smesh || shieldAnimArch != NULL, "race shield animation") ||
+			!requireMedia(!smesh || !pData->shield.fizzAnimName[0] || shieldFizzAnimArch != NULL, pData->shield.fizzAnimName))
+			return false;
+	}
+#endif
 
 	result = true;
 

@@ -39,6 +39,7 @@ struct OpenFile
 {
     std::string path;
     std::size_t position = 0;
+    bool writable = true;
 };
 
 struct Search
@@ -128,9 +129,9 @@ public:
         : path_(std::move(path)), state_(std::make_shared<ArchiveState>()) {}
 
     WritableArchive(std::filesystem::path path, std::shared_ptr<ArchiveState> state,
-                    std::string filePath)
+                    std::string filePath, bool writable = true)
         : path_(std::move(path)), state_(std::move(state)), filePath_(std::move(filePath)),
-          fileView_(true) {}
+          fileView_(true) { implicitFile_.writable = writable; }
 
     WritableArchive(std::filesystem::path path, std::shared_ptr<ArchiveState> state,
                     std::string directory, IFileSystem * parent)
@@ -274,7 +275,7 @@ public:
             if (read)
             {
                 *instance = static_cast<IFileSystem *>(
-                    new WritableArchive(path_, state_, resolved));
+                    new WritableArchive(path_, state_, resolved, false));
                 return GR_OK;
             }
             if (found == state_->entries.end())
@@ -322,7 +323,7 @@ public:
         if (overlapped || (count && !buffer)) return FALSE;
         std::lock_guard<std::mutex> lock(mutex_);
         OpenFile * open = ResolveOpen(handle);
-        if (!open) return FALSE;
+        if (!open || !open->writable) return FALSE;
         std::lock_guard<std::mutex> treeLock(state_->mutex);
         auto entry = state_->entries.find(open->path);
         if (entry == state_->entries.end() || entry->second.directory ||
@@ -376,7 +377,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(mutex_);
         OpenFile * open = ResolveOpen(handle);
-        if (!open) return FALSE;
+        if (!open || !open->writable) return FALSE;
         std::lock_guard<std::mutex> treeLock(state_->mutex);
         auto entry = state_->entries.find(open->path);
         if (entry == state_->entries.end() || entry->second.directory) return FALSE;
@@ -538,6 +539,18 @@ public:
     BOOL DeleteFile(LPCTSTR name) override
     {
         if (fileView_) return FALSE;
+        if (saveDirectory_)
+        {
+            // Match save-directory CreateInstance: only a regular leaf file.
+            if (!name || !*name || std::strpbrk(name, "/\\") ||
+                std::strcmp(name, ".") == 0 || std::strcmp(name, "..") == 0)
+                return FALSE;
+            std::error_code error;
+            const auto file = path_ / name;
+            if (std::filesystem::symlink_status(file, error).type() !=
+                    std::filesystem::file_type::regular || error) return FALSE;
+            return std::filesystem::remove(file, error) && !error ? TRUE : FALSE;
+        }
         std::string resolved;
         if (!ResolvePath(directory_, name, false, resolved)) return FALSE;
         std::lock_guard<std::mutex> lock(state_->mutex);
@@ -588,7 +601,7 @@ public:
         }
         const auto token = nextFileToken_;
         nextFileToken_ += 2;
-        files_.emplace(token, OpenFile{std::move(resolved), 0});
+        files_.emplace(token, OpenFile{std::move(resolved), 0, create});
         return EncodeHandleValue(token);
     }
     DWORD GetFilePosition(HANDLE handle, PLONG high) override

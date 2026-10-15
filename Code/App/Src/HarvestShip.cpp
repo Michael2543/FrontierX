@@ -17,6 +17,7 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "Include/CQTrace.h"
+#include "Include/NativeShipVisualTransform.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
 #include <IHardPoint.h>
@@ -31,6 +32,7 @@
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
+#include <cstdio>
 #include <type_traits>
 using std::min;
 using std::max;
@@ -888,7 +890,13 @@ void HarvestShip::renderNuggeting (void)
 			v0 = v1 = v4 = obj->GetPosition();
 			v0 += (20+80*(1-deltaTime))*dir2;
 			v1 -= (20+80*(1-deltaTime))*dir2;
+#if defined(_WIN32)
 			v2 = v3 = v5 = transform*beamPointInfo.point;
+#else
+			// The authored muzzle shares the hull's direct-Engine model axes.
+			v2 = v3 = v5 = NativeShipVisualTransform(transform, !bSpecialRender &&
+				(instanceMesh == NULL || CQEFFECTS.bFastRender == 0))*beamPointInfo.point;
+#endif
 			v2 -= 20*dir2;
 			v3 += 20*dir2;
 
@@ -976,7 +984,12 @@ void HarvestShip::renderHarvestShip (void)
 						TRANSFORM trans;
 						trans.set_orientation(tankPoint[tank].orientation);
 						trans.translation = tankPoint[tank].point;
+						#if defined(_WIN32)
 						trans = transform*trans;
+#else
+						trans = NativeShipVisualTransform(transform, !bSpecialRender &&
+							(instanceMesh == NULL || CQEFFECTS.bFastRender == 0))*trans;
+#endif
 						BATCH->set_state(RPR_BATCH,TRUE);
 						BATCH->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
 						BATCH->set_render_state(D3DRS_ZENABLE,TRUE);
@@ -992,7 +1005,12 @@ void HarvestShip::renderHarvestShip (void)
 						TRANSFORM trans;
 						trans.set_orientation(tankPoint[tank].orientation);
 						trans.translation = tankPoint[tank].point;
+						#if defined(_WIN32)
 						trans = transform*trans;
+#else
+						trans = NativeShipVisualTransform(transform, !bSpecialRender &&
+							(instanceMesh == NULL || CQEFFECTS.bFastRender == 0))*trans;
+#endif
 						BATCH->set_state(RPR_BATCH,TRUE);
 						BATCH->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
 						BATCH->set_render_state(D3DRS_ZENABLE,TRUE);
@@ -1008,7 +1026,12 @@ void HarvestShip::renderHarvestShip (void)
 						TRANSFORM trans;
 						trans.set_orientation(tankPoint[tank].orientation);
 						trans.translation = tankPoint[tank].point;
+						#if defined(_WIN32)
 						trans = transform*trans;
+#else
+						trans = NativeShipVisualTransform(transform, !bSpecialRender &&
+							(instanceMesh == NULL || CQEFFECTS.bFastRender == 0))*trans;
+#endif
 						BATCH->set_state(RPR_BATCH,TRUE);
 						BATCH->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
 						BATCH->set_render_state(D3DRS_ZENABLE,TRUE);
@@ -1023,7 +1046,12 @@ void HarvestShip::renderHarvestShip (void)
 						TRANSFORM trans;
 						trans.set_orientation(tankPoint[tank].orientation);
 						trans.translation = tankPoint[tank].point;
+						#if defined(_WIN32)
 						trans = transform*trans;
+#else
+						trans = NativeShipVisualTransform(transform, !bSpecialRender &&
+							(instanceMesh == NULL || CQEFFECTS.bFastRender == 0))*trans;
+#endif
 						BATCH->set_state(RPR_BATCH,TRUE);
 						BATCH->set_render_state(D3DRS_ZWRITEENABLE,TRUE);
 						BATCH->set_render_state(D3DRS_ZENABLE,TRUE);
@@ -3429,6 +3457,9 @@ struct DACOM_NO_VTABLE HarvestShipFactory : public IObjectFactory
 		OBJTYPE (void)
 		{
 			mineTex = 0;
+#if !defined(_WIN32)
+			gasTankArch = metalTankArch = INVALID_ARCHETYPE_INDEX;
+#endif
 		}
 
 		~OBJTYPE (void)
@@ -3602,6 +3633,21 @@ HANDLE HarvestShipFactory::CreateArchetype (const char *szArchname, OBJCLASS obj
 				result->metalTankArch = -1;
 				//result->metalTankIndex = -1;
 			}
+#if !defined(_WIN32)
+			if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS &&
+				(!result->mineTex || !result->harvestAnimArch ||
+				 (data->gasTankMesh[0] &&
+				  (!result->gasTankMeshObj || !result->gasTankMeshObj->mc.numChildren || !result->gasTankMeshObj->mc.mi[0] ||
+				   !REND->get_archetype_mesh(result->gasTankArch))) ||
+				 (data->metalTankMesh[0] &&
+				  (!result->metalTankMeshObj || !result->metalTankMeshObj->mc.numChildren || !result->metalTankMeshObj->mc.mi[0] ||
+				   !REND->get_archetype_mesh(result->metalTankArch)))))
+			{
+				std::fprintf(stderr, "Native required Harvester media missing: beam=%u animation=%d gas=%s metal=%s\n",
+					result->mineTex, result->harvestAnimArch != NULL, data->gasTankMesh, data->metalTankMesh);
+				goto Error;
+			}
+#endif
 		}
 		goto Done;
 	}

@@ -42,7 +42,7 @@
 #endif
 
 #ifndef SYSMAP_H
-#include "Sysmap.h"
+#include "SysMap.h"
 #endif
 
 //--------------------------------------------------------------------------//
@@ -241,4 +241,9 @@ struct _NO_VTABLE PingLaunch : IBaseObject, ILauncher, ISaveLoad, PING_LAUNCHER_
 //---------------------------------------------------------------------------------------------
 //-------------------------------End PingLauncher.h-------------------------------------------
 //---------------------------------------------------------------------------------------------
+#if !defined(_WIN32)
+// Gunboat recreates this stateless launcher before restoring its empty directory.
+bool ValidateNativeStatelessPingRestart(IBaseObject *launcher, PARCHETYPE archetype,
+    IBaseObject *owner, IFileSystem *directory, const char *directoryName);
+#endif
 #endif

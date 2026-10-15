@@ -78,6 +78,8 @@
 #include <cstring>
 #include <cwchar>
 #include <cstdlib>
+#include <stdexcept>
+#include <cstdio>
 #include <type_traits>
 using std::min;
 using std::max;
@@ -102,6 +104,9 @@ struct IDrawAgent;
 #include "DSpaceship.h"
 #include "DInstance.h"
 #include "ILauncher.h"
+#if !defined(_WIN32)
+#include "PingLauncher.h"
+#endif
 #include <MGlobals.h>
 #include "Startup.h"
 #include "IAttack.h"
@@ -2007,7 +2012,12 @@ BOOL32 Gunboat::Save (struct IFileSystem * file)
 	int i;
 	OBJPTR<ISaveLoad> obj;
 
+#if defined(_WIN32)
 	SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>::Save(file);
+#else
+	if (!SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>::Save(file))
+		return 0;
+#endif
 
 	char buffer[64];
 
@@ -2022,26 +2032,91 @@ BOOL32 Gunboat::Save (struct IFileSystem * file)
 			if (file->SetCurrentDirectory(buffer) == 0) 
 				return 0;
 
+#if defined(_WIN32)
 			obj->Save(file);
+#else
+			const BOOL32 saved = obj->Save(file);
+#endif
 
 			if (file->SetCurrentDirectory("..") == 0) 
 				return 0;
+#if !defined(_WIN32)
+			if (!saved) return 0;
+#endif
 		}
 	}
 
 	return 1;
 }
+#if !defined(_WIN32)
+bool IsNativePersistentGunboat(IBaseObject *object)
+{
+	return dynamic_cast<Gunboat *>(object) != nullptr;
+}
+#endif
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+BOOL32 LoadNativePersistedLauncher(ISaveLoad *saved, const BASIC_DATA *data,
+	IBaseObject *launcherObject, PARCHETYPE archetype, IBaseObject *owner,
+	IFileSystem *file, const char *directoryName)
+{
+	if (!saved || !data) return 0;
+	const bool statelessPing = data->objClass == OC_LAUNCHER &&
+		static_cast<const BASE_LAUNCHER *>(data)->type == LC_PING_LAUNCH;
+	return statelessPing ?
+		ValidateNativeStatelessPingRestart(launcherObject, archetype, owner, file, directoryName) :
+		saved->Load(file);
+}
+
+bool CheckNativeGunboatLauncherFailure(IFileSystem *file)
+{
+	// Protect the actual Gunboat loader branch that formerly discarded child
+	// failures. This caller can only fail; it provides no replacement gameplay.
+	struct RejectedRecord : ISaveLoad
+	{
+		U32 calls = 0;
+		void *QueryInterface(OBJID, OBJPTR<IBaseObject> &, U32) override { std::abort(); }
+		BOOL32 Save(IFileSystem *) override { std::abort(); }
+		BOOL32 Load(IFileSystem *) override { ++calls; return 0; }
+		void ResolveAssociations() override { std::abort(); }
+	} rejected;
+	BASE_LAUNCHER data = {};
+	data.objClass = OC_LAUNCHER;
+	data.type = LC_TURRET;
+	if (!file || LoadNativePersistedLauncher(&rejected, &data, nullptr, nullptr,
+		nullptr, file, "Turret-0") || rejected.calls != 1)
+		return false;
+	return !LoadNativePersistedLauncher(&rejected, nullptr, nullptr, nullptr,
+		nullptr, file, "Turret-0") && rejected.calls == 1;
+}
+#endif
+
 BOOL32 Gunboat::Load (struct IFileSystem * file)
 {
 	int i;
 	OBJPTR<ISaveLoad> obj;
 	char buffer[64];
 
+#if defined(_WIN32)
 	SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>::Load(file);
+#else
+	if (!SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>::Load(file))
+		return 0;
+#endif
 
+#if defined(_WIN32)
 	initLaunchers();
+#else
+	try { initLaunchers(); }
+	catch (const std::exception &error)
+	{
+		std::fprintf(stderr, "Native Gunboat launcher restoration failed: %s\n", error.what());
+		return 0;
+	}
+	for (i = 0; i < MAX_GUNBOAT_LAUNCHERS && ginitData->launchers[i]; ++i)
+		if (!launcher[i].Ptr()) return 0;
+#endif
 
 	for (i = 0; i < MAX_GUNBOAT_LAUNCHERS; i++)
 	{
@@ -2052,10 +2127,19 @@ BOOL32 Gunboat::Load (struct IFileSystem * file)
 			if (file->SetCurrentDirectory(buffer) == 0) 
 				return 0;
 
+#if defined(_WIN32)
 		 	obj->Load(file);
+#else
+			const BASIC_DATA *data = static_cast<const BASIC_DATA *>(ARCHLIST->GetArchetypeData(ginitData->launchers[i]));
+			const BOOL32 loaded = LoadNativePersistedLauncher(obj, data, launcher[i].Ptr(),
+				ginitData->launchers[i], this, file, buffer);
+#endif
 
 			if (file->SetCurrentDirectory("..") == 0) 
 				return 0;
+#if !defined(_WIN32)
+			if (!loaded) return 0;
+#endif
 		}
 	}
 
@@ -2090,12 +2174,20 @@ void Gunboat::initLaunchers (void)
 				else
 				{
 					delete tmp;
+#if !defined(_WIN32)
+					throw std::runtime_error("required original Gunboat child does not expose ILauncher");
+#else
 					break;
+#endif
 				}
 			}
 			else
 			{
+#if !defined(_WIN32)
+				throw std::runtime_error("required original Gunboat launcher factory could not create its instance");
+#else
 				break;
+#endif
 			}
 		}
 		else
@@ -3241,7 +3333,17 @@ HANDLE GunboatFactory::CreateArchetype (const char *szArchname, OBJCLASS objClas
 				if (data->launcherType[i][0])
 				{
 					if ((result->launchers[i] = ARCHLIST->LoadArchetype(data->launcherType[i])) == 0)
+					{
+#if !defined(_WIN32)
+						if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+						{
+							std::fprintf(stderr, "Native required Gunboat launcher missing: %s -> %s\n",
+								szArchname, data->launcherType[i]);
+							goto Error;
+						}
+#endif
 						break;
+					}
 					else
 						ARCHLIST->AddRef(result->launchers[i], OBJREFNAME);
 				}

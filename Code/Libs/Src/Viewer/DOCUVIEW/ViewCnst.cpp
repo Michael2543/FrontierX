@@ -62,7 +62,11 @@ static char interface_name[] = "IViewConstructor";
 
 extern SymbolManager SymbolTable;
 
-static BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData);
+static BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData
+#if !defined(_WIN32)
+	, SYMBOL optionalLegacyMetadata = nullptr, SYMBOL optionalLegacySlotChallenge = nullptr
+#endif
+);
 void COMAPI CreateDataParser (SYMBOL symbol, IDataParser ** pParser);
 #ifndef _WIN32
 BOOL32 CopyViewSymbolValue (SYMBOL source, U32 sourceModifiers, const char * sourceData,
@@ -467,6 +471,122 @@ void ViewConstructor::CorrelateSymbol (SYMBOL oldSymbol, void *pOldData, SYMBOL 
 
 	::CorrelateSymbol(oldSymbol, (char *)pOldData, newSymbol, (char *)pNewData);
 }
+#if !defined(_WIN32)
+bool CorrelateNativeViewSymbols(IViewConstructor2 *provider, SYMBOL oldSymbol,
+	const void *oldData, SYMBOL newSymbol, void *newData)
+{
+	if (!dynamic_cast<ViewConstructor *>(provider) || !oldSymbol || !newSymbol ||
+		!oldData || !newData)
+		return false;
+	SYMBOL oldType = ResolveViewSymbolType(oldSymbol);
+	SYMBOL newType = ResolveViewSymbolType(newSymbol);
+	if (!oldType || !newType || oldType->size < 0 || newType->size < 0 ||
+		(!oldType->size && (oldType->kind != RECORDSYM || oldType->datatype)) ||
+		(!newType->size && (newType->kind != RECORDSYM || newType->datatype)))
+		return false;
+	std::memset(newData, 0, newType->size);
+	return ::CorrelateSymbol(oldSymbol, const_cast<char *>(static_cast<const char *>(oldData)),
+		newSymbol, static_cast<char *>(newData)) != 0;
+}
+
+bool CorrelateNativeMissionGlobals(IViewConstructor2 *provider, SYMBOL oldSymbol,
+	const void *oldData, SYMBOL newSymbol, void *newData)
+{
+	// Retail initial maps omit the later maxPlayers lobby metadata nibble.
+	// The Windows provider clears the destination and leaves that absent field
+	// zero. Do not relax any other required field or the fixed Globals extent.
+	if (!dynamic_cast<ViewConstructor *>(provider) || !oldSymbol || !newSymbol ||
+		!oldData || !newData) return false;
+	SYMBOL oldType = ResolveViewSymbolType(oldSymbol);
+	SYMBOL newType = ResolveViewSymbolType(newSymbol);
+	if (!oldType || !newType || oldType->kind != RECORDSYM || newType->kind != RECORDSYM ||
+		!oldType->name || !newType->name || std::strcmp(oldType->name, "MT_GlobalData") ||
+		std::strcmp(newType->name, "MT_GlobalData") || oldType->size != 3236 || newType->size != 3236)
+		return false;
+	// MT_GlobalData is an ordinary struct. Reject an invented union-like
+	// replacement that would take the original provider's raw-copy shortcut.
+	if (!oldType->datatype || !newType->datatype ||
+		(oldType->datatype->link && oldType->datatype->link->offset == 0 &&
+		 oldType->datatype->bit_count == 0) ||
+		(newType->datatype->link && newType->datatype->link->offset == 0 &&
+		 newType->datatype->bit_count == 0)) return false;
+	const auto field = [](SYMBOL record, const char *name) {
+		for (SYMBOL value = record->datatype; value; value = value->link)
+		{
+			const char *fieldName = value->name ? value->name : ResolveViewSymbolType(value)->name;
+			if (fieldName && !std::strcmp(fieldName, name)) return value;
+		}
+		return SYMBOL(nullptr);
+	};
+	SYMBOL metadata = field(newType, "maxPlayers");
+	SYMBOL player = field(newType, "currentPlayer");
+	SYMBOL oldPlayer = field(oldType, "currentPlayer");
+	if (!metadata || !player || !oldPlayer || metadata->offset != 624 ||
+		metadata->bit_offset != 4 || metadata->bit_count != 4 ||
+		player->offset != 624 || player->bit_offset != 0 || player->bit_count != 4 ||
+		oldPlayer->offset != 624 || oldPlayer->bit_offset != 0 || oldPlayer->bit_count != 4 ||
+		ResolveViewSymbolType(metadata)->kind != BASICTYPE ||
+		ResolveViewSymbolType(metadata)->size != 1 ||
+		ResolveViewSymbolType(player)->size != 1 || ResolveViewSymbolType(oldPlayer)->size != 1)
+		return false;
+	SYMBOL oldMetadata = field(oldType, "maxPlayers");
+	if (oldMetadata && (oldMetadata->offset != 624 || oldMetadata->bit_offset != 4 ||
+		oldMetadata->bit_count != 4 || ResolveViewSymbolType(oldMetadata)->size != 1)) return false;
+	SYMBOL optionalMetadata = oldMetadata ? nullptr : metadata;
+	const auto slot = [&](SYMBOL globals) {
+		SYMBOL game = field(globals, "gameSettings");
+		if (!game) return SYMBOL(nullptr);
+		game = ResolveViewSymbolType(game);
+		if (game->kind != RECORDSYM || game->size != 76) return SYMBOL(nullptr);
+		SYMBOL base = field(game, "_CQGAME");
+		if (!base) return SYMBOL(nullptr);
+		base = ResolveViewSymbolType(base);
+		if (base->kind != RECORDSYM || base->size != 68) return SYMBOL(nullptr);
+		SYMBOL slots = field(base, "slot");
+		if (!slots || slots->offset != 4) return SYMBOL(nullptr);
+		slots = ResolveViewSymbolType(slots);
+		if (slots->kind != ARRAYSYM || slots->arrayval != 8 || slots->size != 64)
+			return SYMBOL(nullptr);
+		SYMBOL type = ResolveViewSymbolType(slots->datatype);
+		return type && type->kind == RECORDSYM && type->name &&
+			!std::strcmp(type->name, "SLOT") && type->size == 8 ? type : SYMBOL(nullptr);
+	};
+	SYMBOL oldSlot = slot(oldType), newSlot = slot(newType);
+	if (!oldSlot || !newSlot) return false;
+	SYMBOL challenge = field(newSlot, "compChalange");
+	if (!challenge || challenge->offset != 0 || challenge->bit_offset != 3 ||
+		challenge->bit_count != 4 || ResolveViewSymbolType(challenge)->kind != BASICTYPE ||
+		ResolveViewSymbolType(challenge)->size != 4) return false;
+	SYMBOL oldChallenge = field(oldSlot, "compChalange");
+	if (oldChallenge && (oldChallenge->offset != 0 || oldChallenge->bit_offset != 3 ||
+		oldChallenge->bit_count != 4 || ResolveViewSymbolType(oldChallenge)->size != 4)) return false;
+	const bool missingChallenge = oldChallenge == nullptr;
+	struct SlotField { const char *name; unsigned bit; unsigned count; };
+	const SlotField slots[] = {{"type",0,3}, {"state",7,3}, {"race",10,4},
+		{"color",14,5}, {"team",19,4}, {"zoneSeat",23,3}};
+	for (const auto &expected : slots)
+	{
+		SYMBOL oldField = field(oldSlot, expected.name), newField = field(newSlot, expected.name);
+		const unsigned oldBit = missingChallenge && expected.bit ? expected.bit-4 : expected.bit;
+		if (!oldField || !newField || oldField->offset != 0 || newField->offset != 0 ||
+			oldField->bit_offset != oldBit || newField->bit_offset != expected.bit ||
+			oldField->bit_count != expected.count || newField->bit_count != expected.count ||
+			ResolveViewSymbolType(oldField)->size != 4 || ResolveViewSymbolType(newField)->size != 4)
+			return false;
+	}
+	SYMBOL oldID = field(oldSlot, "dpid"), newID = field(newSlot, "dpid");
+	if (!oldID || !newID || oldID->offset != 4 || newID->offset != 4 ||
+		oldID->bit_count || newID->bit_count || ResolveViewSymbolType(oldID)->size != 4 ||
+		ResolveViewSymbolType(newID)->size != 4) return false;
+	// The added four-bit lobby/standard-AI difficulty slot is absent from retail
+	// maps. Preserve the original Windows zero default; do not invent AI rules.
+	SYMBOL optionalChallenge = missingChallenge ? challenge : nullptr;
+	std::memset(newData, 0, newType->size);
+	return ::CorrelateSymbol(oldSymbol, const_cast<char *>(static_cast<const char *>(oldData)),
+		newSymbol, static_cast<char *>(newData), optionalMetadata, optionalChallenge) != 0;
+}
+#endif
+
 //--------------------------------------------------------------------------//
 //
 BOOL32 ViewConstructor::IsEqual (SYMBOL oldSymbol, SYMBOL newSymbol)
@@ -592,8 +712,58 @@ static SYMBOL GetTypeByName (SYMBOL list, SYMBOL match)
 
 	if ((matchName = match->name) == 0)
 	{
-		if ((matchName = ResolveViewSymbolType(match)->name) == 0)		// ambiguous case
+		if ((matchName = ResolveViewSymbolType(match)->name) == 0)
+		{
+#if !defined(_WIN32)
+			// Source TOBJMOVE persists an unnamed overrideSpeed/overrideYaw
+			// union. Two separately parsed identical schemas cannot match it
+			// by a name. Require one exact storage/member match; never default
+			// an absent or ambiguous record and never alter serialized names.
+			SYMBOL target = ResolveViewSymbolType(match);
+			if (target->kind != RECORDSYM || target->size <= 0 ||
+				!target->datatype || !target->datatype->link ||
+				target->datatype->offset != 0 || target->datatype->link->offset != 0 ||
+				target->datatype->bit_count) return 0;
+			SYMBOL found = nullptr;
+			for (SYMBOL candidate = list; candidate; candidate = candidate->link)
+			{
+				if (candidate->name || candidate->size != match->size || candidate->offset != match->offset ||
+					candidate->bit_count != match->bit_count || candidate->bit_offset != match->bit_offset)
+					continue;
+				SYMBOL type = ResolveViewSymbolType(candidate);
+				if (type->name || type->kind != RECORDSYM || type->size != target->size) continue;
+				SYMBOL oldMember = type->datatype, newMember = target->datatype;
+				bool equal = true;
+				while (oldMember && newMember)
+				{
+					SYMBOL oldType = ResolveViewSymbolType(oldMember->datatype);
+					SYMBOL newType = ResolveViewSymbolType(newMember->datatype);
+					if (!oldMember->name || !newMember->name ||
+						std::strcmp(oldMember->name, newMember->name) ||
+						oldMember->offset || newMember->offset ||
+						oldMember->bit_count || newMember->bit_count ||
+						oldMember->size != newMember->size ||
+						oldMember->modifiers != newMember->modifiers ||
+						oldType->modifiers != newType->modifiers ||
+						(oldType->kind == BASICTYPE && newType->kind == BASICTYPE &&
+						 oldType->basicdt != newType->basicdt) ||
+						!EqualViewSymbols(oldMember->datatype, newMember->datatype))
+					{
+						equal = false;
+						break;
+					}
+					oldMember = oldMember->link;
+					newMember = newMember->link;
+				}
+				if (!equal || oldMember || newMember) continue;
+				if (found) return 0; // No unique original storage member.
+				found = candidate;
+			}
+			return found;
+#else
 			return 0;
+#endif
+		}
 	}
 
 	while (list)
@@ -612,7 +782,11 @@ static SYMBOL GetTypeByName (SYMBOL list, SYMBOL match)
 //--------------------------------------------------------------------------//
 // return TRUE if symbols are equal
 //
-BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData)
+BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData
+#if !defined(_WIN32)
+	, SYMBOL optionalLegacyMetadata, SYMBOL optionalLegacySlotChallenge
+#endif
+)
 {
 	SYMBOL type = ResolveViewSymbolType(pNewSymbol);
 	BOOL32 result = 1;
@@ -650,8 +824,15 @@ BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, ch
 			while (type)
 			{
 				if ((pOldSubType = GetTypeByName(pOldSymbol, type)) != 0)
-					result &= CorrelateSymbol(pOldSubType, pOldData+pOldSubType->offset, type, pNewData+type->offset);
+					result &= CorrelateSymbol(pOldSubType, pOldData+pOldSubType->offset, type, pNewData+type->offset
+#if !defined(_WIN32)
+						, optionalLegacyMetadata, optionalLegacySlotChallenge
+#endif
+					);
 				else
+#if !defined(_WIN32)
+				if (type != optionalLegacyMetadata && type != optionalLegacySlotChallenge)
+#endif
 					result = 0;
 
 				type = type->link;
@@ -684,7 +865,11 @@ BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, ch
 			else
 			while (i-- > 0)
 			{
-				result &= CorrelateSymbol(pOldSymbol, pOldData, type, pNewData);
+				result &= CorrelateSymbol(pOldSymbol, pOldData, type, pNewData
+#if !defined(_WIN32)
+					, optionalLegacyMetadata, optionalLegacySlotChallenge
+#endif
+				);
 				pOldData+=pOldSymbol->size;
 				pNewData+=type->size;
 			}

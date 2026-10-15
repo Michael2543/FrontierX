@@ -13,21 +13,39 @@
 
 #include <cstdlib>
 #include <cstdio>
-#include <stdexcept>
+#include <cstring>
 
 namespace
 {
-SDL_SystemCursor CursorShape(U32 id)
+struct SourceCursor
 {
-	switch (id)
+	U32 id;
+	int hot_x, hot_y;
+	bool monochrome;
+	const unsigned char *pixels;
+	const unsigned char *mask;
+};
+
+#include "NativeAppBuildCursor.inc"
+
+SDL_Cursor *CreateCursor(U32 id)
+{
+	for (const auto &source : source_cursors)
 	{
-	case IDC_CURSOR_DEFAULT:
-	case IDC_CURSOR_ARROW: return SDL_SYSTEM_CURSOR_DEFAULT;
-	case IDC_CURSOR_MOVEOBJECT: return SDL_SYSTEM_CURSOR_MOVE;
-	case IDC_CURSOR_ATTACK: return SDL_SYSTEM_CURSOR_CROSSHAIR;
-	case IDC_CURSOR_BAN: return SDL_SYSTEM_CURSOR_NOT_ALLOWED;
-	default: throw std::invalid_argument("unsupported native cursor resource");
+		if (source.id != id) continue;
+		if (source.monochrome)
+			return SDL_CreateCursor(source.pixels, source.mask, 32, 32,
+				source.hot_x, source.hot_y);
+		unsigned char pixels[32 * 32 * 4];
+		std::memcpy(pixels, source.pixels, sizeof(pixels));
+		SDL_Surface *surface = SDL_CreateSurfaceFrom(32, 32, SDL_PIXELFORMAT_RGBA32,
+			pixels, 32 * 4);
+		if (!surface) return nullptr;
+		SDL_Cursor *cursor = SDL_CreateColorCursor(surface, source.hot_x, source.hot_y);
+		SDL_DestroySurface(surface);
+		return cursor;
 	}
+	return nullptr;
 }
 
 struct NativeAppCursor : Resource<NativeAppCursor, ICursorResource>,
@@ -58,10 +76,7 @@ struct NativeAppCursor : Resource<NativeAppCursor, ICursorResource>,
 
 	BOOL32 SetCursor(U32 id) override
 	{
-		SDL_SystemCursor shape;
-		try { shape = CursorShape(id); }
-		catch (const std::invalid_argument &) { return FALSE; }
-		SDL_Cursor *next = SDL_CreateSystemCursor(shape);
+		SDL_Cursor *next = CreateCursor(id);
 		if (!next) return FALSE;
 		if (!SDL_SetCursor(busy_count_ ? BusyCursor() : next))
 		{

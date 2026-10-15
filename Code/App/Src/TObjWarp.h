@@ -37,6 +37,10 @@
 #include "FogOfWar.h"
 #endif
 
+#if !defined(_WIN32)
+#include "Include/NativeShipWarpInTransform.h"
+#endif
+
 #define ObjectWarp _Cow
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -478,12 +482,16 @@ template <class Base>
 void ObjectWarp< Base >::startWarpIn ()
 {
 	gatePosition = inTargetGate.Ptr()->GetPosition();
+#if defined(_WIN32)
 	TRANSFORM trans;
 	trans.set_j(Vector(0,0,1));
 	Vector facing(sin(stop_heading),cos(stop_heading),0);
 	trans.set_k(-facing);
 	trans.set_i(Vector(facing.y,-facing.x,0));
 	trans.translation = gatePosition;
+#else
+	const TRANSFORM trans = NativeShipWarpInTransform(stop_heading, gatePosition);
+#endif
 	SetTransform(trans, inTargetGate.Ptr()->GetSystemID());
 	ENGINE->update_instance(instanceIndex,0,0);
 

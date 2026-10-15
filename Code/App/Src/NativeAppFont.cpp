@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cwchar>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -22,6 +24,7 @@
 namespace
 {
 std::string fontFile;
+std::map<std::pair<std::wstring, long>, std::string> mappedFonts;
 std::uint64_t drawCount = 0;
 unsigned liveFonts = 0;
 [[noreturn]] void FontFailure(const char *reason)
@@ -30,6 +33,28 @@ unsigned liveFonts = 0;
     std::abort();
 }
 #if defined(FRONTIERX_NATIVE_FREETYPE)
+std::wstring NormalizeFamily(const std::wstring &family)
+{
+    std::wstring normalized;
+    for (wchar_t c : family)
+    {
+        if (c >= L'A' && c <= L'Z') c += L'a' - L'A';
+        if ((c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9')) normalized += c;
+    }
+    return normalized;
+}
+std::wstring NormalizeFamily(const char *family)
+{
+    std::wstring wide;
+    if (family) while (*family) wide += static_cast<unsigned char>(*family++);
+    return NormalizeFamily(wide);
+}
+std::string Trim(std::string text)
+{
+    const auto first = text.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return {};
+    return text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
+}
 struct Span { int x0, x1, y; };
 struct Glyph { int advance; std::vector<Span> spans; };
 struct NativeFont : IFontDrawAgent
@@ -66,13 +91,34 @@ struct NativeFont : IFontDrawAgent
         // Match CQCreateLogFont's resource pixel height and IDEAL2REALY scaling.
         const wchar_t *descriptor = _localLoadStringW(id);
         const wchar_t *comma = descriptor ? std::wcschr(descriptor, L',') : nullptr;
-        if (!comma || fontFile.empty()) return false;
+        if (!comma || (fontFile.empty() && mappedFonts.empty())) return false;
         wchar_t *end = nullptr;
         const long pixels = std::wcstol(comma + 1, &end, 10);
-        if (pixels < 1 || pixels > 64 || !end || *end != L',') return false;
+        if (pixels < 1 || pixels > 128 || !end) return false;
+        long weight = 400;
+        if (*end == L',')
+        {
+            const wchar_t *number = end + 1;
+            weight = std::wcstol(number, &end, 10);
+            if (end == number || weight < 1 || weight > 1000) return false;
+        }
+        while (*end == L' ' || *end == L'\t') ++end;
+        if (*end) return false;
+        std::string selectedFile = fontFile;
+        if (!mappedFonts.empty())
+        {
+            const auto key = std::make_pair(NormalizeFamily(std::wstring(descriptor, comma)), weight);
+            const auto selected = mappedFonts.find(key);
+            if (selected == mappedFonts.end())
+            {
+                std::fprintf(stderr, "Native font has no strict family/weight mapping for resource %u\n", id);
+                return false;
+            }
+            selectedFile = selected->second;
+        }
         height = notScaling ? pixels : IDEAL2REALY(pixels);
-        if (!height || height > 128 || FT_Init_FreeType(&library) ||
-            FT_New_Face(library, fontFile.c_str(), 0, &face) ||
+        if (!height || height > 256 || FT_Init_FreeType(&library) ||
+            FT_New_Face(library, selectedFile.c_str(), 0, &face) ||
             FT_Select_Charmap(face, FT_ENCODING_UNICODE) ||
             FT_Set_Pixel_Sizes(face, 0, height)) return false;
         baseline = static_cast<int>(face->size->metrics.ascender >> 6);
@@ -230,10 +276,68 @@ bool SetNativeFontFile(const char *path)
     const bool valid = FT_New_Face(library, path, 0, &face) == 0;
     if (face) FT_Done_Face(face);
     FT_Done_FreeType(library);
-    if (valid) fontFile = path;
+    if (valid) { fontFile = path; mappedFonts.clear(); }
     return valid;
 #else
     (void)path; return false;
+#endif
+}
+bool SetNativeFontMapping(const char *path, std::string &error)
+{
+#if defined(FRONTIERX_NATIVE_FREETYPE)
+    error.clear();
+    if (!path || !*path || liveFonts) { error = "Font mapping requires startup before live fonts"; return false; }
+    std::ifstream input(path);
+    if (!input) { error = "External font mapping cannot be read"; return false; }
+    FT_Library library = nullptr;
+    if (FT_Init_FreeType(&library)) { error = "FreeType initialization failed"; return false; }
+    struct LibraryGuard { FT_Library library; ~LibraryGuard() { FT_Done_FreeType(library); } } guard{library};
+    std::map<std::pair<std::wstring, long>, std::string> pending;
+    std::string line;
+    while (std::getline(input, line))
+    {
+        line = Trim(line);
+        if (line.empty() || line.front() == '#') continue;
+        if (line.size() > 4096 || pending.size() >= 64)
+        { error = "External font mapping exceeds bounds"; return false; }
+        const auto equals = line.find('=');
+        const auto comma = line.find(',');
+        if (equals == std::string::npos || comma == std::string::npos || comma >= equals)
+        { error = "Expected font mapping Family,weight=filename"; return false; }
+        const std::string family = Trim(line.substr(0, comma));
+        const std::wstring normalized = NormalizeFamily(family.c_str());
+        const std::string number = Trim(line.substr(comma + 1, equals - comma - 1));
+        char *end = nullptr;
+        const long weight = std::strtol(number.c_str(), &end, 10);
+        if (normalized.empty() || end == number.c_str() || *end || weight < 1 || weight > 1000)
+        { error = "Invalid font mapping family or weight"; return false; }
+        std::filesystem::path facePath = Trim(line.substr(equals + 1));
+        if (facePath.empty()) { error = "Empty font mapping filename"; return false; }
+        if (facePath.is_relative()) facePath = std::filesystem::path(path).parent_path() / facePath;
+        FT_Face face = nullptr;
+        if (FT_New_Face(library, facePath.c_str(), 0, &face))
+        { error = "Mapped external font cannot be opened"; return false; }
+        const bool matches = NormalizeFamily(face->family_name) == normalized ||
+            NormalizeFamily(FT_Get_Postscript_Name(face)) == normalized;
+        const bool bold = (face->style_flags & FT_STYLE_FLAG_BOLD) != 0;
+        // The retail font installation supplies only this Bauhaus face; GDI
+        // resolves its requested weights to that same available family face.
+        const bool styleMatches = normalized == L"bauhausmditctt" ||
+            bold == (weight >= 600);
+        FT_Done_Face(face);
+        if (!matches) { error = "Mapped face does not match the original font family"; return false; }
+        if (!styleMatches) { error = "Mapped face does not match the requested font weight"; return false; }
+        if (!pending.emplace(std::make_pair(normalized, weight), facePath.string()).second)
+        { error = "Duplicate font family/weight mapping"; return false; }
+    }
+    if (!input.eof() || pending.empty()) { error = "Incomplete external font mapping"; return false; }
+    mappedFonts.swap(pending);
+    fontFile.clear();
+    return true;
+#else
+    (void)path;
+    error = "Native fonts were not built";
+    return false;
 #endif
 }
 IFontDrawAgent *CreateNativeFontDrawAgent(U32 resource, COLORREF color, bool multiline, bool notScaling)

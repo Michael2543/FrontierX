@@ -1039,6 +1039,12 @@ void POLYMESH::verify_lists( int faces, int verts )
 
 GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance *object, const XMesh *mesh, FaceGroup *fgroup, Material *mat, U16 *index_list, U32 index_cnt, U16 *spec_index_list, U32 spec_index_cnt, U32 dip_flags, int local_light_map, Matrix4 &texxform )
 {
+#if defined(_WIN32)
+#define PM_CHECK_STATE(call) (call)
+#else
+#define PM_CHECK_STATE(call) do { const GENRESULT stateResult = (call); \
+    if (FAILED(stateResult)) return stateResult; } while (0)
+#endif
 	// avoid setting unnecassary state
 	if( !index_cnt )
 		return GR_OK;
@@ -1073,29 +1079,29 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 
 	// Set common state for all passes
 	//
-	renderprimitive->set_render_state( D3DRS_LIGHTING, FALSE );
+	PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_LIGHTING, FALSE ) );
 
-	renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,		D3DTOP_SELECTARG2 );
-	renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG1,		D3DTA_TEXTURE );
-	renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG2,		D3DTA_DIFFUSE );
-	renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,		D3DTOP_SELECTARG2 );
-	renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG1,		D3DTA_TEXTURE );
-	renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG2,		D3DTA_DIFFUSE );
-	renderprimitive->set_sampler_state( 0, D3DSAMP_MINFILTER,		 D3DTEXF_LINEAR );
-	renderprimitive->set_sampler_state( 0, D3DSAMP_MAGFILTER,		 D3DTEXF_LINEAR );
-	renderprimitive->set_sampler_state( 0, D3DSAMP_MIPFILTER,		 D3DTEXF_POINT );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,		D3DTOP_SELECTARG2 ) );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG1,		D3DTA_TEXTURE ) );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG2,		D3DTA_DIFFUSE ) );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,		D3DTOP_SELECTARG2 ) );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG1,		D3DTA_TEXTURE ) );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG2,		D3DTA_DIFFUSE ) );
+	PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_MINFILTER,		 D3DTEXF_LINEAR ) );
+	PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_MAGFILTER,		 D3DTEXF_LINEAR ) );
+	PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_MIPFILTER,		 D3DTEXF_POINT ) );
 
 	if( GET_TC_WRAP_MODE(mat->texture_flags) == TC_WRAP_UV_1 && mesh->texture_batch_list2 )
 	{
-		renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	1 );
+		PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	1 ) );
 	}
 	else
 	{
-		renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	0 );
+		PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	0 ) );
 	}
 
-	renderprimitive->set_render_state( D3DRS_ZENABLE,			TRUE );
-	renderprimitive->set_render_state( D3DRS_ZWRITEENABLE,	TRUE );
+	PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZENABLE,			TRUE ) );
+	PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZWRITEENABLE,	TRUE ) );
 
 
 	// Transparency
@@ -1118,14 +1124,14 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 	{
 
 		if( !(rwm_flags & RWM_DONT_TEXTURE) ) {
-			renderprimitive->set_texture_stage_texture( stage_cnt, mat->texture_id );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( stage_cnt, mat->texture_id ) );
 		
 			if( mat->texture_id ) {
 			
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP,	D3DTOP_MODULATE );
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAOP,	D3DTOP_MODULATE );
-				renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->texture_flags,0) );
-				renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->texture_flags,1) );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP,	D3DTOP_MODULATE ) );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAOP,	D3DTOP_MODULATE ) );
+				PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->texture_flags,0) ) );
+				PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->texture_flags,1) ) );
 					
 				if( mat->texture_id && (mat->texture_flags & TF_F_HAS_ALPHA) ) {
 					blend_needed++;
@@ -1138,7 +1144,7 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 			}
 		}
 		else {
-			renderprimitive->set_texture_stage_texture( stage_cnt, 0 );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( stage_cnt, 0 ) );
 		}
 	}
 
@@ -1154,30 +1160,30 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 		if( mat->second_diffuse_texture_id || (!mat->texture_id && !mat->emissive_texture_id) ) {
 		
 			if( !(rwm_flags & RWM_DONT_TEXTURE) ) {
-				renderprimitive->set_texture_stage_texture( stage_cnt, mat->second_diffuse_texture_id );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( stage_cnt, mat->second_diffuse_texture_id ) );
 			
 				if( GET_TC_WRAP_MODE(mat->second_diffuse_texture_flags) == TC_WRAP_UV_1 && mesh->texture_batch_list2 )
 				{
-					renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	1 );
+					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	1 ) );
 				}
 				else
 				{
-					renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	0 );
+					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	0 ) );
 				}
 
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP,	D3DTOP_MODULATE );
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAOP,	D3DTOP_MODULATE );
-				renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,0) );
-				renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,1) );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP,	D3DTOP_MODULATE ) );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAOP,	D3DTOP_MODULATE ) );
+				PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,0) ) );
+				PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,1) ) );
 
 				if( stage_cnt ) {
-					renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG1,	D3DTA_TEXTURE );
-					renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG2,	D3DTA_CURRENT );
-					renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE );
-					renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG2,	D3DTA_CURRENT );
-					renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MINFILTER,	D3DTEXF_LINEAR );
-					renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MAGFILTER,	D3DTEXF_LINEAR );
-					renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MIPFILTER,	D3DTEXF_POINT );
+					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG1,	D3DTA_TEXTURE ) );
+					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG2,	D3DTA_CURRENT ) );
+					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE ) );
+					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG2,	D3DTA_CURRENT ) );
+					PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MINFILTER,	D3DTEXF_LINEAR ) );
+					PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MAGFILTER,	D3DTEXF_LINEAR ) );
+					PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MIPFILTER,	D3DTEXF_POINT ) );
 				}
 
 				if( mat->second_diffuse_texture_id && (mat->second_diffuse_texture_flags & TF_F_HAS_ALPHA) ) {
@@ -1190,7 +1196,7 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 				stage_cnt++;
 			}
 			else {
-				renderprimitive->set_texture_stage_texture( stage_cnt, 0 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( stage_cnt, 0 ) );
 			}
 		}
 	}
@@ -1202,29 +1208,29 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 		// emissive_blend
 
 		if( !(rwm_flags & RWM_DONT_TEXTURE) ) {
-			renderprimitive->set_texture_stage_texture( stage_cnt, mat->emissive_texture_id );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( stage_cnt, mat->emissive_texture_id ) );
 		
 			if( GET_TC_WRAP_MODE(mat->emissive_texture_flags) == TC_WRAP_UV_1 && mesh->texture_batch_list2 )
 			{
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	1 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	1 ) );
 			}
 			else
 			{
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	0 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_TEXCOORDINDEX,	0 ) );
 			}
 
-			renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP,	D3DTOP_ADD );
-			renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->emissive_texture_flags,0) );
-			renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->emissive_texture_flags,1) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP,	D3DTOP_ADD ) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->emissive_texture_flags,0) ) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->emissive_texture_flags,1) ) );
 			
 			if( stage_cnt ) {
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG1,	D3DTA_TEXTURE );
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG2,	D3DTA_CURRENT );
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE );
-				renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG2,	D3DTA_CURRENT );
-				renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MINFILTER,	D3DTEXF_LINEAR );
-				renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MAGFILTER,	D3DTEXF_LINEAR );
-				renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MIPFILTER,	D3DTEXF_POINT );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG1,	D3DTA_TEXTURE ) );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLORARG2,	D3DTA_CURRENT ) );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE ) );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAARG2,	D3DTA_CURRENT ) );
+				PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MINFILTER,	D3DTEXF_LINEAR ) );
+				PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MAGFILTER,	D3DTEXF_LINEAR ) );
+				PM_CHECK_STATE( renderprimitive->set_sampler_state( stage_cnt, D3DSAMP_MIPFILTER,	D3DTEXF_POINT ) );
 			}
 			
 			if( mat->emissive_texture_id && (mat->emissive_texture_flags & TF_F_HAS_ALPHA) ) {
@@ -1237,34 +1243,40 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 			stage_cnt++;
 		}
 		else {
-			renderprimitive->set_texture_stage_texture( stage_cnt, 0 );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( stage_cnt, 0 ) );
 		}
 	}
 
 	// Set up blending
 	//
 	if( blend_needed == 0 || (mat->flags & MF_ENABLE_ALPHA_BLEND_NEVER) ) {
-		renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, FALSE );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, FALSE ) );
 	}
 	else {
-		renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE );
-		renderprimitive->set_render_state( D3DRS_SRCBLEND, mat->src_blend );
-		renderprimitive->set_render_state( D3DRS_DESTBLEND, mat->dst_blend );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SRCBLEND, mat->src_blend ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_DESTBLEND, mat->dst_blend ) );
 	}
 
 	if ( mat->flags & MF_ENABLE_DEPTH_WRITES_ALWAYS )
-		renderprimitive->set_render_state( D3DRS_ZWRITEENABLE, TRUE );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZWRITEENABLE, TRUE ) );
 
-	renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP, D3DTOP_DISABLE );
-	renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAOP, D3DTOP_DISABLE );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP, D3DTOP_DISABLE ) );
+	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAOP, D3DTOP_DISABLE ) );
 
 	if( mat->num_passes <= 0 ) {
+#if defined(_WIN32)
 		if( SUCCEEDED( renderprimitive->verify_state() ) ) {
 			mat->num_passes = 1;
 		}
 		else {
 			mat->num_passes = Tmax<U32>(1, stage_cnt);
 		}
+#else
+        const GENRESULT stateResult = renderprimitive->verify_state();
+        if (FAILED(stateResult)) return stateResult;
+        mat->num_passes = 1;
+#endif
 	}
 
 #endif
@@ -1272,13 +1284,13 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 	U32 enable_specular = mat->shininess && (mat->shininess_width > 0.0) && !(mat->flags & MF_NO_SPECULAR_PASS);
 
 	if( enable_specular && specular_mode == 1 ) {
-		renderprimitive->set_render_state( D3DRS_SPECULARENABLE, TRUE );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SPECULARENABLE, TRUE ) );
 	}
 	else {
-		renderprimitive->set_render_state( D3DRS_SPECULARENABLE, FALSE );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SPECULARENABLE, FALSE ) );
 	}
 	
-	renderprimitive->set_state( RPR_STATE_ID, mat_uid++ );
+	PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, mat_uid++ ) );
 	GENRESULT draw_result = GR_OK;
 
 	if( mat->num_passes > 1 ) {
@@ -1291,56 +1303,56 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 		// Stage0 will already be setup above
 		draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags );
 		if( FAILED(draw_result) ) {
-			renderprimitive->set_state( RPR_STATE_ID, 0 );
+			PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, 0 ) );
 			return draw_result;
 		}
 		
 		if( enable_specular && specular_mode == 1 ) {
-			renderprimitive->set_render_state( D3DRS_SPECULARENABLE, FALSE );
+			PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SPECULARENABLE, FALSE ) );
 		}
 
 		// set up framebuffer blending for next N passes
 		//
-		renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE );
-		renderprimitive->set_render_state( D3DRS_ZENABLE, TRUE );
-		renderprimitive->set_render_state( D3DRS_ZWRITEENABLE, FALSE );
-		renderprimitive->set_render_state( D3DRS_ZFUNC, D3DCMP_LESSEQUAL );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZENABLE, TRUE ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZWRITEENABLE, FALSE ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZFUNC, D3DCMP_LESSEQUAL ) );
 
 
 		// Diffuse2
 		//
 		if( (stage_zero_flags != MF_NO_DIFFUSE2_PASS) && !(mat->flags & MF_NO_DIFFUSE2_PASS) && mat->second_diffuse_texture_id ) {
 
-			renderprimitive->set_render_state( D3DRS_SRCBLEND, diffuse2_fallback_blend[0] );
-			renderprimitive->set_render_state( D3DRS_DESTBLEND, diffuse2_fallback_blend[1] );
+			PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SRCBLEND, diffuse2_fallback_blend[0] ) );
+			PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_DESTBLEND, diffuse2_fallback_blend[1] ) );
 
 			if( GET_TC_WRAP_MODE(mat->second_diffuse_texture_flags) == TC_WRAP_UV_1 && mesh->texture_batch_list2 )
 			{
-				renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	1 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	1 ) );
 			}
 			else
 			{
-				renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	0 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	0 ) );
 			}
 
 			if( !(rwm_flags & RWM_DONT_TEXTURE) ) {
-				renderprimitive->set_texture_stage_texture( 0, mat->second_diffuse_texture_id );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( 0, mat->second_diffuse_texture_id ) );
 			}
 			else {
-				renderprimitive->set_texture_stage_texture( 0, 0 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( 0, 0 ) );
 			}
 			
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,   D3DTOP_SELECTARG1 );
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,   D3DTOP_DISABLE );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,   D3DTOP_SELECTARG1 ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,   D3DTOP_DISABLE ) );
 
-			renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,0) );
-			renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,1) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSU,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,0) ) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSV,	MAT_GET_ADDR_MODE(mat->second_diffuse_texture_flags,1) ) );
 			
-			renderprimitive->set_state( RPR_STATE_ID, mat_uid++ );
+			PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, mat_uid++ ) );
 		
 			draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
 			if( FAILED(draw_result) ) {
-				renderprimitive->set_state( RPR_STATE_ID, 0 );
+				PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, 0 ) );
 				return draw_result;
 			}
 		}
@@ -1349,36 +1361,36 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 		//
 		if( (stage_zero_flags != MF_NO_EMITTER_PASS) && !(mat->flags & MF_NO_EMITTER_PASS) && mat->emissive_texture_id ) {
 			
-			renderprimitive->set_render_state( D3DRS_SRCBLEND, emissive_fallback_blend[0] );
-			renderprimitive->set_render_state( D3DRS_DESTBLEND, emissive_fallback_blend[1] );
+			PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SRCBLEND, emissive_fallback_blend[0] ) );
+			PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_DESTBLEND, emissive_fallback_blend[1] ) );
 			
 			if( GET_TC_WRAP_MODE(mat->emissive_texture_flags) == TC_WRAP_UV_1 && mesh->texture_batch_list2 )
 			{
-				renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	1 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	1 ) );
 			}
 			else
 			{
-				renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	0 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX,	0 ) );
 			}
 
 			if( !(rwm_flags & RWM_DONT_TEXTURE) ) {
-				renderprimitive->set_texture_stage_texture( 0, mat->emissive_texture_id );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( 0, mat->emissive_texture_id ) );
 			}
 			else {
-				renderprimitive->set_texture_stage_texture( 0, 0 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( 0, 0 ) );
 			}
 			
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,   D3DTOP_SELECTARG1 );
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,   D3DTOP_DISABLE );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,   D3DTOP_SELECTARG1 ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,   D3DTOP_DISABLE ) );
 
-			renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSU, MAT_GET_ADDR_MODE(mat->emissive_texture_flags,0) );
-			renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSV, MAT_GET_ADDR_MODE(mat->emissive_texture_flags,1) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSU, MAT_GET_ADDR_MODE(mat->emissive_texture_flags,0) ) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSV, MAT_GET_ADDR_MODE(mat->emissive_texture_flags,1) ) );
 			
-			renderprimitive->set_state( RPR_STATE_ID, mat_uid++ );
+			PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, mat_uid++ ) );
 
 			draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
 			if( FAILED(draw_result) ) {
-				renderprimitive->set_state( RPR_STATE_ID, 0 );
+				PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, 0 ) );
 				return draw_result;
 			}
 		
@@ -1389,7 +1401,7 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 
 		draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
 		if( FAILED(draw_result) ) {
-			renderprimitive->set_state( RPR_STATE_ID, 0 );
+			PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, 0 ) );
 			return draw_result;
 		}
 	}
@@ -1405,48 +1417,48 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 			renderprimitive->set_render_state( D3DRS_ZFUNC, D3DCMP_LESSEQUAL ) ;
 
 			renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE ) ;
-			renderprimitive->set_render_state( D3DRS_SRCBLEND, specular_fallback_blend[0] );
-			renderprimitive->set_render_state( D3DRS_DESTBLEND, specular_fallback_blend[1] );
+			PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SRCBLEND, specular_fallback_blend[0] ) );
+			PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_DESTBLEND, specular_fallback_blend[1] ) );
 			
 			if( !(rwm_flags & RWM_DONT_TEXTURE) ) {
-				renderprimitive->set_texture_stage_texture( 0, local_light_map );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( 0, local_light_map ) );
 			}
 			else {
-				renderprimitive->set_texture_stage_texture( 0, 0 );
+				PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( 0, 0 ) );
 			}
 			
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,	D3DTOP_MODULATE );
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG1,	D3DTA_TEXTURE );
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG2,	D3DTA_CURRENT );
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,	D3DTOP_MODULATE );
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE );
-			renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG2,	D3DTA_CURRENT );
-			renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSU,	D3DTADDRESS_CLAMP );
-			renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSV,	D3DTADDRESS_CLAMP );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLOROP,	D3DTOP_MODULATE ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG1,	D3DTA_TEXTURE ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_COLORARG2,	D3DTA_CURRENT ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAOP,	D3DTOP_MODULATE ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG1,	D3DTA_TEXTURE ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_ALPHAARG2,	D3DTA_CURRENT ) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSU,	D3DTADDRESS_CLAMP ) );
+			PM_CHECK_STATE( renderprimitive->set_sampler_state( 0, D3DSAMP_ADDRESSV,	D3DTADDRESS_CLAMP ) );
 
-//PTEX					renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION );
-//PTEX					renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT3 | D3DTTFF_PROJECTED );
+//PTEX					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION ) );
+//PTEX					PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 0, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT3 | D3DTTFF_PROJECTED ) );
 //PTEX					renderpipeline->set_texture_stage_transform( 0, texxform );
 
-			renderprimitive->set_texture_stage_texture( 1, 0 );
-			renderprimitive->set_texture_stage_state( 1, D3DTSS_COLOROP, D3DTOP_DISABLE );
-			renderprimitive->set_texture_stage_state( 1, D3DTSS_ALPHAOP, D3DTOP_DISABLE );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_texture( 1, 0 ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 1, D3DTSS_COLOROP, D3DTOP_DISABLE ) );
+			PM_CHECK_STATE( renderprimitive->set_texture_stage_state( 1, D3DTSS_ALPHAOP, D3DTOP_DISABLE ) );
 
-			renderprimitive->set_state( RPR_STATE_ID, mat_uid++ );
+			PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, mat_uid++ ) );
 
 			U32 btm;
 
 			renderprimitive->get_state( RPR_BATCH_TRANSLUCENT_MODE, &btm );
-			renderprimitive->set_state( RPR_BATCH_TRANSLUCENT_MODE, RPR_TRANSLUCENT_UNSORTED );
+			PM_CHECK_STATE( renderprimitive->set_state( RPR_BATCH_TRANSLUCENT_MODE, RPR_TRANSLUCENT_UNSORTED ) );
 
 			draw_result = renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX, pbSpecGood.vertex_buffer, pbSpecGood.current_vertex, spec_index_list, spec_index_cnt, dip_flags ) ;
 //PTEX		renderprimitive->draw_indexed_primitive( D3DPT_TRIANGLELIST, MTVERTEX_FVFFLAGS, mt_list, mt_list_index, index_list, index_cnt, dip_flags ) ;
 			
 			renderprimitive->set_render_state( D3DRS_ZFUNC, D3DCMP_LESS ) ;
 
-			renderprimitive->set_state( RPR_BATCH_TRANSLUCENT_MODE, btm );
+			PM_CHECK_STATE( renderprimitive->set_state( RPR_BATCH_TRANSLUCENT_MODE, btm ) );
 			if( FAILED(draw_result) ) {
-				renderprimitive->set_state( RPR_STATE_ID, 0 );
+				PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, 0 ) );
 				return draw_result;
 			}
 
@@ -1458,8 +1470,9 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 		}
 	}
 
-	renderprimitive->set_state( RPR_STATE_ID, 0 );
+	PM_CHECK_STATE( renderprimitive->set_state( RPR_STATE_ID, 0 ) );
 	return GR_OK;
+#undef PM_CHECK_STATE
 }
 
 //

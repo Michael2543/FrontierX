@@ -54,14 +54,36 @@ int main()
 	if (!CURSOR || !CURSOR->IsValid() || CURSOR->GetCursor() != IDC_CURSOR_DEFAULT ||
 		!CURSOR->SetCursor(IDC_CURSOR_MOVEOBJECT) ||
 		CURSOR->GetCursor() != IDC_CURSOR_MOVEOBJECT ||
-		CURSOR->SetCursor(0xFFFFFFFFU))
+		!CURSOR->SetCursor(IDC_CURSOR_BUILD) ||
+		CURSOR->GetCursor() != IDC_CURSOR_BUILD ||
+		CURSOR->SetCursor(0xFFFFFFFFU) ||
+		CURSOR->GetCursor() != IDC_CURSOR_BUILD)
 	{
-		std::cerr << "Native cursor startup, move shape or resource rejection failed\n";
+		std::cerr << "Native cursor startup, original build resource or transactional rejection failed\n";
 		return 1;
+	}
+	// Original ObjComm, SysMap and MScroll requests must retain their resource ID.
+	const U32 required[] = {
+		IDC_CURSOR_DEFAULT, IDC_CURSOR_ARROW, IDC_CURSOR_BUILD,
+		IDC_CURSOR_MOVEOBJECT, IDC_CURSOR_ATTACK, IDC_CURSOR_BAN,
+		IDC_CURSOR_HARVEST, IDC_CURSOR_JUMP, IDC_CURSOR_FABREPAIR,
+		IDC_CURSOR_REPAIR, IDC_CURSOR_RESUPPLY, IDC_CURSOR_SELLOBJECT,
+		IDC_CURSOR_DEFEND, IDC_CURSOR_PATROL, IDC_CURSOR_RALLY,
+		IDC_CURSOR_SPECIAL_ATTACK, IDC_CURSOR_MICRO_MOVE,
+		IDC_CURSOR_MICRO_GOTO, IDC_CURSOR_MICRO_RALLY,
+		IDC_CURSOR_LEFT, IDC_CURSOR_RIGHT, IDC_CURSOR_UP, IDC_CURSOR_DOWN,
+		IDC_CURSOR_UPLEFT, IDC_CURSOR_UPRIGHT,
+		IDC_CURSOR_DOWNLEFT, IDC_CURSOR_DOWNRIGHT
+	};
+	for (const U32 id : required)
+	{
+		if (!CURSOR->SetCursor(id) || CURSOR->GetCursor() != id) return 10;
 	}
 	CURSOR->SetBusy(TRUE);
 	CURSOR->SetBusy(TRUE);
-	if (CURSOR->IsValid()) return 2;
+	if (CURSOR->IsValid() || !CURSOR->SetCursor(IDC_CURSOR_HARVEST) ||
+		CURSOR->GetCursor() != IDC_CURSOR_HARVEST || CURSOR->SetCursor(0xFFFFFFFFU) ||
+		CURSOR->GetCursor() != IDC_CURSOR_HARVEST) return 2;
 	CURSOR->SetBusy(FALSE);
 	if (CURSOR->IsValid()) return 3;
 	CURSOR->SetBusy(FALSE);
@@ -87,6 +109,6 @@ int main()
 	CleanupGlobals();
 	if (CURSOR) return 7;
 	SDL_Quit();
-	std::cout << "Native App cursor: shapes, busy nesting, resource update and cleanup\n";
+	std::cout << "Native App cursor: 27 original resources, busy nesting, transactional rejection and cleanup\n";
 	return 0;
 }

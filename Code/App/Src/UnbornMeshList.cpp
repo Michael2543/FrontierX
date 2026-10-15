@@ -247,7 +247,11 @@ void UnbornMeshList::RenderMeshAt(TRANSFORM trans,U32 archID,U32 playerID,U8 red
 		setMeshColor(mesh,playerID,red,green,blue,alpha);
 	}
 	setMeshTransform(mesh,trans);
+#if defined(_WIN32)
 	TreeRender(mesh->mc);
+#else
+	TreeRenderNativeLegacyPreview(mesh->mc);
+#endif
 }
 //--------------------------------------------------------------------------//
 //

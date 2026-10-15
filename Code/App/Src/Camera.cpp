@@ -20,6 +20,7 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "DMissionEnum.h"
+#include <FrontierX/LegacyInput.h>
 #include <cstdint>
 #include <cstdlib>
 #include <algorithm>
@@ -1136,6 +1137,21 @@ GENRESULT Camera::Notify (U32 message, void *param)
 			onMouseWheel(short(HIWORD(msg->wParam)));
 		if (s_camLog) { fprintf(s_camLog, "Camera::Notify WM_MOUSEWHEEL done\n"); fflush(s_camLog); }
 		break;
+#else
+	case FrontierX::LegacyMessage::MouseWheel:
+	{
+		const auto *msg = static_cast<const FrontierX::LegacyWindowMessage *>(param);
+		if (!msg || msg->message != message)
+			return GR_INVALID_PARMS;
+		if (bHasFocus && CQFLAGS.bGameActive)
+		{
+			const U32 packed = static_cast<U32>((msg->wparam >> 16U) & 0xffffU);
+			const S32 delta = packed >= 0x8000U ? static_cast<S32>(packed) - 0x10000 :
+				static_cast<S32>(packed);
+			onMouseWheel(delta);
+		}
+		break;
+	}
 #endif
 
 	case CQE_UPDATE:

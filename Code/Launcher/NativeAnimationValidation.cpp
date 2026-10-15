@@ -5,6 +5,7 @@
 #include "IAnim.h"
 #include "IHardPoint.h"
 #include "FrontierX/LegacyFileTypes.h"
+#include "FrontierX/NativeMeshManager.h"
 #include "IMaterialManager.h"
 #include "IMeshManager.h"
 #include "renderer.h"
@@ -19,6 +20,14 @@ namespace FrontierX
 {
 namespace
 {
+// Original Engine stores the compound root part first, and enumeration
+// includes it. An instance's archetype is that part, not the outer CMP ID.
+bool CaptureFirstPart(ARCHETYPE_INDEX, ARCHETYPE_INDEX child, void *context)
+{
+    *static_cast<ARCHETYPE_INDEX *>(context) = child;
+    return false;
+}
+
 template <class Interface> struct OwnedInterface
 {
     Interface * value = nullptr;
@@ -129,14 +138,32 @@ bool ValidateMeshObject(ISystemContainer * system, IEngine * engine,
         IMeshInstance * instance = meshes.value->CreateMesh(arch);
         if (instance)
         {
+            const INSTANCE_INDEX index = GetNativeMeshInstanceIndex(instance);
+            const ARCHETYPE_INDEX instanceArch = index == INVALID_INSTANCE_INDEX ?
+                INVALID_ARCHETYPE_INDEX : engine->get_instance_archetype(index);
+            const bool compound = engine->is_archetype_compound(arch->GetEngineArchtype());
+            ARCHETYPE_INDEX expected = arch->GetEngineArchtype();
+            if (compound)
+            {
+                expected = INVALID_ARCHETYPE_INDEX;
+                valid = valid && engine->enumerate_archetype_parts(
+                    arch->GetEngineArchtype(), CaptureFirstPart, &expected) == GR_OK;
+            }
+            valid = valid && expected != INVALID_ARCHETYPE_INDEX && instanceArch == expected;
+            if (instanceArch != INVALID_ARCHETYPE_INDEX)
+                engine->release_archetype(instanceArch);
+            // Original Engine root enumeration tracks compounds only. A simple
+            // mesh must still have its own real instance and matching archetype.
             const INSTANCE_INDEX root = engine->get_root_instance_next();
-            const ARCHETYPE_INDEX rootArch = root == INVALID_INSTANCE_INDEX ?
-                INVALID_ARCHETYPE_INDEX : engine->get_instance_archetype(root);
-            valid = valid && rootArch != INVALID_ARCHETYPE_INDEX;
-            if (rootArch != INVALID_ARCHETYPE_INDEX)
-                engine->release_archetype(rootArch);
+            valid = valid && (compound ?
+                root == index : root == INVALID_INSTANCE_INDEX);
             meshes.value->DestroyMesh(instance);
-            valid = valid && engine->get_root_instance_next() == INVALID_INSTANCE_INDEX;
+            const ARCHETYPE_INDEX remaining = index == INVALID_INSTANCE_INDEX ?
+                INVALID_ARCHETYPE_INDEX : engine->get_instance_archetype(index);
+            valid = valid && remaining == INVALID_ARCHETYPE_INDEX &&
+                engine->get_root_instance_next() == INVALID_INSTANCE_INDEX;
+            if (remaining != INVALID_ARCHETYPE_INDEX)
+                engine->release_archetype(remaining);
             if (valid) faceGroups = arch->GetNumFaceGroups();
         }
         else valid = false;

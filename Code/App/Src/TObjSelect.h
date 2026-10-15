@@ -99,6 +99,10 @@
 #ifndef MESHRENDER_H
 #include "MeshRender.h"
 #endif
+#if !defined(_WIN32)
+#include <DEffectOpts.h>
+#include "Include/NativeShipVisualTransform.h"
+#endif
 
 #define ObjectSelection _Cos
 
@@ -272,6 +276,14 @@ void ObjectSelection< Base >::DrawSelected (void)
 	if (bVisible==0 || instanceIndex == INVALID_INSTANCE_INDEX)
 		return;
 
+#if !defined(_WIN32)
+	OBJBOX drawBox;
+	// The direct Engine hull rotates model Y/Z. Use that visible footprint
+	// for these markers without changing cached gameplay/collision bounds.
+	NativeShipSelectionBounds(this->box, objClass == OC_SPACESHIP && !bSpecialRender &&
+		(this->instanceMesh == NULL || CQEFFECTS.bFastRender == 0), drawBox);
+	const SINGLE *const box = drawBox;
+#endif
 	BATCH->set_state(RPR_BATCH, TRUE);
 	CAMERA->SetModelView(&transform);
 

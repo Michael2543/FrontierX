@@ -47,7 +47,8 @@ bool MatchesSpec(const char * pattern, const std::string & name)
 }
 
 bool ResolveVirtualPath(const std::string & current, const char * name,
-                        bool allowRoot, std::string & resolved)
+                        bool allowRoot, std::string & resolved,
+                        const std::string & root = {})
 {
     if (!name || !*name) return false;
     std::string path(name);
@@ -58,7 +59,7 @@ bool ResolveVirtualPath(const std::string & current, const char * name,
     if (path.empty())
     {
         if (!absolute || !allowRoot) return false;
-        resolved.clear();
+        resolved = root;
         return true;
     }
     std::size_t start = 0;
@@ -71,7 +72,8 @@ bool ResolveVirtualPath(const std::string & current, const char * name,
         start = end + 1;
         if (start == path.size()) return false;
     }
-    resolved = absolute || current.empty() ? std::move(path) : current + "/" + path;
+    resolved = absolute ? (root.empty() ? std::move(path) : root + "/" + path) :
+        current.empty() ? std::move(path) : current + "/" + path;
     return resolved.size() <= 4096;
 }
 
@@ -81,9 +83,10 @@ public:
     explicit NativeUtfFileSystem(std::filesystem::path path, std::string directory = {},
         std::shared_ptr<const std::vector<unsigned char>> archive = {}, bool physical = false,
         IFileSystem * parent = nullptr,
-        std::shared_ptr<const UtfArchiveIndex> diskIndex = {})
-        : path_(std::move(path)), directory_(std::move(directory)), archive_(std::move(archive)),
-          diskIndex_(std::move(diskIndex)), physical_(physical), parent_(parent)
+        std::shared_ptr<const UtfArchiveIndex> diskIndex = {},
+        U32 physicalFileLimit = static_cast<U32>(NativePhysicalFileLimit::Standard))
+        : path_(std::move(path)), rootDirectory_(directory), directory_(std::move(directory)), archive_(std::move(archive)),
+          diskIndex_(std::move(diskIndex)), physical_(physical), physicalFileLimit_(physicalFileLimit), parent_(parent)
     { if (parent_) parent_->AddRef(); }
 
     NativeUtfFileSystem(std::filesystem::path path, std::string entry,
@@ -141,7 +144,7 @@ public:
                 return GR_INVALID_PARMS;
             try
             {
-                *instance = static_cast<IFileSystem *>(new NativeUtfFileSystem(path_, {}, archive_, physical_, nullptr, diskIndex_));
+                *instance = static_cast<IFileSystem *>(new NativeUtfFileSystem(path_, rootDirectory_, archive_, physical_, nullptr, diskIndex_, physicalFileLimit_));
                 return GR_OK;
             }
             catch (const std::bad_alloc &)
@@ -158,7 +161,7 @@ public:
             std::string directory;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                if (!ResolveVirtualPath(directory_, file->lpFileName, false, directory))
+                if (!ResolveVirtualPath(directory_, file->lpFileName, false, directory, rootDirectory_))
                     return GR_INVALID_PARMS;
             }
             std::vector<UtfDirectoryEntry> entries;
@@ -171,7 +174,7 @@ public:
                     if (!ResolvePhysical(directory, childRoot, error))
                         return GR_DATA_NOT_FOUND;
                     *instance = static_cast<IFileSystem *>(
-                        new NativeUtfFileSystem(std::move(childRoot), {}, {}, true));
+                        new NativeUtfFileSystem(std::move(childRoot), {}, {}, true, nullptr, {}, physicalFileLimit_));
                 }
                 else
                     *instance = static_cast<IFileSystem *>(
@@ -382,7 +385,9 @@ public:
     DWORD GetCurrentDirectory(DWORD size, LPTSTR buffer) override
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        const std::string current = directory_.empty() ? "/" : "/" + directory_;
+        const std::string relative = directory_.substr(rootDirectory_.size());
+        const std::string current = relative.empty() ? "/" :
+            relative.front() == '/' ? relative : "/" + relative;
         if (!buffer || size <= current.size()) return static_cast<DWORD>(current.size() + 1);
         std::memcpy(buffer, current.c_str(), current.size() + 1);
         return static_cast<DWORD>(current.size());
@@ -395,16 +400,16 @@ public:
             std::lock_guard<std::mutex> lock(mutex_);
             std::string candidate;
             if (std::strcmp(name, "/") == 0 ||
-                std::strcmp(name, "\\") == 0) candidate.clear();
+                std::strcmp(name, "\\") == 0) candidate = rootDirectory_;
             else if (std::strcmp(name, "..") == 0)
             {
-                if (directory_.empty()) return FALSE;
+                if (directory_ == rootDirectory_) return FALSE;
                 const auto slash = directory_.rfind('/');
                 candidate = slash == std::string::npos ? "" : directory_.substr(0, slash);
             }
             else
             {
-                if (!ResolveVirtualPath(directory_, name, true, candidate))
+                if (!ResolveVirtualPath(directory_, name, true, candidate, rootDirectory_))
                     return FALSE;
             }
             std::vector<UtfDirectoryEntry> entries;
@@ -443,7 +448,7 @@ public:
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 if (!ResolveVirtualPath(directory_, descriptor->lpFileName,
-                        false, entry))
+                        false, entry, rootDirectory_))
                 {
                     last_error_ = 1;
                     return INVALID_HANDLE_VALUE;
@@ -587,10 +592,13 @@ private:
     std::atomic<U32> references_{1};
     std::filesystem::path path_;
     std::mutex mutex_;
+    // Match BaseUTF iRootIndex: each directory view owns its virtual root.
+    std::string rootDirectory_;
     std::string directory_;
     std::shared_ptr<const std::vector<unsigned char>> archive_;
     std::shared_ptr<const UtfArchiveIndex> diskIndex_;
     bool physical_ = false;
+    U32 physicalFileLimit_ = static_cast<U32>(NativePhysicalFileLimit::Standard);
     IFileSystem * parent_ = nullptr;
     bool ResolvePhysical(const std::string & relative, std::filesystem::path & resolved,
                          std::string & error) const
@@ -658,8 +666,8 @@ private:
             { error = "physical child is not a regular file"; return false; }
             std::ifstream input(resolved, std::ios::binary | std::ios::ate);
             const auto size = input.tellg();
-            if (!input || size < 0 || size > 64 * 1024 * 1024)
-            { error = "physical file is unreadable or exceeds 64 MiB"; return false; }
+            if (!input || size < 0 || size > static_cast<std::streamoff>(physicalFileLimit_))
+            { error = "physical file is unreadable or exceeds its directory read limit"; return false; }
             std::vector<unsigned char> data(static_cast<std::size_t>(size));
             input.seekg(0);
             if (!data.empty() && !input.read(reinterpret_cast<char *>(data.data()),
@@ -732,15 +740,18 @@ bool OpenNativeUtfFileSystemWithParent(const std::filesystem::path & path,
 }
 
 bool OpenNativeDirectoryFileSystem(const std::filesystem::path & path,
-                                   IFileSystem ** output, std::string & error)
+                                   IFileSystem ** output, std::string & error,
+                                   NativePhysicalFileLimit limit)
 {
     if (!output) { error = "native directory output is null"; return false; }
     *output = nullptr;
+    if (limit != NativePhysicalFileLimit::Standard && limit != NativePhysicalFileLimit::Movies)
+    { error = "invalid native physical directory read limit"; return false; }
     std::error_code status;
     const auto root = std::filesystem::canonical(path, status);
     if (status || !std::filesystem::is_directory(root, status) || status)
     { error = "native directory root is inaccessible"; return false; }
-    try { *output = new NativeUtfFileSystem(root, {}, {}, true); }
+    try { *output = new NativeUtfFileSystem(root, {}, {}, true, nullptr, {}, static_cast<U32>(limit)); }
     catch (const std::bad_alloc &)
     { error = "cannot allocate native directory file system"; return false; }
     error.clear();

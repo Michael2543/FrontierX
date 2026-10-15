@@ -148,6 +148,7 @@ extern S32 camMoved;
 extern S32 EXPCOUNT;
 extern CQGlobalFlags CQFLAGS;
 extern bool NATIVE_SKIP_LEGACY_LIGHTING;
+extern bool NATIVE_USE_ORIGINAL_LEGACY_MATERIALS;
 extern GlobalRenderFlags CQRENDERFLAGS;
 extern struct ICOManager *DACOM;
 extern struct IRenderPipeline *PIPE;
@@ -250,6 +251,10 @@ void RectangleHash(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1, COLORREF c
 void RectangleFill(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1, COLORREF color);
 }
 void OrthoView(const _pane *pane = nullptr);
+namespace DA {
+void DrawTexture(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1,
+                 U32 textureHandle, SINGLE u0, SINGLE v0, SINGLE u1, SINGLE v1);
+}
 extern class ObjMapIterator *DEBUG_ITERATOR;
 extern struct IEventSystem *EVENTSYS;
 extern struct IWindowManager *WM;
@@ -274,6 +279,7 @@ extern S32 SCREEN_HEIGHT;
 extern struct ITextureLibrary *TEXLIB;
 extern struct ITManager *TMANAGER;
 extern struct IMaterialManager *MATMAN;
+extern struct IVideoSystem *VIDEOSYS;
 extern struct IFileSystem *TEXTURESDIR;
 extern struct IFileSystem *OBJECTDIR;
 extern struct IFileSystem *INTERFACEDIR;
@@ -432,4 +438,29 @@ private:
 }
 #endif
 
+// Native module registrations must keep training and campaign start flags separate.
+void InitializeNativeEffectsOptions();
+bool CheckNativeCampaignScriptPrograms();
+bool CheckNativePlayerAISaveLifecycle(IFileSystem *directory);
+bool IsNativePersistentGunboat(IBaseObject *object);
+bool IsNativePersistentSpaceShip(IBaseObject *object);
+bool IsNativePersistentScriptObject(IBaseObject *object);
+bool LoadNativeMissionRecord(IMission *mission, const char *name, IFileSystem *file,
+                             void *destination, U32 destinationBytes);
+bool LoadNativeMissionScripts(IFileSystem *file);
+bool CheckNativeMissionRecordPersistence(IFileSystem *directory);
+BOOL32 LoadNativePersistedLauncher(struct ISaveLoad *saved, const struct BASIC_DATA *data,
+    IBaseObject *launcher, PARCHETYPE archetype, IBaseObject *owner,
+    IFileSystem *file, const char *directoryName);
+bool CheckNativeStatelessPingRestart(IFileSystem *directory);
+bool CheckNativeGunboatLauncherFailure(IFileSystem *file);
+bool CheckNativeMimicPersistence(IFileSystem *directory);
+bool CheckNativeRepellentCloudPersistence(IFileSystem *directory);
+bool CheckNativeStasisBoltPersistence(IFileSystem *directory);
+bool CheckNativeMissionAbilityPersistence(IFileSystem *directory);
+namespace FrontierX
+{
+void LoadNativeSystemMap(ISystemMap *map, IFileSystem *file, bool requireRecord);
+bool CheckNativeSystemMapPersistence(IFileSystem *directory, IUserDefaults *defaults);
+}
 #endif

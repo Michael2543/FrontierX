@@ -3679,6 +3679,11 @@ BOOL32 ObjectList::Save (struct IFileSystem * outFile)
 
 			if (saveOk == 0)
 			{
+#if !defined(_WIN32)
+				if (IsNativePersistentGunboat(obj) || IsNativePersistentSpaceShip(obj) ||
+					IsNativePersistentScriptObject(obj) || obj->objClass == OC_PLATFORM)
+					goto Done;
+#endif
 				if (outFile->RemoveDirectory(buffer) == 0)
 				{
 					CQERROR1("Could not remove directory: '%s'", buffer);
@@ -3964,14 +3969,14 @@ BOOL32 ObjectList::Load (struct IFileSystem * inFile,bool bNoDynamics, bool bOnl
 
 			if ((node = LoadArchetype(data.cFileName)) != 0)
 			{
-				HANDLE handle;
+				HANDLE instanceSearch;
 
-				if ((handle = file->FindFirstFile("*.*", &data)) != INVALID_HANDLE_VALUE)
+				if ((instanceSearch = file->FindFirstFile("*.*", &data)) != INVALID_HANDLE_VALUE)
 				do
 				{
 					COMPTR<IFileSystem> file2;
 					fdesc.lpFileName = data.cFileName;
-					fdesc.hFindFirst = handle;
+					fdesc.hFindFirst = instanceSearch;
 					if (file->CreateInstance(&fdesc, file2) != GR_OK)		// file2 ->saveLoadType
 						break;
 					else
@@ -3983,7 +3988,21 @@ BOOL32 ObjectList::Load (struct IFileSystem * inFile,bool bNoDynamics, bool bOnl
 							//
 							if (obj->QueryInterface(ISaveLoadID, pSaveLoad) != 0)
 							{
+#if defined(_WIN32)
 								pSaveLoad->Load(file2);
+#else
+								if (!pSaveLoad->Load(file2))
+								{
+									pSaveLoad.Null();
+									delete obj;
+									obj = nullptr;
+									file2.free();
+									file->FindClose(instanceSearch);
+									inFile->FindClose(handle);
+									CQFLAGS.bLoadingObjlist = 0;
+									goto Done;
+								}
+#endif
 							}
 							AddObject(obj);
 							loadCount++;
@@ -3992,9 +4011,9 @@ BOOL32 ObjectList::Load (struct IFileSystem * inFile,bool bNoDynamics, bool bOnl
 						}
 					}
 
-				} while (file->FindNextFile(handle, &data));
+				} while (file->FindNextFile(instanceSearch, &data));
 
-				file->FindClose(handle);
+				file->FindClose(instanceSearch);
 			}
 
 		} while (inFile->FindNextFile(handle, &data));
@@ -5425,6 +5444,16 @@ struct _olist : GlobalComponent
 };
 
 static _olist olist;
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+IObjectList *CreateNativeSoundCheckObjectList()
+{
+	return new DAComponent<ObjectList>;
+}
+}
+#endif
 
 //-------------------------------------------------------------------
 //-------------------------END ObjList.cpp---------------------------

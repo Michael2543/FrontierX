@@ -19,6 +19,7 @@
 #include "NativeAppUiInput.h"
 #include "NativeAppTextResources.h"
 #include "NativeAppImage.h"
+#include "NativeAppMissionMedia.h"
 #include "MyVertex.h"
 #include <IRenderPrimitive.h>
 #include <VFX.H>
@@ -110,6 +111,10 @@ struct DACOM_NO_VTABLE Animate : BaseHotRect, IAnimate
 	bool bPaused;
 	bool bLooping;
 	bool bSeenAllCells;
+#if !defined(_WIN32)
+	std::uint64_t nativeFrameChanges = 0;
+	std::uint64_t nativeDraws = 0;
+#endif
 
 	//
 	// class methods
@@ -250,6 +255,13 @@ void Animate::InitAnimate (const ANIMATE_DATA & data, BaseHotRect * _parent, con
 		if (CQFLAGS.bFrameLockEnabled == false)
 		{
 			textureID = TMANAGER->CreateTextureFromFile("videoFX.tga", TEXTURESDIR,DA::TGA, PF_4CC_DAA4);
+#if !defined(_WIN32)
+			if (!textureID)
+			{
+				std::fputs("Native animated portrait requires videoFX.tga DAA4 texture\n", stderr);
+				std::abort();
+			}
+#endif
 			fuzzIndex = rand()%16;
 		}
 	}
@@ -327,6 +339,9 @@ GENRESULT Animate::Notify (U32 message, void *param)
 //
 void Animate::update (U32 dt)
 {
+#if !defined(_WIN32)
+	const U32 previousCell = currentCell;
+#endif
 	timer += dt;
 	fullTimer += dt;
 
@@ -392,6 +407,9 @@ void Animate::update (U32 dt)
 			}
 		}
 	}
+#if !defined(_WIN32)
+	if (currentCell != previousCell) ++nativeFrameChanges;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -400,6 +418,9 @@ void Animate::draw (void)
 	// go through the animation cells
 	if (pAnimateType->shapes[currentCell])
 	{
+#if !defined(_WIN32)
+		++nativeDraws;
+#endif
 		pAnimateType->shapes[currentCell]->Draw(0, screenRect.left, screenRect.top);
 		
 		// if we can, draw the stupid video effect
@@ -434,6 +455,21 @@ void Animate::draw (void)
 			frameAgent->Draw(0,screenRect.left-IDEAL2REALX(5),screenRect.top-IDEAL2REALY(8));
 	}
 }
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool GetNativeAnimationCounts(IAnimate *animation, std::uint64_t &frameChanges,
+                             std::uint64_t &draws)
+{
+	auto *owner = dynamic_cast<Animate *>(animation);
+	if (!owner) return false;
+	frameChanges = owner->nativeFrameChanges;
+	draws = owner->nativeDraws;
+	return true;
+}
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 void Animate::init (ANIMATETYPE * _pAnimateType)

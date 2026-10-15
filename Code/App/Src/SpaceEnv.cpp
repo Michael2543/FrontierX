@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
+#include <stdexcept>
 using std::min;
 using std::max;
 #define __min std::min
@@ -652,6 +653,10 @@ GENRESULT SpaceEnvironment::Notify (U32 message, void *param)
 #endif
 		IGM_LOG("SpaceEnv: entered\n");
 		textureID = TMANAGER->CreateTextureFromFile("StarBk.tga", TEXTURESDIR, DA::TGA, PF_RGB5_A1);
+#if !defined(_WIN32)
+        if (!textureID)
+            throw std::runtime_error("Required mission background texture StarBk.tga failed to load");
+#endif
 		IGM_LOG("SpaceEnv: after CreateTextureFromFile\n");
 		if (CQRENDERFLAGS.bMultiTexture)
 			multiStages = 0xffffffff;

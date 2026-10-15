@@ -1,7 +1,16 @@
-name: M3 controlled compatibility gates
+name: Linux playtest preparation and separate M3 diagnostics
 on:
   workflow_dispatch:
     inputs:
+      track:
+        description: Technical playtest preparation or strict deferred M3 diagnostics
+        type: choice
+        options: [technical, m3]
+        default: technical
+      host_smokes:
+        description: Execute available GPU/mission hosts (false records untested, never passed)
+        type: boolean
+        default: true
       gpu_host_setup:
         description: Explicit Linux GPU desktop setup (ordinary default retained)
         type: choice
@@ -15,6 +24,8 @@ concurrency:
 
 # No pull_request/pull_request_target trigger. These persistent runners and
 # their external inputs must only execute reviewed default-branch code.
+# Technical optional/sanitizer/host configurations require the protected external
+# shared-LGPL MPEG1/MP2 + MPEG parsers + swscale prefix. Default remains video-free.
 jobs:
   linux:
     if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -31,8 +42,8 @@ jobs:
         with:
           persist-credentials: false
           clean: true
-      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope ${{ matrix.scope }}
-      - if: matrix.scope == 'default'
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope ${{ matrix.scope }} --track ${{ inputs.track }}
+      - if: inputs.track == 'm3' && matrix.scope == 'default'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: crt-${{ matrix.compiler }}
@@ -43,7 +54,7 @@ jobs:
           retention-days: 3
 
   linux-host-gpu:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: (inputs.track == 'm3' || inputs.host_smokes) && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     runs-on: [self-hosted, Linux, X64, frontierx-m3-linux-gpu]
     env:
@@ -58,10 +69,10 @@ jobs:
         with:
           persist-credentials: false
           clean: true
-      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope gpu
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope gpu --track ${{ inputs.track }}
 
   linux-host-mission:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: (inputs.track == 'm3' || inputs.host_smokes) && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     runs-on: [self-hosted, Linux, X64, frontierx-m3-linux-gpu]
     strategy:
@@ -69,16 +80,16 @@ jobs:
       max-parallel: 1
       matrix:
         compiler: [gcc, clang]
-        frame_input: [measured, fixed-source-period]
+        frame_input: ${{ inputs.track == 'm3' && fromJSON('["measured", "fixed-source-period"]') || fromJSON('["measured"]') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
           clean: true
-      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope mission --frame-input ${{ matrix.frame_input }}
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope mission --frame-input ${{ matrix.frame_input }} --track ${{ inputs.track }}
 
   linux-host-mission-sanitizers:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: (inputs.track == 'm3' || inputs.host_smokes) && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     runs-on: [self-hosted, Linux, X64, frontierx-m3-linux-gpu]
     strategy:
@@ -86,16 +97,16 @@ jobs:
       max-parallel: 1
       matrix:
         compiler: [gcc, clang]
-        frame_input: [measured, fixed-source-period]
+        frame_input: ${{ inputs.track == 'm3' && fromJSON('["measured", "fixed-source-period"]') || fromJSON('["measured"]') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
           clean: true
-      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope mission-sanitizers --frame-input ${{ matrix.frame_input }}
+      - run: python3 Tools/ci/linux_m3.py --compiler ${{ matrix.compiler }} --scope mission-sanitizers --frame-input ${{ matrix.frame_input }} --track ${{ inputs.track }}
 
   linux-cross-build:
-    if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: inputs.track == 'm3' && always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     needs: [linux-host-mission, linux-host-mission-sanitizers]
     runs-on: [self-hosted, Linux, X64, frontierx-m3-linux]
@@ -120,7 +131,8 @@ jobs:
       - id: native
         shell: powershell
         run: ./Tools/ci/windows_m3.ps1
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - if: inputs.track == 'm3'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: crt-windows
           path: |
@@ -132,7 +144,7 @@ jobs:
   windows-host-mission:
     # A later helper regression must not hide successfully rebuilt/ABI-checked
     # mission evidence; the native job remains a required failing gate.
-    if: always() && needs.windows-native.outputs.rebuild_abi == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: inputs.track == 'm3' && always() && needs.windows-native.outputs.rebuild_abi == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     runs-on: [self-hosted, Windows, X64, frontierx-m3-windows-gpu]
     needs: windows-native
@@ -146,7 +158,7 @@ jobs:
 
   crt-cross-build:
     # CPU sanitizer failures must not hide independent available CRT evidence.
-    if: always() && needs.windows-native.result == 'success'
+    if: inputs.track == 'm3' && always() && needs.windows-native.result == 'success'
     needs: [linux, windows-native]
     runs-on: ubuntu-24.04
     steps:
@@ -163,7 +175,7 @@ jobs:
       - run: python3 Tools/portability/m3_compare.py rng out/crt/gcc.json out/crt/windows.json
 
   native-cross-build:
-    if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: inputs.track == 'm3' && always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: frontierx-m3-controlled
     needs: [linux-cross-build, windows-host-mission]
     runs-on: [self-hosted, Linux, X64, frontierx-m3-linux]
@@ -175,7 +187,7 @@ jobs:
       - run: python3 Tools/ci/native_cross_m3.py
 
   randomgen-cross-build:
-    if: always() && needs.windows-native.result == 'success'
+    if: inputs.track == 'm3' && always() && needs.windows-native.result == 'success'
     needs: [linux, windows-native]
     runs-on: ubuntu-24.04
     steps:
@@ -191,7 +203,7 @@ jobs:
       - run: python3 Tools/portability/m3_compare.py randomgen out/rng/gcc-randomgen.json out/rng/windows-randomgen.json
 
   acceptance:
-    if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: inputs.track == 'm3' && always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     needs: [linux, linux-host-gpu, linux-host-mission, linux-host-mission-sanitizers, linux-cross-build, windows-native, windows-host-mission, native-cross-build, crt-cross-build, randomgen-cross-build]
     runs-on: ubuntu-24.04
     steps:
@@ -199,3 +211,20 @@ jobs:
           echo 'M3 BLOCKED: full semantic RNG/script/order capture and equivalent save/reload continuation remain incomplete.'
           echo 'Partial observer and CRT characterization cannot satisfy the simulation or retail acceptance criteria.'
           exit 1
+
+  technical-readiness:
+    if: always() && inputs.track == 'technical' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: [linux, windows-native, linux-host-gpu, linux-host-mission, linux-host-mission-sanitizers]
+    runs-on: ubuntu-24.04
+    env:
+      CPU_RESULT: ${{ needs.linux.result }}
+      WINDOWS_RESULT: ${{ needs.windows-native.result }}
+      GPU_RESULT: ${{ needs.linux-host-gpu.result }}
+      MISSION_RESULT: ${{ needs.linux-host-mission.result }}
+      MISSION_SANITIZER_RESULT: ${{ needs.linux-host-mission-sanitizers.result }}
+      HOST_SMOKES: ${{ inputs.host_smokes }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 Tools/ci/check_readiness.py

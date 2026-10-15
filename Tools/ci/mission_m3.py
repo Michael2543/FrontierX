@@ -1,6 +1,8 @@
 """Run original Linux Sol_Train repeats and exact-tick save cases on a trusted host.
 
-Every failure remains fatal. Current partial capture cannot pass acceptance.
+Every failure remains fatal. Current partial capture cannot pass M3 acceptance.
+Technical smokes preserve the training checkpoint path and additionally check
+the bounded original first-Terran source load/frame-loop/close path.
 No trace, save, command line, private path or raw process output is published.
 """
 import argparse
@@ -12,6 +14,49 @@ import json
 
 from input_manifest import manifest, digest
 from private_workspace import create
+from playtest import MISSION_GPU_SHADER_SUFFIXES
+
+
+def check_technical_smoke(log):
+    output = log.read_text(errors='replace')
+    for marker in ('Native App selected training checkpoint preserved after source reload',
+                   'Native App source mission closed after checkpoint'):
+        if marker not in output:
+            raise RuntimeError('technical source smoke did not finish required path')
+
+
+def check_terran_smoke(log):
+    output = log.read_text(errors='replace')
+    for marker in ('Native App selected source script: script01.dll',
+                   'Native App first Terran bounded source loop completed',
+                   'Native App regular close: mission audio streams=0; hint ownership=idle'):
+        if marker not in output:
+            raise RuntimeError('technical Terran smoke did not finish required source path')
+
+
+def run_terran_smoke(root, args, install, font):
+    from playtest import mission_command, play_environment
+    private = create(root, 'frontierx-terran-smoke-')
+    save = private / 'save'
+    save.mkdir(mode=0o700)
+    command = mission_command(root, args.build, install, Path(font), save,
+                              mission='terran1', bounded_presentation=True)
+    command.remove('--mission-campaign')
+    command += ['--smoke-ms', '3000']
+    env = play_environment(os.environ)
+    env['XDG_CONFIG_HOME'] = str(private / 'config')
+    log = private / 'process-private.log'
+    with log.open('wb') as stream:
+        result = subprocess.run(command, cwd=private, env=env, stdout=stream,
+                                stderr=subprocess.STDOUT, timeout=120)
+    (private / 'result.json').write_text(json.dumps({
+        'mission': 'terran1', 'process_exit': result.returncode,
+        'scope': 'bounded source load/frame loop/close; presentation exclusions active',
+        'full_gameplay': 'untested'}))
+    if result.returncode:
+        raise RuntimeError('technical Terran source process failed')
+    check_terran_smoke(log)
+    print('Technical Terran source load/frame loop/close executed; P1b gameplay/media untested')
 
 
 def main():
@@ -20,7 +65,14 @@ def main():
     parser.add_argument('--frame-input', choices=['measured', 'fixed-source-period'], default='measured')
     parser.add_argument('--case', choices=['repeat1', 'repeat2', '256-save', '256-reload',
                                          '512-save', '512-reload'])
+    parser.add_argument('--mission', choices=['training', 'terran1'], default='training')
+    parser.add_argument('--technical-smoke', action='store_true',
+                        help='One bounded source load/move/save/reload/close, no M3 comparison')
     args = parser.parse_args()
+    if args.mission != 'training' and not args.technical_smoke:
+        raise ValueError('Terran has no M3 comparison protocol; use explicit technical smoke')
+    if args.technical_smoke and (args.case or args.frame_input != 'measured'):
+        raise ValueError('technical smoke uses one measured source run')
     root = Path(__file__).resolve().parents[2]
     install = os.environ.get('FRONTIERX_RETAIL_ROOT')
     font = os.environ.get('FRONTIERX_TEST_FONT_FILE')
@@ -30,6 +82,9 @@ def main():
     data = next((p for p in install.iterdir() if p.name.lower() == 'data'), None)
     if data is None:
         raise RuntimeError('external data root missing')
+    if args.mission == 'terran1':
+        run_terran_smoke(root, args, install, font)
+        return
     private = create(root, 'frontierx-m3-mission-')
     if private.resolve().is_relative_to(root):
         raise RuntimeError('private mission output must be outside source checkout')
@@ -65,12 +120,12 @@ def main():
                '--skip-legacy-lighting', '--skip-mission-music', '--mission-source',
                'Sol_Train.dmission', '--mission-engine', '--mission-start', '--mission-gpu']
     command += [str(args.build / 'generated/shaders' / ('sdl3_gpu_probe' + name + '.spv'))
-                for name in ('.vert', '.frag', '_mt.vert', '_t4.vert')]
+                for name in MISSION_GPU_SHADER_SUFFIXES]
     for option, filename in [('--string-pack', 'stringpack.db'), ('--gen-data', 'gendata.db'),
                              ('--game-types', 'gametypes.db')]:
         command += [option, str(install / filename)]
     command += ['--hotkeys', str(root / 'Code/App/Src/Hotkeys.utf')]
-    cases = ['repeat1', 'repeat2']
+    cases = ['repeat1'] if args.technical_smoke else ['repeat1', 'repeat2']
     if fixed:
         cases += ['256-save', '256-reload', '512-save', '512-reload']
     if args.case:
@@ -99,7 +154,7 @@ def main():
         save.mkdir()
         with (run / 'process-private.log').open('wb') as log:
             try:
-                result = subprocess.run(command + ['--save-root', str(save)], cwd=root,
+                result = subprocess.run(command + ['--save-root', str(save)], cwd=run,
                                         env=env, stdout=log, stderr=subprocess.STDOUT,
                                         timeout=inputs['execution']['timeout_seconds'])
                 code = result.returncode
@@ -149,7 +204,7 @@ def main():
     summary['save_byte_comparisons'] = byte_comparisons
     (private / 'result.json').write_text(json.dumps(summary, sort_keys=True))
     execution = inputs['execution']
-    if execution['workflow_run'] != 'local-supplement':
+    if not args.technical_smoke and execution['workflow_run'] != 'local-supplement':
         import re
         tokens = [execution['workflow_run'], execution['attempt'], execution['revision'],
                   execution['scope'], args.frame_input, execution['compiler']]
@@ -168,6 +223,12 @@ def main():
             record.chmod(0o600)
     if any(codes) or any(comparisons):
         raise RuntimeError('mission comparison failed or incomplete')
+    if args.technical_smoke:
+        # Zero exit alone could be an early desktop Close; require the existing
+        # source checkpoint/teardown markers, never infer full mission acceptance.
+        check_technical_smoke(private / 'repeat1/process-private.log')
+        print('Technical source load/move/save/reload/close executed; full gameplay untested')
+        return
     # Even a narrow --case without a cross-run comparison cannot pass M3.
     raise RuntimeError('partial observation cannot satisfy M3 acceptance')
 
@@ -176,5 +237,5 @@ if __name__ == '__main__':
     try:
         main()
     except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
-        print('FAIL: original mission comparison; private diagnostics retained', file=sys.stderr)
+        print('FAIL: original mission required execution; private diagnostics retained', file=sys.stderr)
         sys.exit(1)

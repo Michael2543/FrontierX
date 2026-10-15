@@ -11,8 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "TObjTrans.h"
 #include "TObjControl.h"
@@ -20,28 +51,28 @@
 #include "IBuildShip.h"  //ISpiderDrone
 #include <DShipSave.h>
 #include "TObject.h"
-#include "Objlist.h"
-#include <DSpaceShip.h>
+#include "ObjList.h"
+#include <DSpaceship.h>
 #include "Startup.h"
 #include "Mission.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IAnim.h"
 #include "IExplosion.h"
 #include "IBlast.h"
 #include "anim2d.h"
-#include "archHolder.h"
+#include "ArchHolder.h"
 #include "Sector.h"
 #include "Camera.h"
 #include "UserDefaults.h"
 #include "MGlobals.h"
-#include "Fogofwar.h"
+#include "FogOfWar.h"
 #include "MPart.h"
 #include "TObjRender.h"
 
 #include "CQLight.h"
 
 #include <IHardPoint.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TSmartPointer.h>
 #include <TComponent.h>
@@ -63,12 +94,16 @@ struct SPIDERDRONE_INIT : BUILDSHIP_INIT
 	const BT_BUILDERSHIP_DATA * pData;
 	PARCHETYPE pArchetype;
 	S32 archIndex;
-	S32 animArchetype;
+	SCRIPT_SET_ARCH animArchetype;
 	IMeshArchetype * meshArch;
 
 	PARCHETYPE pExplosion;
 	AnimArchetype * sparkAnmArch;
+#if defined(_WIN32)
 	struct EngineSpiderDrone *engineSpiderDrones;
+#else
+	ObjectImpl<struct EngineSpiderDrone> *engineSpiderDrones;
+#endif
 
 	virtual ~SPIDERDRONE_INIT()
 	{
@@ -177,7 +212,11 @@ struct _NO_VTABLE SpiderDrone : public ObjectFrame<IBaseObject,SPACESHIP_SAVELOA
 	Vector velocity,position;
 	int engineSpiderRef;
 
+#if defined(_WIN32)
 	EngineSpiderDrone *engineSpiderDrones;
+#else
+	ObjectImpl<EngineSpiderDrone> *engineSpiderDrones;
+#endif
 
 
 	BOOL32 bDeleteRequested:1;
@@ -689,7 +728,7 @@ TRANSFORM SpiderDrone::getStartPos()
 	if(dockIndex != -1)
 	{
 		TRANSFORM result;
-		result.TRANSFORM::TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
+		result = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
 		result = ENGINE->get_transform(dockIndex).multiply(result);
 		return result;
 	}
@@ -774,7 +813,11 @@ struct DACOM_NO_VTABLE SpiderDroneFactory : public IObjectFactory, IBuildShipFac
 	struct ShipNode
 	{
 		struct ShipNode *next;
+#if defined(_WIN32)
 		struct SpiderDrone *drones;
+#else
+		ObjectImpl<struct SpiderDrone> *drones;
+#endif
 		U8 numDrones;
 		bool bTaken;
 		PARCHETYPE pArchetype;
@@ -1072,6 +1115,22 @@ void SpiderDroneFactory::ReleaseShips (const IBuildShip * firstShip)
 		node->bTaken = false;
 	}
 }
+#if !defined(_WIN32)
+namespace FrontierX
+{
+// Exercise the production array owners without external archetype resources.
+bool CheckNativeSpiderDroneArrayRelease()
+{
+    auto *archetype = new SpiderDroneFactory::OBJTYPE;
+    archetype->engineSpiderDrones = new ObjectImpl<EngineSpiderDrone>[3];
+    delete archetype;
+    auto *pool = new SpiderDroneFactory::ShipNode{};
+    pool->drones = new ObjectImpl<SpiderDrone>[3];
+    delete pool;
+    return true;
+}
+}
+#endif
 //---------------------------------------------------------------------------
 //---------------------------GLOBAL STARTUP----------------------------------
 //---------------------------------------------------------------------------

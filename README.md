@@ -1,5 +1,20 @@
 # FrontierX
 
+Current P1b build workflow (2026-10-14): full-media Terran candidates use
+`-DFRONTIERX_BUILD_NATIVE_FONTS=ON -DFRONTIERX_BUILD_FFMPEG_AUDIO=ON
+-DFRONTIERX_BUILD_FFMPEG_VIDEO=ON -DCMAKE_PREFIX_PATH=/external/lgpl-prefix`
+with the reviewed shared-LGPL MPEG/IAC/swscale/parser closure. Default builds
+keep these optional dependencies off. Strict original-family fonts are supplied
+externally through `--ui-font-map FILE`. Commands, interim candidate limits and
+pending user/CI/Windows acceptance: [Linux playtest CI](docs/LINUX_PLAYTEST_CI.md)
+and [Terran media](docs/NATIVE_TERRAN_MEDIA.md). P1b was completed by explicit user acceptance on 2026-10-15; P1c is next.
+Documented technical follow-ups and unexecuted CI/Windows checks remain open.
+
+Optional native mission `--no-frame-limit` exposes the original uncapped option
+at normal game speed0; the private handoff pins that choice. `--frame-stats`
+reports bounded source-frame/backend timings when explicitly requested. Exact
+commands and timing/presentation limits remain in the linked playtest document.
+
 Selected original gameplay hints, M1 (2026-10-11): normal SDL mouse hover in
 Sol_Train now visibly shows original Cygnus/asteroid hints under GCC and Clang,
 including resource switch/removal and renewed hover after source save/reload.
@@ -766,6 +781,14 @@ uses the original Solar training selector and briefing with --mission-start
 and Sol_Train.dmission. Visible Clang initial entry executes; other campaigns,
 full training and winning return are unaccepted. Commands, requirements and
 limits: [native singleplayer evidence](docs/NATIVE_SINGLEPLAYER_SLICE.md).
+
+The manual [controlled CI workflow](.github/workflows/m3.yml) defaults to
+`track=technical` for GCC/Clang default and playable font/audio preparation;
+`track=m3` retains separate strict comparison diagnostics. Builds and candidate
+handoffs remain private on the existing protected runners; no binary/runtime
+bundle is uploaded. Commands, host requirements, untested-host handling and user
+checklist: [Linux playtest CI](docs/LINUX_PLAYTEST_CI.md). Actual updated CI runs
+remain pending.
 
 M3 automation is under development, not accepted. The manual
 [controlled CI workflow](.github/workflows/m3.yml) requires protected Linux/GCC,

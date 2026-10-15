@@ -1,5 +1,24 @@
 # M3 simulation, save and compatibility comparison
 
+## Priority reset (2026-10-13): deferred diagnostic track
+
+By user direction, the next milestone is regular Linux campaign gameplay, with
+CI preparing candidates and the user performing necessary playtests. See the
+[active delivery plan](PORT_READINESS.md#active-plan-playable-single-player-first-2026-10-13).
+M3 is **deferred, not accepted**. Older “next gate” and mandatory comparison
+instructions below describe the previous M3 scope, not prerequisites for P1.
+
+Retain confirmed production fixes and focused regressions. Concrete gameplay,
+memory-safety and save defects remain actionable. Full-state observer expansion,
+bitwise Windows/Linux equality and identical live-audio event scheduling no longer
+block additional playable missions. Affected Windows builds/ABI checks remain
+required independently. Do not weaken comparisons, erase failures or claim parity.
+
+The existing M3 workflow and its failing acceptance job are unchanged. Separating
+technical readiness from diagnostic comparison jobs is planned P0 work, not an
+executed CI result. The remainder of this document preserves historical evidence;
+its running/queued job descriptions are dated snapshots, not live CI status.
+
 Latest M3 evidence (2026-10-13): **NOT ACCEPTED**. Completed protected CI
 [run38426508626](https://github.com/Michael2543/frontierX/actions/runs/38426508626)
 at `b24115686c0f733f3d22a7ee852f638dd26cd205` fails overall. Its six Linux
@@ -12,9 +31,9 @@ fails afterward in the launch-helper regression. Windows mission is skipped.
 GCC measured mission sanitizers expose an unaligned Planetoid sync store after
 the preceding OpAgent correction. Working-tree follow-up is supplementary,
 not executed CI proof. The user confirms the separate Steam executable is
-unmodified retail; its runtime has not yet been compared. Retail behavior is
-the preferred corroborating reference, rather than the restored conversation
-failure. Full state/RNG, repeatability and Save/Reload continuation remain open.
+unmodified retail; its runtime has not yet been compared. The user subsequently reports that conversations also fail in the unchanged
+Steam installation on this host. Its audio runtime is therefore not a valid
+oracle; codecs/environment are a user hypothesis, with cause still unproved. Full state/RNG, repeatability and Save/Reload continuation remain open.
 See the current follow-up section below.
 
 Earlier updates below are dated historical snapshots.
@@ -1200,3 +1219,43 @@ all1025 records with no invalid-access/UBSan report. Whole LSan still fails
 is accepted. All six affected local builds and non-GPU CTest suites pass. Queued run38443845234 atb76f24d was cancelled before
 any job executed; no evidence is claimed from it. The next dispatch explicitly
 selects the reviewed `hyprland-x11` GPU fixture. Older b6ca3dd CI continues.
+
+### Retail audio provenance correction and actual completion evidence
+
+The user now confirms that mission conversations also fail in the unchanged
+Steam executable on the supplied Windows host. File provenance is unchanged;
+the *runtime* is not a valid audio/mission-conversation oracle. Missing codecs
+or other environmental issues are a user hypothesis, not an established cause.
+Do not label this automatically a restored-source defect, and do not adopt
+skipping dialogue as Linux behavior. Further Windows product repair remains
+out of scope; Linux speech should decode, play and notify original scripts.
+A healthy retail runtime or other independently documented audio contract is
+needed for corroboration where this Windows environment cannot supply it.
+
+The supplemental Clang fixed runs isolate the observed tick185 divergence:
+real native-sound completion for stream5 is seen at tick182 in repeat1 versus
+203 in repeat2; original script polls at184 return0 versus1, respectively.
+This changes original TM1 objective/teletype scheduling. Real resource/decode/
+playback and cleanup paths execute. The variation is live device completion
+relative to simulation ticks, not a justified scalar tolerance. No synthetic
+completion, field omission or gameplay change is introduced. Equivalent
+external event input remains a concrete unimplemented test requirement.
+
+Run38439947717 was superseded after observed failures; cancellation requested
+while the GCC fixed mission job was executing. Its remaining matrix is not
+claimed executed. Run38443845234 was cancelled before any job execution.
+Protected full run38444546533 is dispatched at
+`17483475d750bdfaf89f74bbe6dbdb56017a4647` with `gpu_host_setup=hyprland-x11`;
+it is queued behind cancellation, not a pass. Source worktree was clean at
+dispatch. Documentation changes after dispatch do not alter its immutable
+source/input provenance.
+
+## P0 technical preparation split (2026-10-13)
+
+The existing workflow now defaults to `track=technical`; use `track=m3` to run
+these strict comparison jobs and the unfinished full-acceptance gate separately.
+No comparison/assertion/normalization rule is relaxed. Technical source smokes use
+one existing measured load/move/save/reload/close path and retain private partial
+traces, without evaluating full M3 completeness. This is bounded integration
+execution, not M3 acceptance or a full user playtest. See
+[Linux playtest CI](LINUX_PLAYTEST_CI.md) for implementation and validation.

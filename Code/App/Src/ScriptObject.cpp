@@ -11,8 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
+
 
 #include "TObject.h"
 #include "TObjSelect.h"
@@ -37,10 +68,10 @@
 #include "IBlinkers.h"
 #include "IAnim.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <ITextureLibrary.h>
@@ -418,7 +449,12 @@ BOOL32 ScriptObject::Save (struct IFileSystem * inFile)
 	FRAME_save(save);
 	memcpy(&save, static_cast<BASE_SCRIPTOBJECT_SAVELOAD *>(this), sizeof(BASE_SCRIPTOBJECT_SAVELOAD));
 	save.exploredFlags = GetVisibilityFlags();
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+		goto Done;
+#endif
 	
 	result = 1;
 
@@ -440,8 +476,13 @@ BOOL32 ScriptObject::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("SCRIPTOBJECT_SAVELOAD", buffer, &load);
+#else
+	if (!LoadNativeMissionRecord(MISSION, "SCRIPTOBJECT_SAVELOAD", file, &load, sizeof(load)))
+		goto Done;
+#endif
 
 	FRAME_load(load);
 	
@@ -457,6 +498,13 @@ Done:
 }
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+bool IsNativePersistentScriptObject(IBaseObject *object)
+{
+	return dynamic_cast<ScriptObject *>(object) != nullptr;
+}
+#endif
+
 void ScriptObject::ResolveAssociations()
 {
 	if (systemID && systemID <= MAX_SYSTEMS)
@@ -475,7 +523,7 @@ void ScriptObject::ResolveAssociations()
 //
 void ScriptObject::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = partName.string;
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_SCRIPTOBJECT_QLOAD");
@@ -526,7 +574,7 @@ void ScriptObject::QuickResolveAssociations (void)
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 //
-inline struct IBaseObject * createScriptObject (PARCHETYPE pArchetype, S32 archIndex, U32 mapTex, BlinkersArchetype * blink_arch,U32 blinkTex, S32 animArchetype)
+inline struct IBaseObject * createScriptObject (PARCHETYPE pArchetype, S32 archIndex, U32 mapTex, BlinkersArchetype * blink_arch,U32 blinkTex, SCRIPT_SET_ARCH animArchetype)
 {
 	ScriptObject * obj = new ObjectImpl<ScriptObject>;
 	const BT_SCRIPTOBJECT * data = (const BT_SCRIPTOBJECT *)ARCHLIST->GetArchetypeData(pArchetype);
@@ -569,7 +617,7 @@ struct DACOM_NO_VTABLE ScriptObjectFactory : public IObjectFactory
 		BlinkersArchetype * blink_arch;
 		U32 blinkTex;
 
-		S32 animArchetype;
+		SCRIPT_SET_ARCH animArchetype;
 		
 		void * operator new (size_t size)
 		{
@@ -713,7 +761,9 @@ BOOL32 ScriptObjectFactory::DestroyArchetype (HANDLE hArchetype)
 	
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+	#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -730,7 +780,11 @@ IBaseObject * ScriptObjectFactory::CreateInstance (HANDLE hArchetype)
 void ScriptObjectFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+	#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	std::abort(); // Native editor entry is outside the mission closure.
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

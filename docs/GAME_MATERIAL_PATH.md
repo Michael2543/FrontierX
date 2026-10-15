@@ -1,5 +1,197 @@
 # Game Mesh and Material Ownership for Milestone 5
 
+## Native speaking-marker anchor (2026-10-14)
+
+User feedback identifies the red two-half-circle speaker symbol swinging like a
+pendulum instead of staying below the ship. Source review connects real native
+sound-owner bSpecialHighlight to SpaceShip::renderSpaceShip's original hiliteTex
+quad. Its old J-axis oscillation tilts the native current -J-forward/K-up plane
+and rotates the below-hull displacement around the ship origin. Raw model Y/Z
+bounds also disagree with the native direct Engine hull's visual axes.
+
+Native marker drawing now uses the same corrected hull footprint as selection,
+anchors its own center below that footprint, and applies the unchanged original
+oscillation about local K in the marker plane. Center and below-hull height no
+longer depend on the animation phase. Preserve the explicit Transform-to-TRANSFORM
+copy so the legacy Matrix assignment cannot drop the translated anchor. Original
+texture, blend/depth settings, phase increment, highlight lifecycle and Windows
+branch remain unchanged. This is render-only: no simulation transform, save
+layout, control sequence or RNG changes.
+
+The existing production material fixture adds asymmetric offsets and four phase
+values, checking exact stable below-hull center, all quad-corner heights and
+unchanged ship transform through the actual math provider and TRANSFORM copy.
+The old tilted/translated layout fails these invariants. Final standard and full-media Debug GCC16.2.1/Clang22.1.8 and full-media
+Clang ASan/UBSan graphs rebuild/link completely. Existing material variants,
+layout, batcher header/runtime and native shell lifecycle execute without failures
+or skips. Fatal ASan/UBSan with leak detection reports no error in this focused
+synthetic scope; the historical whole-process mission leak remains open.
+Visible speaker stability remains user-operated. Actual CI and native Windows
+Debug/Final/module ABI execution remain pending. No full mission is automated.
+
+
+## Completed user run: selection, warp and effect follow-up (2026-10-14)
+
+User retail-runtime feedback reports regular first-Terran victory and save/load,
+with small selection corners, keel-up warp emergence and brief colorful impact/
+explosion artifacts. The latter are not reproduced or accepted as repaired.
+Root reviewed the real Blast/Anim2D/Explosion/MeshExplode submission paths and
+native captured-buffer/state handling; no causal effect change is justified yet.
+A bounded original campaign/F8 capture retry executes964 source frames and
+normal close (result4, audio0, idle hints, exit0), but captures do not establish
+actual relevant impact/explosion reproduction. This is not combat acceptance.
+
+Native ObjectWarp::startWarpIn now initializes the current -J-forward/K-up
+right-handed control basis. The old CQ2 -K-forward/J-up basis fed a90-degree
+pitch into current SuperTrans getters and subsequent ObjectControl targets.
+The new native-only initializer retains original stop_heading/gate translation,
+call sequence, warp timers and velocity formulas/RNG; Windows is untouched.
+New jumps intentionally store corrected orientation; already-active faulty
+jumps in prior saves are not normalized. The existing material fixture checks
+four headings through real SuperTrans getters, zero pitch/roll, handedness and
+corrected hull up/forward, explicitly rejecting the former pitched basis.
+
+Full-media Debug GCC16.2.1, Clang22.1.8 and strict Clang ASan/UBSan execute the
+existing material variants, layout, batcher header/runtime and native shell
+checks (fatal sanitizers, leak detection enabled). A fresh Clang original-entry
+runtime executes the actual Blackwell jump to system2, presents geometry in
+60 private captures, and closes normally after2266 source frames (result4,
+audio0, idle hints, exit0). The ship is small in those captures; final upright
+appearance remains a short user retest, not a full mission replay. Capture
+load reduces measured throughput and is not a steady FPS benchmark.
+
+The reported disappearance is separately confirmed as a native communication
+abort on an unavailable Harvester voice, before any verified regular victory
+teardown; see [audio diagnosis](NATIVE_AUDIO_STREAMER.md). Actual GitHub CI,
+native Windows Debug/Final and applicable module ABI checks remain unexecuted;
+M3 comparisons remain separate. All saves/captures/retail media stay external.
+
+
+## Wheel, Harvester muzzle and frame-rate feedback (2026-10-14)
+
+Final bounded retail runtime also enters through original controls, loads the
+genuine existing F7 slot with F8, and renders the approximately99-draw scene at
+59.6–59.75 source FPS in settled five-second windows. After that interval, actual
+wheel+1/-1 events produce original positive/negative MoveForward updates and
+visible before/in/out zoom captures. Normal close executes1638 source frames,
+returns4, releases mission audio to0/idle hints and exits0. This is load/zoom/
+render/close evidence, not a complete mission run. The separate first automated
+attempt failed on a not-yet-mapped window; the corrected original-control retry
+waits for the actual owned mapped window. Its failure remains retained.
+
+
+User feedback judges the current presentation very good and identifies three
+remaining reported defects: mouse-wheel zoom, the Harvester beam origin and
+low frame rate. Full mission outcome/media acceptance is still user-operated.
+
+Native Camera::Notify now admits the real legacy mouse-wheel record, explicitly
+decodes its signed high16 delta and calls the unchanged original onMouseWheel
+under the existing focus/game-active conditions. The SDL input/dispatcher already
+carried that event correctly; the production camera case was excluded by its
+Windows guard. Windows keeps its MSG handling. Native renderNuggeting now
+transforms the authored Harvester muzzle through the same original Rx90/Ry180
+hull visual axes and direct-hull predicate as cargo/glow attachments. Targets,
+beam widths, harvesting, physical hardpoints, simulation/RNG and Windows remain
+unchanged. Existing numeric material-fixture cases check an asymmetric muzzle
+with a nonidentity ship rotation, alongside unchanged simulation/fast-hull
+coordinates; GCC/Clang and strict focused sanitizer execution pass.
+
+Performance measurements use optional --frame-stats on the existing original
+CQE_ENDFRAME subscriber, with native backend CPU-wall counters. These include
+driver waits and are not GPU timestamps or proof of displayed unique frames.
+Instrumentation is off by default and adds no M3 control or gameplay input.
+On the current RTX3060/SDL3.4.16/NVIDIA610.57.04/60Hz Wayland host, full-media
+Clang22.1.8 Debug (no compiler optimization added, no NDEBUG/fast-math) shows:
+
+| Quiet first-Terran scene, approximately79 draws | Source frame rate | SDL submission CPU time |
+|---|---|---|
+| Shared render pass, exact sampler reapplication reuse | 13–14 FPS | approximately53 ms/frame |
+| Omit unbound per-draw fixture textures | 18–19 FPS | approximately38 ms/frame |
+| Reuse idle-retired vertex/index/transfer buffers | approximately30 FPS, original limit | approximately3–4 ms/frame |
+| Same buffer reuse, original No Frame limiting at normal speed | approximately59.6–59.9 FPS | approximately3–4 ms/frame |
+
+The buffer pool admits only resources retired after the existing GPU-idle
+BeginFrame boundary. Best-fit selection checks capacity and indexed/direct
+shape; current captured draws retain distinct owners. Reserve failure preserves
+the current frame and returns failure. Unused pooled resources are bounded by
+256 sets/64MiB and are released once at shutdown. Registered/null texture stages
+keep their actual bindings; only explicit fixture-handle consumers retain the
+per-submission fixture upload. Immediate submission retains its previous path.
+All source draw order, material/effect draws, color/depth/alpha state, geometry,
+texture mips and required media remain enabled. No shader/debug/assertion gate
+is weakened. The existing SDL GPU fixture adds mixed indexed/direct geometry,
+growth/shrink, actual reuse and equal readback across three frames. Its final
+scene is now different, so its final checksum must not be compared to the older
+single-scene checksum; the relevant image invariants remain explicit.
+
+A capability-checked MAILBOX experiment still spent approximately53 ms in SDL
+submission and did not resolve the bottleneck; it was reverted. Default VSYNC
+remains. [SDL3.4.16 Vulkan submission](https://github.com/libsdl-org/SDL/blob/release-3.4.16/src/gpu/vulkan/SDL_gpu_vulkan.c)
+includes presentation and deferred destruction, so the
+coarse call duration alone cannot identify a particular driver function. The
+measured improvement after removing allocations identifies resource churn as a
+concrete port bottleneck, not insufficient GPU memory or game complexity.
+Earlier debugger intervals affected by Wayland unresponsive/focus dialogs,
+user interactions and the separate240s diagnostic watchdog failure are retained
+but excluded from steady performance evidence. Attempts to capture wheel output
+after bounded windows had already closed are inconclusive, not passes.
+
+--no-frame-limit exposes the existing original option only for a mission start,
+requires original normal game speed0 (the original option otherwise bypasses
+its multiplier), and restores the stored bit before final preference save and
+on return/exception unwinding. Original intermediate UI stores still operate;
+use a separate private configuration for this candidate. It changes original
+pacing/elapsed-time normalization and is not described as timing-neutral.
+Global simulation/render constants, update algorithms and RNG calls are untouched.
+Candidate metadata pins this option and rejects mismatched launches. The existing
+CLI/helper checks protect rejection/provenance; actual GCC/Clang/sanitizer early
+failure runs protect stored flags and nonzero-speed rejection. 60 FPS across
+large combat, later production and all mission media remains a user test.
+
+
+## Bounded feedback follow-up (2026-10-14)
+
+The native SDL backend now retains immutable graphics pipelines under the exact
+seven fixed-state inputs used by its pipeline constructor. Revisited states
+restore the complete uniform snapshot without recreating pipelines or waiting
+for GPU idle. Captured draws borrow live cached pipelines; eviction occurs only
+at an idle frame boundary, retaining the active set and reducing the cache to
+64 sets. A current frame may temporarily exceed that limit. Failure remains
+transactional. No public interface, persistent layout, simulation/RNG, material
+pass or Windows implementation changes.
+
+The existing production SDL GPU fixture now checks exact state reuse, fragment
+uniform restoration, 80 distinct states while a captured draw retains its
+pipeline, rejection rollback, idle eviction/regrowth and identical readback on
+the following frame. GCC16.2.1 and Clang22.1.8 full-media Debug execute that
+fixture and `portability.game_material_gpu` on actual X11/Vulkan, twice through
+scene reinitialization, without skips. Three earlier narrow fixture attempts
+failed because the new full-target clear inherited the 64x64 diagnostic
+viewport; restoring the actual window viewport fixes the fixture while retaining
+the renderer's strict clear validation. Those failed attempts remain recorded.
+
+Actual lawfully external retail runtime: the same genuine ready-HQ save loads
+through original campaign/briefing/Start and F8, with all graphics/media enabled
+and the documented single-font interim. A 30.001-second interval advances 336
+source modal frames (11.200 FPS), compared with 326/30.002 (10.866 FPS) before
+the cache. No input or per-frame breakpoints execute during either interval.
+This small uncontrolled difference does not establish a meaningful performance
+gain. Normal close records823 source frames, return4, audio0/idle hints and
+process exit0. No full mission playthrough is claimed. Per-draw allocation/upload,
+sampler replacement waits and frame-idle serialization remain in the backend;
+source review identifies costs, not measured percentages or a proven dominant
+bottleneck. Smoothness and renewed weapon-flight user assessment remain open.
+
+The original cursor adapter now builds 27 source-owned context, minimap and
+edge-scroll resources from `Globals.rc`, preserving original IDs, dimensions,
+hotspots, palette orientation and AND masks. The monochrome arrow uses the
+original XOR/AND truth table. Unknown requests fail without changing the current
+cursor. The deterministic source-decoder check validates malformed inputs and
+bitmap semantics; the real `portability.app_cursor` checks all 27 IDs and
+ownership under GCC, Clang and strict Clang ASan/UBSan on Wayland. Exact visual
+Windows comparison and full user presentation remain pending.
+
+
 Native mesh pre-sort sanitizer correction, 2026-10-11: an instrumented
 external Sol_Train start found signed overflow in the original
 `rand() * (face_cnt - 1)` intermediate with Linux's larger RAND_MAX. The
@@ -2954,3 +3146,450 @@ were repository source and generated synthetic UTF/material/texture fixtures;
 no retail data was used. Native Windows Debug/Final rebuilding, affected
 module ABI checks, retail runtime, same-input Windows D3D9 effect capture,
 multi-pass effects and other shader techniques remain unperformed.
+
+## Regular Terran native legacy material path (2026-10-14, P1b open)
+
+Source review identifies the original App `MeshInstance`/`TreeRender` path,
+including `Mimic` through `UNBORNMANAGER::RenderMeshAt`, as distinct from the
+Engine/PolyMesh and CQ2 effect paths above. Its old native adaptation bypassed
+original material lighting and second texture coordinates. A successful base
+texture load could therefore not establish the selected mission's presentation.
+The existing game-material probe now represents this real caller rather than
+adding a separate renderer.
+
+The regular mission enables the native original-material path unless legacy
+lighting is explicitly excluded; accepted training retains its documented
+bounded mode. FaceGroupRender uses the original LIGHT vertex calculation,
+material diffuse/emission arithmetic and alpha, stage-zero texture modulation
+and stage-one emissive ADD with independently retained per-corner UV2. The
+original cooking branch, vertex count, random calls and source face traversal
+remain unchanged. UV2 follows original split ordering and interpolation through
+repeated explosion splits, including the source's unusual edge ratio. No save
+fields change. Native light registration/activation uses the original LIGHT
+owner; the Windows D3D mirror remains unchanged. Unsupported chrome, CQ2 or
+unintegrated special mesh modes fail explicitly.
+
+Automated synthetic runtime: the existing game_material_manager CPU variants
+pass on GCC 16.2.1, Clang 22.1.8 and focused Clang ASan/UBSan. They exercise the
+real source LightManager/material caller, exact ambient/material/alpha values,
+independent UV seams, repeated splits and unchanged next RNG value. The
+existing `portability.game_material_gpu` executes on Clang SDL/X11/Vulkan,
+requiring dim/light/restore and emissive/suppressed/restore images and opaque
+primary output. Generated repository fixtures contain no retail assets.
+Bounded externally supplied regular-mission load/reload/close also executes
+with this path enabled; it does not verify every required asset or effect.
+
+Native Windows Debug/Final rebuilds and affected module ABI checks, suitable
+retail reference captures, complete mission presentation before/after reload
+and user visible/audible acceptance remain pending. Current strict mission
+sanitizers stop on separately documented owner defects; synthetic renderer
+success is not a clean whole-mission sanitizer result. See
+[NATIVE_TERRAN_MEDIA.md](NATIVE_TERRAN_MEDIA.md) and
+[LINUX_PLAYTEST_CI.md](LINUX_PLAYTEST_CI.md) for current evidence.
+
+## PolyMesh material state verification (2026-10-14, synthetic checks executed)
+
+Source review identifies a separate selected-mission blocker in the ordinary
+Engine/PolyMesh caller: native `IRenderPrimitive::verify_state` always rejected
+verification. The original material owner could consequently choose fallback
+passes after already configuring a supported diffuse/emissive pair. Its state
+writes also ignored native rejections, allowing an unsupported additional stage
+to leave a previously accepted state in place. Existing base-texture GPU input
+cannot disprove duplicated or omitted emissive passes.
+
+Native verification now revalidates accepted render/texture-combine states,
+both samplers and both texture bindings through the bound backend callbacks;
+missing callbacks and stale/rejected bindings fail. PolyMesh checks native
+state writes and stops before drawing on rejection. The Windows calls remain
+unchanged. The existing fixtures now supply a recording backend and execute
+supported paired textures, single-pass selection, stale bindings and rejection
+before draw while retaining their exact source lighting/error assertions.
+Optional GCC 16.2.1 and Clang 22.1.8 Debug CPU checks pass; focused GCC/Clang
+ASan/UBSan checks pass with leak detection enabled. The existing optional GPU
+fixtures execute the paired-texture image checks on the explicit X11/Vulkan
+host. The first fixture run failed because its old descriptor supplied no
+state callbacks; that failure prompted fixture integration, not weaker state
+validation. These results do not establish complete mission rendering.
+
+A separate read-only debugger observation on the existing optional Clang
+Wayland/Vulkan shell executes six distinct original PolyMesh material owners,
+including diffuse/emissive bindings, with GR_OK results. The bounded eight-
+second source interval executes 103 frames and closes through original QUIT,
+with zero audio handles, idle hints and advancing communication portraits.
+This observation precedes the verification correction and does not prove
+correct pass images. Single-font and movie exclusions remain explicit; actual
+intended shading and complete mission/media acceptance remain open. Two
+attempted X11 observations failed after one frame with modal result zero and
+provide no material evidence; the fixture-only host setup did not prepare the
+native shell window. Raw logs remain private outside the checkout.
+
+## Required compound parts and material loads (2026-10-14, P1b open)
+
+A fresh strict external-data Terran load exposes unresolved required material
+maps and then a null Hybrid Center mesh at actor initialization. Native material
+loading rejects missing formats/frames and XMesh returns its failed-load
+contract. The Engine now rejects a declared compound when its required root or
+listed part fails, releases acquired parts through their original owner and
+does not fall back to a simple model. Windows behavior remains unchanged.
+
+The existing generated compound fixture uses real part files and fixed joints.
+It checks a connected root/child model, a missing root, a missing listed part
+and failure after earlier parts loaded; a simple root mesh is also present to
+expose forbidden fallback. Optional GCC/Clang Debug and both focused sanitizer
+configurations execute the state-material and three game-material checks with
+no reports or skips. A part claimed by another Engine component could still lack
+the required renderer. Native RenderMgr now distinguishes a declared mesh or
+MultiLevel directory whose loading failed from an absent renderer. A private
+native failure signal reaches Engine, which releases the archetype and returns
+INVALID; the BOOL32 interface, Windows path and persistent layouts remain
+unchanged. Genuine hardpoint-only nodes retain the original absence result.
+The corresponding real hardpoint/compound fixture extension is pending.
+
+The first fresh scoped texture log contained no load request for seven required
+map keys and no unsupported-format failure. Resource inspection confirms those
+palette/alpha maps reside in the outer planet/Hybrid Center compound libraries.
+Original compound-viewer callers load that outer library before creating the
+Engine instance. Native MeshManager now loads the exact opened object's shared
+texture/animation library through the GameSystem TextureLibrary owner before
+Engine creation; files without outer libraries retain child loading. There is
+no ancestor search, substitute material or widened texture-format policy.
+
+Actual optional Clang Debug Wayland/Vulkan retry after this failure propagation
+rejects the first required planet map and its compound root. It then reaches
+the unchanged Planetoid required-mesh assertion (SIGABRT), rather than accepting
+the partial model and reaching the later null-mesh fault. This is still a
+failed retail load, not a gameplay or teardown pass. The texture dependency
+repair remains required. Private inputs and logs remain outside the checkout.
+
+The subsequent optional Clang Debug Wayland/Vulkan retail retry with that
+dependency repair requests all seven maps and records no texture-load or
+required-material/component errors. The original mission loop executes 132
+frames and returns original QUIT (4), with zero mission audio streams and idle
+hints after close. A communication portrait starts and advances eighteen frames
+with twenty-two draw calls. This is bounded load/close owner execution, not
+correct-pixel, audible, full asset-census or complete gameplay acceptance.
+Fresh save/reload, native Windows Debug/Final, affected ABI execution, actual CI
+and complete user mission/presentation checks remain pending.
+
+The existing `--mesh-object` production-owner diagnostic may now run with
+`--mission-engine --mission-gpu` without `--mission-start`. Its genuine
+MeshManager load/create/destroy runs after SDL GPU texture callbacks are bound,
+so later compound models can be checked in separate processes. The ordinary
+non-GPU diagnostic and playable mission ordering remain unchanged. Deliberate
+later-model loading must stay out of the playable process because original
+mesh cooking consumes RNG. Compilation and separate external-model execution
+of this diagnostic extension are pending; successful loading alone will not
+prove correct rendered output.
+
+## Pooled mission effect texture states (2026-10-14, validation pending)
+
+Original `StatisBolt::Render` and `RepellentCloud::Render` set both stages'
+color/alpha arguments and the second UV index. Native RenderBatcher pooled
+flushes previously replayed only stage-one COLOROP/ALPHAOP and omitted both
+stages' TEXCOORDINDEX, so an earlier backend state could survive a queued draw.
+The backend's direct two-stage checks cannot disprove this caller regression.
+
+Native replay now includes the supported arguments and UV index for both
+stages. Pooled setters reject unsupported fields/values before caching; Windows
+replay and shared layouts remain unchanged. The existing
+`portability.render_batcher_runtime` check is being extended with the real
+RenderBatcher/BMPoolJr caller, exact queued state/binding restoration and rejected
+setter rollback. Its outcome decides whether the selected ability state path
+can be used; it does not simulate the ability or accept its visible effect.
+Optional Clang 22.1.8 Debug `frontierx_render_batcher_object` compilation passes.
+The existing real pooled regression passes optional Clang/GCC Debug and both
+ASan/UBSan configurations with leak detection: two queued RPVERTEX2 draws
+retain all fourteen stage fields, distinct texture bindings and exact geometry;
+unsupported UV/op writes leave the later submitted snapshot unchanged. Failed
+backend callbacks and stale cached ownership after genuine unbind/destruction
+reject verification. Native verification rebinds cached active textures and
+propagates failed state/binding calls before claiming success.
+
+The existing Clang X11/Vulkan GPU pair and GCC selected GPU check also execute
+the bounded Stasis/Repellent color-and-alpha MODULATE, WRAP/CLAMP and original
+blend-factor image predicates with exact restoration. That receiver test uses
+one triangle for its independent single-fragment numeric oracle; an initial
+overlapping-triangle fixture correctly failed because blending occurred twice.
+It retains earlier ADD/mip/alpha/resize predicates. Actual ability rendering,
+Windows Debug/Final/affected ABI and user inspection remain required.
+
+2026-10-14 separate owner diagnostic follow-up: optional Clang's genuine
+GameSystem/MeshManager/Engine/TextureLibrary load/create/destroy path also
+executes the original nested planet compound successfully. The CLI accepts
+confined slash-separated relative object names, rejecting absolute paths,
+traversal, empty components and Windows-style paths. Together with the nine
+previous later-unit/attachment checks, this closes the named load-owner
+checks; none submits a scene or establishes correct geometry/material pixels.
+Real mission rendering, later abilities and full user presentation acceptance
+remain separate. The extended existing native_shell CLI regression passes under optional Clang,
+including absolute/traversal/dot/empty-component rejection and a nested path
+reaching the genuine owner. Windows/actual CI remain pending.
+
+
+## Original movie captured-texture teardown (2026-10-14)
+
+The real optional MovieScreen Esc path released its video texture after the
+source EndFrame had captured its draw, while native slots were already unbound.
+The old backend rejected that release and the source owner aborted. Native
+texture destruction now retires captured SDL storage until the existing
+idle-waited BeginFrame/Shutdown boundary, while invalid, stale and bound handles
+still reject destruction. Logical ownership is removed immediately; retirement
+allocation failure leaves ownership unchanged.
+
+The existing `portability.sdl3_gpu` fixture captures a unique green texture,
+checks bound rejection, destroys it after unbind, rejects stale operations and
+requires identical image/readback and actual presentation before retirement.
+Its next frame retires storage and restores the baseline. GCC16.2.1 and
+Clang22.1.8 optional VIDEOon Debug execute this and the existing production
+`portability.game_material_manager_gpu` check on X11/Vulkan. Actual external
+cq_intro MovieScreen now closes through Esc and natural EOF with native exit0.
+This is owner-lifetime and bounded movie execution evidence, not user audiovisual
+acceptance. Native Windows Debug/Final/affected ABI and actual CI remain pending.
+
+
+## Planet pixels and shader argument contract (2026-10-14)
+
+Actual optional VIDEOon Clang22.1.8 Wayland/Vulkan diagnosis of the original
+Planetoid/Engine/PolyMesh caller confirms diffuse/cloud bindings, nonzero UVs,
+MODULATE, authored cloud alpha and SRCALPHA/INVSRCALPHA. The native pipeline
+retains colored 128x128 diffuse data with eight authored levels and 64x64 cloud
+data with seven levels and varying alpha; the SDL registration and captured
+draw preserve those dimensions, bindings, stages and blend states. This proves
+submission/loading facts, not correct sampling by itself.
+
+The launch helper reversed the final `--mission-gpu` arguments. NativeShell and
+SdlGpuRenderer require EXTENDED then GAME: `_t4.vert` reads RPVERTEX2 UV at
+location2, while `_mt.vert` reads MTVERTEX specular at location2 and UV at
+location3. The wrong game shader sampled specular zero as UV, explaining the
+gray illuminated planet despite valid resource/state data. Correct only this
+command composition; changing materials, mip content or renderer behavior is
+not justified. The existing CI helper regression pins the source argument and
+shader-input contracts.
+
+A same-build, no-presentation-exclusion original F8 and normal system-map camera
+retry visibly restores colored continents/cloud structure and HQ textures,
+then closes through source QUIT4/native exit0 after179 frames with audio0 and
+idle hints. Private before/after captures and checkpoints remain outside the
+repository. This closes the named launch defect, not complete later assets,
+abilities, maps, audiovisual fidelity or user acceptance. Actual CI and affected
+native Windows/ABI remain pending; historical incorrectly configured captures
+are not upgraded into full rendering evidence.
+
+
+## User-reported world effects and construction follow-up (2026-10-14)
+
+The user reports weapon fire toward the lower map edge for Corvette, Blackwell,
+Mantis and earlier training Celeron units, absent ship/platform construction,
+missing green free-space previews, displaced exhaust and rotated Harvester cargo
+tanks. These observations reopen presentation acceptance; compilation or asset
+loading does not resolve them.
+
+Original Beam/GattlingBeam/PlasmaBolt and Harvester beams submit world vertices
+through Camera/RenderBatcher. The existing real Batcher fixture now uses its
+actual scalar math provider and records receiver projection/viewport/modelview.
+A preserved pre-fix owner fails the getter/nonmutation, all four world-to-HUD
+view transitions and modelview rejection/identity predicates. Native getters
+now return cached output without mutating it; nonbatched setters update cache
+only after successful application and reapply identity after external changes.
+Native projection/orthographic/perspective/viewport changes drain source pools
+before changing the shared receiver state. Windows bodies and persistent/module
+interfaces are unchanged. GCC/Clang and both ASan/UBSan focused checks pass,
+including a genuinely rejected new projection leaving the old receiver state.
+These are synthetic receiver-contract checks; actual weapon direction remains
+a separate live test.
+
+Original construction uses the existing ObjectExtent tree and TerranBuild
+GirderRender channels. The restored native ship construction caller applies the
+same original local model-axis correction as its regular Engine hull draw.
+Native EffectChannel respects that existing scaled TreeRender transform rather
+than replacing it with the raw Girder instance transform. Platforms retain their
+original uncorrected model convention. Original masks, face/UV order, build
+progress and authored resource requirements remain authoritative. The genuine
+owner/start/reload and live lifetime record belongs in
+[NATIVE_TERRAN_CAMPAIGN.md](NATIVE_TERRAN_CAMPAIGN.md); exhaust/cargo attachment
+scope is in [NATIVE_TERRAN_MEDIA.md](NATIVE_TERRAN_MEDIA.md).
+
+**User execution update:** the user personally operated the weapon-observer
+scene and confirms that building construction looks correct, but weapon flight
+remains unchanged. The Fabricator's original opening-wing animation is missing,
+and perceived frame rate is low. These are user results, not scripted checks;
+the five reported fixes cannot be declared complete. Actual Bolt/PlasmaBolt
+initialization and rendering now execute in the observed combat interval. A
+missing-Fabricator script lookup subsequently aborts the run and remains an
+additional gameplay blocker.
+
+**Performance source review:** the candidate is an unoptimized Debug build. Its
+weapon observer stops in Python/GDB at every Bolt/PlasmaBolt render even after
+printed samples are limited; that run is unsuitable for uninstrumented frame-rate
+acceptance. Independently, native SdlGpuRenderer::SubmitBytes waits for GPU idle,
+allocates per-draw geometry/transfer/texture storage and submits uploads for each
+draw. BeginFrame also waits before releasing captured-frame resources. Frequent
+original Batcher material eviction is observed in the private run. These are
+concrete synchronization/allocation paths and observed churn, not measured
+percentage attribution. An uninstrumented matched-scene profile is required
+before declaring the dominant cost or choosing a performance correction.
+
+The abort above is not attributed to a new source lookup defect: read-only UTF
+inspection proves that the selected archival pre-encounter checkpoint has no
+`FAB!!T_Fabricator` record. It predates the required compound-geometry restoration.
+The current genuine construction checkpoint contains its 604-byte Fabricator.
+Discard the incomplete checkpoint as a test input; preserve the original required
+lookup/assertion and do not manufacture the actor. No current core was emitted
+when the debugger intercepted SIGABRT.
+
+A subsequent debugger-free optional Clang VIDEOon fresh Terran bounded run
+executes600 original end-frame callbacks over the configured60-second source
+modal interval (approximately10 frames/second), then returnsQUIT4/native exit0
+with zero mission audio streams and idle hints. Source portrait counters are
+5 starts,289 changes and425 draws. Normal user input occurs during the interval,
+so it is not a fixed-camera benchmark or an automated gameplay recipe. A
+separate20.004-second process sample consumes16.14 aggregate CPU seconds
+(approximately81% of one CPU core, summed over process threads). This proves
+that the low rate remains without the weapon debugger; it does not isolate GPU
+waits, CPU lighting, uploads or decoding individually. The gprofng attempt ends
+withSIGKILL during initial loading, without a kernel OOM entry; its paused
+experiment provides no usable attribution and is not a runtime pass.
+
+**Scoped captured-upload correction:** independent owner reviews verify that
+SubmitBytes allocates distinct resources for every captured draw and retains
+them until the existing idle-waited BeginFrame boundary. Native captured mode
+now omits only the redundant idle wait before each upload. Immediate mode still
+waits before replacing its resources; frame retirement, shutdown, invalid-handle
+and failed-submission checks remain intact. Upload commands are submitted before
+Present, following the SDL GPU command-ordering contract. The optional Clang
+shell and existing GPU fixture rebuild15/15 successfully. GPU image/lifetime
+execution and a comparable post-fix frame-rate measurement remain pending;
+the preceding10-FPS interval is the pre-correction observation. No textures,
+effects, lighting or animation are omitted to improve this rate.
+
+**Corrected bounded retail execution:** the current optional Clang VIDEOon HQ
+continuation executes actual Bolt/Plasma initialization and rendering. Four Bolt
+and two Plasma samples align actual velocity with the actual explicit target
+displacement (direction cosine effectively1), rather than the earlier near-Z
+flight. Fabricator reload has a real Sc_build instance and a capture shows
+extended wings. Original F7 and normal close succeed after the user releases
+the window;2559 source frames returnQUIT4/native0. This does not accept complete
+visual fidelity, training gatling or a quantified performance improvement.
+
+**Post-reboot recovery, 2026-10-14:** both fresh optional GCC/Clang Vulkan
+fixture pairs execute the captured-upload/resource-retirement and image
+contracts without skips, as recorded in BUILD_GRAPH. Original campaign,
+normal movie Escape, animated briefing, Start and an early original F7 save
+execute again on the rebuilt Clang all-media interim candidate. Saves now use
+durable external storage. Earlier HQ and weapon captures/checkpoints are lost;
+their recorded observations remain historical, not current continuation.
+A proposed two-stop source-frame-counter measurement cannot attach because
+the host rejects ptrace; the game remains running and the policy is unchanged.
+That attempt provides no FPS result. A bounded source-modal interval or a
+parent-owned debugger run is still needed for post-correction measurement.
+Independent source review confirms training Gattling uses original world-space
+target/endpoints and does not consume the corrected Bolt/Plasma pitch helper.
+Actual training endpoint/receiver observation remains open; no speculative
+Gattling simulation/RNG change is made.
+
+**Actual free-space preview owner correction:** after original ready-HQ F8,
+Fab selection and defence/Turret selection, genuine relative mouse motion still
+does not reach UnbornMeshList::RenderMeshAt. Read-only parent-GDB execution
+finds BUILDARCHEID33400 present, but NativeAppCursor::GetCursor returns DEFAULT104.
+Original ObjComm requests BUILD127; the native adapter rejects that resource,
+so the unchanged original Unborn cursor condition skips rendering entirely.
+The earlier scoped material correction alone could not fix this gate.
+
+NativeAppCursor now embeds the existing source-owned Res/build.cur at build
+time with strict original CUR shape/extent/palette/mask/hotspot checks and uses
+SDL's color-cursor owner. Failed requests preserve the prior resource, and no
+game condition, Windows branch, saved type, interface, simulation or RNG changes.
+The existing real-host cursor fixture exercises BUILD127 and transactional
+unknown-resource rejection under GCC, Clang and strict Clang sanitizers.
+Actual rebuilt optional Clang all-media/single-font original F8 then shows
+the Turret preview green in free space and red in an invalid location. Four
+bounded original RenderMeshAt samples use arch33400, RGB0/255/0, alpha128 and
+three children; genuine legacy submissions include24/150/216 vertices.
+Normal close returns4/native0 after2035 source frames with audio0 and idle hints.
+These are bounded retail execution/captures, not original-image or full user
+presentation acceptance. Other original cursor resources remain a P1b UI gap.
+
+**Measured remaining performance:** a parent-owned debugger observes only the
+source frame counter at the start/end of one30.002-second resume, with no inputs
+or per-frame breakpoints. The genuine loaded ready-HQ all-media Debug scene
+executes326 source frames (10.866 FPS). It differs from the earlier fresh-mission
+interval, so it proves continued low frame rate, not an attributed improvement.
+One stopped stack is in SDL/GPU Present; source review retains per-draw resource
+allocation/copy, state-change pipeline creation/idle waits and repeated material
+eviction as concrete costs. Their dominant contribution remains unmeasured.
+
+### Native ship selection footprint correction, 2026-10-14
+
+**Source review and production-owner compilation:** original
+`ObjectSelection::DrawSelected` in `TObjSelect.h`, called by
+`ObjList::drawSelectedList`, draws its corner triangles in the object's local
+X/Y plane. The direct Engine hull in `SpaceShip::renderSpaceShip` applies the
+original 90-degree I and 180-degree J model correction: authored model Z becomes
+the visible local Y length, while authored model Y is height. Previously the
+markers used the uncorrected model height as their planar length. This is a
+footprint mismatch, not a measured DPI or line-width failure.
+
+The native draw now obtains a local transformed box through
+`NativeShipSelectionBounds` in `NativeShipVisualTransform.h`, under the same
+direct-hull predicate: spaceship, no special render, and either no instance mesh
+or FastRender disabled. It transforms all eight box corners using the existing
+hull correction. Other paths copy the original box. The original marker width
+formula `min(0.1 * (L2 - L1), 200)` and triangle geometry remain unchanged.
+The cached box, `GetObjectBox` gameplay consumers, Windows branch, object layout,
+saved schema and simulation transform are unchanged.
+
+**Falsified hypothesis:** the initial suspicion that `ComputeCorners` confused
+instance and archetype IDs was disproved. Its original `HARCH` RAII owner resolves
+and holds the instance archetype correctly. The existing material probe now
+calls production `ComputeCorners` with deliberately divergent IDs and compares
+the result with the actual renderer's origin-expanded bounds. This passes with
+the unchanged `corners.h`; no Engine bounds-contract repair is claimed.
+
+**Synthetic CPU execution:** the existing `game_material_manager_probe` checks
+asymmetric authored bounds `{7,-3,1,-2,30,-10}` against the corrected bounds
+`{3,-7,30,-10,1,-2}` within floating-point tolerance. The visible planar length is
+40 rather than the raw model height 3, without added padding or scale. It also
+checks the unchanged non-direct path/input and correction of genuine
+`ComputeCorners` output. On Linux x86_64, GCC 16.2.1 Debug, Clang 22.1.8 Debug and
+the full-media Clang sanitizer configuration each built
+`frontierx_game_material_manager_probe`, `frontierx_app_gunboat_owner` and
+`frontierx_app_build_support_platform_owner`, compiling the production
+`DrawSelected` templates. Commands for each existing configuration were:
+
+```sh
+cmake --build "$build" --target frontierx_game_material_manager_probe \
+  frontierx_app_gunboat_owner frontierx_app_build_support_platform_owner -j2
+ctest --test-dir "$build" --output-on-failure --no-tests=error \
+  -R '^portability\.game_material_manager.*$' -LE host --output-junit "$report"
+python Tools/ci/check_ctest.py "$report"
+```
+
+The three existing CPU material variants passed in each configuration with zero
+skips. Sanitizers used `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. Inputs were generated repository
+fixtures; no retail asset was added. The subsequent full-graph builds failed:
+nonship callers such as Waypoint, jumpgate and Trigger included `TObjSelect.h`
+without the `CQEFFECTS` declaration supplied by ship callers. The native-only
+include now explicitly imports its owning `DEffectOpts.h`; full-graph rebuilds
+after that correction are pending at this entry. The earlier narrow passes prove
+bounds math and those production templates, not the complete graph or execution
+of the complete selection draw. Full-media production relinks, bounded actual
+selection capture, native Windows Debug/Final and affected module-ABI checks
+remain separate gates.
+
+Final root integration: all five native graphs rebuild after the owning
+DEffectOpts include; the final focused layout/batcher/material/native-shell
+scope executes7/7 per configuration without skips or failures, including fatal
+Clang ASan/UBSan with leak detection. Root retains the initial full-build failures
+and the first selection input attempt that missed the actual ship; neither is
+reported as a selection pass. Source waveform/channel, simulation bounds and
+all original marker width/cap values remain unchanged. Windows/actual CI and
+renewed user visual selection acceptance remain pending.
+
+Final bounded Clang retail runtime: fresh original campaign entry executes the
+Blackwell jump to system2, then a normal corrected-coordinate mouse click reports
+highlighted=yes/selected=yes and plays original BLA5501.wav. Wheel zoom and
+private normal/zoom captures execute, followed by normal close after594 source
+frames (result4, audio0, idle hints, exit0). No presentation-exclusion flags are
+used. This proves selected-source/render/input/close execution, not full corner
+visibility acceptance or effect correctness; the user checks those next.

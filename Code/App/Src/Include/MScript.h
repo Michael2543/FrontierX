@@ -1244,6 +1244,9 @@ private:
 	static void Notify (U32 message, void * param);
 // friends
 	friend struct Mission;
+#if !defined(_WIN32)
+	friend bool LoadNativeMissionScripts(struct IFileSystem *);
+#endif
 };
 
 

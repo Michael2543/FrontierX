@@ -145,6 +145,34 @@ an artifact. Local execution is not distribution approval. Neither a GPL-enabled
 system build nor a successful runtime test satisfies that gate. Exact build and
 execution evidence belongs in [NATIVE_AUDIO_STREAMER.md](NATIVE_AUDIO_STREAMER.md).
 
+## Optional native movie dependency preparation (2026-10-14)
+
+The native movie owner is in progress, not an accepted capability. Its separate
+`FRONTIERX_BUILD_FFMPEG_VIDEO` configuration uses replaceable shared
+`libavcodec`, `libavformat`, `libavutil` and `libswscale`. The existing optional
+IAC configuration remains available without video. Default builds require
+neither FFmpeg configuration.
+
+A separate external prefix was built from a fresh, unmodified extraction of
+the same verified official FFmpeg 9.0.1 archive and SHA-256 recorded above.
+It retains WAV/IAC and enables only the additional MPEG-PS/MPEG-video demuxers,
+MPEG-1 video and MP2 decoders, MPEG-video/MPEG-audio packet parsers, and
+swscale color conversion. The parsers are required by MPEG-PES packet boundaries;
+an initially incomplete local prefix omitted them. Its separate rebuild and
+installation now enable both required parsers; the original audio-only prefix
+remains unchanged. GPL, nonfree,
+version3, autodetected dependencies, programs, network, static libraries,
+avdevice, avfilter, swresample and x86 assembly remain disabled. All four
+loaded shared libraries report `LGPL version 2.1 or later`; CMake rejects
+static libraries or a differing license report. Source, builds, installed
+libraries and runtime media remain outside the repository.
+
+This is local dependency preparation, not movie playback evidence or
+redistribution approval. The existing source/notice/library-replacement and
+Conquest compatibility review remains required before conveying a package.
+The active first-mission intro sequence still needs a suitable retail reference;
+no startup manifest entry is removed to hide the missing owner.
+
 ## Optional native font rasterizer (FreeType 2.14.3)
 
 The optional `FRONTIERX_BUILD_NATIVE_FONTS=ON` adapter uses the existing

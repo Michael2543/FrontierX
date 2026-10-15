@@ -532,7 +532,11 @@ GENRESULT ScrollingText::SetText (U32 dwResourceID)
 #if !defined(_WIN32)
         if (!skipNotificationCue)
         {
-            CQASSERT(SFXMANAGER);
+            if (!SFXMANAGER)
+            {
+                std::fputs("Native scrolling-text BEACON cue requires the original SFX owner\n", stderr);
+                std::abort();
+            }
 #endif
 	if (hsndMessage == NULL && SFXMANAGER)
 	{
@@ -540,7 +544,15 @@ GENRESULT ScrollingText::SetText (U32 dwResourceID)
 //		hsndMessage = SFXMANAGER->Open(SFX::TELETYPE);
 		hsndMessage = SFXMANAGER->Open(SFX::BEACON);
 	}
+	#if defined(_WIN32)
 	SFXMANAGER->Play(hsndMessage, 0, 0);
+#else
+        if (!hsndMessage || !SFXMANAGER->Play(hsndMessage, 0, 0))
+        {
+            std::fputs("Native scrolling-text BEACON cue has no mapped sample or playback failed\n", stderr);
+            std::abort();
+        }
+#endif
 #if !defined(_WIN32)
         }
 #endif
@@ -598,7 +610,11 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 #if !defined(_WIN32)
         if (!skipNotificationCue)
         {
-            CQASSERT(SFXMANAGER);
+            if (!SFXMANAGER)
+            {
+                std::fputs("Native scrolling-text BEACON cue requires the original SFX owner\n", stderr);
+                std::abort();
+            }
 #endif
 		if (hsndMessage == NULL && SFXMANAGER)
 		{
@@ -606,7 +622,15 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 //			hsndMessage = SFXMANAGER->Open(SFX::TELETYPE);
 			hsndMessage = SFXMANAGER->Open(SFX::BEACON);
 		}
-		SFXMANAGER->Play(hsndMessage, 0, 0);
+		#if defined(_WIN32)
+	SFXMANAGER->Play(hsndMessage, 0, 0);
+#else
+        if (!hsndMessage || !SFXMANAGER->Play(hsndMessage, 0, 0))
+        {
+            std::fputs("Native scrolling-text BEACON cue has no mapped sample or playback failed\n", stderr);
+            std::abort();
+        }
+#endif
 #if !defined(_WIN32)
         }
 #endif

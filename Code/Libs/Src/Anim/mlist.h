@@ -6,11 +6,35 @@
 #include "STDDAT.H"
 #include "mnode.h"
 #include "FDump.h"
+#if !defined(_WIN32)
+#include <cstdlib>
+#endif
 
 //
 
 struct MotionList : public LList<MotionStackNode>
 {
+#if !defined(_WIN32)
+    // MotionStackNode has no virtual destructor. Its three source node kinds
+    // must be released with their allocated type, without changing node vtables
+    // or the supported Windows module layout.
+    void free(MotionStackNode *node)
+    {
+        unlink(node);
+        switch (node->type)
+        {
+        case MSN_CHANNEL: delete static_cast<ChannelNode *>(node); break;
+        case MSN_TRANSITION: delete static_cast<TransitionNode *>(node); break;
+        case MSN_POSE: delete static_cast<PoseNode *>(node); break;
+        default: std::abort();
+        }
+    }
+
+    void free()
+    {
+        while (first()) free(first());
+    }
+#endif
 	const MotionList& operator = (const MotionList& other)
 	{
 		MotionStackNode * node = other.first();

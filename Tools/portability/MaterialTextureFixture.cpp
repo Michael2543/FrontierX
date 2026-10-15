@@ -106,4 +106,101 @@ bool WriteMaterialFixture(const std::filesystem::path & path,
                static_cast<std::streamsize>(bytes.size()));
     return file.good();
 }
+
+bool WriteMipTextureFixture(const std::filesystem::path &path, bool alphaPlanes,
+                            int levelTwoAlphaExtentDelta)
+{
+    struct Entry
+    {
+        std::string name;
+        std::vector<unsigned char> data;
+        std::vector<U32> children;
+        bool directory;
+    };
+    std::vector<Entry> entries{{"/", {}, {}, true}};
+    auto directory = [&](U32 parent, const std::string &name) {
+        const U32 index = static_cast<U32>(entries.size());
+        entries.push_back({name, {}, {}, true});
+        entries[parent].children.push_back(index);
+        return index;
+    };
+    auto file = [&](U32 parent, const std::string &name, std::vector<unsigned char> data) {
+        const U32 index = static_cast<U32>(entries.size());
+        entries.push_back({name, std::move(data), {}, false});
+        entries[parent].children.push_back(index);
+    };
+    auto wordBytes = [](U32 value) {
+        return std::vector<unsigned char>{static_cast<unsigned char>(value),
+            static_cast<unsigned char>(value >> 8), static_cast<unsigned char>(value >> 16),
+            static_cast<unsigned char>(value >> 24)};
+    };
+    const U32 library = directory(0, "Texture library");
+    const U32 tile = directory(library, alphaPlanes ? "AlphaMipTile" : "MipTile");
+    file(tile, "Image X size", wordBytes(256));
+    file(tile, "Image Y size", wordBytes(256));
+    const U32 palette = directory(tile, "Palette 8 Bit");
+    file(palette, "Palette color count", wordBytes(9));
+    // Each source-authored mip has a distinct color; no generated mip substitute.
+    file(palette, "Palette RGB 888", {240,40,80, 40,240,80, 40,80,240,
+        200,160,40, 160,40,200, 40,200,160, 120,80,40, 80,40,120, 40,120,80});
+    for (U32 level = 0; level < 9; ++level)
+    {
+        const U32 mip = directory(palette, "MIP" + std::to_string(level));
+        const U32 dimension = 256U >> level;
+        file(mip, "Image indices", std::vector<unsigned char>(dimension * dimension,
+                                                               static_cast<unsigned char>(level)));
+        if (alphaPlanes)
+        {
+            std::vector<unsigned char> alpha(dimension * dimension);
+            for (U32 pixel = 0U; pixel < dimension * dimension; ++pixel)
+                alpha[pixel] = pixel % 3U == 0U ? 0U : pixel % 3U == 1U ? 96U : 255U;
+            if (level == 2U)
+            {
+                const int extent = static_cast<int>(alpha.size()) + levelTwoAlphaExtentDelta;
+                if (extent < 0) return false;
+                alpha.resize(static_cast<std::size_t>(extent), 255U);
+            }
+            file(mip, "Alpha 8 bit", std::move(alpha));
+        }
+    }
+    std::string names;
+    std::vector<U32> nameOffsets, dataOffsets;
+    std::vector<unsigned char> data;
+    for (const auto &entry : entries)
+    {
+        nameOffsets.push_back(static_cast<U32>(names.size()));
+        names.append(entry.name.c_str(), entry.name.size() + 1);
+        dataOffsets.push_back(static_cast<U32>(data.size()));
+        data.insert(data.end(), entry.data.begin(), entry.data.end());
+    }
+    constexpr U32 headerSize = 56, recordSize = 44;
+    const U32 recordsBytes = static_cast<U32>(entries.size()) * recordSize;
+    std::vector<unsigned char> bytes;
+    auto word = [&](U32 value) {
+        const auto encoded = wordBytes(value);
+        bytes.insert(bytes.end(), encoded.begin(), encoded.end());
+    };
+    for (U32 value : {0x20465455U, 0x101U, headerSize, recordsBytes, 0U, recordSize,
+        headerSize + recordsBytes, static_cast<U32>(names.size()), static_cast<U32>(names.size()),
+        headerSize + recordsBytes + static_cast<U32>(names.size()), 0U, 0U, 0U, 0U}) word(value);
+    std::vector<U32> next(entries.size());
+    for (const auto &entry : entries)
+        for (std::size_t i = 1; i < entry.children.size(); ++i)
+            next[entry.children[i - 1]] = entry.children[i] * recordSize;
+    for (std::size_t i = 0; i < entries.size(); ++i)
+    {
+        const auto &entry = entries[i];
+        const U32 size = static_cast<U32>(entry.data.size());
+        const U32 child = entry.directory ?
+            (entry.children.empty() ? 0U : entry.children[0] * recordSize) : dataOffsets[i];
+        for (U32 value : {next[i], nameOffsets[i], entry.directory ? 0x10U : 0U, 0U,
+            child, size, size, size, 0U, 0U, 0U}) word(value);
+    }
+    bytes.insert(bytes.end(), names.begin(), names.end());
+    bytes.insert(bytes.end(), data.begin(), data.end());
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    return output.good();
+}
+
 }

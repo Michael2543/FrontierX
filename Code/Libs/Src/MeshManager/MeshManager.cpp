@@ -5,6 +5,7 @@
 #if !defined(_WIN32)
 #include <ICamera.h>
 #include "FrontierX/NativeMeshManager.h"
+#include <ITextureLibrary.h>
 #endif
 #include <IMeshManager.h>
 #include <TComponent.h>
@@ -98,6 +99,10 @@ struct MeshManager : IMeshManager, public ISystemComponent, IInternalMeshManager
 	IHardpoint *HARDPOINT;
 	IMaterialManager * MATMAN;
 
+#if !defined(_WIN32)
+	// Borrowed aggregate parent, whose lifetime contains this component.
+	IDAComponent * nativeSystem = NULL;
+#endif
 	MeshArch * meshArchList;
 	MeshInstance * dynamicMeshCache;
 
@@ -141,6 +146,10 @@ GENRESULT COMAPI MeshManager::ShutdownAggregate(void)
 
 GENRESULT COMAPI MeshManager::init( AGGDESC *desc )
 {
+#if !defined(_WIN32)
+	if (!desc || !desc->outer) return GR_INVALID_PARMS;
+	nativeSystem = desc->outer;
+#endif
 	return GR_OK;
 }
 
@@ -211,6 +220,38 @@ IMeshArchetype * MeshManager::CreateMeshArch(const char * filename)
 
 	if(objFile)
 	{
+#if !defined(_WIN32)
+		// Original compound tools load the owning file's shared texture and
+		// texture-animation libraries before Engine visits individual parts.
+		// Child XMesh libraries alone cannot resolve maps stored at CMP root.
+		bool hasSharedLibrary = false;
+		for (const char *name : {"Texture library", "Animation library"})
+			if (objFile->SetCurrentDirectory(name))
+			{
+				hasSharedLibrary = true;
+				if (!objFile->SetCurrentDirectory(".."))
+				{
+					std::fprintf(stderr, "Native MeshManager cannot restore shared library directory: %s\n", filename);
+					return NULL;
+				}
+			}
+		if (hasSharedLibrary)
+		{
+			COMPTR<ITextureLibrary> textures;
+			if (!nativeSystem || nativeSystem->QueryInterface(IID_ITextureLibrary, textures) != GR_OK || !textures)
+			{
+				std::fprintf(stderr, "Native MeshManager shared texture owner unavailable: %s\n", filename);
+				return NULL;
+			}
+			if (textures->load_library(objFile, NULL) != GR_OK)
+			{
+				std::fprintf(stderr, "Native MeshManager shared texture library rejected: %s\n", filename);
+				return NULL;
+			}
+		}
+		// Files without an outer library retain their original child-library
+		// loading. Required map failures remain fatal in the material owner.
+#endif
 		const ARCHETYPE_INDEX engineArch = ENGINE->create_archetype(filename,objFile);
 		const SCRIPT_SET_ARCH animationArch = ANIM->create_script_set_arch(objFile);
 		if(engineArch == INVALID_ARCHETYPE_INDEX)

@@ -28,6 +28,11 @@
 #include <cstdlib>
 #include <string>
 #include <limits>
+#include <stdexcept>
+#include <cctype>
+#include <vector>
+#include <memory>
+
 
 static void RequireNativeMissionFileTransfer()
 {
@@ -87,6 +92,11 @@ static FILE *g_mis_f = NULL;
 #include "Startup.h"
 #include "Menu.h"
 #include "CQTrace.h"
+#if !defined(_WIN32)
+#include <ViewSymbolOperations.h>
+#include <DScriptObject.h>
+#include <DBuildPlat.h>
+#endif
 #include "Cursor.h"
 #include "Hotkeys.h"
 #include "CQGame.h"
@@ -145,6 +155,50 @@ static FILE *g_mis_f = NULL;
 #define DEFERRED_MISSION_END_TIME 5000
 
 using namespace CQGAMETYPES;
+
+#if !defined(_WIN32)
+static bool NativeSaveMissionSystemMap(IFileSystem *file)
+{
+	try
+	{
+		SYSMAP->Save(file);
+		return true;
+	}
+	catch (const std::exception &error)
+	{
+		std::fprintf(stderr, "Native mission system-map save failed: %s\n", error.what());
+		return false;
+	}
+}
+
+static bool NativeLoadMissionSystemMap(IFileSystem *file)
+{
+	try
+	{
+		char script[MAX_PATH] = {};
+		char filename[MAX_PATH + 4] = {};
+		const LONG filenameLength = file ? file->GetFileName(filename, sizeof(filename)) : 0;
+		if (!MGlobals::GetScriptName(script, sizeof(script)) || filenameLength <= 0 ||
+			filenameLength >= S32(sizeof(filename)))
+			throw std::runtime_error("cannot identify the loaded mission");
+		std::string foldedScript = script;
+		for (char &value : foldedScript)
+			if (value >= 'A' && value <= 'Z') value = static_cast<char>(value + ('a' - 'A'));
+		const bool regularTerran = foldedScript == "script01t.dll" || foldedScript == "script01.dll";
+		const char *extension = std::strrchr(filename, '.');
+		std::string foldedExtension = extension ? extension : "";
+		for (char &value : foldedExtension)
+			value = static_cast<char>(std::tolower(static_cast<unsigned char>(value)));
+		FrontierX::LoadNativeSystemMap(SYSMAP, file, regularTerran && foldedExtension == ".mission");
+		return true;
+	}
+	catch (const std::exception &error)
+	{
+		std::fprintf(stderr, "Native mission system-map load failed: %s\n", error.what());
+		return false;
+	}
+}
+#endif
 
 static IViewConstructor2 * parser;
 
@@ -437,9 +491,14 @@ struct DACOM_NO_VTABLE Mission : public IMission,
 	
 	bool savePlayerAI (struct IFileSystem * outFile);
 	
+#if defined(_WIN32)
 	void loadPlayerAI (struct IFileSystem * inFile);
 	
 	void loadPlayerAI (struct IFileSystem * inFile, U32 playerID);
+#else
+	bool loadPlayerAI (struct IFileSystem * inFile);
+	bool loadPlayerAI (struct IFileSystem * inFile, U32 playerID);
+#endif
 
 	void createPlayerAI (M_RACE race, U32 playerID, ISPlayerAI ** ppPlayerAI);
 	void calculateCtrlO_Scores (void);
@@ -625,6 +684,7 @@ void Mission::startPlayerAI (void)
 }
 //--------------------------------------------------------------------------
 //
+#if defined(_WIN32)
 void Mission::loadPlayerAI (struct IFileSystem * inFile, U32 playerID)
 {
 	char buffer[MAX_PATH];
@@ -701,6 +761,56 @@ void Mission::loadPlayerAI (struct IFileSystem * inFile)
 	}
 
 }
+#else
+bool Mission::loadPlayerAI (struct IFileSystem *inFile, U32 playerID)
+{
+	char buffer[MAX_PATH];
+	CQASSERT(playerID && playerID <= MAX_PLAYERS);
+	sprintf(buffer, "\\PLAYERAI\\Player%02d", playerID);
+	// An absent AI is legitimate before the mission script starts that player.
+	if (!inFile->SetCurrentDirectory(buffer)) return true;
+	WIN32_FIND_DATA data = {};
+	HANDLE search = inFile->FindFirstFile("*.*", &data);
+	if (search == INVALID_HANDLE_VALUE) return false;
+	bool loaded = false;
+	if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+		inFile->SetCurrentDirectory(data.cFileName))
+	{
+		ISPlayerAI::CreateInstance(data.cFileName, playerID, playerAI[playerID-1]);
+		loaded = playerAI[playerID-1] && playerAI[playerID-1]->Load(inFile);
+		if (!loaded) playerAI[playerID-1].free();
+	}
+	inFile->FindClose(search);
+	return loaded;
+}
+
+bool Mission::loadPlayerAI (struct IFileSystem *inFile)
+{
+	const struct CQGAME &cqgame = MGlobals::GetGameSettings();
+	if (cqgame.gameType == MISSION_DEFINED)
+	{
+		for (U32 i = 2; i <= MAX_PLAYERS; ++i)
+			if (!loadPlayerAI(inFile, i)) return false;
+	}
+	else
+	{
+		for (int i = 0; i < cqgame.activeSlots; ++i)
+		{
+			if (cqgame.slot[i].type == COMPUTER)
+			{
+				const U32 playerID = MGlobals::GetPlayerIDFromSlot(i);
+				if (playerID && playerID <= MAX_PLAYERS && playerAI[playerID-1] == 0)
+				{
+					if (!loadPlayerAI(inFile, playerID)) return false;
+					if (playerAI[playerID-1] == 0)
+						createPlayerAI((M_RACE)cqgame.slot[i].race, playerID, playerAI[playerID-1]);
+				}
+			}
+		}
+	}
+	return true;
+}
+#endif
 //--------------------------------------------------------------------------
 //
 bool Mission::savePlayerAI (struct IFileSystem * outFile)
@@ -762,12 +872,182 @@ GENRESULT Mission::CorrelateSymbol (const C8 *pSymbolName, void *pOldData, void 
 
 	if (oldSymbol && newSymbol)
 	{
+#if defined(_WIN32)
 		parser->CorrelateSymbol(oldSymbol, pOldData, newSymbol, pNewData);
 		return GR_OK;
+#else
+		const bool correlated = !std::strcmp(pSymbolName, "MT_GlobalData") ?
+			CorrelateNativeMissionGlobals(parser, oldSymbol, pOldData, newSymbol, pNewData) :
+			CorrelateNativeViewSymbols(parser, oldSymbol, pOldData, newSymbol, pNewData);
+		return correlated ? GR_OK : GR_GENERIC;
+#endif
 	}
 	else
 		return GR_GENERIC;
 }
+#if !defined(_WIN32)
+bool LoadNativeMissionRecord(IMission *mission, const char *name, IFileSystem *file,
+	void *destination, U32 destinationBytes)
+{
+	// The saved schema is authoritative for input extent. Older legitimate
+	// layouts remain correlated by the original owner rather than read as the
+	// current C++ struct or silently accepted after a short read.
+	auto *owner = dynamic_cast<Mission *>(mission);
+	if (!owner || !parser || !name || !file || !destination || !destinationBytes)
+		return false;
+	SYMBOL oldSymbol = parser->GetSymbol(owner->hPrevSymbols, name);
+	SYMBOL newSymbol = parser->GetSymbol(0, name);
+	if (!oldSymbol || !newSymbol) return false;
+	oldSymbol = ResolveViewSymbolType(oldSymbol);
+	newSymbol = ResolveViewSymbolType(newSymbol);
+	if (!oldSymbol || !newSymbol || oldSymbol->kind != RECORDSYM || newSymbol->kind != RECORDSYM ||
+		oldSymbol->size <= 0 || newSymbol->size <= 0 ||
+		static_cast<U32>(newSymbol->size) != destinationBytes ||
+		file->GetFileSize() != static_cast<U32>(oldSymbol->size))
+		return false;
+	try
+	{
+		std::vector<U8> input(static_cast<U32>(oldSymbol->size));
+		std::vector<U8> output(destinationBytes, 0);
+		U32 read = 0;
+		if (!file->ReadFile(0, input.data(), input.size(), &read, 0) || read != input.size() ||
+			owner->CorrelateSymbol(name, input.data(), output.data()) != GR_OK)
+			return false;
+		std::memcpy(destination, output.data(), destinationBytes);
+		return true;
+	}
+	catch (const std::bad_alloc &)
+	{
+		std::fprintf(stderr, "Native mission record allocation failed: %s\n", name);
+		return false;
+	}
+}
+
+bool CheckNativeMissionRecordPersistence(IFileSystem *directory)
+{
+	// Source ScriptObject/SpaceShip Load call this exact parser-owned path.
+	// Exercise saved-schema extents and genuine correlation before any actor
+	// mutation, using the source record and original App schema, not a serializer.
+	const auto fail = [](const char *stage) {
+		std::fprintf(stderr, "Native mission record regression failed: %s\n", stage);
+		return false;
+	};
+	if (!directory || MISSION || parser || !GS) return fail("fixture lifecycle prerequisites");
+	COMPTR<IViewConstructor> constructor;
+	COMPTR<IViewConstructor2> provider;
+	if (GS->QueryInterface("IViewConstructor", constructor) != GR_OK ||
+		constructor->QueryInterface("IViewConstructor2", provider) != GR_OK) return fail("genuine provider lookup");
+	if ((!provider->GetSymbol(0, "SCRIPTOBJECT_SAVELOAD") ||
+		!provider->GetSymbol(0, "BUILDPLAT_SAVELOAD")) &&
+		!FrontierX::ParseNativeAppSchema(provider)) return fail("current App schema parse");
+	std::unique_ptr<DAComponent<Mission>> owner(new DAComponent<Mission>);
+	parser = provider;
+	parser->AddRef(); // The actual Mission destructor owns this reference.
+	int schemaLength = 0;
+	const char *schema = static_cast<const char *>(FrontierX::GetNativeAppSchema(schemaLength));
+	if (!schema || schemaLength <= 0) return fail("original schema resource");
+	std::vector<char> schemaText(schema, schema+schemaLength);
+	schemaText.push_back(0);
+	owner->hPrevSymbols = parser->ParseNewMemory(schemaText.data());
+	if (!owner->hPrevSymbols) return fail("saved App schema parse");
+	DAFILEDESC descriptor = "MissionRecordRegression.mission";
+	descriptor.lpImplementation = "UTF";
+	descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	descriptor.dwCreationDistribution = CREATE_ALWAYS;
+	COMPTR<IFileSystem> archive;
+	if (directory->CreateInstance(&descriptor, archive) != GR_OK) return fail("physical archive create");
+	SCRIPTOBJECT_SAVELOAD saved = {};
+	saved.bTowed = true;
+	saved.towerID = 0x12345678;
+	saved.exploredFlags = 3;
+	const auto write = [&](const void *data, U32 size) {
+		DAFILEDESC record = "SCRIPTOBJECT_SAVELOAD";
+		record.lpImplementation = "DOS";
+		record.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+		record.dwCreationDistribution = CREATE_ALWAYS;
+		COMPTR<IFileSystem> file;
+		U32 count = 0;
+		return archive->CreateInstance(&record, file) == GR_OK &&
+			file->WriteFile(0, data, size, &count, 0) && count == size;
+	};
+	const auto read = [&](IFileSystem *source, SCRIPTOBJECT_SAVELOAD &output) {
+		DAFILEDESC record = "SCRIPTOBJECT_SAVELOAD";
+		record.lpImplementation = "DOS";
+		COMPTR<IFileSystem> file;
+		return source->CreateInstance(&record, file) == GR_OK &&
+			LoadNativeMissionRecord(owner.get(), record.lpFileName, file, &output, sizeof(output));
+	};
+	SCRIPTOBJECT_SAVELOAD output = {};
+	if (!write(&saved, sizeof(saved))) return fail("canonical ScriptObject write");
+	COMPTR<IUTFWriter> writer;
+	if (archive->QueryInterface(IID_IUTFWriter, writer) != GR_OK) return fail("source UTF writer query");
+	writer->Flush();
+	writer.free();
+	descriptor.dwCreationDistribution = OPEN_EXISTING;
+	descriptor.dwDesiredAccess = GENERIC_READ;
+	COMPTR<IFileSystem> reopened;
+	if (directory->CreateInstance(&descriptor, reopened) != GR_OK)
+		return fail("physical read-only archive reopen");
+	if (!read(reopened, output)) return fail("physical ScriptObject canonical record load");
+	if (std::memcmp(&output, &saved, sizeof(saved)))
+		return fail("ScriptObject canonical correlated bytes");
+	output.towerID = 0x87654321;
+	if (!write(&saved, sizeof(saved)-1) || read(archive, output) || output.towerID != 0x87654321)
+		return fail("ScriptObject truncated rejection/transaction");
+	std::vector<U8> oversized(sizeof(saved)+1, 0);
+	std::memcpy(oversized.data(), &saved, sizeof(saved));
+	if (!write(oversized.data(), oversized.size()) || read(archive, output) ||
+		output.towerID != 0x87654321) return fail("ScriptObject oversized rejection/transaction");
+	// Construction platforms use the same production loader with their real
+	// nested source record, including a live queue/working operation payload.
+	BUILDPLAT_SAVELOAD platform = {};
+	platform.buildPlanetID = 0x10203040;
+	platform.buildSlot = 3;
+	platform.buildPlatSaveload.workingID = 71;
+	platform.buildPlatSaveload.constructionID = 72;
+	platform.buildPlatSaveload.buidTimeSpent = 1.5f;
+	DAFILEDESC platformDescriptor = "BUILDPLAT_SAVELOAD";
+	platformDescriptor.lpImplementation = "DOS";
+	platformDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	platformDescriptor.dwCreationDistribution = CREATE_ALWAYS;
+	COMPTR<IFileSystem> platformFile;
+	U32 platformWritten = 0;
+	if (archive->CreateInstance(&platformDescriptor, platformFile) != GR_OK ||
+		!platformFile->WriteFile(0, &platform, sizeof(platform), &platformWritten, 0) ||
+		platformWritten != sizeof(platform)) return fail("Platform canonical record write");
+	BUILDPLAT_SAVELOAD platformOutput = {};
+	platformFile.free();
+	platformDescriptor.dwDesiredAccess = GENERIC_READ;
+	platformDescriptor.dwCreationDistribution = OPEN_EXISTING;
+	if (archive->CreateInstance(&platformDescriptor, platformFile) != GR_OK)
+		return fail("Platform canonical fresh child open");
+	if (!LoadNativeMissionRecord(owner.get(), platformDescriptor.lpFileName, platformFile,
+		&platformOutput, sizeof(platformOutput)))
+		return fail("Platform canonical record load/correlation");
+	if (std::memcmp(&platformOutput, &platform, sizeof(platform)))
+		return fail("Platform canonical correlated bytes");
+	platformFile.free();
+	platformDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	platformDescriptor.dwCreationDistribution = CREATE_ALWAYS;
+	if (archive->CreateInstance(&platformDescriptor, platformFile) != GR_OK ||
+		!platformFile->WriteFile(0, &platform, sizeof(platform)-1, &platformWritten, 0) ||
+		platformWritten != sizeof(platform)-1) return fail("Platform truncated record write");
+	platformFile.free();
+	platformDescriptor.dwDesiredAccess = GENERIC_READ;
+	platformDescriptor.dwCreationDistribution = OPEN_EXISTING;
+	if (archive->CreateInstance(&platformDescriptor, platformFile) != GR_OK ||
+		LoadNativeMissionRecord(owner.get(), platformDescriptor.lpFileName, platformFile,
+			&platformOutput, sizeof(platformOutput))) return fail("Platform truncated record rejection");
+	parser->DestroySymbols(owner->hPrevSymbols);
+	owner->hPrevSymbols = parser->ParseNewMemory(
+		"struct SCRIPTOBJECT_SAVELOAD { unsigned int towerID; };");
+	const U32 incomplete = 7;
+	if (!owner->hPrevSymbols || !write(&incomplete, sizeof(incomplete)) ||
+		read(archive, output) || output.towerID != 0x87654321) return fail("incomplete schema rejection/transaction");
+	return true;
+}
+#endif
+
 //-------------------------------------------------------------------
 //
 BOOL32 Mission::Load (const C8 * fileName, IComponentFactory * pParent)
@@ -961,9 +1241,15 @@ BOOL32 Mission::Save (const C8 * fileName, struct IComponentFactory * pParent)
 #endif
 
 	// any one of these saves can fail, no?
+#if defined(_WIN32)
 	SECTOR->Save(inFile);
 	savePlayerAI(inFile);
 	CAMERAMANAGER->Save(inFile);
+#else
+	if (!SECTOR->Save(inFile) || !NativeSaveMissionSystemMap(inFile) ||
+		!savePlayerAI(inFile) || !CAMERAMANAGER->Save(inFile))
+		goto Done;
+#endif
 	NUGGETMANAGER->Save(inFile);
 	#if !defined(_WIN32)
 	if (!OBJLIST->Save(inFile))
@@ -974,18 +1260,36 @@ BOOL32 Mission::Save (const C8 * fileName, struct IComponentFactory * pParent)
 	#else
 	OBJLIST->Save(inFile);
 	#endif
+#if defined(_WIN32)
 	THEMATRIX->Save(inFile);
+#else
+	if (!THEMATRIX->Save(inFile)) goto Done;
+#endif
 	MUSICMANAGER->Save(inFile);
+#if defined(_WIN32)
 	FOGOFWAR->Save(inFile);
+#else
+	if (!FOGOFWAR->Save(inFile)) goto Done;
+#endif
 	MScript::Save(inFile);
+#if defined(_WIN32)
 	MGlobals::Save(inFile);		// needs to save last, load first because it's referenced elsewhere
+#else
+	if (!MGlobals::Save(inFile)) goto Done;
+#endif
 
 
+#if defined(_WIN32)
 	if (inFile!=0 && inFile->QueryInterface("IUTFWriter", pWriter)==GR_OK)
 	{
 		pWriter->Flush();
 		pWriter.free();
 	}
+#else
+	if (!inFile || inFile->QueryInterface("IUTFWriter", pWriter) != GR_OK) goto Done;
+	pWriter->Flush();
+	pWriter.free();
+#endif
 
 	// re-open the file for read-only
 	{
@@ -1150,13 +1454,27 @@ BOOL32 Mission::QuickSave (const C8 * fileName, struct IComponentFactory * pPare
 		CQERROR0("Failed write to save game");
 		goto Done;
 	}
+#if defined(_WIN32)
 	SECTOR->QuickSave(inFile);
 	OBJLIST->QuickSave(inFile);
+#else
+	if (!SECTOR->QuickSave(inFile) || !NativeSaveMissionSystemMap(inFile) ||
+		!OBJLIST->QuickSave(inFile)) goto Done;
+#endif
 	MUSICMANAGER->Save(inFile);
+#if defined(_WIN32)
 	MGlobals::QuickSave(inFile);
+#else
+	if (!MGlobals::QuickSave(inFile)) goto Done;
+#endif
 
+#if defined(_WIN32)
 	if (inFile!=0 && inFile->QueryInterface("IUTFWriter", pWriter)==GR_OK)
 		pWriter->Flush();
+#else
+	if (!inFile || inFile->QueryInterface("IUTFWriter", pWriter) != GR_OK) goto Done;
+	pWriter->Flush();
+#endif
 
 	SetWindowTitle();
 	bUnsavedData=0;
@@ -1186,6 +1504,12 @@ BOOL32 Mission::QuickSaveFile (void)
 	{
 		SCROLLTEXT->SetText(IDS_QUICKSAVE_SUCCESS);
 	}
+#if !defined(_WIN32)
+	else
+	{
+		SCROLLTEXT->SetTextString(L"Quicksave failed.");
+	}
+#endif
 
 	return result;
 }
@@ -1219,7 +1543,11 @@ BOOL32 Mission::QuickLoadFile (void)
 //		SCROLLTEXT->SetText(IDS_QUICKLOAD_WAIT);
 		SAVEDIR->FindClose(findHandle);
 		BOOL32 result = MISSION->Load(szDescription, SAVEDIR);
+#if defined(_WIN32)
 		SCROLLTEXT->SetText(IDS_QUICKLOAD_SUCCESS);
+#else
+		SCROLLTEXT->SetText(result ? IDS_QUICKLOAD_SUCCESS : IDS_QUICKLOAD_FAILED);
+#endif
 		return result;
 	}
 }
@@ -1284,11 +1612,21 @@ BOOL32 Mission::DynamicSave (const C8 * fileName, struct IComponentFactory * pPa
 		CQERROR0("Failed write to save game");
 		goto Done;
 	}
+#if defined(_WIN32)
 	OBJLIST->QuickSave(inFile,true);
 	MGlobals::QuickSave(inFile);
+#else
+	if (!NativeSaveMissionSystemMap(inFile) || !OBJLIST->QuickSave(inFile,true) ||
+		!MGlobals::QuickSave(inFile)) goto Done;
+#endif
 
+#if defined(_WIN32)
 	if (inFile!=0 && inFile->QueryInterface("IUTFWriter", pWriter)==GR_OK)
 		pWriter->Flush();
+#else
+	if (!inFile || inFile->QueryInterface("IUTFWriter", pWriter) != GR_OK) goto Done;
+	pWriter->Flush();
+#endif
 
 	SetWindowTitle();
 	bUnsavedData=0;
@@ -2838,7 +3176,11 @@ BOOL32 Mission::Reload (void)
 			MIS_LOG("Reload: SECTOR->Load\n");
 			SECTOR->Load(terrainFile);
 			MIS_LOG("Reload: SYSMAP->Load\n");
+#if defined(_WIN32)
 			SYSMAP->Load(terrainFile);
+#else
+			if (!NativeLoadMissionSystemMap(terrainFile)) goto Done;
+#endif
 
 			ipAnim->SetProgress(0.20f);
 			ipAnim->UpdateString(IDS_PROG_CAMERA);
@@ -2854,7 +3196,11 @@ BOOL32 Mission::Reload (void)
 			baseObjPercent=ipAnim->GetProgress();
 			totalObjPercent=0.40-baseObjPercent;
 			MIS_LOG("Reload: OBJLIST->Load(terrainFile)\n");
+#if defined(_WIN32)
 			OBJLIST->Load(terrainFile,true);
+#else
+			if (!OBJLIST->Load(terrainFile,true)) goto Done;
+#endif
 			MIS_LOG("Reload: OBJLIST->Load done\n");
 
 			ipAnim->SetProgress(0.40f);
@@ -2882,16 +3228,29 @@ BOOL32 Mission::Reload (void)
 			hPrevSymbols = _hPrevSymbols;
 		}
 
+#if !defined(_WIN32)
+		// Terrain supplies the initial map; the dynamic checkpoint owns saved alerts.
+		if (!NativeLoadMissionSystemMap(inFile)) goto Done;
+#endif
+
 		ipAnim->UpdateString(IDS_PROG_OBJECTS);
 		baseObjPercent=ipAnim->GetProgress();
 		totalObjPercent=0.80 - baseObjPercent;
 		MIS_LOG("Reload: OBJLIST->Load(inFile)\n");
+#if defined(_WIN32)
 		OBJLIST->Load(inFile);
+#else
+		if (!OBJLIST->Load(inFile)) goto Done;
+#endif
 
 		ipAnim->SetProgress(0.80f);
 		ipAnim->UpdateString(IDS_PROG_SCRIPTS);
 		MIS_LOG("Reload: MScript::Load\n");
-		MScript::Load(NULL);		// should not have any save/load info here anyway
+#if defined(_WIN32)
+		MScript::Load(NULL);
+#else
+		if (!LoadNativeMissionScripts(NULL)) goto Done;
+#endif		// should not have any save/load info here anyway
 		ipAnim->SetProgress(0.90f);
 	}
 	else
@@ -2900,13 +3259,21 @@ BOOL32 Mission::Reload (void)
 		MIS_LOG("Reload: else branch - SECTOR->Load\n");
 		SECTOR->Load(inFile);
 		MIS_LOG("Reload: SYSMAP->Load\n");
+#if defined(_WIN32)
 		SYSMAP->Load(inFile);
+#else
+		if (!NativeLoadMissionSystemMap(inFile)) goto Done;
+#endif
 		ipAnim->SetProgress(0.10f);
 
 		// load the artificial intelligence
 		ipAnim->UpdateString(IDS_PROG_CREATEAI);
 		MIS_LOG("Reload: loadPlayerAI\n");
+#if defined(_WIN32)
 		loadPlayerAI(inFile);
+#else
+		if (!loadPlayerAI(inFile)) goto Done;
+#endif
 		ipAnim->SetProgress(0.15f);
 
 		ipAnim->UpdateString(IDS_PROG_CAMERA);
@@ -2919,7 +3286,11 @@ BOOL32 Mission::Reload (void)
 
 		baseObjPercent=ipAnim->GetProgress();
 		totalObjPercent=0.80 - baseObjPercent;
+#if defined(_WIN32)
 		OBJLIST->Load(inFile);
+#else
+		if (!OBJLIST->Load(inFile)) goto Done;
+#endif
 		ipAnim->SetProgress(0.80f);
 
 		ipAnim->UpdateString(IDS_PROG_MATRIX);
@@ -2936,7 +3307,11 @@ BOOL32 Mission::Reload (void)
 		ipAnim->SetProgress(0.88f);
 
 		ipAnim->UpdateString(IDS_PROG_SCRIPTS);
+#if defined(_WIN32)
 		MScript::Load(inFile);
+#else
+		if (!LoadNativeMissionScripts(inFile)) goto Done;
+#endif
 		ipAnim->SetProgress(0.90f);
 	}
 

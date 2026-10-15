@@ -10,6 +10,8 @@
 #include "Include/NativeAppGlobals.h"
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
+#include <stdexcept>
 #endif
 
 #include "anim2d.h"
@@ -27,8 +29,23 @@
 #include <IRenderPrimitive.h>
 #include <TComponent.h>
 
+#if !defined(_WIN32)
+namespace
+{
+struct NativeAnimDataError : std::runtime_error
+{
+	using std::runtime_error::runtime_error;
+};
+}
+#endif
+
 AnimArchetype::AnimArchetype (void) : frames (NULL)
 {
+#if !defined(_WIN32)
+	tex = NULL;
+	texCnt = 0;
+	frame_cnt = 0;
+#endif
 }
 #define ANIM_INDEX INSTANCE_INDEX
 
@@ -58,7 +75,40 @@ void AnimArchetype::load (IFileSystem* fs)
 	fs->ReadFile (hndl, &capture_rate, sizeof (SINGLE), &read);
 	fs->CloseHandle (hndl);
 
+#if defined(_WIN32)
 	fs->SetCurrentDirectory ("UV Set");
+#else
+	// Retail ANMs keep these records directly in Animation; newer exports
+	// put them in UV Set. Preserve the original failed-directory behavior
+	// explicitly, while rejecting a file that has neither complete layout.
+	const bool enteredUvDirectory = fs->SetCurrentDirectory("UV Set") != FALSE;
+	if (!enteredUvDirectory)
+	{
+		const char *flatRecords[] = {"Texture names", "UV Rects"};
+		for (const char *record : flatRecords)
+		{
+			DAFILEDESC recordDesc(record);
+			HANDLE recordHandle = fs->OpenChild(&recordDesc);
+			if (recordHandle == INVALID_HANDLE_VALUE)
+				throw NativeAnimDataError("Native Anim2D flat animation record missing");
+			if (!fs->CloseHandle(recordHandle))
+				throw NativeAnimDataError("Native Anim2D flat animation record close failed");
+		}
+	}
+	struct UvDirectoryScope
+	{
+		IFileSystem *fs;
+		bool entered;
+		~UvDirectoryScope()
+		{
+			if (entered && !fs->SetCurrentDirectory(".."))
+			{
+				std::fputs("Native Anim2D cannot restore UV directory\n", stderr);
+				std::abort();
+			}
+		}
+	} directoryScope{fs, enteredUvDirectory};
+#endif
 
 /*	desc.lpFileName = "Library name";
 
@@ -76,15 +126,37 @@ void AnimArchetype::load (IFileSystem* fs)
 	hndl = fs->OpenChild (&desc);
 	CQASSERT (hndl != INVALID_HANDLE_VALUE);
 
+#if defined(_WIN32)
 	S32 len_names = fs->GetFileSize (hndl);
+#else
+	if (hndl == INVALID_HANDLE_VALUE)
+		throw NativeAnimDataError("Native Anim2D texture-name record missing");
+	DWORD high = 0;
+	const DWORD extent = fs->GetFileSize(hndl, &high);
+	if (high || !extent || extent > 0x7FFFFFFFU)
+	{
+		fs->CloseHandle(hndl);
+		throw NativeAnimDataError("Native Anim2D texture-name extent invalid");
+	}
+	const S32 len_names = S32(extent);
+#endif
 
 	char* buf = (char*)malloc (len_names);
+#if !defined(_WIN32)
+	std::unique_ptr<char, decltype(&std::free)> namesOwner(buf, &std::free);
+	if (!buf)
+	{
+		fs->CloseHandle(hndl);
+		throw std::bad_alloc();
+	}
+#endif
 	fs->ReadFile (hndl, buf, fs->GetFileSize (hndl), &read);
 
 	#define MAX_TXMS 64
 
 	char* name_ptrs[MAX_TXMS];
 
+#if defined(_WIN32)
 	{
 		int cur = 1;
 		name_ptrs[0] = buf;
@@ -96,6 +168,28 @@ void AnimArchetype::load (IFileSystem* fs)
 		texCnt = cur-1;
 		CQASSERT(texCnt);
 	}
+#else
+	if (!buf || len_names <= 0 || read != U32(len_names) || buf[len_names - 1] != 0)
+	{
+		fs->CloseHandle(hndl);
+		throw NativeAnimDataError("Native Anim2D texture-name record invalid");
+	}
+	{
+		unsigned count = 1;
+		name_ptrs[0] = buf;
+		for (S32 i = 0; i + 1 < len_names; ++i)
+			if (!buf[i])
+			{
+				if (count >= MAX_TXMS)
+				{
+					fs->CloseHandle(hndl);
+					throw NativeAnimDataError("Native Anim2D texture-name count exceeds source array");
+				}
+				name_ptrs[count++] = buf + i + 1;
+			}
+		texCnt = U8(count);
+	}
+#endif
 
 	fs->CloseHandle (hndl);
 
@@ -105,16 +199,34 @@ void AnimArchetype::load (IFileSystem* fs)
 	CQASSERT (hndl != INVALID_HANDLE_VALUE);
 
 	DWORD fsize = fs->GetFileSize (hndl);
+#if !defined(_WIN32)
+	if (!fsize || fsize % sizeof(UVRect))
+	{
+		fs->CloseHandle(hndl);
+		throw NativeAnimDataError("Native Anim2D frame record extent invalid");
+	}
+#endif
 	CQASSERT (!(fsize % sizeof (UVRect)));
 	frame_cnt = fsize / sizeof (UVRect);
 
 	CQASSERT(frame_cnt && "Anim has no frames");
 
 	UVRect* uvrects = new UVRect[frame_cnt];
+#if !defined(_WIN32)
+	std::unique_ptr<UVRect[]> rectOwner(uvrects);
+#endif
 
 	frames = new AnimFrame[frame_cnt];
 
+#if defined(_WIN32)
 	fs->ReadFile (hndl, uvrects, fsize, &read);
+#else
+	if (!fs->ReadFile(hndl, uvrects, fsize, &read) || read != fsize)
+	{
+		fs->CloseHandle(hndl);
+		throw NativeAnimDataError("Native Anim2D frame record read failed or short");
+	}
+#endif
 	fs->CloseHandle (hndl);
 
 /*	desc.lpFileName = "Frame Counts";
@@ -144,7 +256,11 @@ void AnimArchetype::load (IFileSystem* fs)
 	}*/
 	
 	CQASSERT(texCnt < 256 && "REALLY big tex anm.  expand arrays?");
+#if defined(_WIN32)
 	tex = new U32[texCnt];
+#else
+	tex = new U32[texCnt]{};
+#endif
 	for (unsigned int i = 0;i<texCnt;i++)
 	{
 		if (TEXLIB->has_texture_id(name_ptrs[i]) != GR_OK)		// name is not present yet
@@ -182,8 +298,17 @@ void AnimArchetype::load (IFileSystem* fs)
 
 	for (unsigned int j = 0; j < frame_cnt; j++)
 	{
+#if defined(_WIN32)
 		ITL_TEXTUREFRAME_IRP tframe;
 		TEXLIB->get_texture_frame(tex[uvrects[j].txm_id], ITL_FRAME_FIRST, &tframe );
+#else
+		if (uvrects[j].txm_id < 0 || U32(uvrects[j].txm_id) >= texCnt)
+			throw NativeAnimDataError("Native Anim2D frame references invalid texture index");
+		ITL_TEXTUREFRAME_IRP tframe{};
+		if (TEXLIB->get_texture_frame(tex[uvrects[j].txm_id], ITL_FRAME_FIRST, &tframe) != GR_OK ||
+			!tframe.rp_texture_id)
+			throw NativeAnimDataError("Native Anim2D required frame texture unavailable");
+#endif
 
 		frames[j].texture = tframe.rp_texture_id;
 //		frames[j].texture = tex[uvrects[j].txm_id];
@@ -210,16 +335,21 @@ void AnimArchetype::load (IFileSystem* fs)
 		frames[j].y1 = uvrects[j].y1;
 	}
 
+#if defined(_WIN32)
 	delete [] uvrects;
 	free (buf);
 
 	fs->SetCurrentDirectory ("..");
+#endif
 
 	//free (libName);
 }
 
 void AnimArchetype::release ()
 {
+#if !defined(_WIN32)
+	if (!tex) return; // A rejected parse can precede texture-array allocation.
+#endif
 	for (unsigned int i = 0; i < texCnt; i++)
 	{
 		TEXLIB->release_texture_id(tex[i]);
@@ -680,8 +810,19 @@ AnimArchetype *Anim2D::create_archetype (char *fileName)
 	{
 		if (objFile->SetCurrentDirectory ("Animation"))
 		{
+#if defined(_WIN32)
 			result = new AnimArchetype;
 			result->load (objFile);
+#else
+			std::unique_ptr<AnimArchetype> pending(new AnimArchetype);
+			try { pending->load(objFile); }
+			catch (const NativeAnimDataError &error)
+			{
+			    std::fprintf(stderr, "%s; animation source: %s\n", error.what(), fileName);
+			    pending.reset();
+			}
+			result = pending.release();
+#endif
 			
 			objFile->SetCurrentDirectory ("..");
 		}
@@ -700,8 +841,22 @@ AnimArchetype *Anim2D::create_archetype (IFileSystem* parent)
 
 	if (parent->SetCurrentDirectory ("Animation"))
 	{
+#if defined(_WIN32)
 		result = new AnimArchetype;
 		result->load (parent);
+#else
+		std::unique_ptr<AnimArchetype> pending(new AnimArchetype);
+		try { pending->load(parent); }
+		catch (const NativeAnimDataError &error)
+		{
+		    char sourceName[512] = {};
+		    parent->GetFileName(sourceName, sizeof(sourceName));
+		    sourceName[sizeof(sourceName)-1] = 0;
+		    std::fprintf(stderr, "%s; animation source: %s\n", error.what(), sourceName);
+		    pending.reset();
+		}
+		result = pending.release();
+#endif
 
 		parent->SetCurrentDirectory ("..");
 		//result = TRUE;

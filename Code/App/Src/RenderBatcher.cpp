@@ -54,6 +54,7 @@ extern IVertexBufferManager *VB_MANAGER;
 #include "FVF.h"
 #if !defined(_WIN32)
 #include "RenderBatcherRegistration.h"
+#include "FrontierX/RenderState.h"
 #endif
 #define BIG_BATCH 202
 #define SCRATCH_BUFF_SIZE 12000
@@ -66,14 +67,35 @@ static bool CanReplayTextureStageState(U32 stage, U32 state)
 	(void)state;
 	return true;
 #else
-	if (stage == 1)
-		return state == D3DTSS_COLOROP || state == D3DTSS_ALPHAOP;
-	return stage == 0 && (state == D3DTSS_COLOROP ||
+	return stage < 2 && (state == D3DTSS_COLOROP ||
 		state == D3DTSS_COLORARG1 || state == D3DTSS_COLORARG2 ||
 		state == D3DTSS_ALPHAOP || state == D3DTSS_ALPHAARG1 ||
-		state == D3DTSS_ALPHAARG2);
+		state == D3DTSS_ALPHAARG2 || state == D3DTSS_TEXCOORDINDEX);
 #endif
 }
+
+#if !defined(_WIN32)
+static bool IsNativeTextureStageWrite(U32 stage, U32 state, U32 value)
+{
+	if (stage >= 2)
+		return (state == D3DTSS_COLOROP || state == D3DTSS_ALPHAOP) && value == D3DTOP_DISABLE;
+	switch (state)
+	{
+	case D3DTSS_COLOROP:
+	case D3DTSS_ALPHAOP:
+		return FrontierX::IsTextureStageOperation(value);
+	case D3DTSS_COLORARG1:
+	case D3DTSS_COLORARG2:
+	case D3DTSS_ALPHAARG1:
+	case D3DTSS_ALPHAARG2:
+		return FrontierX::IsTextureStageArgument(value);
+	case D3DTSS_TEXCOORDINDEX:
+		return value <= 1;
+	default:
+		return false;
+	}
+}
+#endif
 
 U8 vert_buff[SCRATCH_BUFF_SIZE];
 int buff_pos=0;
@@ -154,6 +176,9 @@ public:		// public interface
 	DA_METHOD(	set_perspective,			(float fovy, float aspect, float znear, float zfar ));
 	DA_METHOD(  set_projection,				(const Matrix4 &projection ));
 	DA_METHOD(  get_projection,				(Matrix4 &projection ));
+#if !defined(_WIN32)
+    GENRESULT FlushBeforeViewChange();
+#endif
 
 	virtual GENRESULT COMAPI set_material( D3DMATERIAL9 *material_values ) { return GR_GENERIC;}
 	virtual GENRESULT COMAPI get_material( D3DMATERIAL9 *out_material_values ) {return GR_GENERIC;}
@@ -2063,6 +2088,16 @@ DA_METHOD(	get_state,(RPRSTATE _state, U32 *value ))
 
 DA_METHOD(	set_modelview,(const Transform & _modelview ))
 {
+#if !defined(_WIN32)
+    if (!state[RPR_BATCH])
+    {
+        const GENRESULT result = PIPE->set_modelview(_modelview);
+        if (result != GR_OK) return result;
+    }
+    modelview = _modelview;
+    bIdentityModelview = memcmp(&_modelview, &id_trans, sizeof(id_trans)) == 0;
+    return GR_OK;
+#else
 	if ((memcmp(&_modelview, &id_trans, sizeof(id_trans)) == 0))
 	{
 		if (bIdentityModelview)
@@ -2076,6 +2111,7 @@ DA_METHOD(	set_modelview,(const Transform & _modelview ))
 		return PIPE->set_modelview( _modelview );
 	else
 		return GR_OK;
+#endif
 }
 
 //
@@ -2086,15 +2122,39 @@ DA_METHOD(	get_modelview,(Transform & _modelview ))
 		return PIPE->get_modelview( _modelview );
 	else
 	{
+#if defined(_WIN32)
 		modelview = _modelview;
+#else
+        _modelview = modelview;
+#endif
 		return GR_OK;
 	}
 }
 
 //
 
+#if !defined(_WIN32)
+GENRESULT RenderBatcher::FlushBeforeViewChange()
+{
+    // Source world effects are queued, unlike the immediate hull draws.
+    // Their projection and viewport must precede the following HUD pane.
+    if (bQueueSetup)
+    {
+        FlushQueue1();
+        FlushQueue2();
+    }
+    if (bm_pools[0].is_empty() && bm_pools[1].is_empty() && bm_pools[2].is_empty())
+        return GR_OK;
+    return flush(FLUSH_INTERNAL);
+}
+#endif
+
 DA_METHOD(	set_viewport,(int x, int y, int w, int h ))
 {
+#if !defined(_WIN32)
+    const GENRESULT result = FlushBeforeViewChange();
+    if (result != GR_OK) return result;
+#endif
 	return PIPE->set_viewport( x,y,w,h );
 }
 
@@ -2109,6 +2169,10 @@ DA_METHOD(	get_viewport,(int *x, int *y, int *w, int *h ))
 
 DA_METHOD(	set_ortho,(float left, float right, float bottom, float top, float nearval, float farval ))
 {
+#if !defined(_WIN32)
+    const GENRESULT result = FlushBeforeViewChange();
+    if (result != GR_OK) return result;
+#endif
 	return PIPE->set_ortho( left, right, bottom, top, nearval, farval );
 }
 
@@ -2116,6 +2180,10 @@ DA_METHOD(	set_ortho,(float left, float right, float bottom, float top, float ne
 
 DA_METHOD(	set_perspective,(float fovy, float aspect, float nearval, float farval ) )
 {
+#if !defined(_WIN32)
+    const GENRESULT result = FlushBeforeViewChange();
+    if (result != GR_OK) return result;
+#endif
 	return PIPE->set_perspective( fovy, aspect, nearval, farval );
 }
 
@@ -2123,6 +2191,10 @@ DA_METHOD(	set_perspective,(float fovy, float aspect, float nearval, float farva
 
 DA_METHOD(  set_projection,(const Matrix4 &projection ))
 {
+#if !defined(_WIN32)
+    const GENRESULT result = FlushBeforeViewChange();
+    if (result != GR_OK) return result;
+#endif
 	return PIPE->set_projection( projection );
 }
 
@@ -2182,6 +2254,12 @@ DA_METHOD(  set_texture_stage_state,(U32 stage, D3DTEXTURESTAGESTATETYPE tss, U3
 {
 	if (stage >= BM_NUM_STAGES || tss < D3DTSS_COLOROP || tss >= D3DTSS_MAX_STATE)
 		return GR_INVALID_PARMS;
+#if !defined(_WIN32)
+	// Pooled state is replayed later, so reject unsupported values before
+	// recording them rather than silently dropping them during that flush.
+	if (!IsNativeTextureStageWrite(stage, tss, value))
+		return GR_NOT_IMPLEMENTED;
+#endif
 
 	if( !state[RPR_BATCH] )
 	{
@@ -2237,20 +2315,32 @@ DA_METHOD(  get_texture_stage_texture,(U32 stage, U32 *htexture ))
 
 DA_METHOD(	verify_state,())
 {
+#if !defined(_WIN32)
+#define RB_VERIFY_STATE_CALL(call) do { const GENRESULT result = (call); if (result != GR_OK) return result; } while (0)
+#else
+#define RB_VERIFY_STATE_CALL(call) (call)
+#endif
 	if( state[RPR_BATCH] )
 	{
 		U32 texture_stage_cnt = 2;
 		for( U32 ts=0; ts<BM_NUM_STAGES; ts++ ) {
 			
-			PIPE->set_texture_stage_state( ts, D3DTSS_COLOROP, texture_stage_state[ts][D3DTSS_COLOROP] );
+			RB_VERIFY_STATE_CALL(PIPE->set_texture_stage_state( ts, D3DTSS_COLOROP, texture_stage_state[ts][D3DTSS_COLOROP] ));
 			
 			if( texture_stage_state[ts][D3DTSS_COLOROP] != D3DTOP_DISABLE ) {
 				
 				if (currentTextureID[ts] != -1)
 				{
-					if (commitedTextureID[ts] != currentTextureID[ts])
+#if !defined(_WIN32)
+					// External destruction/unbinding can invalidate the cached
+					// ownership even when these two IDs still compare equal.
+					const bool bindRequired = true;
+#else
+					const bool bindRequired = commitedTextureID[ts] != currentTextureID[ts];
+#endif
+					if (bindRequired)
 					{
-						PIPE->set_texture_stage_texture( ts, currentTextureID[ts]);
+						RB_VERIFY_STATE_CALL(PIPE->set_texture_stage_texture( ts, currentTextureID[ts]));
 						commitedTextureID[ts] = currentTextureID[ts];
 					}
 				}
@@ -2258,17 +2348,18 @@ DA_METHOD(	verify_state,())
 				// start at 2, COLOROP is 1, zero is invalid;
 				for( U32 tss=2; tss<D3DTSS_MAX_STATE; tss++ ) {
 					if (!CanReplayTextureStageState(ts, tss)) continue;
-					PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] );
+					RB_VERIFY_STATE_CALL(PIPE->set_texture_stage_state( ts, (D3DTEXTURESTAGESTATETYPE)tss, texture_stage_state[ts][tss] ));
 				}
 			}
 			else if (currentTextureID[ts] == 0)
 			{
-				PIPE->set_texture_stage_texture( ts, 0 );
+				RB_VERIFY_STATE_CALL(PIPE->set_texture_stage_texture( ts, 0 ));
 				commitedTextureID[ts] = 0;
 			}
 		}
 	}
 	
+#undef RB_VERIFY_STATE_CALL
 	return PIPE->verify_state();
 }
 

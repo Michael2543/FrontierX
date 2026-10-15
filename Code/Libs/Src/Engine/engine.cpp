@@ -826,6 +826,13 @@ HRESULT ENGINE::create_compound_archetype( ARCHETYPE_INDEX arch_index, IFileSyst
 	if( SUCCEEDED( create_compound_archetype_part( ROOT_OBJ_NAME, root_filesys, INVALID_HANDLE_VALUE, parts_filesys, &new_part ) ) ) {
 		compound_root_archetype->parts.push_back( new_part );
 	}
+#if !defined(_WIN32)
+    else
+    {
+        GENERAL_ERROR("Engine: required compound root archetype failed to load");
+        return E_FAIL;
+    }
+#endif
 
 	strcpy( part_filter, PART_STEM );
 	strcat( part_filter, "*" );
@@ -834,8 +841,14 @@ HRESULT ENGINE::create_compound_archetype( ARCHETYPE_INDEX arch_index, IFileSyst
 		
 		do {
 			if( FAILED( create_compound_archetype_part( find_data.cFileName, root_filesys, srch, parts_filesys, &new_part ) ) ) {
+#if defined(_WIN32)
 				GENERAL_WARNING( "Engine: create_compound_archetype: unable to create part archetype, ignoring..." );
 				continue;
+#else
+                GENERAL_ERROR("Engine: required compound part archetype failed to load");
+                root_filesys->FindClose(srch);
+                return E_FAIL;
+#endif
 			}
 
 			ASSERT( new_part.part_archetype != NULL ) ;
@@ -1027,6 +1040,15 @@ ARCHETYPE_INDEX COMAPI ENGINE::create_archetype( const C8 *arch_name, IFileSyste
 	ARCH_DIAG("create_archetype: compound directory %s result=0x%08lX\n", arch_name, (unsigned long)compound_dir_result);
 	HRESULT compound_result = FAILED(compound_dir_result) ? E_FAIL : create_compound_archetype( arch_index, cmpnd_dir, filesys );
 	ARCH_DIAG("create_archetype: compound archetype %s result=0x%08lX\n", arch_name, (unsigned long)compound_result);
+#if !defined(_WIN32)
+    if (SUCCEEDED(compound_dir_result) && FAILED(compound_result))
+    {
+        // A declared compound must not become a simple or partial model.
+        // This releases each successfully acquired part through its real owner.
+        release_archetype(arch_index);
+        return INVALID_ARCHETYPE_INDEX;
+    }
+#endif
 	if( FAILED( compound_dir_result ) || FAILED( compound_result ) ) {
 
 		// Otherwise, try to load it as a simple engine archetype
@@ -1040,7 +1062,22 @@ ARCHETYPE_INDEX COMAPI ENGINE::create_archetype( const C8 *arch_name, IFileSyste
 
 		for( ec=bg; ec != en; ec++ ) {
 			ARCH_DIAG("create_archetype: before component %s for %s\n", (*ec).component_name, arch_name);
-			BOOL32 created = (*ec).component->create_archetype( arch_index, filesys );
+			BOOL32 created;
+#if !defined(_WIN32)
+			try
+			{
+				created = (*ec).component->create_archetype( arch_index, filesys );
+			}
+			catch (const FrontierX::NativeArchetypeLoadFailure &)
+			{
+				fprintf(stderr, "Native required component failed: %s (%s)\n",
+					arch_name, (*ec).component_name);
+				release_archetype(arch_index);
+				return INVALID_ARCHETYPE_INDEX;
+			}
+#else
+			created = (*ec).component->create_archetype( arch_index, filesys );
+#endif
 			ARCH_DIAG("create_archetype: after component %s for %s created=%d\n", (*ec).component_name, arch_name, created);
 			if( created ) {
 				DEBUG_LIFETIME_TRACE( TEMPSTR( "Engine: create_archetype: '%s' created archetype %d (%s)\n", (*ec).component_name, arch_index, arch_name ) );

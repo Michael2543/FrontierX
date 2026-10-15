@@ -126,6 +126,60 @@ bool CheckUnitSpeechStrings(const std::filesystem::path &root)
     return true;
 }
 
+// The original MovieScreen loads an 82 MiB intro through its physical Movies
+// owner. Preserve the general cap while testing the narrowly selected owner
+// policy, its actual clone/child callers, and both boundaries with sparse data.
+bool CheckPhysicalMovieLimits(const std::filesystem::path &root)
+{
+    const auto directory = root / "Movies";
+    std::filesystem::create_directory(directory / "Nested");
+    constexpr U32 size = U32(FrontierX::NativePhysicalFileLimit::Standard) + 1U;
+    const auto sparse = [](const std::filesystem::path &path, U32 extent) {
+        std::ofstream file(path, std::ios::binary);
+        file.put(char(0x5a)); file.seekp(std::streamoff(extent) - 1); file.put(char(0xa5));
+        return bool(file);
+    };
+    if (!sparse(directory / "large.mpg", size) ||
+        !sparse(directory / "Nested/large.mpg", size) ||
+        !sparse(directory / "oversize.mpg", U32(FrontierX::NativePhysicalFileLimit::Movies) + 1U)) return false;
+    const auto read = [&](IFileSystem *files, const char *name) {
+        DAFILEDESC desc(name);
+        HANDLE file = files->OpenChild(&desc);
+        if (file == INVALID_HANDLE_VALUE) return false;
+        U8 first = 0, last = 0; DWORD count = 0;
+        const bool valid = files->GetFileSize(file) == size &&
+            files->ReadFile(file, &first, 1, &count, nullptr) && count == 1 && first == 0x5a &&
+            files->SetFilePointer(file, S32(size - 1U), nullptr, FILE_BEGIN) == size - 1U &&
+            files->ReadFile(file, &last, 1, &count, nullptr) && count == 1 && last == 0xa5;
+        return files->CloseHandle(file) && valid;
+    };
+    const auto rejects = [](IFileSystem *files, const char *name) {
+        DAFILEDESC desc(name); HANDLE file = files->OpenChild(&desc);
+        if (file == INVALID_HANDLE_VALUE) return true;
+        files->CloseHandle(file); return false;
+    };
+    IFileSystem *standard = nullptr, *movies = nullptr, *invalid = nullptr;
+    std::string error;
+    if (!FrontierX::OpenNativeDirectoryFileSystem(directory, &standard, error) ||
+        !FrontierX::OpenNativeDirectoryFileSystem(directory, &movies, error, FrontierX::NativePhysicalFileLimit::Movies)) return false;
+    bool valid = rejects(standard, "large.mpg") && read(movies, "large.mpg") && rejects(movies, "oversize.mpg") &&
+        !FrontierX::OpenNativeDirectoryFileSystem(directory, &invalid, error,
+            static_cast<FrontierX::NativePhysicalFileLimit>(1U)) && !invalid;
+    for (const char *name : {"\\", "Nested"})
+    {
+        DAFILEDESC desc(name); desc.lpImplementation = "DOS"; desc.dwDesiredAccess = GENERIC_READ;
+        IFileSystem *child = nullptr;
+        const bool created = movies->CreateInstance(&desc, reinterpret_cast<void **>(&child)) == GR_OK && child;
+        valid = created && valid;
+        if (child) { valid = read(child, "large.mpg") && valid; child->Release(); }
+    }
+    standard->Release(); movies->Release();
+    std::filesystem::remove_all(directory / "Nested");
+    std::filesystem::remove(directory / "large.mpg");
+    std::filesystem::remove(directory / "oversize.mpg");
+    return valid;
+}
+
 int RunSelfTest()
 {
 	using FrontierX::Platform::SelectDataRootPath;
@@ -222,6 +276,11 @@ int RunSelfTest()
 		}
 	}
 	{
+        if (!CheckPhysicalMovieLimits(root))
+        {
+            std::cerr << "Physical movie limits, clone/child inheritance or sparse sentinels failed\n";
+            std::filesystem::remove_all(root, error); return 1;
+        }
 		const auto writerPath = root / "roundtrip.utf";
 		std::ofstream file(writerPath, std::ios::binary | std::ios::trunc);
 		file.write(reinterpret_cast<const char *>(encoded.data()),
@@ -587,6 +646,21 @@ int RunSelfTest()
 		DWORD read = 0;
 		mounted = child != INVALID_HANDLE_VALUE && files->ReadFile(child, &value, 1, &read, nullptr) &&
 			read == 1 && value == 'M' && files->CloseHandle(child);
+        // Mission::Reload resolves \Map_Mission1_3.qmission from its Campaign
+        // view. BaseUTF anchors absolute paths to that view, not the outer maps.
+        // The prior root-wide resolver loses terrain and reaches platform park
+        // assertions; this existing synthetic mount check gates campaign load.
+        DAFILEDESC absoluteMarker("\\Marker");
+        HANDLE absolute = files->OpenChild(&absoluteMarker);
+        char absoluteValue = 0;
+        DWORD absoluteRead = 0;
+        mounted = mounted && absolute != INVALID_HANDLE_VALUE &&
+            files->ReadFile(absolute, &absoluteValue, 1, &absoluteRead, nullptr) &&
+            absoluteRead == 1 && absoluteValue == 'M';
+        if (absolute != INVALID_HANDLE_VALUE) mounted = files->CloseHandle(absolute) && mounted;
+        mounted = mounted && files->SetCurrentDirectory("..") == FALSE &&
+            files->SetCurrentDirectory("\\") != FALSE;
+
 		files->Release();
 	}
 	if (!mounted || !FrontierX::Platform::IsDataRootUsable(packedEntries)) return 1;

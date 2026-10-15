@@ -3,6 +3,12 @@
 #include "FrontierX/NativeStreamer.h"
 #include "FrontierX/NativeUtfFileSystem.h"
 #include "Streamer.h"
+#if defined(FRONTIERX_HAVE_VIDEO_DECODER)
+#include "FrontierX/NativeVideoSystem.h"
+#include "FrontierX/NativeRenderPipeline.h"
+#include "FrontierX/NativeRenderPrimitive.h"
+#include "VideoSystem.h"
+#endif
 #if defined(FRONTIERX_HAVE_IAC_DECODER)
 #include "NativeIacWave.h"
 #endif
@@ -20,6 +26,9 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <array>
+#include <map>
+#include <algorithm>
 
 namespace
 {
@@ -250,6 +259,238 @@ struct CloseCallback final : ISystemEventCallback
     bool veto = true;
 };
 
+#if defined(FRONTIERX_HAVE_VIDEO_DECODER)
+#include "SyntheticVideoFixture.inc"
+std::vector<std::uint8_t> DecodeSyntheticBase64(const char *input, std::size_t expected)
+{
+    constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::vector<std::uint8_t> bytes;
+    U32 value = 0U; unsigned bits = 0U;
+    for (const char *cursor = input; *cursor; ++cursor)
+    {
+        if (*cursor == '\n' || *cursor == '\r') continue;
+        if (*cursor == '=') break;
+        const char *digit = std::strchr(alphabet, *cursor);
+        Require(digit != nullptr, "synthetic movie base64 invalid");
+        value = (value << 6U) | U32(digit - alphabet); bits += 6U;
+        if (bits >= 8U) { bits -= 8U; bytes.push_back(std::uint8_t((value >> bits) & 255U)); }
+    }
+    Require(bytes.size() == expected, "synthetic movie extent invalid");
+    return bytes;
+}
+struct VideoTexture
+{
+    U32 width, height;
+    std::vector<std::uint8_t> pixels;
+};
+struct VideoTextures
+{
+    U32 next = 1U;
+    unsigned uploads = 0U, creates = 0U, destroys = 0U;
+    std::map<U32, VideoTexture> textures;
+    std::array<U32, 2> bindings{};
+};
+bool VideoTextureExists(void *context, U32 handle)
+{ return static_cast<VideoTextures *>(context)->textures.count(handle) == 1U; }
+GENRESULT CreateVideoTexture(void *context, U32 width, U32 height, U32 &handle)
+{
+    if (width != 16U || height != 16U) return GR_INVALID_PARMS;
+    auto &owner = *static_cast<VideoTextures *>(context);
+    handle = owner.next++;
+    owner.textures.emplace(handle, VideoTexture{width, height, std::vector<std::uint8_t>(width * height * 4U)});
+    ++owner.creates; return GR_OK;
+}
+GENRESULT UploadVideoTexture(void *context, U32 handle, const std::uint8_t *pixels,
+                             U32 width, U32 height, std::size_t bytes)
+{
+    auto &owner = *static_cast<VideoTextures *>(context);
+    const auto found = owner.textures.find(handle);
+    if (found == owner.textures.end() || !pixels || found->second.width != width ||
+        found->second.height != height || found->second.pixels.size() != bytes) return GR_INVALID_PARMS;
+    std::copy_n(pixels, bytes, found->second.pixels.begin()); ++owner.uploads; return GR_OK;
+}
+GENRESULT DestroyVideoTexture(void *context, U32 handle)
+{
+    auto &owner = *static_cast<VideoTextures *>(context);
+    if (std::find(owner.bindings.begin(), owner.bindings.end(), handle) != owner.bindings.end())
+        return GR_INVALID_PARMS;
+    if (owner.textures.erase(handle) != 1U) return GR_INVALID_PARMS;
+    ++owner.destroys; return GR_OK;
+}
+GENRESULT DACOM_CDECL BindVideoTexture(void *context, U32 stage, U32 texture)
+{
+    auto &owner = *static_cast<VideoTextures *>(context);
+    if (stage >= owner.bindings.size() || (texture && owner.textures.count(texture) != 1U)) return GR_INVALID_PARMS;
+    owner.bindings[stage] = texture; return GR_OK;
+}
+GENRESULT DACOM_CDECL RejectVideoGeometry(void *, const FrontierX::RenderSubmissionView &)
+{ return GR_NOT_IMPLEMENTED; }
+void CheckVideo(FrontierX::NativeComponentManager &manager)
+{
+    // MovieScreen uses this real factory and legacy interface. Decoder-owned
+    // textures/audio/timing must execute; registration alone cannot prove them.
+    Require(FrontierX::RegisterNativeVideoSystem(&manager), "video registration failed");
+    AGGDESC descriptor("IVideoSystem", "VideoSystem");
+    void *raw = nullptr;
+    Require(manager.CreateInstance(&descriptor, &raw) == GR_OK && raw, "video aggregate creation failed");
+    auto *aggregate = static_cast<IAggregateComponent *>(raw);
+    IVideoSystem *video = nullptr;
+    Require(aggregate->QueryInterface(IID_IVideoSystem, reinterpret_cast<void **>(&video)) == GR_OK && video,
+            "video legacy interface query failed");
+    Require(aggregate->Initialize() == GR_OK, "video genuine decoder/license initialization failed");
+    struct PrivateDirectory
+    {
+        std::filesystem::path path;
+        ~PrivateDirectory() { std::error_code ec; std::filesystem::remove_all(path, ec); if (ec) std::abort(); }
+    } privateDirectory;
+    for (unsigned attempt = 0;; ++attempt)
+    {
+        privateDirectory.path = std::filesystem::temp_directory_path() /
+            ("frontierx-native-video-" + std::to_string(SDL_GetTicksNS()) + '-' + std::to_string(attempt));
+        if (std::filesystem::create_directory(privateDirectory.path)) break;
+    }
+    std::filesystem::permissions(privateDirectory.path, std::filesystem::perms::owner_all,
+                                std::filesystem::perm_options::replace);
+    const auto write = [&](const char *name, const std::vector<std::uint8_t> &bytes) {
+        std::ofstream file(privateDirectory.path / name, std::ios::binary);
+        file.write(reinterpret_cast<const char *>(bytes.data()), std::streamsize(bytes.size()));
+        Require(bool(file), "synthetic movie write failed");
+    };
+    const auto movie = DecodeSyntheticBase64(kSyntheticMovieBase64, kSyntheticMovieBytes);
+    write("movie.mpg", movie);
+    write("video-only.mpg", DecodeSyntheticBase64(kSyntheticVideoOnlyBase64, kSyntheticVideoOnlyBytes));
+    write("audio-only.mpg", DecodeSyntheticBase64(kSyntheticAudioOnlyBase64, kSyntheticAudioOnlyBytes));
+    write("truncated.mpg", std::vector<std::uint8_t>(movie.begin(), movie.begin() + 16));
+    write("invalid.mpg", {1U, 2U, 3U, 4U});
+    IFileSystem *directory = nullptr;
+    std::string error;
+    Require(FrontierX::OpenNativeDirectoryFileSystem(privateDirectory.path, &directory, error), error.c_str());
+    VideoTextures textures;
+    FrontierX::NativeTextureOperations operations{};
+    operations.context = &textures; operations.lookup = VideoTextureExists;
+    operations.create = CreateVideoTexture; operations.upload = UploadVideoTexture; operations.destroy = DestroyVideoTexture;
+    FrontierX::RegisterNativeRenderPrimitive(&manager);
+    FrontierX::NativeRenderPrimitiveDesc primitiveDescriptor;
+    primitiveDescriptor.callback = RejectVideoGeometry;
+    primitiveDescriptor.context = &textures; primitiveDescriptor.textureBind = BindVideoTexture;
+    void *primitiveRaw = nullptr;
+    Require(manager.CreateInstance(&primitiveDescriptor, &primitiveRaw) == GR_OK && primitiveRaw,
+            "video genuine native binding owner creation failed");
+    auto *primitive = static_cast<IRenderPrimitive *>(primitiveRaw);
+    auto *pipeline = new FrontierX::NativeRenderPipeline(primitive, operations);
+    Require(video->Initialize(directory, pipeline) == GR_OK, "video actual filesystem/pipeline binding failed");
+    Require(video->Initialize(directory, pipeline) != GR_OK, "video duplicate owner binding accepted");
+    for (const char *name : {"missing.mpg", "invalid.mpg", "truncated.mpg", "video-only.mpg", "audio-only.mpg"})
+        Require(!video->LoadVideoMovie(name, false) && textures.textures.empty(),
+                "missing/corrupt/truncated or missing-stream movie succeeded or retained texture");
+    const VIDEO_HANDLE handle = video->LoadVideoMovie("movie.mpg", false);
+    Require(handle && !video->IsPlaying(handle) && video->GetNumFrames(handle) == 25U &&
+            video->GetVideoWidth(handle) == 16U && video->GetVideoHeight(handle) == 16U,
+            "video actual decoded dimensions/frame count invalid");
+    FrontierX::NativeVideoDiagnostics diagnostics{};
+    Require(FrontierX::GetNativeVideoDiagnostics(video, handle, diagnostics) &&
+            diagnostics.sampleRate == 22050U && diagnostics.channels == 1U &&
+            diagnostics.decodedFrames == 25U && diagnostics.decodedAudioSamples >= 22050U &&
+            diagnostics.decodedAudioSamples <= 24255U && diagnostics.peak >= 0.10F && diagnostics.peak <= 0.16F &&
+            diagnostics.rms >= 0.06F && diagnostics.rms <= 0.11F,
+            "video genuine MP2 tone sample count/rate/channels/amplitude invalid");
+    const U32 texture = video->GetVideoTexture(handle);
+    Require(texture && pipeline->is_texture(texture) == GR_OK && textures.textures.count(texture) == 1U,
+            "video actual decoded texture handle invalid");
+    float u = 0.0F, v = 0.0F;
+    video->GetVideoTexureCoords(handle, u, v);
+    Require(u == 1.0F && v == 1.0F, "video authored texture extent invalid");
+    const auto pixels = [&]() { return textures.textures.at(texture).pixels; };
+    const auto color = [&](const std::vector<std::uint8_t> &rgba, bool red) {
+        Require(rgba.size() == 16U * 16U * 4U, "video decoded pixel extent invalid");
+        for (std::size_t index = 0; index < rgba.size(); index += 4U)
+            Require(rgba[index + (red ? 0U : 2U)] >= 220U &&
+                    rgba[index + (red ? 2U : 0U)] <= 30U && rgba[index + 1U] <= 30U && rgba[index + 3U] == 255U,
+                    "video actual MPEG/YUV color or opaque alpha invalid");
+    };
+    const auto first = pixels(); color(first, true);
+    video->SetVideoFrame(handle, 2U);
+    const auto second = pixels(); color(second, false);
+    Require(first != second, "one-based first/second video seeks did not select distinct actual frames");
+    video->SetVideoFrame(handle, 1U);
+    Require(pixels() == first, "first decoded video frame failed exact seek restoration");
+    bool rejectedSeek = false;
+    try { video->SetVideoFrame(handle, 0U); } catch (const std::runtime_error &) { rejectedSeek = true; }
+    Require(rejectedSeek && pixels() == first, "invalid seek changed current video frame or succeeded");
+    video->StartVideoMovie(handle);
+    Require(video->IsPlaying(handle), "video actual playback did not start");
+    const unsigned before = textures.uploads;
+    const Uint64 advanceLimit = SDL_GetTicks() + 1500U;
+    while (textures.uploads == before && SDL_GetTicks() < advanceLimit)
+    { SDL_Delay(10); video->UpdateVideoFrame(handle); }
+    Require(textures.uploads > before, "video real audio-master clock did not advance decoded frame uploads");
+    video->StopVideoMovie(handle);
+    const unsigned paused = textures.uploads;
+    const auto pausedPixels = pixels();
+    SDL_Delay(100); video->UpdateVideoFrame(handle);
+    Require(!video->IsPlaying(handle) && paused == textures.uploads && pausedPixels == pixels(),
+            "video pause did not preserve real frame output");
+    video->SetVideoFrame(handle, 24U); color(pixels(), false);
+    video->StartVideoMovie(handle);
+    const Uint64 eofLimit = SDL_GetTicks() + 2500U;
+    while (video->IsPlaying(handle) && SDL_GetTicks() < eofLimit)
+    { SDL_Delay(10); video->UpdateVideoFrame(handle); }
+    Require(!video->IsPlaying(handle), "video EOF/audio drain failed to stop playback");
+    Require(pipeline->set_texture_stage_texture(0U, texture) == GR_OK &&
+            pipeline->set_texture_stage_texture(1U, texture) == GR_OK,
+            "video owner binding fixture requires actual both-stage bindings");
+    video->ReleaseVideoMovie(handle);
+    Require(textures.textures.empty() && textures.bindings == std::array<U32,2>{0U,0U} && pipeline->is_texture(texture) != GR_OK,
+            "video release retained actual texture ownership");
+    bool stale = false;
+    try { (void)video->GetVideoWidth(handle); } catch (const std::runtime_error &failure)
+    { stale = std::strcmp(failure.what(), "native video handle invalid/stale") == 0; }
+    Require(stale, "released video handle accepted or returned placeholder metadata");
+    const auto previousDiagnostics = diagnostics;
+    Require(!FrontierX::GetNativeVideoDiagnostics(video, handle, diagnostics) &&
+            diagnostics.decodedAudioSamples == previousDiagnostics.decodedAudioSamples &&
+            diagnostics.sampleRate == previousDiagnostics.sampleRate && diagnostics.channels == previousDiagnostics.channels &&
+            diagnostics.decodedFrames == previousDiagnostics.decodedFrames && diagnostics.peak == previousDiagnostics.peak &&
+            diagnostics.rms == previousDiagnostics.rms,
+            "stale video diagnostics changed output or returned placeholder success");
+    const VIDEO_HANDLE loop = video->LoadVideoMovie("movie.mpg", true);
+    Require(loop && loop != handle, "released video handle reused");
+    video->SetVideoFrame(loop, 25U);
+    const U32 loopTexture = video->GetVideoTexture(loop);
+    color(textures.textures.at(loopTexture).pixels, true);
+    const unsigned loopBefore = textures.uploads;
+    bool loopReachedBlueFrame = false;
+    video->StartVideoMovie(loop);
+    const Uint64 loopLimit = SDL_GetTicks() + 1800U;
+    while ((textures.uploads < loopBefore + 3U || !loopReachedBlueFrame) && SDL_GetTicks() < loopLimit)
+    {
+        SDL_Delay(10); video->UpdateVideoFrame(loop);
+        const auto &loopPixels = textures.textures.at(loopTexture).pixels;
+        if (loopPixels[2] >= 220U && loopPixels[0] <= 30U) loopReachedBlueFrame = true;
+    }
+    Require(video->IsPlaying(loop) && textures.uploads >= loopBefore + 3U && loopReachedBlueFrame,
+            "video loop failed genuine rewind/continued frame uploads");
+    U32 otherTexture = 0U;
+    Require(pipeline->create_texture(16, 16, PixelFormat(PF_RGBA8), 1, 0, otherTexture) == GR_OK && otherTexture &&
+            pipeline->set_texture_stage_texture(0U, video->GetVideoTexture(loop)) == GR_OK &&
+            pipeline->set_texture_stage_texture(1U, otherTexture) == GR_OK,
+            "video owner binding fixture requires actual independent nonmovie texture");
+    video->Shutdown();
+    Require(textures.bindings[0] == 0U && textures.bindings[1] == otherTexture &&
+            pipeline->is_texture(otherTexture) == GR_OK,
+            "video shutdown changed unrelated binding or retained its own texture");
+    Require(pipeline->set_texture_stage_texture(1U, 0U) == GR_OK && pipeline->destroy_texture(otherTexture) == GR_OK,
+            "video fixture failed independent texture release");
+    Require(textures.textures.empty() && textures.creates == textures.destroys,
+            "video shutdown retained decoded texture owners");
+    stale = false;
+    try { video->StartVideoMovie(loop); } catch (const std::runtime_error &) { stale = true; }
+    Require(stale, "video shutdown retained live movie handles");
+    directory->Release(); pipeline->Release(); primitive->Release(); video->Release(); aggregate->Release();
+    std::cout << "Native IVideoSystem: real MPEG1/MP2 decode, frame pixels, exact seek, clock, pause, EOF, loop and owner rejection checked\n";
+}
+#endif
+
 void CheckControlledInput()
 {
     FrontierX::NativeComponentManager manager;
@@ -447,6 +688,9 @@ int main()
         Require(exit_calls == 1, "quit event did not invoke the configured exit callback");
 
         CheckStreamer(manager, window);
+#if defined(FRONTIERX_HAVE_VIDEO_DECODER)
+        CheckVideo(manager);
+#endif
 
         Require(close_point->Unadvise(close_token) == GR_OK,
             "close callback unsubscribe failed");

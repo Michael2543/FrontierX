@@ -11,6 +11,9 @@ struct RenderStateSnapshot
     U32 depthWriteEnabled = 1U;
     U32 depthFunction = D3DCMP_LESSEQUAL;
     U32 alphaBlendEnabled = 0U;
+    U32 alphaTestEnabled = 0U;
+    U32 alphaFunction = D3DCMP_ALWAYS;
+    U32 alphaReference = 0U;
     U32 sourceBlend = D3DBLEND_ONE;
     U32 destinationBlend = D3DBLEND_ZERO;
     U32 specularEnabled = 0U;
@@ -18,7 +21,7 @@ struct RenderStateSnapshot
     U32 textureFactor = 0xFFFFFFFFU;
 };
 
-struct TextureStageSnapshot
+struct TextureStageValues
 {
     U32 colorOperation = D3DTOP_MODULATE;
     U32 colorArgument1 = D3DTA_TEXTURE;
@@ -29,8 +32,15 @@ struct TextureStageSnapshot
     U32 textureCoordinateIndex = 0U;
 };
 
+struct TextureStageSnapshot : TextureStageValues
+{
+    TextureStageValues second{D3DTOP_DISABLE, D3DTA_TEXTURE, D3DTA_CURRENT,
+                              D3DTOP_DISABLE, D3DTA_TEXTURE, D3DTA_CURRENT, 1U};
+};
+
 struct SamplerStateSnapshot
 {
+    U32 stage = 0U;
     U32 addressU = D3DTADDRESS_CLAMP;
     U32 addressV = D3DTADDRESS_CLAMP;
     U32 minFilter = D3DTEXF_POINT;
@@ -46,7 +56,8 @@ inline bool IsTextureStageArgument(U32 value) noexcept
 
 inline bool IsTextureStageOperation(U32 value) noexcept
 {
-    return value == D3DTOP_SELECTARG1 || value == D3DTOP_SELECTARG2 ||
+    return value == D3DTOP_DISABLE || value == D3DTOP_ADD ||
+           value == D3DTOP_SELECTARG1 || value == D3DTOP_SELECTARG2 ||
            value == D3DTOP_MODULATE;
 }
 

@@ -23,6 +23,7 @@
 #include "CQTrace.h"
 #include "Include/NativeAppGlobals.h"
 #include "Include/NativeAppTextResources.h"
+#include "Include/NativeAsteroidDistanceOrder.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -1127,10 +1128,18 @@ void AsteroidField::RenderBackground ()
 			while (texList[tx] != -1)
 			{
 				ANIM2D->start_batch(texList[tx]);//roids[0]);
+#if !defined(_WIN32)
+				if (numRoids < 0)
+					throw std::runtime_error("Native asteroid distance sort has negative asteroid count");
+#endif
 				for (i=0;i<numRoids;i++)
 				{
 					Vector rpos = roids[i].anim.GetPosition();
+#if defined(_WIN32)
 					roid_sort[i] = (rpos-cpos).magnitude_squared();
+#else
+					roid_sort[i] = NativeAsteroidDistanceKey((rpos-cpos).magnitude_squared());
+#endif
 				}
 
 				RadixSort::sort(roid_sort,numRoids);	

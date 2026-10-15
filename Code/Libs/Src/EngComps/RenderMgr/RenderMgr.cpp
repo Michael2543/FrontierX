@@ -36,6 +36,9 @@ static FILE *g_renderMgrDiag;
 #include "ENGINE.H"
 #include "engcomp.h"
 #include "IRenderPrimitive.h"
+#if !defined(_WIN32)
+#include "FrontierX/NativeEngine.h"
+#endif
 
 #include "Tfuncs.h"
 
@@ -297,6 +300,17 @@ BOOL32 RenderMgr::create_archetype( ARCHETYPE_INDEX arch_index, struct IFileSyst
 
 	archetypes.erase( arch_index );
 
+#if !defined(_WIN32)
+	// A hardpoint component may still claim this engine archetype. Do not let
+	// that hide the failure of an authored render model; locator-only nodes
+	// have neither directory and retain the original FALSE result.
+	COMPTR<IFileSystem> declaredRender;
+	DAFILEDESC meshDesc("openFLAME 3D N-mesh");
+	DAFILEDESC lodDesc(MULTI_APPEARANCE_DIR);
+	if (SUCCEEDED(filesys->CreateInstance(&meshDesc, declaredRender)) ||
+		SUCCEEDED(filesys->CreateInstance(&lodDesc, declaredRender)))
+		throw FrontierX::NativeArchetypeLoadFailure();
+#endif
 	return FALSE;
 }
 

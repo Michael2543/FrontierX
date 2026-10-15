@@ -11,15 +11,36 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <algorithm>
+using std::min;
+using std::max;
+struct IDrawAgent;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DEffect.h"
-#include "Objlist.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "TObjTrans.h"
 #include "TObjFrame.h"
 #include "TObjPhys.h"
@@ -42,11 +63,15 @@
 
 #include <TSmartPointer.h>
 #include <Mesh.h>
-#include <FileSys.h>
-#include <Engine.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <IRenderPrimitive.h>
-#include <Renderer.h>
+#include <renderer.h>
 
+#if !defined(_WIN32)
+static_assert(sizeof(BASE_ZEALOT_SAVELOAD) == 20);
+static_assert(sizeof(ZEALOT_SAVELOAD) == 64);
+#endif
 
 
 struct ZealotArchetype
@@ -599,7 +624,12 @@ BOOL32 Zealot::Save (struct IFileSystem * outFile)
 
 	save.visibilityFlags = GetVisibilityFlags();
 	
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+		goto Done;
+#endif
 	
 	result = 1;
 
@@ -621,8 +651,15 @@ BOOL32 Zealot::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("ZEALOT_SAVELOAD", buffer, &load);
+#else
+	if (file->GetFileSize() != sizeof(load) ||
+		!file->ReadFile(0, buffer, sizeof(load), &dwRead, 0) || dwRead != sizeof(load) ||
+		MISSION->CorrelateSymbol("ZEALOT_SAVELOAD", buffer, &load) != GR_OK)
+		goto Done;
+#endif
 
 	// temporarily removed - returned, but why was it removed?
 	*static_cast<BASE_ZEALOT_SAVELOAD *>(this) = load;

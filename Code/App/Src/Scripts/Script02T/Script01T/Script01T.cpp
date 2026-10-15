@@ -12,10 +12,21 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#include <cstdlib>
+#if defined(_WIN32)
 #include "DataDef.h"
-#include "stdlib.h"
-
 #include "..\helper\helper.h"
+#else
+#include <DMTechNode.h>
+#include "../../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript01Resources.h"
+#include <cstdio>
+// DLL-local data/program types remain distinct in the native process link.
+namespace FrontierXScript01
+{
+#include "DataDef.h"
+#endif
 
 //--------------------------------------------------------------------------
 //  TM1 #define's
@@ -48,6 +59,20 @@ static void TM1_TurnOnTheAI
 //--------------------------------------------------------------------------
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+extern "C" void FrontierXInitializeScript01(void)
+{
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript01Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript01ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
+
 
 //--------------------------------------------------------------------------
 //  Mission functions: Terran Campaign Mission 1
@@ -92,6 +117,9 @@ bool TM1_Briefing::Update
 ) 
 {
     CQBRIEFINGITEM slotAnim;
+#if !defined(_WIN32)
+    slotAnim.bContinueAnimating = false;
+#endif
 
 	switch(state)
 	{
@@ -2732,3 +2760,7 @@ bool TM1_DisplayObjectiveHandler::Update
     return true;
 }
 
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript01
+#endif

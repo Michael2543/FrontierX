@@ -29,6 +29,9 @@
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
+#include <memory>
+#include <IUTFWriter.h>
+#include "Include/NativeAppMissionMedia.h"
 struct IDrawAgent;
 #include "MyVertex.h"
 #include <algorithm>
@@ -591,6 +594,11 @@ void Mimic::SpecialAttackObject (IBaseObject * obj)
 }
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+static_assert(sizeof(BASE_MIMIC_SAVELOAD) == 8, "Original BASE_MIMIC_SAVELOAD record extent");
+static_assert(sizeof(MIMIC_SAVELOAD) == 8, "Original MIMIC_SAVELOAD record extent");
+#endif
+
 BOOL32 Mimic::Save (struct IFileSystem * outFile)
 {
 	DAFILEDESC fdesc = "MIMIC_SAVELOAD";
@@ -612,7 +620,12 @@ BOOL32 Mimic::Save (struct IFileSystem * outFile)
 
 //	FRAME_save(save);
 	
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) ||
+		dwWritten != sizeof(save)) goto Done;
+#endif
 	
 	result = 1;
 
@@ -634,8 +647,15 @@ BOOL32 Mimic::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("MIMIC_SAVELOAD", buffer, &load);
+#else
+	if (file->GetFileSize() != sizeof(load) ||
+		!file->ReadFile(0, buffer, sizeof(load), &dwRead, 0) || dwRead != sizeof(load) ||
+		!MISSION || MISSION->CorrelateSymbol("MIMIC_SAVELOAD", buffer, &load) != GR_OK)
+		goto Done;
+#endif
 
 	*static_cast<BASE_MIMIC_SAVELOAD *>(this) = load;
 
@@ -648,6 +668,81 @@ Done:
 }
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+bool CheckNativeMimicPersistence(IFileSystem *directory)
+{
+	// The shell regression has no active mission or simulation. Exercise this
+	// real source writer and reject damaged records without a fake Mission loader.
+	if (!directory || !HEAP || !OBJLIST || MISSION) return false;
+	DAFILEDESC descriptor = "MimicRegression.mission";
+	descriptor.lpImplementation = "UTF";
+	descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	descriptor.dwCreationDistribution = CREATE_ALWAYS;
+	COMPTR<IFileSystem> archive;
+	if (directory->CreateInstance(&descriptor, archive) != GR_OK) return false;
+	auto object = std::unique_ptr<IBaseObject>(new ObjectImpl<Mimic>);
+	auto *source = static_cast<Mimic *>(object.get());
+	source->aliasArchetypeID = 0x12345678;
+	source->aliasPlayerID = 2;
+	if (!source->Save(archive)) return false;
+	COMPTR<IUTFWriter> writer;
+	if (archive->QueryInterface(IID_IUTFWriter, writer) != GR_OK) return false;
+	writer->Flush();
+	writer.free();
+	descriptor.dwDesiredAccess = GENERIC_READ;
+	descriptor.dwCreationDistribution = OPEN_EXISTING;
+	COMPTR<IFileSystem> reopened;
+	if (directory->CreateInstance(&descriptor, reopened) != GR_OK || source->Save(reopened))
+		return false;
+	descriptor = "MIMIC_SAVELOAD";
+	descriptor.lpImplementation = "DOS";
+	COMPTR<IFileSystem> payload;
+	MIMIC_SAVELOAD saved;
+	U32 count = 0;
+	if (reopened->CreateInstance(&descriptor, payload) != GR_OK ||
+		payload->GetFileSize() != sizeof(saved) ||
+		!payload->ReadFile(0, &saved, sizeof(saved), &count, 0) || count != sizeof(saved) ||
+		saved.aliasArchetypeID != 0x12345678 || saved.aliasPlayerID != 2) return false;
+	payload.free();
+	auto writeRecord = [&](const void *data, U32 bytes)
+	{
+		descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+		descriptor.dwCreationDistribution = CREATE_ALWAYS;
+		COMPTR<IFileSystem> damaged;
+		U32 written = 0;
+		return archive->CreateInstance(&descriptor, damaged) == GR_OK &&
+			damaged->WriteFile(0, data, bytes, &written, 0) && written == bytes;
+	};
+	if (!writeRecord(&saved, sizeof(saved)-1) || source->Load(archive)) return false;
+	U8 oversized[sizeof(saved)+1] = {};
+	std::memcpy(oversized, &saved, sizeof(saved));
+	if (!writeRecord(oversized, sizeof(oversized)) || source->Load(archive)) return false;
+	return true;
+}
+#endif
+
+#if !defined(_WIN32)
+bool CheckNativeMissionAbilityPersistence(IFileSystem *directory)
+{
+	if (!directory || OBJLIST || MISSION) return false;
+	struct ObjectBinding
+	{
+		IObjectList *previous = OBJLIST;
+		~ObjectBinding() { OBJLIST = previous; }
+	} binding;
+	// The actual ObjectMission destructor removes its ID through ObjectList,
+	// even for these zero-ID serialized owners. Reuse the real fixture owner.
+	COMPTR<IObjectList> fixtureObjects;
+	fixtureObjects = FrontierX::CreateNativeSoundCheckObjectList();
+	if (!fixtureObjects) return false;
+	fixtureObjects->Release();
+	OBJLIST = fixtureObjects;
+	return CheckNativeMimicPersistence(directory) &&
+		CheckNativeRepellentCloudPersistence(directory) &&
+		CheckNativeStasisBoltPersistence(directory);
+}
+#endif
+
 void Mimic::ResolveAssociations ()
 {
 	VOLPTR(IExtent) extentObj;

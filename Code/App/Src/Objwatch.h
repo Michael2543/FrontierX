@@ -1,5 +1,8 @@
 #ifndef OBJWATCH_H
 #define OBJWATCH_H
+#if !defined(_WIN32)
+#include <cstdint>
+#endif
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                              OBJWATCH.H                                  //
@@ -129,12 +132,20 @@ public:
 
 	bool operator == (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr == (IBaseObject *)i);
+#else
+		return ptr == reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator != (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr != (IBaseObject *)i);
+#else
+		return ptr != reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator == (const OBJPTR<Type> & cmp) const
@@ -264,12 +275,20 @@ public:
 
 	bool operator == (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr == (IBaseObject *)i);
+#else
+		return ptr == reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator != (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr != (IBaseObject *)i);
+#else
+		return ptr != reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator == (const OBJPTR<IBaseObject> & cmp) const
@@ -402,12 +421,20 @@ public:
 
 	bool operator == (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr == (IBaseObject *)i);
+#else
+		return ptr == reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator != (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr != (IBaseObject *)i);
+#else
+		return ptr != reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator == (const OBJPTR2<Type,objid> & cmp) const
@@ -536,12 +563,20 @@ public:
 
 	bool operator == (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr == (IBaseObject *)i);
+#else
+		return ptr == reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator != (const int i) const
 	{
+#if defined(_WIN32)
 	 	return (ptr != (IBaseObject *)i);
+#else
+		return ptr != reinterpret_cast<IBaseObject *>(static_cast<std::intptr_t>(i));
+#endif
 	}
 
 	bool operator == (const OBJPTR2<IBaseObject,IBaseObjectID> & cmp) const

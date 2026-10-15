@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <type_traits>
+#include <stdexcept>
 using std::min;
 using std::max;
 #define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
@@ -1075,11 +1076,21 @@ void Gunplat::initLaunchers (void)
 				else
 				{
 					delete tmp;
+#if !defined(_WIN32)
+					if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+						throw std::runtime_error("Native Gunplat required launcher interface missing");
+#endif
 					break;
 				}
 			}
 			else
+			{
+#if !defined(_WIN32)
+				if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+					throw std::runtime_error("Native Gunplat required launcher creation failed");
+#endif
 				break;
+			}
 		}
 		else
 			break;
@@ -1094,8 +1105,16 @@ void Gunplat::initLaunchers (void)
 			else
 			{
 				delete tmp;
+#if !defined(_WIN32)
+				if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+					throw std::runtime_error("Native Gunplat required special launcher interface missing");
+#endif
 			}
 		}
+#if !defined(_WIN32)
+		else if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+			throw std::runtime_error("Native Gunplat required special launcher creation failed");
+#endif
 	}
 }
 //---------------------------------------------------------------------------
@@ -1208,7 +1227,11 @@ BOOL32 Gunplat::Save (struct IFileSystem * file)
 	int i;
 	OBJPTR<ISaveLoad> obj;
 
+#if defined(_WIN32)
 	Platform<GUNPLAT_SAVELOAD, GUNPLAT_INIT>::Save(file);
+#else
+	if (!Platform<GUNPLAT_SAVELOAD, GUNPLAT_INIT>::Save(file)) return 0;
+#endif
 
 	char buffer[64];
 
@@ -1218,15 +1241,26 @@ BOOL32 Gunplat::Save (struct IFileSystem * file)
 		{
 			sprintf(buffer, "Turret-%d", i);
 
+#if defined(_WIN32)
 			file->CreateDirectory(buffer);
+#else
+			if (!file->CreateDirectory(buffer)) return 0;
+#endif
 
 			if (file->SetCurrentDirectory(buffer) == 0) 
 				return 0;
 
+#if defined(_WIN32)
 			obj->Save(file);
+#else
+			const BOOL32 saved = obj->Save(file);
+#endif
 
 			if (file->SetCurrentDirectory("..") == 0) 
 				return 0;
+#if !defined(_WIN32)
+			if (!saved) return 0;
+#endif
 		}
 	}
 
@@ -1234,15 +1268,26 @@ BOOL32 Gunplat::Save (struct IFileSystem * file)
 	{
 		sprintf(buffer, "Special-Launcher");
 		
+#if defined(_WIN32)
 		file->CreateDirectory(buffer);
+#else
+		if (!file->CreateDirectory(buffer)) return 0;
+#endif
 		
 		if (file->SetCurrentDirectory(buffer) == 0) 
 			return 0;
 		
+#if defined(_WIN32)
 		obj->Save(file);
+#else
+		const BOOL32 saved = obj->Save(file);
+#endif
 		
 		if (file->SetCurrentDirectory("..") == 0) 
 			return 0;
+#if !defined(_WIN32)
+		if (!saved) return 0;
+#endif
 	}
 
 	return 1;
@@ -1255,9 +1300,21 @@ BOOL32 Gunplat::Load (struct IFileSystem * file)
 	OBJPTR<ISaveLoad> obj;
 	char buffer[64];
 
+#if defined(_WIN32)
 	Platform<GUNPLAT_SAVELOAD, GUNPLAT_INIT>::Load(file);
-
 	initLaunchers();
+#else
+	if (!Platform<GUNPLAT_SAVELOAD, GUNPLAT_INIT>::Load(file)) return 0;
+	try { initLaunchers(); }
+	catch (const std::exception &error)
+	{
+		std::fprintf(stderr, "Native Gunplat launcher restore failed: %s\n", error.what());
+		return 0;
+	}
+	for (i = 0; i < MAX_GUNPLAT_LAUNCHERS && ginitData->launchers[i]; ++i)
+		if (!launcher[i].Ptr()) return 0;
+	if (ginitData->specialLauncher && !specialLauncher.Ptr()) return 0;
+#endif
 
 	for (i = 0; i < MAX_GUNPLAT_LAUNCHERS; i++)
 	{
@@ -1268,10 +1325,19 @@ BOOL32 Gunplat::Load (struct IFileSystem * file)
 			if (file->SetCurrentDirectory(buffer) == 0) 
 				return 0;
 
+#if defined(_WIN32)
 		 	obj->Load(file);
+#else
+			const BASIC_DATA *data = static_cast<const BASIC_DATA *>(ARCHLIST->GetArchetypeData(ginitData->launchers[i]));
+			const BOOL32 loaded = LoadNativePersistedLauncher(obj, data, launcher[i].Ptr(),
+				ginitData->launchers[i], this, file, buffer);
+#endif
 
 			if (file->SetCurrentDirectory("..") == 0) 
 				return 0;
+#if !defined(_WIN32)
+			if (!loaded) return 0;
+#endif
 		}
 	}
 
@@ -1282,10 +1348,19 @@ BOOL32 Gunplat::Load (struct IFileSystem * file)
 		if (file->SetCurrentDirectory(buffer) == 0) 
 			return 0;
 		
+#if defined(_WIN32)
 		obj->Load(file);
+#else
+		const BASIC_DATA *data = static_cast<const BASIC_DATA *>(ARCHLIST->GetArchetypeData(ginitData->specialLauncher));
+		const BOOL32 loaded = LoadNativePersistedLauncher(obj, data, specialLauncher.Ptr(),
+			ginitData->specialLauncher, this, file, buffer);
+#endif
 		
 		if (file->SetCurrentDirectory("..") == 0) 
 			return 0;
+#if !defined(_WIN32)
+		if (!loaded) return 0;
+#endif
 	}
 
 	return 1;
@@ -2417,7 +2492,17 @@ HANDLE GunplatFactory::CreateArchetype (const char *szArchname, OBJCLASS objClas
 				if (data->launcherType[i][0])
 				{
 					if ((result->launchers[i] = ARCHLIST->LoadArchetype(data->launcherType[i])) == 0)
+					{
+#if !defined(_WIN32)
+						if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+						{
+							std::fprintf(stderr, "Native required Gunplat launcher missing: %s -> %s\n",
+								szArchname, data->launcherType[i]);
+							goto Error;
+						}
+#endif
 						break;
+					}
 					else
 						ARCHLIST->AddRef(result->launchers[i], OBJREFNAME);
 				}
@@ -2429,6 +2514,14 @@ HANDLE GunplatFactory::CreateArchetype (const char *szArchname, OBJCLASS objClas
 			{
 				if ((result->specialLauncher = ARCHLIST->LoadArchetype(data->specialLauncherType)) != 0)
 					ARCHLIST->AddRef(result->specialLauncher, OBJREFNAME);
+#if !defined(_WIN32)
+				else if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+				{
+					std::fprintf(stderr, "Native required Gunplat special launcher missing: %s -> %s\n",
+						szArchname, data->specialLauncherType);
+					goto Error;
+				}
+#endif
 			}
 		}
 		goto Done;
