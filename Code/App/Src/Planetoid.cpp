@@ -18,6 +18,7 @@
 #include "Include/NativeAppGlobals.h"
 #include "Include/CQTrace.h"
 #include <ICamera.h>
+#include <FrontierX/NativePolyMesh.h>
 #include <IMeshManager.h>
 #include <IHardPoint.h>
 #include <VFX.H>
@@ -848,6 +849,9 @@ Planetoid::Planetoid (void) :
 	planetRing->owner = this;
 	planetRing->objClass = OC_BUILDRING;
 	bFirstUpdate = false;
+#if !defined(_WIN32)
+    alphaMod = 1.0f;
+#endif
 }
 //---------------------------------------------------------------------------
 //
@@ -1002,6 +1006,9 @@ SINGLE Planetoid::TestHighlight (const RECT &rect)
 {
 	bHighlight = 0;
 	bMouseOver = 0;
+#if !defined(_WIN32)
+    alphaMod = 1.0f;
+#endif
 	if (renderArch1 && renderArch2)
 	{
 		return 0;
@@ -1029,6 +1036,11 @@ SINGLE Planetoid::TestHighlight (const RECT &rect)
 				bHighlight = TRUE;
 		}
 	}
+#if !defined(_WIN32)
+    // The source retains the hover/faded-pass contract, but not its old opacity
+    // curve. Use a bounded presentation value until retail capture comparison.
+    if (bMouseOver) alphaMod = 64.0f / 255.0f;
+#endif
 	return 0.0f;
 }
 //---------------------------------------------------------------------------
@@ -1630,7 +1642,12 @@ void Planetoid::Render (void)
 		// underlying engine instance as retail did while retaining instanceMesh
 		// for updates, callbacks, and any sequel-era effect plumbing.
 		if(instanceIndex != INVALID_INSTANCE_INDEX)
+#if defined(_WIN32)
 			ENGINE->render_instance(MAINCAM, instanceIndex,0,LODPERCENT,0,0);
+#else
+            ENGINE->render_instance(MAINCAM, instanceIndex, 0, LODPERCENT,
+                FrontierX::EncodeNativeInstanceOpacity(static_cast<U8>(alphaMod * 255.0f + 0.5f)), nullptr);
+#endif
 		else if(instanceMesh)
 			instanceMesh->Render();
 

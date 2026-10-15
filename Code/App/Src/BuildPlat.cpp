@@ -2113,7 +2113,12 @@ HANDLE BuildPlatFactory::CreateArchetype (const char *szArchname, OBJCLASS objCl
 				}
 			}
 			else
+			{
+#if !defined(_WIN32)
+				std::fprintf(stderr, "Native required construction-platform load failed: %s -> %s\n", szArchname, data->fileName);
+#endif
 				goto Error;
+			}
 		}
 
 		goto Done;

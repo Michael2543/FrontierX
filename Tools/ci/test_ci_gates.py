@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 import os
+import re
 import shutil
 import json
 import subprocess
@@ -132,6 +133,9 @@ class GateTests(unittest.TestCase):
                     self.assertIn('-DFRONTIERX_BUILD_FFMPEG_VIDEO=ON', calls[0])
                 if scope == 'sanitizers':
                     self.assertIn('-R', calls[2])
+                    pattern = ctest[ctest.index('-R') + 1]
+                    for owner in ('script02_schema', 'script03_schema', 'net_buffer'):
+                        self.assertIsNotNone(re.fullmatch(pattern, 'portability.' + owner))
                 if scope.startswith('mission'):
                     self.assertIn('--technical-smoke', calls[-1])
                 if scope == 'optional':

@@ -11,14 +11,32 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+struct IDrawAgent;
+#endif
 
 #include "CloakLauncher.h"
 
 #include "SuperTrans.h"
 #include "ObjList.h"
-#include "sfx.h"
+#include "SFX.h"
 
 #include "Mission.h"
 #include "IMissionActor.h"
@@ -29,10 +47,10 @@
 #include "MPart.h"
 #include "OpAgent.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IAnim.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <IConnection.h> 
 #include <MGlobals.h>
@@ -42,6 +60,11 @@
 
 // so that we can use the techtree stuff
 using namespace TECHTREE;
+
+#if !defined(_WIN32)
+static_assert(sizeof(CLOAK_LAUNCHER_SAVELOAD) == 8,
+	"Win32 cloak-launcher save record size");
+#endif
 
 //---------------------------------------------------------------------------
 //
@@ -143,7 +166,7 @@ BOOL32 CloakLauncher::Update (void)
 }
 //---------------------------------------------------------------------------
 //
-void CloakLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void CloakLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	const BT_CLOAK_LAUNCHER * data = (const BT_CLOAK_LAUNCHER *) ARCHLIST->GetArchetypeData(pArchetype);
 
@@ -182,7 +205,12 @@ BOOL32 CloakLauncher::Save (struct IFileSystem * inFile)
 
 	save = *static_cast<CLOAK_LAUNCHER_SAVELOAD *>(this);
 
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+		goto Done;
+#endif
 	
 	result = 1;
 
@@ -204,8 +232,16 @@ BOOL32 CloakLauncher::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("CLOAK_LAUNCHER_SAVELOAD", buffer, &load);
+#else
+	if (file->GetFileSize(0, nullptr) != sizeof(CLOAK_LAUNCHER_SAVELOAD) ||
+		!file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0) ||
+		dwRead != sizeof(CLOAK_LAUNCHER_SAVELOAD) ||
+		MISSION->CorrelateSymbol("CLOAK_LAUNCHER_SAVELOAD", buffer, &load) != GR_OK)
+		goto Done;
+#endif
 
 	*static_cast<CLOAK_LAUNCHER_SAVELOAD *>(this) = load;
 		
@@ -240,7 +276,13 @@ bool CloakLauncher::checkSupplies()
 void CloakLauncher::enableCloak(bool bEnable)
 {
 	CQASSERT(bEnable != bCloakEnabled);
+#if defined(_WIN32)
 	VOLPTR(ICloak) cloakShip = owner;
+#else
+	VOLPTR(ICloak) cloakShip;
+	owner.Ptr()->QueryInterface(ICloakID, cloakShip);
+	CQASSERT(cloakShip);
+#endif
 	cloakShip->EnableCloak(bEnable);
 	bCloakEnabled = bEnable;
 }
@@ -285,6 +327,13 @@ struct DACOM_NO_VTABLE CloakLauncherFactory : public IObjectFactory
 		{
 			return calloc(size,1);
 		}
+
+#if !defined(_WIN32)
+        void operator delete (void *memory)
+        {
+            ::free(memory);
+        }
+#endif
 
 		OBJTYPE (void)
 		{

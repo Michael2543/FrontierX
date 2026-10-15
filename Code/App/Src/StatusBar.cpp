@@ -379,6 +379,13 @@ GENRESULT StatusBarResource::Notify (U32 message, void *param)
 
 	switch (message)
 	{
+#if !defined(_WIN32)
+	case CQE_MISSION_CLOSE:
+		GetOwnership(nullptr);
+		SetDefaultState();
+		szName[0] = 0;
+		break;
+#endif
 #ifdef USE_WINDOWS_CTRL
 	case WM_SIZE:
 		{
@@ -538,6 +545,10 @@ bool CheckNativeSourceStatus()
         std::wcscmp(owner->szName, L"Forger") == 0 && std::wcscmp(owner->szText, L"Status") == 0;
     owner->SetDefaultState();
     valid = valid && !owner->GetText() && !owner->szText[0] && owner->mode == STM_DEFAULT;
+    owner->SetTextString2(L"Forger", L"Previous mission");
+    owner->Notify(CQE_MISSION_CLOSE);
+    valid = valid && !owner->owner && !owner->GetText() && !owner->szText[0] &&
+        !owner->szName[0] && owner->mode == STM_DEFAULT;
     owner->reloadFonts(true);
     valid = valid && NativeFontLiveCount() == fonts + 4;
     owner->Notify(CQE_END3DMODE);

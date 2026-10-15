@@ -56,6 +56,9 @@ U32 __stdcall MovieScreen(struct Frame *parent, const char *filename);
 #include "GenData.h"
 #include <DMenu1.h>
 struct Frame;
+bool CheckNativeGameProgressPersistence(IFileSystem *directory);
+bool CheckNativeUnitCatalog(IArchetypeList *objectList);
+bool CheckNativeUnitCatalogMetadata();
 U32 __stdcall DoMenu_Briefing (Frame * parent, const char * szFileName);
 U32 __stdcall CreateMenuEndGame(bool won);
 U32 __stdcall DoMenu_campaign(Frame *parent, const GT_MENU1 &data, bool skip);
@@ -74,6 +77,7 @@ U32 __stdcall DoMenu_campaign(Frame *parent, const GT_MENU1 &data, bool skip);
 namespace FrontierX {
 bool CheckNativeTerranDroneArrayRelease();
 bool CheckNativeSpiderDroneArrayRelease();
+bool CheckNativeAnimationBorder();
 }
 #include "FrontierX/NativeChannel.h"
 #include "FrontierX/NativeHardpoint.h"
@@ -537,6 +541,7 @@ struct Options
     bool missionEngine = false;
     bool missionGpu = false;
     bool missionStart = false;
+    bool unitCatalogCheck = false;
     bool missionBriefing = false;
     bool missionCampaign = false;
     bool HasUiFont() const { return !uiFontPath.empty() || !uiFontMappingPath.empty(); }
@@ -567,7 +572,7 @@ Options ParseOptions(int argc, char ** argv)
                          "[--game-scene MATERIAL_SOURCE MESH_UTF VERTEX_SPV "
                          "FRAGMENT_SPV EXTENDED_SPV GAME_SPV] "
                          "[--mission-gpu VERTEX_SPV FRAGMENT_SPV EXTENDED_SPV GAME_SPV] "
-                         "[--capture-ppm FILE] [--skip-movies] [--skip-notification-cue] [--skip-sector-map] [--skip-space-background] [--skip-unit-labels] [--skip-planet-ui] [--skip-animated-portraits] [--skip-subtitles] [--base-textures-only] [--skip-legacy-lighting] [--skip-training-speech] [--skip-unit-voice] [--skip-unit-alerts] [--mission-alert-smoke] [--mission-hint-check] [--skip-mission-sfx] [--skip-teletype-visuals] [--skip-mission-music] [--sfx-smoke] [--no-frame-limit] [--frame-stats] [--profile-smoke FILE] [--mission-engine] [--mission-start] [--mission-briefing] [--mission-campaign] "
+                         "[--capture-ppm FILE] [--skip-movies] [--skip-notification-cue] [--skip-sector-map] [--skip-space-background] [--skip-unit-labels] [--skip-planet-ui] [--skip-animated-portraits] [--skip-subtitles] [--base-textures-only] [--skip-legacy-lighting] [--skip-training-speech] [--skip-unit-voice] [--skip-unit-alerts] [--mission-alert-smoke] [--mission-hint-check] [--skip-mission-sfx] [--skip-teletype-visuals] [--skip-mission-music] [--sfx-smoke] [--no-frame-limit] [--frame-stats] [--profile-smoke FILE] [--mission-engine] [--mission-start] [--unit-catalog-check] [--mission-briefing] [--mission-campaign] "
                          "[--animation-object OBJECT_NAME SCRIPT_NAME] "
                          "[--mesh-object OBJECT_NAME] "
                          "[--movie-source FILE (separate optional movie diagnostic)] "
@@ -731,6 +736,13 @@ Options ParseOptions(int argc, char ** argv)
             if (options.missionStart)
                 throw std::invalid_argument("duplicate option: --mission-start");
             options.missionStart = true;
+            continue;
+        }
+        if (option == "--unit-catalog-check")
+        {
+            if (options.unitCatalogCheck)
+                throw std::invalid_argument("duplicate option: --unit-catalog-check");
+            options.unitCatalogCheck = true;
             continue;
         }
         if (option == "--mission-briefing")
@@ -993,6 +1005,9 @@ Options ParseOptions(int argc, char ** argv)
         throw std::invalid_argument("--game-types requires --mission-source");
     if (options.skipNotificationCue && options.missionSourceName.empty())
         throw std::invalid_argument("--skip-notification-cue requires --mission-source");
+    if (options.unitCatalogCheck && (!options.missionStart || options.missionCampaign ||
+        options.missionBriefing || !options.movieSourceName.empty()))
+        throw std::invalid_argument("--unit-catalog-check requires exclusive --mission-start without campaign/briefing/movie");
     if (options.missionBriefing && (!options.missionStart || options.hidden))
         throw std::invalid_argument("--mission-briefing requires visible --mission-start");
     if (options.missionCampaign && (!options.missionStart || options.hidden ||
@@ -2184,6 +2199,22 @@ int Run(int argc, char ** argv)
                     throw std::runtime_error("Native source mission record persistence check failed");
                 std::cout << "Native source mission records correlated and invalid records rejected\n";
             }
+            if (!options.missionStart && saveDirectory.Get())
+            {
+                InterfaceOwner<IFileSystem> progressDirectory;
+                std::string progressError;
+                std::filesystem::create_directories(options.saveRoot / "NativeProgressRegression");
+                if (!FrontierX::OpenNativeSaveDirectory(options.saveRoot / "NativeProgressRegression",
+                        progressDirectory.Receive(), progressError) ||
+                    !CheckNativeGameProgressPersistence(progressDirectory.Get()))
+                    throw std::runtime_error("Native original progress persistence check failed");
+                std::cout << "Native original progress scratch roundtrip and malformed-read preservation passed\n";
+            }
+            if (!options.missionStart && !CheckNativeUnitCatalogMetadata())
+            {
+                std::cerr << "Native unit catalogue metadata classification failed\n";
+                return 6;
+            }
             if (!options.missionStart && !CheckNativeCampaignScriptPrograms())
             {
                 std::cerr << "Native source campaign script registration check failed\n";
@@ -2315,6 +2346,11 @@ int Run(int argc, char ** argv)
     SCREEN_WIDTH = 800;
     SCREEN_HEIGHT = 600;
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    if (!options.missionStart)
+    {
+        if (!FrontierX::CheckNativeAnimationBorder())
+        { std::cerr << "Native animation border resize check failed\n"; return 6; }
+    }
     if (!options.fontSmokePath.empty())
     {
         if (!options.uiFontMappingPath.empty())
@@ -2512,7 +2548,9 @@ int Run(int argc, char ** argv)
             // Sol_T/resource.h: IDS_SOLTRAIN_OBJECTIVE1 and OBJECTIVE2.
             constexpr U32 kSelectForgerObjective = 46U;
             constexpr U32 kMoveForgerObjective = 47U;
-            if (options.missionSourceName == "T_Mission1.dmission")
+            if (options.missionSourceName == "T_Mission1.dmission" ||
+                options.missionSourceName == "T_Mission2.dmission" ||
+                options.missionSourceName == "T_Mission3.dmission")
             {
                 InitializeNativeEffectsOptions();
                 if (options.skipSpaceBackground)
@@ -2520,11 +2558,13 @@ int Run(int argc, char ** argv)
                     CQEFFECTS.bBackground = GlobalEffectsOptions::off;
                     CQEFFECTS.bExpensiveTerrain = GlobalEffectsOptions::off;
                 }
-                std::cout << "Native App first Terran source effects settings initialized\n";
+                std::cout << "Native App Terran source effects settings initialized\n";
             }
             NATIVE_SKIP_LEGACY_LIGHTING = options.skipLegacyLighting;
             NATIVE_USE_ORIGINAL_LEGACY_MATERIALS =
-                options.missionSourceName == "T_Mission1.dmission" && !options.skipLegacyLighting;
+                (options.missionSourceName == "T_Mission1.dmission" ||
+                 options.missionSourceName == "T_Mission2.dmission" ||
+                options.missionSourceName == "T_Mission3.dmission") && !options.skipLegacyLighting;
             if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
                 std::cout << "Native Terran legacy materials use original scalar lighting, "
                              "diffuse/emission colors and authored texture UV pairs\n";
@@ -2712,6 +2752,14 @@ int Run(int argc, char ** argv)
                 return 0;
             }
 #endif
+            if (options.unitCatalogCheck)
+            {
+                std::cout << "Native separate unit-catalog diagnostic; no mission simulation will start\n" << std::flush;
+                const bool complete = CheckNativeUnitCatalog(ARCHLIST);
+                windowManager.Get()->SetCallback(nullptr);
+                shellEventSystem = nullptr;
+                return complete ? 0 : 6;
+            }
             if (options.missionCampaign)
             {
                 const auto *menu = static_cast<const GT_MENU1 *>(GENDATA->GetArchetypeData("Menu1"));
@@ -2740,7 +2788,13 @@ int Run(int argc, char ** argv)
             const bool trainingMission = std::strcmp(selectedScript, "Sol_T.dll") == 0;
             const bool firstTerranMission = std::strcmp(selectedScript, "Script01T.dll") == 0 ||
                 std::strcmp(selectedScript, "script01.dll") == 0;
-            if (!trainingMission && !firstTerranMission) return 6;
+            const bool secondTerranMission = std::strcmp(selectedScript, "Script02T.dll") == 0 ||
+                std::strcmp(selectedScript, "script02.dll") == 0 ||
+                std::strcmp(selectedScript, "Script02.dll") == 0;
+            const bool thirdTerranMission = std::strcmp(selectedScript, "Script03T.dll") == 0 ||
+                std::strcmp(selectedScript, "script03.dll") == 0 ||
+                std::strcmp(selectedScript, "Script03.dll") == 0;
+            if (!trainingMission && !firstTerranMission && !secondTerranMission && !thirdTerranMission) return 6;
             std::cout << "Native App selected source script: " << selectedScript << '\n';
             unsigned int forgers = 0;
             Vector initialPlayerForgerPosition{};
@@ -2960,12 +3014,20 @@ int Run(int argc, char ** argv)
                     GENDATA->FlushUnusedArchetypes();
                     const U32 endResult = CreateMenuEndGame(modalResult == MISSION_END_WON);
                     std::cout << "Native App original end menu returned " << endResult << '\n';
-                    if (options.missionCampaign && !shellCloseRequested)
-                    {
-                        const auto *menu = static_cast<const GT_MENU1 *>(GENDATA->GetArchetypeData("Menu1"));
-                        if (!menu) throw std::runtime_error("Original training-menu resource unavailable");
-                        if (DoMenu_campaign(nullptr, *menu, false)) goto missionLoaded;
-                    }
+                }
+                // Match the original single-player main loop: Continue, defeat,
+                // resign and quit return through the campaign's mission selector.
+                // Completion is owned exclusively by MScript::EndMissionVictory.
+                MSCROLL->SetActive(0);
+                GENDATA->FlushUnusedArchetypes();
+                if (options.missionCampaign && !options.smokeMilliseconds && !shellCloseRequested &&
+                    modalResult != MISSION_END_SPLASH)
+                {
+                    ChangeInterfaceRes(IR_FRONT_END_RESOLUTION);
+                    FULLSCREEN->Notify(CQE_UPDATE, nullptr);
+                    const auto *menu = static_cast<const GT_MENU1 *>(GENDATA->GetArchetypeData("Menu1"));
+                    if (!menu) throw std::runtime_error("Original campaign-menu resource unavailable");
+                    if (DoMenu_campaign(nullptr, *menu, MGlobals::IsSinglePlayer())) goto missionLoaded;
                 }
                 return 0;
             }

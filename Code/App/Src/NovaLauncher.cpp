@@ -98,7 +98,7 @@ struct _NO_VTABLE NovaLaunch : IBaseObject, ILauncher, ISaveLoad, NOVA_LAUNCHER_
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 	
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial)
@@ -378,7 +378,7 @@ void NovaLaunch::Render()
 }
 //---------------------------------------------------------------------------
 //
-void NovaLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void NovaLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	const BT_NOVA_LAUNCHER * data = (const BT_NOVA_LAUNCHER *) ARCHLIST->GetArchetypeData(pArchetype);
 	pData = data;

@@ -193,7 +193,7 @@ struct _NO_VTABLE Zealot : public ObjectPhysics<ObjectTransform<ObjectFrame<IBas
 	
 	// ILauncher
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE _range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE _range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
 
@@ -459,7 +459,7 @@ void Zealot::Render (void)
 
 // ILauncher
 
-void Zealot::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE _range)
+void Zealot::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE _range)
 {
 	CQASSERT(_owner);
 	//ownerID = _owner->GetPartID();

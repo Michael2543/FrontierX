@@ -10,8 +10,22 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include "UserDefaults.h"
+#include "DrawAgent.h"
+#include <algorithm>
+#include <cwchar>
+#include <cstdlib>
+#include <cstdint>
+#include <cstring>
+#include <iterator>
+#include <stdexcept>
+#endif
 
 #include <wchar.h>
 
@@ -21,7 +35,7 @@
 
 #include "Frame.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IButton2.h"
 #include "ITeletype.h"
 
@@ -134,7 +148,13 @@ struct Menu_Objectives : public DAComponent<dummy_menuobjectives>
 		if (PLAYERID == 0)
 		{
 			CQFLAGS.bGamePaused = TRUE;
-			EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
+			EVENTSYS->Send(CQE_PAUSE_CHANGE,
+#if defined(_WIN32)
+			(void *)(CQFLAGS.bGamePaused)
+#else
+			reinterpret_cast<void *>(static_cast<std::uintptr_t>(CQFLAGS.bGamePaused))
+#endif
+		);
 		}
 	}
 
@@ -207,7 +227,13 @@ Menu_Objectives::~Menu_Objectives (void)
 	if (PLAYERID == 0)
 	{
 		CQFLAGS.bGamePaused = bOldPause;
-		EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
+		EVENTSYS->Send(CQE_PAUSE_CHANGE,
+#if defined(_WIN32)
+			(void *)(CQFLAGS.bGamePaused)
+#else
+			reinterpret_cast<void *>(static_cast<std::uintptr_t>(CQFLAGS.bGamePaused))
+#endif
+		);
 	}
 
 	// delete everything in the temp objectives list too
@@ -296,7 +322,12 @@ void Menu_Objectives::addObjectiveToList (U32 stringID)
 	pString = MScript::GetCountedString(stringID);
 	CQASSERT(pString);
 
+#if defined(_WIN32)
 	wcsncpy(buffer, &pString[1], U16(pString[0]));
+#else
+	const std::size_t length = std::min<std::size_t>(U16(pString[0]), std::size(buffer)-1);
+	std::wmemcpy(buffer, pString+1, length);
+#endif
 
 	// if the objective has failed - show in red
 	// if the objective is completed - show in green
@@ -327,7 +358,11 @@ void Menu_Objectives::addObjectiveToList (U32 stringID)
 		wchar_t szIndented[128];
 		memset(szIndented, 0, sizeof(szIndented));
 		wcsncpy(szIndented, L"    ", 4);
+#if defined(_WIN32)
 		wcscat(szIndented, buffer);
+#else
+		std::wcsncat(szIndented, buffer, std::size(szIndented)-5);
+#endif
 		staticObjectiveArray[nObjectives]->SetText(szIndented);
 	}
 	else
@@ -357,8 +392,14 @@ void Menu_Objectives::updateObjectiveInfo (void)
 		pString = MScript::GetCountedString(stringID);
 		if (pString)
 		{
+#if defined(_WIN32)
 			memcpy(buffer, pString+1, pString[0]*sizeof(wchar_t));
 			buffer[pString[0]] = 0;
+#else
+			const std::size_t length = std::min<std::size_t>(U16(pString[0]), std::size(buffer)-1);
+			std::wmemcpy(buffer,pString+1,length);
+			buffer[length] = 0;
+#endif
 			staticName->SetText(buffer);
 		}
 		else
@@ -471,7 +512,16 @@ void Menu_Objectives::setStateInfo (void)
 //
 void Menu_Objectives::init (void)
 {
+#if defined(_WIN32)
 	data = 	*((GT_MENUOBJECTIVES *) GENDATA->GetArchetypeData("MenuObjectives"));
+#else
+	U32 dataBytes = 0;
+	const auto *source = static_cast<const GT_MENUOBJECTIVES *>(
+		GENDATA->GetArchetypeData("MenuObjectives", dataBytes));
+	if (!source || dataBytes != sizeof(data))
+		throw std::runtime_error("Native objective menu archetype layout is unavailable");
+	data = *source;
+#endif
 
 	COMPTR<IDAComponent> pComp;
 

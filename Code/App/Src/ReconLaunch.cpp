@@ -111,7 +111,7 @@ void ReconLaunch::init (PARCHETYPE _pArchetype, PARCHETYPE _pBoltType)
 }
 //---------------------------------------------------------------------------
 //
-void ReconLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void ReconLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	const BT_RECON_LAUNCH * data = (const BT_RECON_LAUNCH *) ARCHLIST->GetArchetypeData(pArchetype);
 

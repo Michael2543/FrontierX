@@ -56,8 +56,25 @@ static void AddAndDisplayObjective
 //---------------------------------------------------------------------------//
 CQSCRIPTDATA(MissionData, data);
 #if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    // Match a fresh Windows DLL instance before correlating any saved state.
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckSolTrainScriptReset(void)
+{
+    // Only the existing hidden synthetic owner check calls this with no mission.
+    const MissionData previous = data;
+    data.mission_over = true;
+    data.mhandle = data.shandle = UINT32_MAX;
+    ResetNativeMissionData();
+    const bool reset = !data.mission_over && !data.mhandle && !data.shandle;
+    data = previous;
+    return reset;
+}
 extern "C" void FrontierXInitializeSolTrainScript(void)
 {
+    ResetNativeMissionData();
 	if (!HEAP) HEAP = HEAP_Acquire();
 	std::size_t schemaSize = 0;
 	const void *schema = FrontierX::GetNativeSolTrainSchema(schemaSize);

@@ -19,6 +19,7 @@
 #if defined(FRONTIERX_NATIVE_FREETYPE)
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include FT_SFNT_NAMES_H
 #endif
 
 namespace
@@ -49,6 +50,36 @@ std::wstring NormalizeFamily(const char *family)
     if (family) while (*family) wide += static_cast<unsigned char>(*family++);
     return NormalizeFamily(wide);
 }
+#if defined(FRONTIERX_NATIVE_FREETYPE)
+bool MatchesFontFamily(FT_Face face, const std::wstring &family)
+{
+    if (NormalizeFamily(face->family_name) == family ||
+        NormalizeFamily(FT_Get_Postscript_Name(face)) == family) return true;
+    // OpenType can group Arial Narrow under typographic family Arial while
+    // preserving its original GDI family in nameID1. Validate that authored
+    // family too; do not infer a family from filenames or strip style suffixes.
+    const FT_UInt count = FT_Get_Sfnt_Name_Count(face);
+    for (FT_UInt i = 0; i < count; ++i)
+    {
+        FT_SfntName name = {};
+        if (FT_Get_Sfnt_Name(face, i, &name) || name.name_id != 1 ||
+            (name.platform_id != 0 && !(name.platform_id == 3 &&
+                (name.encoding_id == 1 || name.encoding_id == 10))) ||
+            !name.string || !name.string_len || name.string_len > 512 || name.string_len % 2)
+            continue;
+        std::wstring legacyFamily;
+        bool valid = true;
+        for (FT_UInt offset = 0; offset < name.string_len; offset += 2)
+        {
+            const unsigned character = (unsigned(name.string[offset]) << 8) | name.string[offset+1];
+            if (!character) { valid = false; break; }
+            legacyFamily.push_back(static_cast<wchar_t>(character));
+        }
+        if (valid && NormalizeFamily(legacyFamily) == family) return true;
+    }
+    return false;
+}
+#endif
 std::string Trim(std::string text)
 {
     const auto first = text.find_first_not_of(" \t\r\n");
@@ -317,8 +348,7 @@ bool SetNativeFontMapping(const char *path, std::string &error)
         FT_Face face = nullptr;
         if (FT_New_Face(library, facePath.c_str(), 0, &face))
         { error = "Mapped external font cannot be opened"; return false; }
-        const bool matches = NormalizeFamily(face->family_name) == normalized ||
-            NormalizeFamily(FT_Get_Postscript_Name(face)) == normalized;
+        const bool matches = MatchesFontFamily(face, normalized);
         const bool bold = (face->style_flags & FT_STYLE_FLAG_BOLD) != 0;
         // The retail font installation supplies only this Bauhaus face; GDI
         // resolves its requested weights to that same available family face.

@@ -133,7 +133,7 @@ struct _NO_VTABLE Repulsor : IBaseObject, ISaveLoad, ILauncher, REPULSOR_SAVELOA
 
 	// IRecon
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial) {}
 
@@ -589,7 +589,7 @@ void Repulsor::SpecialAttackObject(IBaseObject *obj)
 	}
 }
 
-void Repulsor::InitLauncher(IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void Repulsor::InitLauncher(IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	_owner->QueryInterface(ILaunchOwnerID,owner,LAUNCHVOLATILEPTR);
 

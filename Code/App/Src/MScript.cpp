@@ -21,6 +21,8 @@
 #include "Scripts/Sol_T/NativeSolTrainModule.h"
 #include "Scripts/Sol_T/NativeSolTrainSchema.h"
 #include "Scripts/Script02T/Script01T/NativeScript01Resources.h"
+#include "Scripts/Script02T/NativeScript02Resources.h"
+#include "Scripts/Script03T/NativeScript03Resources.h"
 #include "MyVertex.h"
 #include <ICamera.h>
 #include <ENGINE.H>
@@ -285,17 +287,27 @@ static const CQSCRIPTENTRY * g_pScripts;
 #if !defined(_WIN32)
 static const CQSCRIPTENTRY *nativeSolPrograms;
 static const CQSCRIPTENTRY *nativeTerranPrograms;
+static const CQSCRIPTENTRY *nativeTerran02Programs;
+static const CQSCRIPTENTRY *nativeTerran03Programs;
 void FrontierXRegisterNativeScriptProgram(const char *module, CQSCRIPTENTRY *entry)
 {
     const CQSCRIPTENTRY **head = nullptr;
     if (!strcmp(module, "Sol_T.dll")) head = &nativeSolPrograms;
     else if (!strcmp(module, "Script01T.dll")) head = &nativeTerranPrograms;
+    else if (!strcmp(module, "Script02T.dll")) head = &nativeTerran02Programs;
+    else if (!strcmp(module, "Script03T.dll")) head = &nativeTerran03Programs;
     else std::abort();
     entry->pNext = *head;
     *head = entry;
 }
+extern "C" bool FrontierXCheckSolTrainScriptReset(void);
+extern "C" bool FrontierXCheckScript01Reset(void);
+extern "C" bool FrontierXCheckScript02Reset(void);
+extern "C" bool FrontierXCheckScript03Reset(void);
 bool CheckNativeCampaignScriptPrograms()
 {
+    if (!FrontierXCheckSolTrainScriptReset() || !FrontierXCheckScript01Reset() ||
+        !FrontierXCheckScript02Reset() || !FrontierXCheckScript03Reset()) return false;
     const auto check = [](const CQSCRIPTENTRY *head, const char *briefing, const char *start) {
         unsigned int briefings = 0, starts = 0;
         for (auto entry = head; entry; entry = entry->pNext)
@@ -314,7 +326,9 @@ bool CheckNativeCampaignScriptPrograms()
         return briefings == 1 && starts == 1;
     };
     if (!check(nativeSolPrograms, "SolTrain_Briefing", "SolTrain_Start") ||
-        !check(nativeTerranPrograms, "TM1_Briefing", "TM1_MissionStart") || !GS)
+        !check(nativeTerranPrograms, "TM1_Briefing", "TM1_MissionStart") ||
+        !check(nativeTerran02Programs, "TM2_Briefing", "TM2_InGameScene") ||
+        !check(nativeTerran03Programs, "TM3_Briefing", "TM3_MissionIntro") || !GS)
         return false;
     COMPTR<IViewConstructor> constructor;
     COMPTR<IViewConstructor2> provider;
@@ -350,11 +364,15 @@ bool CheckNativeCampaignScriptPrograms()
         provider->DestroySymbols(symbols);
         return valid && empties != 0;
     };
-    std::size_t solLength = 0, terranLength = 0;
+    std::size_t solLength = 0, terranLength = 0, terran02Length = 0, terran03Length = 0;
     const void *solSchema = FrontierX::GetNativeSolTrainSchema(solLength);
     const void *terranSchema = FrontierX::GetNativeScript01Schema(terranLength);
+    const void *terran02Schema = FrontierX::GetNativeScript02Schema(terran02Length);
+    const void *terran03Schema = FrontierX::GetNativeScript03Schema(terran03Length);
     return checkEmpty(nativeSolPrograms, solSchema, solLength) &&
-        checkEmpty(nativeTerranPrograms, terranSchema, terranLength);
+        checkEmpty(nativeTerranPrograms, terranSchema, terranLength) &&
+        checkEmpty(nativeTerran02Programs, terran02Schema, terran02Length) &&
+        checkEmpty(nativeTerran03Programs, terran03Schema, terran03Length);
 }
 
 #endif
@@ -1045,8 +1063,14 @@ void MScript::Load (IFileSystem * inFile)
     const bool training = strcmp(scriptName, "Sol_T.dll") == 0;
     const bool terran = strcmp(scriptName, "Script01T.dll") == 0 ||
         strcmp(scriptName, "script01.dll") == 0;
-    g_pScripts = training ? nativeSolPrograms : terran ? nativeTerranPrograms : nullptr;
-    if (!g_pScripts || !findScript(training ? "SolTrain_Start" : "TM1_MissionStart") ||
+    const bool terran02 = strcmp(scriptName, "Script02T.dll") == 0 ||
+        strcmp(scriptName, "script02.dll") == 0 || strcmp(scriptName, "Script02.dll") == 0;
+    const bool terran03 = strcmp(scriptName, "Script03T.dll") == 0 ||
+        strcmp(scriptName, "script03.dll") == 0 || strcmp(scriptName, "Script03.dll") == 0;
+    g_pScripts = training ? nativeSolPrograms : terran ? nativeTerranPrograms :
+        terran02 ? nativeTerran02Programs : terran03 ? nativeTerran03Programs : nullptr;
+    if (!g_pScripts || !findScript(training ? "SolTrain_Start" :
+            terran ? "TM1_MissionStart" : terran02 ? "TM2_InGameScene" : "TM3_MissionIntro") ||
         !PARSER || !SOUNDMANAGER || !TELETYPE || (inFile && (!STRINGTABLE || !SCRIPTING)))
     {
         std::fprintf(stderr, "Native script prerequisites missing: %s\n", scriptName);
@@ -1054,7 +1078,9 @@ void MScript::Load (IFileSystem * inFile)
     }
     const U32 updateCount = MGlobals::GetUpdateCount();
     if (training) FrontierXInitializeSolTrainScript();
-    else FrontierXInitializeScript01();
+    else if (terran) FrontierXInitializeScript01();
+    else if (terran02) FrontierXInitializeScript02();
+    else FrontierXInitializeScript03();
 	SOUNDMANAGER->SetLastStreamID(MGlobals::GetLastStreamID());
 	TELETYPE->SetLastTeletypeID(MGlobals::GetLastTeletypeID());
 	if (inFile)
@@ -1177,9 +1203,10 @@ void MScript::LoadScript (void)
 	// Use the same source module/resource binding as mission load, then its
 	// original briefing entry. No saved mission programs are loaded here.
 	Load(static_cast<IFileSystem *>(nullptr));
-	if ((!findScript("SolTrain_Briefing") && !findScript("TM1_Briefing")) || !BRIEFING)
+	if ((!findScript("SolTrain_Briefing") && !findScript("TM1_Briefing") &&
+            !findScript("TM2_Briefing") && !findScript("TM3_Briefing")) || !BRIEFING)
 	{
-		std::fputs("Native training briefing prerequisites missing\n", stderr);
+		std::fputs("Native campaign briefing prerequisites missing\n", stderr);
 		std::abort();
 	}
 	runStartProgram(true);
@@ -2473,6 +2500,10 @@ wchar_t * MScript::GetCountedString (U32 stringID)
         counted = FrontierX::GetNativeSolTrainCountedString(stringID);
     else if (g_hLocalDLL == FrontierX::GetNativeScript01ResourceHandle())
         counted = FrontierX::GetNativeScript01CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript02ResourceHandle())
+        counted = FrontierX::GetNativeScript02CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript03ResourceHandle())
+        counted = FrontierX::GetNativeScript03CountedString(stringID);
     else std::abort();
 	if (!counted)
 	{

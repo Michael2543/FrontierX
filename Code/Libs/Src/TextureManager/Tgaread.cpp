@@ -199,9 +199,10 @@ GENRESULT TGAREADER::LoadImage (void *fileImage, U32 fileSize, U32 imageNumber)
 		const U32 paletteLength = static_cast<U32>(bytes[5]) | (static_cast<U32>(bytes[6]) << 8);
 		if (indexed)
 		{
-			if (bytes[3] || bytes[4] || !paletteLength || paletteLength > 256 || bytes[7] != 24)
+			if (bytes[3] || bytes[4] || !paletteLength || paletteLength > 256 ||
+				(bytes[7] != 24 && bytes[7] != 32))
 				return GR_GENERIC;
-			offset += paletteLength * 3;
+			offset += paletteLength * (bytes[7] / 8);
 		}
 		const U32 bytesPerPixel = bytes[16] / 8;
 		if (!width || !height || width > 2048U || height > 2048U ||

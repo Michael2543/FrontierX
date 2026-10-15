@@ -13,14 +13,47 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+#include <memory>
+#include <IUTFWriter.h>
+#include "MyVertex.h"
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -30,7 +63,7 @@
 #include "TObjFrame.h"
 #include "Mesh.h"
 #include "ArchHolder.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "FogOfWar.h"
 #include "UserDefaults.h"
 #include "Mission.h"
@@ -50,16 +83,16 @@
 #include "IVertexBuffer.h"
 #include "TObjRender.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <TComponent.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Pixel.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
 
@@ -443,9 +476,12 @@ BOOL32 DumbReconProbe::Save (struct IFileSystem * inFile)
 
 	FRAME_save(save);
 
+	#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
-
 	result = 1;
+#else
+	result = file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) && dwWritten == sizeof(save);
+#endif
 
 Done:	
 	return result;
@@ -465,9 +501,13 @@ BOOL32 DumbReconProbe::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+	#if defined(_WIN32)
 	if (file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0) == 0)
 		goto Done;
 	MISSION->CorrelateSymbol("DUMBRECONPROBE_SAVELOAD", buffer, &load);
+#else
+	if (!LoadNativeMissionRecord(MISSION, "DUMBRECONPROBE_SAVELOAD", file, &load, sizeof(load))) goto Done;
+#endif
 
 	FRAME_load(load);
 

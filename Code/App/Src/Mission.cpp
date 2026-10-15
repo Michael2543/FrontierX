@@ -96,6 +96,7 @@ static FILE *g_mis_f = NULL;
 #include <ViewSymbolOperations.h>
 #include <DScriptObject.h>
 #include <DBuildPlat.h>
+#include <DSupplyShipSave.h>
 #endif
 #include "Cursor.h"
 #include "Hotkeys.h"
@@ -184,7 +185,9 @@ static bool NativeLoadMissionSystemMap(IFileSystem *file)
 		std::string foldedScript = script;
 		for (char &value : foldedScript)
 			if (value >= 'A' && value <= 'Z') value = static_cast<char>(value + ('a' - 'A'));
-		const bool regularTerran = foldedScript == "script01t.dll" || foldedScript == "script01.dll";
+		const bool regularTerran = foldedScript == "script01t.dll" || foldedScript == "script01.dll" ||
+            foldedScript == "script02t.dll" || foldedScript == "script02.dll" ||
+            foldedScript == "script03t.dll" || foldedScript == "script03.dll";
 		const char *extension = std::strrchr(filename, '.');
 		std::string foldedExtension = extension ? extension : "";
 		for (char &value : foldedExtension)
@@ -901,13 +904,34 @@ bool LoadNativeMissionRecord(IMission *mission, const char *name, IFileSystem *f
 	oldSymbol = ResolveViewSymbolType(oldSymbol);
 	newSymbol = ResolveViewSymbolType(newSymbol);
 	if (!oldSymbol || !newSymbol || oldSymbol->kind != RECORDSYM || newSymbol->kind != RECORDSYM ||
-		oldSymbol->size <= 0 || newSymbol->size <= 0 ||
-		static_cast<U32>(newSymbol->size) != destinationBytes ||
-		file->GetFileSize() != static_cast<U32>(oldSymbol->size))
+		oldSymbol->size <= 0 || newSymbol->size <= 0)
+		return false;
+	U32 inputBytes = static_cast<U32>(oldSymbol->size);
+	// Original SupplyShip Save writes sizeof(SUPPLYSHIP_SAVELOAD): its empty
+	// trailing sup_SL occupies one C++ byte plus alignment, but zero schema bytes.
+	// Recognize that exact contract, keeping every real field in normal correlation.
+	const auto hasEmptySupplyTail = [](SYMBOL record) {
+		if (record->size != 464) return false;
+		SYMBOL field = record->datatype;
+		if (!field) return false;
+		while (field->link) field = field->link;
+		if (!field->name || std::strcmp(field->name, "sup_SL") || field->offset != 464 ||
+			!field->datatype) return false;
+		SYMBOL type = ResolveViewSymbolType(field->datatype);
+		return type && type->kind == RECORDSYM && type->size == 0 && !type->datatype &&
+			type->name && !std::strcmp(type->name, "SUP_SAVELOAD");
+	};
+	const bool supplyTail = !std::strcmp(name, "SUPPLYSHIP_SAVELOAD") &&
+		destinationBytes == sizeof(SUPPLYSHIP_SAVELOAD) && sizeof(SUPPLYSHIP_SAVELOAD) == 468 &&
+		sizeof(SUP_SAVELOAD) == 1 &&
+		hasEmptySupplyTail(oldSymbol) && hasEmptySupplyTail(newSymbol);
+	if (supplyTail) inputBytes = sizeof(SUPPLYSHIP_SAVELOAD);
+	if ((!supplyTail && static_cast<U32>(newSymbol->size) != destinationBytes) ||
+		file->GetFileSize() != inputBytes)
 		return false;
 	try
 	{
-		std::vector<U8> input(static_cast<U32>(oldSymbol->size));
+		std::vector<U8> input(inputBytes);
 		std::vector<U8> output(destinationBytes, 0);
 		U32 read = 0;
 		if (!file->ReadFile(0, input.data(), input.size(), &read, 0) || read != input.size() ||
@@ -1038,6 +1062,54 @@ bool CheckNativeMissionRecordPersistence(IFileSystem *directory)
 	if (archive->CreateInstance(&platformDescriptor, platformFile) != GR_OK ||
 		LoadNativeMissionRecord(owner.get(), platformDescriptor.lpFileName, platformFile,
 			&platformOutput, sizeof(platformOutput))) return fail("Platform truncated record rejection");
+	// The real SupplyShip writer includes the empty trailing C++ member/padding;
+	// its parser record is four bytes shorter. Exercise the same file adapter.
+	SUPPLYSHIP_SAVELOAD supply = {};
+	supply.mission.dwMissionID = 0x12345671;
+	supply.baseSaveLoad.mode = SUP_MOVING_TARGETED_SUPPLY;
+	supply.baseSaveLoad.workingID = 97;
+	supply.baseSaveLoad.targetedTargetID = 0x12345681;
+	supply.baseSaveLoad.supplyTimer = 0.5f;
+	supply.baseSaveLoad.supplyStance = SUP_STANCE_RESUPPLY;
+	supply.baseSaveLoad.bNeedToSendMoveToTarget = true;
+	const auto writeSupply = [&](U32 size) {
+		DAFILEDESC record = "SUPPLYSHIP_SAVELOAD";
+		record.lpImplementation = "DOS";
+		record.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+		record.dwCreationDistribution = CREATE_ALWAYS;
+		COMPTR<IFileSystem> file;
+		std::vector<U8> bytes(size, 0);
+		std::memcpy(bytes.data(), &supply, std::min<size_t>(size, sizeof(supply)));
+		U32 written = 0;
+		return archive->CreateInstance(&record, file) == GR_OK &&
+			file->WriteFile(0, bytes.data(), size, &written, 0) && written == size;
+	};
+	const auto readSupply = [&](SUPPLYSHIP_SAVELOAD &output) {
+		DAFILEDESC record = "SUPPLYSHIP_SAVELOAD";
+		record.lpImplementation = "DOS";
+		COMPTR<IFileSystem> file;
+		return archive->CreateInstance(&record, file) == GR_OK &&
+			LoadNativeMissionRecord(owner.get(), record.lpFileName, file, &output, sizeof(output));
+	};
+	SUPPLYSHIP_SAVELOAD supplyOutput = {};
+	if (!writeSupply(sizeof(supply)) || !readSupply(supplyOutput) ||
+		std::memcmp(&supplyOutput, &supply, sizeof(supply)))
+		return fail("SupplyShip original trailing empty member record");
+	for (U32 size : {464U, 467U, 469U})
+	{
+		supplyOutput.baseSaveLoad.workingID = 101;
+		if (!writeSupply(size) || readSupply(supplyOutput) || supplyOutput.baseSaveLoad.workingID != 101)
+			return fail("SupplyShip malformed extent rejection/transaction");
+	}
+	if (!writeSupply(sizeof(supply))) return fail("SupplyShip original record restore");
+	SYMBOL supplySymbol = ResolveViewSymbolType(parser->GetSymbol(owner->hPrevSymbols, "SUPPLYSHIP_SAVELOAD"));
+	SYMBOL tail = supplySymbol ? supplySymbol->datatype : nullptr;
+	while (tail && tail->link) tail = tail->link;
+	if (!tail || tail->offset != 464) return fail("SupplyShip synthetic schema tail");
+	tail->offset = 463;
+	const bool acceptedWrongTail = readSupply(supplyOutput);
+	tail->offset = 464;
+	if (acceptedWrongTail) return fail("SupplyShip malformed empty tail rejection");
 	parser->DestroySymbols(owner->hPrevSymbols);
 	owner->hPrevSymbols = parser->ParseNewMemory(
 		"struct SCRIPTOBJECT_SAVELOAD { unsigned int towerID; };");
@@ -3101,10 +3173,17 @@ BOOL32 Mission::Reload (void)
 	COMPTR<IFileSystem> temp = inFile;
 	BOOL32 result = 0;
 	bool bMouseBusy = false;
+#if !defined(_WIN32)
+	const bool wasGameActive = CQFLAGS.bGameActive != 0;
+	bool reloadStarted = false;
+#endif
 
 	MIS_LOG("Reload: entered\n");
 	if (close() == 0)
 		{ MIS_LOG("Reload: close() failed\n"); goto Done; }
+#if !defined(_WIN32)
+	reloadStarted = true;
+#endif
 
 	CURSOR->SetBusy(1);
 	bMouseBusy = 1;
@@ -3361,6 +3440,22 @@ Done:
 		ipAnim.free();
 		ipAnim = NULL;
 	}
+#if !defined(_WIN32)
+	if (!result && reloadStarted)
+	{
+		// A rejected object record may already have restored live actors, while
+		// their operations/scripts have not loaded. Never resume that partial graph.
+		std::fputs("Native mission reload failed; closing partial mission\n", stderr);
+		CQFLAGS.bGameActive = 0;
+		EVENTSYS->Send(CQE_GAME_ACTIVE, nullptr);
+		Close(TRUE);
+		if (wasGameActive)
+		{
+			EVENTSYS->Send(CQE_DLG_RESULT, (void *)MISSION_END_QUIT);
+			EVENTSYS->Send(CQE_MISSION_ENDING, (void *)MISSION_END_QUIT);
+		}
+	}
+#endif
 	return result;
 }
 //--------------------------------------------------------------------------

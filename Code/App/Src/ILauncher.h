@@ -17,7 +17,24 @@
 #include "IObject.h"
 #endif
 
+#include <type_traits>
+
+#if defined(_WIN32)
+using LAUNCHER_ANIM_ARCH = S32; // Preserve the original Win32 signed-long method signature.
+#else
+#include <IAnim.h>
+using LAUNCHER_ANIM_ARCH = SCRIPT_SET_ARCH;
+#endif
+
 struct ILauncher;
+
+#if defined(_WIN32)
+static_assert(std::is_same<LAUNCHER_ANIM_ARCH, S32>::value,
+	"Keep the original Win32 launcher animation parameter type");
+#else
+static_assert(sizeof(LAUNCHER_ANIM_ARCH) == sizeof(void *),
+	"Native launcher animation archetypes retain their pointer token");
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -55,7 +72,7 @@ struct _NO_VTABLE ILaunchOwner : IObject
 //
 struct _NO_VTABLE ILauncher : IObject
 {
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range) = 0;
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range) = 0;
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial) = 0;
 
@@ -118,6 +135,10 @@ struct _NO_VTABLE ILauncher : IObject
 
 	virtual IBaseObject * FindChildTarget(U32 childID) = 0;
 };
+
+static_assert(std::is_same<decltype(&ILauncher::InitLauncher),
+	void (ILauncher::*)(IBaseObject *, S32, LAUNCHER_ANIM_ARCH, SINGLE)>::value,
+	"Launcher initialization preserves the platform animation token contract");
 
 struct _NO_VTABLE IMimic : IObject
 {

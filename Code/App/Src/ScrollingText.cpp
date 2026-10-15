@@ -52,18 +52,14 @@ static std::uint64_t scrollingDraws = 0;
 #if defined(_WIN32)
 #include "VideoSurface.h"
 #endif
-#if defined(_WIN32)
 #include "CQGame.h"
-#endif
 #include "SoundManager.h"
 #include "SFX.h"
 #if defined(_WIN32)
 #include "IBanker.h"
 #endif
 
-#if defined(_WIN32)
-#include "frame.h"
-#endif
+#include "Frame.h"
 #include "Hotkeys.h"
 
 #include <TComponent.h>
@@ -107,8 +103,8 @@ Frame * __stdcall CreateMenuChat (bool bChatAll);
 Frame * __stdcall CreatePlayerMenu (void);
 Frame * __stdcall CreateMenuDiplomacy (void);
 Frame * __stdcall CreateMenuPlayerChat (void);
-Frame * __stdcall CreateMenuObjectives (void);
 #endif
+Frame * __stdcall CreateMenuObjectives (void);
 
 
 //--------------------------------------------------------------------------//
@@ -155,10 +151,10 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 	Frame * pPlayerMenu;
 	Frame * pDiplomacyDlg;
 	Frame * pChatFilterDlg;
-	Frame * pObjectivesDlg;
 #else
     bool skipNotificationCue = false;
 #endif
+	Frame * pObjectivesDlg;
 
 	int y_positionChat;
 	int bottomAdmiralEdge;
@@ -280,6 +276,9 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 		}
 	}
 
+	void handleAlliancePacket (ALLIANCE_PACKET * ap);
+#endif
+
 	void deleteObjectivesMenu (void)
 	{
 		if (pObjectivesDlg)
@@ -289,8 +288,6 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 		}
 	}
 
-	void handleAlliancePacket (ALLIANCE_PACKET * ap);
-#endif
 };
 //--------------------------------------------------------------------------//
 //
@@ -843,12 +840,30 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 #else
     case CQE_MISSION_CLOSE:
         teVector.clear();
+        deleteObjectivesMenu();
+        break;
+    case CQE_MISSION_ENDING:
+    case CQE_GAME_ACTIVE:
+        deleteObjectivesMenu();
+        break;
+    case CQE_DELETE_OBJECTIVES_MENU:
+        deleteObjectivesMenu();
         break;
     case CQE_HOTKEY:
+        if (!bHasFocus) break;
         switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
         {
+        case IDH_MISSION_OBJ:
+            if (MGlobals::GetGameSettings().gameType == CQGAMETYPES::MISSION_DEFINED)
+            {
+                if (!pObjectivesDlg && CQFLAGS.bGameActive)
+                    pObjectivesDlg = CreateMenuObjectives();
+                else
+                    deleteObjectivesMenu();
+            }
+            break;
         case IDH_CHATALL: case IDH_CHATTEAM: case IDH_CHAT_MENU:
-        case IDH_DIPLOMACY: case IDH_MULTIPLAYER_SCORE: case IDH_MISSION_OBJ:
+        case IDH_DIPLOMACY: case IDH_MULTIPLAYER_SCORE:
             std::fputs("Native scrolling-text menus are not ported\n", stderr);
             return GR_GENERIC;
         }

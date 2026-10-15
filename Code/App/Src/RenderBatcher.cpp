@@ -74,6 +74,18 @@ static bool CanReplayTextureStageState(U32 stage, U32 state)
 #endif
 }
 
+// Native Engine/Optics draws share PIPE without updating this batcher's cache.
+static bool NeedsTextureBinding(U32 committed, U32 requested)
+{
+#if defined(_WIN32)
+    return committed != requested;
+#else
+    (void)committed;
+    (void)requested;
+    return true;
+#endif
+}
+
 #if !defined(_WIN32)
 static bool IsNativeTextureStageWrite(U32 stage, U32 state, U32 value)
 {
@@ -1087,7 +1099,7 @@ bool BATCHEDMATERIAL::is_equal( BATCHEDMATERIAL *material )
 
 					if (texture_stage_texture[ts] != -1)
 					{
-						if (BATCHER->commitedTextureID[ts] != texture_stage_texture[ts])
+						if (NeedsTextureBinding(BATCHER->commitedTextureID[ts], texture_stage_texture[ts]))
 						{
 #ifndef _ROB
 							CQASSERT(texture_stage_texture[ts] == 0 || PIPE->is_texture(texture_stage_texture[ts]) == GR_OK);
@@ -2291,7 +2303,7 @@ DA_METHOD(  set_texture_stage_texture,(U32 stage, U32 htexture ))
 
 	if( !state[RPR_BATCH] )
 	{
-		if (commitedTextureID[stage] != htexture)
+		if (NeedsTextureBinding(commitedTextureID[stage], htexture))
 		{
 			GENRESULT result = PIPE->set_texture_stage_texture( stage, htexture );
 			if (result != GR_OK)
@@ -2331,13 +2343,7 @@ DA_METHOD(	verify_state,())
 				
 				if (currentTextureID[ts] != -1)
 				{
-#if !defined(_WIN32)
-					// External destruction/unbinding can invalidate the cached
-					// ownership even when these two IDs still compare equal.
-					const bool bindRequired = true;
-#else
-					const bool bindRequired = commitedTextureID[ts] != currentTextureID[ts];
-#endif
+                    const bool bindRequired = NeedsTextureBinding(commitedTextureID[ts], currentTextureID[ts]);
 					if (bindRequired)
 					{
 						RB_VERIFY_STATE_CALL(PIPE->set_texture_stage_texture( ts, currentTextureID[ts]));
@@ -2397,7 +2403,7 @@ DA_METHOD(	draw_primitive,(D3DPRIMITIVETYPE type, U32 vertex_format, const void 
 			if( texture_stage_state[ts][D3DTSS_COLOROP] != D3DTOP_DISABLE ) {
 				
 				if (currentTextureID[ts] != -1)
-					if (commitedTextureID[ts] != currentTextureID[ts])
+					if (NeedsTextureBinding(commitedTextureID[ts], currentTextureID[ts]))
 					{
 						PIPE->set_texture_stage_texture( ts, currentTextureID[ts]);
 						commitedTextureID[ts] = currentTextureID[ts];
@@ -2471,7 +2477,7 @@ DA_METHOD(	draw_indexed_primitive,(D3DPRIMITIVETYPE type, U32 vertex_format, con
 			if( texture_stage_state[ts][D3DTSS_COLOROP] != D3DTOP_DISABLE ) {
 				
 				if (currentTextureID[ts] != -1)
-					if (commitedTextureID[ts] != currentTextureID[ts])
+					if (NeedsTextureBinding(commitedTextureID[ts], currentTextureID[ts]))
 					{
 						PIPE->set_texture_stage_texture( ts, currentTextureID[ts]);
 						commitedTextureID[ts] = currentTextureID[ts];
@@ -2772,7 +2778,7 @@ void RenderBatcher::ReleasePrimBuffer (BATCHDESC *desc)
 					
 					if (currentTextureID[ts] != -1)
 					{
-						if (commitedTextureID[ts] != currentTextureID[ts])
+						if (NeedsTextureBinding(commitedTextureID[ts], currentTextureID[ts]))
 						{
 							PIPE->set_texture_stage_texture( ts, currentTextureID[ts]);
 							commitedTextureID[ts] = currentTextureID[ts];
@@ -2956,7 +2962,7 @@ void RenderBatcher::CommitState ()
 			
 			if (BATCHER->currentTextureID[ts] != -1)
 			{
-				if (BATCHER->commitedTextureID[ts] != BATCHER->currentTextureID[ts])
+				if (NeedsTextureBinding(BATCHER->commitedTextureID[ts], BATCHER->currentTextureID[ts]))
 				{
 #ifndef _ROB
 					CQASSERT(BATCHER->currentTextureID[ts] == 0 || PIPE->is_texture(BATCHER->currentTextureID[ts]) == GR_OK);

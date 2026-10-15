@@ -103,3 +103,6 @@ __pycache__/
 # Third-party files whose redistribution provenance is unresolved (see LEGAL.md).
 binkw32.dll
 /Conquest_Frontier_Wars_Manual.pdf
+
+# Privately supplied proprietary fonts; never distribute with source/build artifacts.
+/Arial Narrow/

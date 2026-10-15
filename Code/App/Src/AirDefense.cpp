@@ -171,7 +171,7 @@ struct _NO_VTABLE AirDefense : IBaseObject, ILauncher, AIRDEFENSE_SAVELOAD
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
 
@@ -303,7 +303,7 @@ void AirDefense::init (AirDefenseArchetype * _archetype)
 }
 //---------------------------------------------------------------------------
 //
-void AirDefense::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE _range)
+void AirDefense::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE _range)
 {
 	const BT_AIR_DEFENSE * data = (const BT_AIR_DEFENSE *) ARCHLIST->GetArchetypeData(pArchetype);
 

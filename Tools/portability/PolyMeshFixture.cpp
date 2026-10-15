@@ -75,7 +75,8 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
                           bool wrapForComponent = false,
                           bool embeddedTexture = false, bool threeSortFaces = false,
                           bool indexedTexture = false, bool secondUvSeam = false,
-                          int compoundMode = -1, unsigned hardpointClaimMode = 0U)
+                          int compoundMode = -1, unsigned hardpointClaimMode = 0U,
+                          bool rawTgaTexture = false)
 {
     std::vector<Entry> entries;
     entries.push_back({"/", {}, {}, true});
@@ -184,6 +185,24 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
     if (embeddedTexture)
     {
         const U32 tile = directory(textureLibrary, textureName.c_str());
+        if (rawTgaTexture)
+        {
+            // Original TextureLibrary 1.6 stores an indexed TGA directly in
+            // MIP0, with no Image X size record or nested image directory.
+            std::vector<unsigned char> tga(18U + 256U * 3U, 0U);
+            tga[1] = tga[2] = 1;
+            tga[6] = 1; // 256 palette entries, little endian
+            tga[7] = 24;
+            tga[12] = tga[14] = 2;
+            tga[16] = 8;
+            tga[17] = 0x20;
+            const unsigned char palette[] = {0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255};
+            std::copy(std::begin(palette), std::end(palette), tga.begin() + 18);
+            tga.insert(tga.end(), {0, 1, 2, 3});
+            file(tile, "MIP0", std::move(tga));
+        }
+        else
+        {
         file(tile, "Image X size", words({2U}));
         file(tile, "Image Y size", words({2U}));
         const U32 rgb = directory(tile, indexedTexture ? "Palette 8 Bit" : "True RGB 565");
@@ -198,6 +217,7 @@ bool WritePolyMeshFixture(const std::filesystem::path & path,
         else
             file(mip, "Image colors", std::vector<unsigned char>{
                 0x00U, 0xf8U, 0xe0U, 0x07U, 0x1fU, 0x00U, 0xffU, 0xffU});
+        }
     }
 
     }
@@ -356,6 +376,12 @@ bool WriteLegacyGameMeshFixture(const std::filesystem::path & path,
 bool WriteAnim2DSharedTextureFixture(const std::filesystem::path &path)
 {
     return WritePolyMeshFixture(path, "AnimSharedTile", false, 1U, "Base", false, true);
+}
+
+bool WriteRawTgaTextureFixture(const std::filesystem::path &path)
+{
+    return WritePolyMeshFixture(path, "RawTgaTile", false, 1U, "Base", true,
+        true, false, false, false, -1, 0U, true);
 }
 
 bool WriteLegacySeamGameMeshFixture(const std::filesystem::path &path, bool textured)

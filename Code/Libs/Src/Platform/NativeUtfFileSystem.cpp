@@ -427,7 +427,72 @@ public:
     BOOL DeleteFile(LPCTSTR) override { return FALSE; }
     BOOL CopyFile(LPCTSTR, LPCTSTR, BOOL) override { return FALSE; }
     BOOL MoveFile(LPCTSTR, LPCTSTR) override { return FALSE; }
-    DWORD GetFileAttributes(LPCTSTR) override { return InvalidFileResult; }
+    DWORD GetFileAttributes(LPCTSTR name) override
+    {
+        try
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            std::string entry;
+            if (fileView_ || !ResolveVirtualPath(directory_, name, true, entry, rootDirectory_))
+            {
+                last_error_ = 1;
+                return InvalidFileResult;
+            }
+            bool directory = false;
+            bool found = false;
+            if (physical_)
+            {
+                std::filesystem::path resolved;
+                std::string error;
+                std::error_code status;
+                if (ResolvePhysical(entry, resolved, error))
+                {
+                    const auto kind = std::filesystem::status(resolved, status);
+                    if (!status)
+                    {
+                        directory = std::filesystem::is_directory(kind);
+                        found = directory || std::filesystem::is_regular_file(kind);
+                    }
+                }
+            }
+            else if (diskIndex_ && !archive_)
+            {
+                std::string exact;
+                directory = ResolveIndexedUtfDirectory(*diskIndex_, entry, exact);
+                found = directory || ResolveIndexedUtfFile(*diskIndex_, entry, exact);
+            }
+            else
+            {
+                // Nested in-memory archives use the same exact entry spelling
+                // as their existing OpenChild and directory-view operations.
+                std::vector<UtfDirectoryEntry> entries;
+                std::string error;
+                if (entry.empty())
+                    found = directory = ListDirectory(entry, entries, error);
+                else
+                {
+                    const auto slash = entry.rfind('/');
+                    const std::string parent = slash == std::string::npos ? "" : entry.substr(0, slash);
+                    const std::string leaf = slash == std::string::npos ? entry : entry.substr(slash + 1);
+                    if (ListDirectory(parent, entries, error))
+                        for (const auto &candidate : entries)
+                            if (candidate.name == leaf)
+                            {
+                                found = true;
+                                directory = candidate.directory;
+                                break;
+                            }
+                }
+            }
+            last_error_ = found ? 0 : ERROR_FILE_NOT_FOUND;
+            return found ? (directory ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL) : InvalidFileResult;
+        }
+        catch (const std::bad_alloc &)
+        {
+            last_error_ = 3;
+            return InvalidFileResult;
+        }
+    }
     BOOL SetFileAttributes(LPCTSTR, DWORD) override { return FALSE; }
     DWORD GetLastError() override { return last_error_; }
 

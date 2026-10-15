@@ -1,5 +1,479 @@
 # First Terran campaign integration (2026-10-13)
 
+## P1c integration and acceptance ledger (2026-10-15)
+
+### P1c completed by user acceptance (2026-10-15)
+
+The user explicitly accepts P1c as completed on 2026-10-15, after the reported
+mission transitions, save/load and subsequent presentation, fighter and HUD
+repairs. Record this as user acceptance of the delivered native Linux scope.
+P1a, P1b and P1c are therefore accepted in that scope; P2 campaign expansion is
+the next planned delivery step.
+
+This status decision adds no test execution and does not invent confirmation
+for individual unreported scenarios. Detailed defeat/retry, complete restart
+persistence, result-driven resource-growth measurements, unresolved unit/hero
+coverage, missing media and whole-process leak findings remain tracked
+technical follow-ups. Native Windows Debug/Final/module ABI and hosted CI
+remain unexecuted; M3 stays separate and unaccepted. Earlier dated pending
+milestone statements below are implementation history, superseded by this
+acceptance decision, not by fabricated technical passes.
+
+No objectives, save states or campaign progress were manufactured for validation.
+
+### TM2 completion, HUD commands, Capture cursor and TM3 entry (2026-10-15)
+
+**User retail-input runtime:** the player reports TM2 ran through, then reports
+unavailable objective-menu clicks, Fabricator repair/sell failures (Sell even
+quickloads by mouse), a false forbidden Capture cursor and a crash entering TM3.
+The player clarifies that the actual capture succeeds on click: the cursor alone
+is wrong. This supersedes an initial assumption of a failed capture operation;
+neither research nor mission conditions are modified to resolve it. User TM2
+completion does not accept these regressions or the remaining P1c gates.
+
+**Confirmed production causes and repairs:**
+
+- Original retail HOTBUTTON semantic/raw pairs differ from the CQ2 command enum.
+  The existing native HotButton adapter now maps Objectives78/700, Sell112/485,
+  Repair88/487 and Assault115/592 to their original source command consumers.
+  It applies equally to click, key hint and flashing. Physical F8/raw112 without
+  Sell semantics remains Quick Load; canonical source IDs and Windows are
+  unchanged. Existing real event-queue regression checks all four pairs and
+  negative/canonical cases. Source review confirms original linked Fabricator
+  repair/dismantle consumers; actual final action completion remains user-tested.
+- Native cursor embedding omitted source-owned Capture.cur/IDC_CURSOR_CAPTURE135.
+  The cursor owner rejected the request and retained the previous cursor, matching
+  the false forbidden indication despite a working click. Embed the original
+  glyph/hotspot(3,0). This file counts XOR pixels plus AND mask in biSizeImage;
+  admit that exact image-size convention while still validating full file, pixel
+  and mask extents. Existing CPU decoder/host SDL cursor checks cover28 original
+  resources, BAN/CAPTURE switching and invalid-ID retention. No capture-rule,
+  target-list, upgrade or research-value change is made.
+- Actual systemd core: SIGABRT in MScript::Load from original TM3 briefing
+  selection, scriptName Script03.dll. The native composition had no third-script
+  provider. There is no corresponding host OOM evidence. The original Script03T
+  owner, separately namespaced native programs/reset, source schema and counted
+  strings are now linked; original briefing/start entries, mission loading, legacy
+  lighting and map/save detection accept that module. No success placeholder,
+  progress writer or automatically completed goal is added.
+
+The existing layout/parser checks pin the original492-byte TM3 MissionData,
+critical actor/array/final-field extents, source program records, source string
+IDs, module separation, empty programs and exact field correlation. This extends
+existing script checks for the newly executable owner; it does not claim complete
+TM3 gameplay. The existing technical sanitizer CI filter also selects script03.
+
+**Executed validation:** GCC16.2.1 and Clang22.1.8 Linux x86_64 Debug standard
+and full-media graphs rebuild and execute the non-host suites; exact central
+results are in BUILD_GRAPH. Fatal Clang ASan/UBSan/leak-detection checks run the
+affected schema/layout/parser/shell and original cursor decoder. Existing host
+SDL cursor checks execute under both compilers without skips. An independent
+read-only review finds no concrete defect in the scoped command/cursor/TM3
+changes; native Windows Debug/Final and module ABI remain unexecuted.
+
+**Bounded retail-input runtime:** GCC enters the original TM3 briefing, starts
+through normal Return, reaches the playable planet/base/fleet, performs normal
+F7/F8 and closes at1543 source frames, result4/exit0, mission audio0/idle hints.
+Clang repeats briefing/start/normal F7/F8/close at766 frames with active portraits.
+The first development attempt found a remaining briefing allow-list guard and
+aborted; that failed interval is retained, followed by the corrected executions.
+These are fresh genuine source-map starts, not a fabricated campaign transition,
+and do not accept full TM3 gameplay or complete media appearance.
+
+A separate Clang strict full-media run loads an unchanged private copy of the
+user's latest TM2 checkpoint. An actual mouse click opens original Objectives,
+with six genuine completed/active rows; Escape, normal F7/F8 and a renewed button
+click work. It closes at4853 frames, result4/exit0, audio0/idle hints, portraits
+2starts/255framechanges/751draws. The first TM3 click attempts hit Options or
+arrived during loading; neither is counted as an Objectives pass. The later
+TM2 capture confirms command106 from the actual right-hand HUD button. No
+required rendering/media is excluded, and the user's live save/progress is not
+replaced by these agent-run copies. Actual repair/sell completion and renewed
+Capture-cursor acceptance remain bundled user checks.
+
+**Discarded hypotheses:** a raw Globals offset initially confused runtime wchar
+width with the original saved schema. The production-parser field offsets
+disprove the initial completed-research claim. The source target-list traversal
+was also inspected but no skipped-upgrade defect established. Neither path is
+changed; the user independently confirms capture mechanics work. An orphaned
+working-research observation is unproven and is not silently repaired in saves.
+
+### User transition feedback (2026-10-15)
+
+**User retail-input runtime:** the player confirms completing TM1 and successfully
+entering TM2 through the transition. The briefing and in-map opening mostly play,
+but three concrete defects block acceptance: inactive briefing portrait frames
+cover only a small upper-left part of their video windows; Mantis opening fire
+originates below the hulls; after the opening no ships/planets are visible and
+camera zoom appears to work only outward. The supplied screenshot documents the
+briefing frame defect. The transition confirmation does not establish every
+statistics screen, restart persistence, defeat/retry or playable TM2 control.
+
+These are required correct-start/presentation repairs within P1c, not deferred
+full-mission P2 work. Source-camera/model/briefing investigations are in progress;
+no cause or successful fix is inferred from the report alone. The previous bounded
+start/save tests establish execution and stored source state, not a playable or
+visually correct camera view. Their narrower observations remain recorded below.
+
+### Missile Cruiser construction feedback (2026-10-15)
+
+The player reports that the preceding briefing/weapon/camera corrections work
+and gameplay continues until attempting to build a Missile Cruiser, when the
+program crashes. This confirms the bounded start-feedback repairs; it does not
+accept all remaining P1c defeat/restart/resource-growth checks or all of TM2.
+
+**Crash evidence on actual retail-input gameplay:** SIGSEGV occurs in
+`ObjectList::AddObject` with a null new ship from `BuildPlat::updateBuild`.
+The exact source branch starts a queued ship; it can be reached after another
+construction finishes, matching the reported timing without proving the completed
+ship itself crashed. No corresponding host OOM event is observed. The original
+Missile Cruiser gunboat requires both vertical-launch and cloak-launch factories;
+neither source owner was previously in the native composition. Required-launcher
+validation rejects the gunboat archetype, so ship creation returns null. No
+ObjectList/BuildPlat assertion or failed-build handling is weakened to hide it.
+Core/stack details remain private; the temporary extracted core was deleted.
+
+The native graph now includes original `VLaunch` and `CloakLauncher`, retaining
+original factory dispatch, salvo/refire/supply/tech logic and random-call order.
+The required original Missile projectile owner was already linked. Vertical
+launchers deliberately have no `ISaveLoad` in the original source; the native
+port does not invent one. Cloak retains its original eight-byte save and native
+exact-I/O/schema validation. Existing layout/app-schema probes pin both archetype
+records and the cloak save flags/fraction. These synthetic checks establish data
+compatibility, not successful real cruiser construction. A genuine prebuild
+checkpoint, normal queue/completion and subsequent F7/F8 remain the decisive
+runtime check. Full TM2 completion remains outside this bounded repair.
+
+**Executed technical validation:** GCC16.2.1 and Clang22.1.8 on Linux x86_64 build
+both complete standard and full-media Debug graphs, then execute the non-host
+CTest suites. The complete Clang instrumented graph builds and the existing
+layout/view-parser/app-schema/native-shell checks run with fatal ASan/UBSan and
+active leak detection. Exact selection/configuration and central totals are in
+[BUILD_GRAPH](BUILD_GRAPH.md#missile-cruiser-factory-closure-validation-2026-10-15).
+No genuine prebuild save was available when this candidate was prepared; normal
+queue/completion and cruiser save/reload are explicitly unexecuted. The requested
+new checkpoint remains pending, with no fabricated substitute. User confirmation
+of the three previous feedback repairs does not establish this new path. Native
+Windows Debug/Final/ABI, actual CI and full-process mission sanitizers remain open.
+
+### Cruiser missiles, objective menu and unit-owner expansion (2026-10-15)
+
+The user has subsequently supplied Arial Narrow privately. Strict mapping now
+uses actual original-family inputs; the ignored source-local font folder and
+external runtime copies are never distribution artifacts. See
+[font input update](NATIVE_TERRAN_MEDIA.md#original-family-font-input-supplied-2026-10-15).
+
+
+**User retail-input runtime:** the player confirms the Missile Cruiser now builds
+and ordinary save/load works. Missiles still depart in the wrong direction; the
+mission-objectives menu also needs restoration. A fresh genuine post-build F7
+checkpoint is preserved unchanged outside the repository for focused checks.
+These reports supersede the earlier pending build/save feedback, not the remaining
+P1c defeat/retry, restart-persistence or resource-growth gates.
+
+The native Missile owner now extracts its actual minus-K flight pitch at launch,
+arc construction and heading reconstruction. VLaunch resolves its authored muzzle
+through the same hull-model transform as fixed gunboats. Original missile arc,
+spread, targeting, simulation/RNG and Windows expressions remain unchanged.
+The existing material/math regression covers actual production TRANSFORM headings
+and elevations. The original Menu_Objectives now uses the native UI composition
+and ScrollingText hotkey owner, with bounded source counted strings, original
+objective/completion state, pause/focus behavior and deferred menu destruction
+on close/load/mission end. No objective setter or replacement menu state is added.
+
+The user-authorized broader unit expansion now integrates original FlagShip,
+Troopship/TroopPod, ReconProbe, SellPlat, Aegis/AreaEffectBolt/DumbReconProbe,
+WormholeLauncher/WormholeBlast, MultiCloakLauncher and Synthesis production owners.
+Compilation is distinct from unit creation, abilities and successful persistence.
+An exclusive `--unit-catalog-check` uses the original ARCHLIST enumeration and
+LoadArchetype cache without starting a mission or creating progress. It validates
+raw unit extents first and reports unsupported records as failures while testing
+other valid records. [Unit coverage](NATIVE_UNIT_COVERAGE.md) records scope and
+remaining factory, gameplay and persistence boundaries.
+
+A genuine post-build checkpoint reproduces a full F8 load failure: the existing
+SupplyShip owner writes its original468-byte C++ record while its schema describes
+464bytes before an empty trailing base member. The native exact-record adapter
+rejects it; the previous reload failure path then resumes a partial object graph
+without its operations matrix and asserts in OpAgent. The saved operation and
+Cruiser IDs are internally consistent, so no cache invalidation or assertion
+change is justified. A narrow original-layout adapter repair and failed-reload
+cleanup are under validation. No successful reload is inferred from the progress
+animation reaching100percent.
+
+**Final executed feedback interval:** the genuine post-build checkpoint now
+restores after the narrow SupplyShip adapter correction. Two normal F8/F7 cycles
+under GCC and two under Clang complete with normal exit0; Clang captures show
+original objectives and their completed/active states, closing/reopening after
+reload. With the subsequently supplied strict fonts, Clang repeats two cycles,
+1768modalframes, normal exit0, mission audio0/idle hints, original portrait2starts/
+255framechanges/751draws. No required media is excluded. Both minimaps and the
+selected fleet/HUD remain visible; no complete portrait/weapon/audio player
+acceptance is inferred from the captures. Fresh-process original progress reads
+completed1/seen3 from the genuine unchanged user file; this is bounded persistence
+read evidence, not full defeat/retry or unlock-rule acceptance. Missile trajectory
+math passes; actual combat appearance still requires user confirmation.
+
+The preceding failed object load and interrupted early input intervals remain
+failures. Final local GCC/Clang standard/full-media and fatal focused sanitizer
+checks execute as recorded in [BUILD_GRAPH](BUILD_GRAPH.md). Actual catalogue
+completeness and whole-process LSan still fail as documented, without suppression.
+No mission/resource-growth gate is closed from a short audio/hint cleanup check.
+
+Two concrete original-source compatibility gaps remain: all20 retail flagships
+use a744-byte record with abilities/bonuses absent from the CQ2 owner. A bounded
+exact decoder documents that contract; the original factory rejects it before
+CQ2-only reads rather than padding invented formations/kits/bonus behavior.
+Wormhole launchers have no implemented original load path or saved portal objects;
+native Save explicitly fails instead of advertising an unloadable successful save.
+Neither gap is an accepted complete ship/hero capability.
+
+### Feedback repair contracts (2026-10-15)
+
+The concrete report above justifies extensions of existing regressions rather
+than another mission driver or replacement gameplay path:
+
+- `Animate` uses the existing original border artwork, with its authored corner
+  insets, around the actual source animation-cell dimensions. The native runtime
+  archetype retains source image dimensions separately from scaled draw size.
+  The existing shell lifecycle check now checks the production resize function
+  and indexed TGA decode for retained corners, transparent aperture, outer extent,
+  complete palette and pixel indices. The actual linked TextureManager TGA reader
+  now admits its existing 32-bit palette decoder with precise byte bounds, in
+  addition to 24-bit palettes. Malformed/truncated/oversized palette/index inputs
+  remain rejected. Initial integrated attempts exposed a nonindexed DrawAgent
+  input and then the reader's missing indexed32 admission; those failed attempts
+  are not passes. Neither DrawAgent assertions nor image bounds are weakened.
+  This synthetic image check does not claim a visible briefing pass.
+- `MovieCameraManager::SetCamera` converts its optical minus-K basis to the
+  native camera's rotation/local pitch rather than using ship J-forward angles.
+  The existing camera-save probe reconstructs the actual matrix convention in
+  quadrants, horizontal directions and both vertical poles, including right-axis
+  orientation, using `TRANSFORM` like the real `Camera::cam2World`, including
+  its initial ship-frame conversion. Plain `Matrix` reconstruction was an
+  insufficient earlier check and an initial +90-degree candidate failed fresh
+  post-opening rendering. The final optical pitch conversion naturally retains
+  the original Camera clipping/zoom path; `Camera.cpp` requires no change. It
+  retains authored position, look target and system. The genuine
+  user's broken checkpoint confirms the old wrong orientation is persisted with
+  no remaining camera queue. Existing saves are not silently normalized; fresh
+  TM2 selection/start is the correct retest, without replaying TM1.
+- Native fixed-barrel gunboat sighting now places the authored muzzle through the
+  same model-axis conversion as its hull, retaining the full Engine child frame.
+  Actual Mantis Frigate turrets have no swivel joint and use the production
+  PlasmaBolt owner. This corrects real native projectile origins/axes; it is not a
+  fabricated visual trajectory. Type/fixed-barrel classification is independent
+  of graphics settings, cloak or FastRender. Jointed turrets and platforms retain
+  their previous path. The existing material/math probe independently pins the
+  asymmetric rotated/scaled child-frame result and all basis directions while
+  checking unchanged input and nonselected paths. Simulation order, random calls,
+  target selection, saved layouts and the Windows branch are unchanged; no full
+  cross-platform simulation equivalence is inferred.
+
+### Production owners and bounded regressions
+
+The native composition follows `Conquest.cpp`'s single-player result loop:
+close the mission before original statistics, show `CreateMenuEndGame` for win
+or loss, then return through original campaign/mission selection for Continue,
+loss, resign and quit. `MScript::EndMissionVictory` remains the only gameplay
+completion writer; `GameProgress` retains its original twelve-byte `player.gpf`.
+Seen/briefing selection is distinct from completed-mission progress. The selector
+retains the original unlocking and replay rules; no automatic next-mission choice
+is added. Ordinary desktop close exits; bounded source smokes do not reopen menus.
+
+The second mission uses the original `Scripts/Script02T/Script02t.cpp`, original
+schema and strings, its own native registration list and retail `script02.dll`
+binding. `TM2_Briefing` and `TM2_InGameScene` remain the original briefing/start
+owners. Native module initialization reconstructs mission data before saved-state
+correlation, matching the Windows DLL lifetime rather than retaining static data
+from a prior mission. No persistent fields or public interfaces are widened.
+
+The concrete integration blockers justify extensions of existing checks:
+
+- Existing layout/parser checks pin TM2's 408-byte mission record, saved actor
+  identifiers, source schema/string identity and module start-list separation.
+  Sol_T/Script01 checks cannot detect a wrong TM2 record or mixed start list;
+  these checks decide whether the second production script can be loaded.
+- The original GameProgress owner is checked in a separate scratch save directory
+  through write, reinitialize/read and a truncated-record rejection which must
+  preserve the damaged file and prior in-memory state. The existing raw DOS
+  adapter round trip cannot detect the owner's ignored read count. This is
+  synthetic format/owner evidence, never a successful mission transition.
+- Existing native source lifecycle checks protect detached spatial one-shots and
+  looping playback at both close phases, stale status text/name ownership, and
+  fullscreen-map/input/rally/zone/old-system ping reset. These are process-scoped
+  owners that survive mission teardown; tests decide whether the same owners can
+  safely accept a subsequent mission rather than creating substitute services.
+
+### Additional initial-media blockers resolved in production owners
+
+The real second map's source startup exposed `MissionCamStart` being absent at
+runtime. External metadata confirms that exact authored object exists; the native
+`MovieCamera.cpp` object/factory had been excluded. The production camera owner,
+its original ChangeCamera queue and fixed36-byte quick/176-byte full save records
+now compile natively. Editor-only Windows dialogs remain outside mission scope.
+Existing layout/app-schema probes cover those records and field correlation.
+The isolated camera-manager save probe uses explicit throwing test dependencies
+for unexercised object creation; it supplies no successful fake gameplay owner.
+
+The same run showed zero speech portraits because original TM2 `DoSpeech` calls
+`MScript::IsAudioThere`, while native `GetFileAttributes` always reported failure.
+The read-only filesystem now returns rooted archive/physical metadata without
+reading payloads, preserving its case/path policies. Existing data-root checks
+cover files/directories, missing/invalid/rooted paths and sizes above payload-read
+limits. A later bounded direct GCC run executes 150 frames with one portrait,
+57 frame changes and 148 draws, then closes with mission audio0 and idle hints.
+This is bounded animation/render execution, not audible/user acceptance.
+
+Native ObjectList quick-map loading now fails when an unavailable factory would
+silently discard actual saved instances; empty metadata folders remain allowed.
+Successful load order and Windows behavior are unchanged. The concrete lost
+camera justifies this guard; a separate negative missing-factory runtime test has
+not yet executed, and no such pass is claimed.
+
+### Feedback repair execution (2026-10-15)
+
+**Compilation/automated execution:** final GCC/Clang standard and full-media
+Debug graphs rebuild, and existing non-host suites execute without failure/skip.
+Fatal Clang ASan/UBSan with leak detection executes the affected layout,
+app-schema, camera-save, native-shell image and game-material checks. Exact
+configuration, selection and central totals are recorded in
+[BUILD_GRAPH](BUILD_GRAPH.md#p1c-user-feedback-repair-validation-2026-10-15).
+
+**Bounded full-media retail-input runtime:** a fresh private save root enters the
+original TM2 briefing and starts via normal Return. After the source opening,
+normal F7 creates a genuine save; its screenshot and unchanged file are retained
+before the first F8. This fresh view shows the planet, stations and starting fleet
+inside the playable pane. F8 reaches100%, followed by original F7; the later
+capture retains that framing. Normal owned-window close ends2984 source frames
+with exit0, zero mission audio streams and idle hint ownership; two portraits
+execute253 frame changes/750 draws. No debug result, objective, progress or camera
+value is injected. Early F7 during movie control is ignored normally, then retried
+when ordinary control is available. Both pre/post-F8 saves are retained privately.
+Independent read-only inspection confirms the exact authored camera position and
+system, heading0 and approximately-40-degree pitch, with no former clamp drift.
+The active BuildBallistics state, unchanged objective bytes, source programs,
+entity/owner-record inventory and four named camera IDs/systems survive while
+simulation updates advance. This is state/continuation evidence, not exact whole-
+save byte identity or a completed mission.
+
+A separate natural briefing-only run constructs the corrected original indexed
+frame through real DrawAgent/GPU ownership, renders speech/media and closes
+normally. Captures during active streams do not establish the inactive-fuzz
+frame's final visible appearance; that remains a targeted user check. Precise
+moving muzzle appearance, ordinary selection/orders, both zoom directions, full
+map/media interaction and complete user acceptance remain unverified. The single
+external interim font is still explicit; no required graphics/media exclusion is
+used. Prior failed format candidates and the insufficient plain-Matrix camera
+candidate remain failed, not alternative passes. No new whole-process sanitizer
+or mission-resource growth pass is inferred. Windows/ABI, actual CI, defeat/retry,
+restart progress and remaining presentation/leak findings stay open.
+
+### Executed validation (2026-10-15)
+
+**Compilation/automated execution:** Linux x86_64 GCC16.2.1 (`c++`) and
+Clang22.1.8 (`clang++`), standard presets and separate full-media Debug builds.
+Optional configuration uses `-DFRONTIERX_BUILD_NATIVE_FONTS=ON
+-DFRONTIERX_BUILD_FFMPEG_AUDIO=ON -DFRONTIERX_BUILD_FFMPEG_VIDEO=ON` and the
+reviewed external shared-LGPL prefix through `CMAKE_PREFIX_PATH`. All graphs
+build with CMake/Ninja. Each executes the complete non-host suite with
+`ctest --test-dir BUILD -LE host --output-on-failure`, without failures/skips;
+central totals are in [BUILD_GRAPH](BUILD_GRAPH.md).
+
+The Clang full-media instrumented graph uses
+`-fsanitize=address,undefined -fno-omit-frame-pointer` and matching executable link
+flags. The exact focused command is:
+
+```sh
+env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir "$P1C_SAN_BUILD" \
+  -R 'portability\.(layout|view_parser|app_schema|script0[12]_schema|sol_t_schema|data_root|net_buffer|native_shell)$' \
+  --output-on-failure
+```
+
+Every selected check executes successfully. This covers synthetic source schema,
+layout, metadata, progress corruption handling, manager save and lifecycle
+ownership, not full mission leak acceptance. Sandbox ptrace prevented LSan's
+configure-time dependency check; configure/build and leak-enabled execution were
+repeated outside that restriction without disabling detection. Native Windows
+Debug/Final/affected-module ABI, actual CI, GPU fixture comparison and M3 remain
+unperformed in this change.
+
+**Bounded runtime on lawfully external data:** the unchanged new user checkpoint
+is loaded through original F8 twice, each after the preceding load reaches100%,
+then continued, saved with original F7 and closed through the owned window.
+The successful final run executes 179 source frames, returns 4/native 0 and reports
+mission audio 0/idle hints. Read-only validation of the earlier continuation
+retains BeaconRecovered, unfinished mission, identical objective bytes, running
+programs and beacon actor reference. No victory is inferred from this checkpoint.
+
+The full-media Clang candidate enters original TM2 briefing, starts via normal
+Return, completes the source opening, then accepts original F7, F8 and another F7
+after the actual reload reaches100%. Original window close ends3005 source frames
+with modal4/native0, mission audio 0/idle hints; two portraits start with 253 frame
+changes and 750 draws. Early F7 attempts during original movie control do not
+produce a save and are not counted. The earlier45-second focused run closes
+normally through 1347 frames; a preceding background/watchdog attempt fails and
+is not promoted. The extended run keeps only its owned window focused and changes
+no desktop configuration. The internal smoke flag's one-minute limit is preserved;
+the longer diagnostic uses normal window close, not a changed game timer.
+
+Independent read-only inspection of the TM2 output confirms Script02, the
+source BuildBallistics state and its original active programs/objectives, with no
+TM1 program/objective set. Four 176-byte cinematic-camera save records include
+MissionCamStart with finite view values and positive FOVs. Only the final TM2 save
+was retained in this run, so exact pre/post-F8 byte equality is unverified; source-
+correct continuation and actual reload completion are the bounded observations.
+The latest TM1 output retains the genuine source state/objective bytes/programs.
+
+All these runs request the required graphics/media with no exclusion flags but
+retain the explicitly single-font interim limitation. They do not establish the
+complete visual/audible state, minimap interactions, regular victory/defeat or
+result-driven mission switching. No mission objectives/progress are set by a
+driver. Detailed commands, source/binary/cache hashes and raw private observations
+stay with the external handoff. Whole-process mission leak findings remain open;
+no cross-process/sanitizer growth pass is claimed from these bounded checks.
+
+A separate **whole-process instrumented retail-input run fails LeakSanitizer**
+after regular TM2 load/render/close. Initial exit1 reports 3540 bytes/13 allocations;
+a same-input retry with read-only module maps reports 3460 bytes/12 allocations.
+Neither is a sanitizer pass. No preceding ASan invalid-access or UBSan diagnostic
+is observed; normal close reports audio0/idle hints. Same-process mapping locates
+the previously unloaded stack frames at NVIDIA and PipeWire/SPA boundaries,
+with explicit DBus allocation stacks. This identifies allocation boundaries,
+not the cleanup cause or an exemption for FrontierX resource ownership. The
+historical additional mission allocation and these host failures remain open;
+no suppression, assertion change or per-cycle growth inference is applied.
+Detailed stacks/maps remain external. The focused CPU sanitizer result above
+remains a separate, narrower successful scope.
+
+### Acceptance and retained technical evidence
+
+Overall P1c user acceptance is recorded above. Pending entries below identify
+unperformed or insufficiently documented checks; they are not reported as passes
+by the milestone decision.
+
+| Behavior/check | Recorded evidence and remaining limit |
+|---|---|
+| Genuine TM1 victory, original result/Continue, TM2 entry | User confirms completion and successful transition; individual statistics-dialog details not separately recorded |
+| Correct TM2 opening and continuation | User confirms briefing/muzzle/camera repairs and subsequent TM2 completion |
+| Defeat, original retry/return, no victory progress from loss/resign | Detailed runtime scenario remains unrecorded |
+| Original progress after complete process restart | Original progress files retained; bounded persistence evidence exists, complete targeted restart scenario remains unrecorded |
+| Genuine pre-end and follow-mission save/load | User confirms save/load; bounded genuine checkpoint F7/F8 continuation runs recorded below |
+| Repeated start/load/close/switch and mission-resource accounting | Multiple bounded load/save/close runs execute; repeated result-driven switches and resource-growth assessment remain unperformed |
+| Presentation/media after transitions | P1b explicitly accepted; user confirms texture repair and later Infiltrator action; remaining per-feature evidence and missing media remain documented |
+| Native Windows Debug/Final/module ABI | Not executed on this Linux host |
+| Protected technical CI and M3 | Hosted CI unexecuted; M3 deferred and unaccepted |
+
+The user supplied a new genuine near-end quicksave on 2026-10-15. Read-only source
+inspection identifies an unfinished BeaconRecovered state, with original remaining
+escort/return and possible combat. A private unchanged copy is retained outside
+the checkout. This improves test access without inventing a completed objective,
+win, loss or progress bit. Earlier private saves remain early states and cannot
+substitute for that checkpoint. Exact private filenames, hashes and observations
+belong with the private handoff, not repository or CI artifacts.
+
 ## P1b completed by user acceptance (2026-10-15)
 
 The user explicitly requested that P1b be marked completed after the full
@@ -68,7 +542,7 @@ Seattle/Tacoma arrival and normal three-ship selection, Gate2 proximity,
 Austin/three-Frigate jumps and combat, Fabricator arrival and HQ construction.
 Genuine F7 output retains an actual524-byte active-HQ record with hull2167/3500
 and a separate completedHQ3500/3500 state. The later completed-HQ F8/F7/close
-executes12753 source frames and returns4/native0, with audio0/idle hints and
+executes12753 source frames and returns 4/native 0, with audio 0/idle hints and
 advancing original portraits. It is not load-during-active-production evidence.
 A further rebuilt BUILD-cursor ready-HQ F8/Turret preview/close executes2035
 frames and returns0. Strict active-HQ sanitizer continuation is recorded below.
@@ -76,7 +550,7 @@ Private checkpoints remain outside the checkout/CI artifacts.
 
 The strict active-HQ Clang ASan/UBSan retry now performs genuine F8 from the
 unchanged2167/3500 source checkpoint,20 seconds of continuation, original F7
-and normal close.830 source frames return4 with audio0/idle hints; whole-process
+and normal close.830 source frames return4 with audio 0/idle hints; whole-process
 exit1 fails LeakSanitizer2988 bytes/seven allocations. No preceding invalid
 access or UBSan diagnostic is observed, including the corrected asteroid sort
 path; this is not a sanitizer pass. The first manual attempt is watchdog-killed
@@ -974,3 +1448,109 @@ building1 and whole0. It is an appropriate active-construction sanitizer input,
 not a replacement mission or automatically completed state. Shipyard display,
 construction cancellation/death/assist cases, whole-process cleanup, complete
 user outcomes and affected native Windows/ABI/actual CI remain open.
+
+### Planet hover and construction-slot visibility (2026-10-15)
+
+User feedback identifies missing planet transparency under the mouse, especially
+when building. Native Planetoid now uses its original `bMouseOver` condition in
+normal play and construction, and the original faded-pass contract forwards
+per-instance alpha to PolyMesh. It does not modify shared materials, saves,
+simulation or Windows. The selected64/255 opacity is provisional: neither an
+exact retail opacity value nor its historical interpolation curve is established.
+
+**Bounded retail runtime:** the strict full-media Clang22.1.8 Debug candidate
+loads a separate, unchanged copy of a genuine ready-HQ TM1 save. Actual compositor
+pointer events show a faded planet on hover and opaque restoration on leaving;
+private captures retain ships, background, HUD and both maps. Normal F7/F8
+followed by renewed pointer input restores the hovered appearance; regular close
+returns result4/exit0 after4285 frames with zero mission-audio streams, idle hints
+and active portrait playback. No objective/progress value was modified. A first input
+attempt only warped the pointer and an over-eager focus loop recentered it; those
+images are not pointer-leave evidence. A compositor responsiveness notice during
+synchronous load clears when loading completes; no permanent hang is inferred.
+
+Existing material CPU/host-Vulkan tests pass under GCC16.2.1 and Clang22.1.8;
+fatal focused Clang ASan/UBSan also passes, without suppressions. See
+[the exact owner and regression scope](GAME_MATERIAL_PATH.md#native-planet-hover-opacity-2026-10-15).
+Construction-slot visibility/clickability, exact fade appearance and full TM2
+visual acceptance remain user checks. This does not close P1c, all-unit admission,
+whole-process leak, native Windows/ABI, actual CI or M3 gates.
+
+### Cross-mission effect feedback after TM3 start (2026-10-15)
+
+The user supplies a TM3 combat screenshot and genuine quicksave, noting the
+transient artifacts also occur in earlier missions and fighters may be invisible.
+The shared App-batcher/direct-renderer texture-cache conflict is reproduced and
+repaired without changing mission, weapon/fighter simulation, progression or
+saves. Actual original TM3 intro and unchanged user-checkpoint runtime are
+recorded in [the focused material entry](GAME_MATERIAL_PATH.md#effect-textures-after-direct-ship-draws-2026-10-15).
+The user confirms that the corrected build removes the texture artifacts, but
+reports invisible fighters and ineffective Hive Carriers. Prepared fighter CPU
+geometry was insufficient evidence of correct rendering or gameplay. An
+independent read-only debugger run on the unchanged genuine TM3 checkpoint
+reproduces launched Scout fighters descending below the battlefield, with sampled
+weapon attempts failing before damage is queued. The owning fighter/control
+frame repair is implemented. Corrected genuine Hive combat delivers eight
+five-point hits through the original scheduler, reducing a Missile Cruiser hull
+from 150 to 110. Bounded same-process Clang F7 and repeated F8 checks close
+normally; renewed user visual/combat confirmation remains open. See
+[the fighter evidence](NATIVE_TERRAN_MEDIA.md#fighter-flight-frame-regression-2026-10-15).
+The private full-media candidate retains the external combat checkpoint and existing player
+progress. This repair does not close P1c or overwrite prior acceptance or gaps.
+
+### HUD command bindings across all ship and structure panels (2026-10-15)
+
+The user reports that the Sell/Repair/F8 command conflict affects additional
+ship and building panels. The earlier tooltip-dependent HotButton translation
+covers only selected semantic pairs. Read-only production IDataParser inspection
+of all 41 GT record types and 1039 actual external UI button slots finds 129
+remaining ordinary HotButton and nine MultiHotButton instances with incorrect
+commands, across 37 resource/tooltip pairs. This includes authored controls
+without text. MultiHotButton also bypasses the earlier sender entirely.
+
+The independently reviewed embedded retail HOTKEYS enum has 148 commands plus
+NONE; 104 command numbers differ from the current source header. Native
+HotButton and MultiHotButton now translate that complete enum exactly once at
+resource initialization and store the current command. Click dispatch, hotkey
+hints and flashing use that same stored value. Mutable MultiHotButton tooltips
+preserve their generic ability/selection command. The old partial semantic
+adapter is removed. Physical HKManager events already contain current IDs and
+never enter the resource conversion, so physical F8 remains Quickload.
+
+**Scope and original behavior:** this covers every authored action slot across
+the retail Terran, Mantis and Celareon HUD resources, including inactive slots.
+The 300 BuildButton and 436 ResearchButton records use only unchanged context
+IDs/NONE; their existing handlers need no translation. TabButton has no assigned
+hotkey in the current owner. Original builder Sell/Repair modes, contextual
+ship selling/repair, fleet repair, capability checks and gameplay consumers are
+retained. This change adds no new ability to units or structures.
+
+**Validation:** the existing native-shell queue check exercises representative
+resource commands from each HUD family through the production shared sender
+and EventSystem Post/Update/Peek, then verifies canonical Sell/Repair/generic
+ability/F8 commands are posted without another translation. An independent
+compiled adapter audit matches every authoritative enum value and all 1039
+external button fields. The old adapter demonstrably leaves 138 instances
+incorrect, including an unlabelled Rally Point and a generic ability button.
+No retail schema, records or raw audit dumps enter repository/CI artifacts.
+GCC16.2.1 full-media shell builds and its focused check passes; the focused
+Clang22.1.8 fatal ASan/UBSan shell check also passes with leak detection enabled.
+The Clang22.1.8 full-media candidate also builds and its non-host suite passes.
+
+**Retail-input runtime and user evidence:** the new Clang candidate loads the
+unchanged genuine TM3 checkpoint through physical F8. Actual resource init logs
+show the new stored current IDs. Two real special-action clicks emit canonical
+IDH_SPECIAL_ABILITY160 without another Quickload event. The user explicitly
+confirms that an Infiltrator action which previously failed now works. This is
+accepted for that action, not every unit ability. The game subsequently closes
+normally after 1543 source frames, audio streams zero and hint ownership idle.
+The private automation wrapper fails its final screenshot assertion because the
+window has already closed; retain that wrapper failure separately from the
+normal game exit. An earlier short launch also closes before the planned F8
+check and provides no action-acceptance evidence. The remaining ship/building
+commands need user gameplay confirmation; the complete data/queue audit does
+not claim every production consumer was played.
+
+Native Windows Debug/Final/module ABI, hosted CI, full gameplay acceptance and
+broader P1c lifecycle/resource-growth gates remain open. No persistent or module
+layout, Windows expression, simulation ordering or RNG call changes.

@@ -16,6 +16,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeShipVisualTransform.h"
 #include "Include/CQTrace.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
@@ -241,7 +242,7 @@ struct _NO_VTABLE Turret : IBaseObject, ILauncher, BASE_TURRET_SAVELOAD
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
 
@@ -419,7 +420,7 @@ void Turret::init (TurretArchetype * _hArchetype)
 }
 //---------------------------------------------------------------------------
 //
-void Turret::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void Turret::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	const BT_TURRET * data = (const BT_TURRET *) ARCHLIST->GetArchetypeData(pArchetype);
 
@@ -836,7 +837,17 @@ void Turret::getSighting (TRANSFORM & result) const
 #else
 	result = TRANSFORM(hardpointinfo.orientation, hardpointinfo.point);
 #endif
+#if defined(_WIN32)
 	result = ENGINE->get_transform(barrelIndex).multiply(result);
+#else
+	// Fixed ship barrels are authored in the same model frame as the hull.
+	// Keep the Engine hierarchy, adding the model correction at its root.
+	// Classification is independent of FastRender/cloak/presentation options;
+	// jointed turrets retain their existing swivel/joint frame.
+	result = TRANSFORM(NativeShipHardpointTransform(owner.Ptr()->GetTransform(),
+		ENGINE->get_transform(barrelIndex), result,
+		turretIndex == -1 && IsNativePersistentGunboat(owner.Ptr())));
+#endif
 
 	if (turretIndex == -1)	// if 360 degree turret
 	{

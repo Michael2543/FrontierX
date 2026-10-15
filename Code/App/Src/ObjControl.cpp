@@ -59,6 +59,18 @@ template ObjectControl<ObjectTransform
 #endif
 //---------------------------------------------------------------------------
 //
+#if defined(_WIN32)
+#define CONTROL_YAW(frame) (frame).get_yaw()
+#define CONTROL_PITCH(frame) (frame).get_pitch()
+#define CONTROL_ROLL(frame) (frame).get_roll()
+#define CONTROL_ROLL_AXIS(frame) (frame).get_j()
+#else
+#define CONTROL_YAW(frame) NativeObjectControlFrame<typename Base::SAVEINFO>::Yaw(frame)
+#define CONTROL_PITCH(frame) NativeObjectControlFrame<typename Base::SAVEINFO>::Pitch(frame)
+#define CONTROL_ROLL(frame) NativeObjectControlFrame<typename Base::SAVEINFO>::Roll(frame)
+#define CONTROL_ROLL_AXIS(frame) NativeObjectControlFrame<typename Base::SAVEINFO>::RollAxis(frame)
+#endif
+
 static bool bUpdateControl = true;
 template <class Base> 
 BOOL32 ObjectControl< Base >::updateControl (void)
@@ -101,7 +113,7 @@ BOOL32 ObjectControl< Base >::updateControl (void)
 	//
 	if (bAngleValid)
 	{
-		SINGLE diff = fixAngle(targetYaw - transform.get_yaw());
+		SINGLE diff = fixAngle(targetYaw - CONTROL_YAW(transform));
 		SINGLE vel;
 		SINGLE coast = calculateCoastingDistance(-ang_velocity.z, angAcceleration, ELAPSED_TIME);
 
@@ -136,7 +148,7 @@ BOOL32 ObjectControl< Base >::updateControl (void)
 		//
 		// now do roll
 		//
-		diff = fixAngle(targetRoll - transform.get_roll());
+		diff = fixAngle(targetRoll - CONTROL_ROLL(transform));
 		vel = REALTIME_FRAMERATE * diff;
 		if (vel > maxAngVelocity*ANG_SCALE)
 			vel = maxAngVelocity*ANG_SCALE;
@@ -144,11 +156,11 @@ BOOL32 ObjectControl< Base >::updateControl (void)
 		if (vel < -maxAngVelocity*ANG_SCALE)
 			vel = -maxAngVelocity*ANG_SCALE;
 
-		SINGLE oldVel = -dot_product(ang_velocity, transform.get_j());
-		ang_velocity -= transform.get_j() * (vel - oldVel);	// subtract because k is backwards
+		SINGLE oldVel = -dot_product(ang_velocity, CONTROL_ROLL_AXIS(transform));
+		ang_velocity -= CONTROL_ROLL_AXIS(transform) * (vel - oldVel);	// subtract because k is backwards
 
 		// now do pitch
-		diff = fixAngle(targetPitch - transform.get_pitch());
+		diff = fixAngle(targetPitch - CONTROL_PITCH(transform));
 		vel = REALTIME_FRAMERATE * diff;
 		if (vel > maxAngVelocity*ANG_SCALE)
 			vel = maxAngVelocity*ANG_SCALE;
@@ -273,7 +285,7 @@ void ObjectControl< Base >::physUpdateControl (SINGLE dt)
 
 	if (bAngleValid)
 	{
-		SINGLE diff = fixAngle(targetYaw - transform.get_yaw());
+		SINGLE diff = fixAngle(targetYaw - CONTROL_YAW(transform));
 		SINGLE vel;
 		SINGLE coast = calculateCoastingDistance(-ang_velocity.z, angAcceleration, dt);
 
@@ -310,8 +322,8 @@ void ObjectControl< Base >::physUpdateControl (SINGLE dt)
 		//
 		// now do roll
 		//
-		diff = fixAngle(targetRoll - transform.get_roll());
-		SINGLE oldVel = -dot_product(ang_velocity, transform.get_j());
+		diff = fixAngle(targetRoll - CONTROL_ROLL(transform));
+		SINGLE oldVel = -dot_product(ang_velocity, CONTROL_ROLL_AXIS(transform));
 		coast = calculateCoastingDistance(oldVel, angAcceleration*ANG_SCALE, dt);
 		newdiff = fixAngle(diff - coast);
 
@@ -341,12 +353,12 @@ void ObjectControl< Base >::physUpdateControl (SINGLE dt)
 				vel = newvel;
 		}
 
-		ang_velocity -= transform.get_j() * (vel - oldVel);	// subtract because k is backwards
+		ang_velocity -= CONTROL_ROLL_AXIS(transform) * (vel - oldVel);	// subtract because k is backwards
 
 		//
 		// now do pitch
 		//
-		diff = fixAngle(targetPitch - transform.get_pitch());
+		diff = fixAngle(targetPitch - CONTROL_PITCH(transform));
 		oldVel = dot_product(ang_velocity, transform.get_i());
 		coast = calculateCoastingDistance(oldVel, angAcceleration*ANG_SCALE, dt);
 		newdiff = fixAngle(diff - coast);
@@ -593,3 +605,8 @@ template struct ObjectControl<ObjectTransform
 
 //------------------------End ObjControl.cpp----------------------------------
 //----------------------------------------------------------------------------
+
+#undef CONTROL_YAW
+#undef CONTROL_PITCH
+#undef CONTROL_ROLL
+#undef CONTROL_ROLL_AXIS

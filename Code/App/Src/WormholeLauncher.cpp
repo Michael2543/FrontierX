@@ -11,12 +11,34 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <algorithm>
+#include "IRenderPrimitive.h"
+#include <rendpipeline.h>
+#include "MyVertex.h"
+struct IDrawAgent;
+#endif
 
 #include "SuperTrans.h"
 #include "ObjList.h"
-#include "sfx.h"
+#include "SFX.h"
 
 #include "Mission.h"
 #include "IMissionActor.h"
@@ -28,21 +50,21 @@
 #include <DWormholeLauncher.h>
 #include "ILauncher.h"
 #include "IWeapon.h"
-#include "DSpaceShip.h"
+#include <DSpaceship.h>
 #include "IGotoPos.h"
 #include "OpAgent.h"
 #include "IShipMove.h"
 #include "ObjMapIterator.h"
 #include "CommPacket.h"
-#include "sector.h"
+#include "Sector.h"
 #include "ObjSet.h"
-#include "camera.h"
+#include "Camera.h"
 #include "IWormholeBlast.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IAnim.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <IConnection.h> 
 #include <MGlobals.h>
@@ -117,7 +139,7 @@ struct _NO_VTABLE WormholeLauncher : IBaseObject, ILauncher, ISaveLoad, WORMHOLE
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 	
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial)
@@ -219,7 +241,13 @@ struct _NO_VTABLE WormholeLauncher : IBaseObject, ILauncher, ISaveLoad, WORMHOLE
 
 	virtual BOOL32 Save (struct IFileSystem * file)
 	{
+#if defined(_WIN32)
 		return TRUE;
+#else
+		// The source has no corresponding loader or persisted portal objects.
+		CQERROR0("WormholeLauncher cannot save: original portal persistence is unimplemented");
+		return FALSE;
+#endif
 	}
 
 	virtual BOOL32 Load (struct IFileSystem * file)
@@ -419,7 +447,7 @@ BOOL32 WormholeLauncher::Update (void)
 }
 //---------------------------------------------------------------------------
 //
-void WormholeLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void WormholeLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	CQASSERT(_owner);
 	_owner->QueryInterface(ILaunchOwnerID, owner, LAUNCHVOLATILEPTR);
@@ -677,6 +705,12 @@ struct DACOM_NO_VTABLE WormholeLauncherFactory : public IObjectFactory
 		{
 			return calloc(size,1);
 		}
+#if !defined(_WIN32)
+		void operator delete (void *ptr)
+		{
+			::free(ptr);
+		}
+#endif
 
 		OBJTYPE (void)
 		{
@@ -769,6 +803,14 @@ HANDLE WormholeLauncherFactory::CreateArchetype (const char *szArchname, OBJCLAS
 			result->pWormEffectType = ARCHLIST->LoadArchetype("WORMEFF!!S_WORM");
 			if(result->pWormEffectType)
 				ARCHLIST->AddRef(result->pWormEffectType, OBJREFNAME);
+#if !defined(_WIN32)
+			else
+			{
+				CQERROR0("WormholeLauncher requires WORMEFF!!S_WORM");
+				delete result;
+				return 0;
+			}
+#endif
 		}
 	}
 

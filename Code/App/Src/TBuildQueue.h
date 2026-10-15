@@ -54,6 +54,7 @@
 template <class Base>
 struct _NO_VTABLE TBuildQueue : public Base, IBuildQueue, BUILDQUEUE_SAVELOAD
 {
+#if defined(_WIN32)
 	typename typedef Base::INITINFO BQINITINFO;
 	typename typedef Base::SAVEINFO BQSAVEINFO;
 
@@ -61,6 +62,20 @@ struct _NO_VTABLE TBuildQueue : public Base, IBuildQueue, BUILDQUEUE_SAVELOAD
 	struct SaveNode			saveNode;
 	struct LoadNode			loadNode;
 	struct ResolveNode      resolveNode;
+#else
+	typedef typename Base::INITINFO BQINITINFO;
+	typedef typename Base::SAVEINFO BQSAVEINFO;
+	using typename Base::InitProc2;
+	using typename Base::SaveLoadProc2;
+	using typename Base::ResolveProc;
+	using Base::castInitProc;
+	using Base::castSaveLoadProc;
+	using Base::failSound;
+	typename Base::InitNode initNode;
+	typename Base::SaveNode saveNode;
+	typename Base::LoadNode loadNode;
+	typename Base::ResolveNode resolveNode;
+#endif
 
 	U32 maxQueueSize;
 	U32 nextIndex;

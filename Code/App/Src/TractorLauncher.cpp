@@ -109,7 +109,7 @@ struct _NO_VTABLE ArtileyLauncher : IBaseObject, ILauncher, ISaveLoad, ARTILERY_
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 	
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
@@ -383,7 +383,7 @@ void ArtileyLauncher::PhysicalUpdate (SINGLE dt)
 }
 //---------------------------------------------------------------------------
 //
-void ArtileyLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void ArtileyLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	CQASSERT(_owner);
 	_owner->QueryInterface(ILaunchOwnerID, owner, LAUNCHVOLATILEPTR);

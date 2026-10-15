@@ -39,6 +39,10 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 
+#if !defined(_WIN32)
+#include "Include/NativeObjectControlFrame.h"
+#endif
+
 #define MAX_UPDOWN_VELOCITY 150.0F
 #define ANG_SCALE (0.3)          // angVelocity * scale = angVelocity for pitch, roll
 #define ZXLATE_SCALE (0.4)		 // scales z accel, velocity
@@ -77,9 +81,16 @@ struct _NO_VTABLE ObjectControl : public Base, DYNAMICS_DATA
 
 	bool rotateShip (SINGLE relYaw, SINGLE relRoll, SINGLE relPitch)
 	{
+#if defined(_WIN32)
 		targetYaw   = fixAngle(transform.get_yaw() + relYaw);
 		targetRoll  = fixAngle(transform.get_roll() + relRoll);
 		targetPitch = fixAngle(transform.get_pitch() + relPitch);
+#else
+        using ControlFrame = NativeObjectControlFrame<typename Base::SAVEINFO>;
+        targetYaw = fixAngle(ControlFrame::Yaw(transform) + relYaw);
+        targetRoll = fixAngle(ControlFrame::Roll(transform) + relRoll);
+        targetPitch = fixAngle(ControlFrame::Pitch(transform) + relPitch);
+#endif
 		bAngleValid = true;
 
 		if (fabs(relYaw) > 0.1 || fabs(relRoll) > 0.1 || fabs(relPitch) > 0.1)

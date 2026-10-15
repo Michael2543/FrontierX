@@ -2120,6 +2120,11 @@ bool CheckNativeSystemMapPersistence(IFileSystem *directory, IUserDefaults *defa
         explicit DefaultsScope(IUserDefaults *value) : previous(DEFAULTS) { DEFAULTS = value; }
         ~DefaultsScope() { DEFAULTS = previous; }
     } defaultsScope(defaults);
+    struct FullScreenScope
+    {
+        bool previous = CQFLAGS.bFullScreenMap != 0;
+        ~FullScreenScope() { CQFLAGS.bFullScreenMap = previous; }
+    } fullScreenScope;
     auto *owner = new DAComponent<SysMap>;
     struct OwnerScope
     {
@@ -2253,9 +2258,15 @@ bool CheckNativeSystemMapPersistence(IFileSystem *directory, IUserDefaults *defa
             !directory->SetCurrentDirectory("\\") ||
             !directory->RemoveDirectory("\\SysMapSaveload\\SysMap") ||
             !directory->RemoveDirectory("\\SysMapSaveload")) return fail("save failure/state retention/cleanup");
+        CQFLAGS.bFullScreenMap = true;
+        owner->bLeftButtonValid = owner->bRightButtonValid = owner->bRallyEnabled = true;
+        owner->bZoning = true;
+        owner->systemPingTime[0][0] = DEFAULT_SYSTEM_PING_TIME;
         owner->OnNativeInterfaceMapChange(false);
-        if (owner->missionAnimList || owner->lastAnimID != 0)
-            return fail("interface teardown clears alerts and next identifier");
+        if (owner->missionAnimList || owner->lastAnimID != 0 || CQFLAGS.bFullScreenMap ||
+            owner->bLeftButtonValid || owner->bRightButtonValid || owner->bRallyEnabled ||
+            owner->bZoning || owner->systemPingTime[0][0] != 0)
+            return fail("interface teardown clears alerts, map input and prior-system pings");
         archive = 0;
         if (!parent->DeleteFile("MapRegression.mission"))
             return fail("scoped UTF archive cleanup");
@@ -3644,6 +3655,20 @@ void SysMap::OnNativeInterfaceMapChange(bool enable)
     {
         FlushMissionAnims();
         lastAnimID = 0;
+        // This global owner survives interface destruction and mission reload.
+        // A new interface starts in thumbnail mode, without old mouse gestures
+        // or pings referring to the preceding sector's system identifiers.
+        CQFLAGS.bFullScreenMap = false;
+        desiredOwnedFlags = 0;
+        releaseResources();
+        sysmapMode = SYSMODE_NONE;
+        bLeftButtonValid = bRightButtonValid = bRallyEnabled = false;
+        bZoning = false;
+        zoneTime = 0;
+        zoneSys = 0;
+        lit_sys = 0;
+        std::memset(systemPingTime, 0, sizeof(systemPingTime));
+        std::memset(systemPingPos, 0, sizeof(systemPingPos));
     }
     // Mission restores saved records before loading the interface. Texture
     // creation must preserve that restored state; close tears it down first.

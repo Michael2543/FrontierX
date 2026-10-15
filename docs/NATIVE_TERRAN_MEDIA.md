@@ -1,5 +1,110 @@
 # First Terran mission: presentation and media
 
+## P1c accepted by the user (2026-10-15)
+
+The user explicitly closes P1c in the delivered native Linux scope. P1b was
+already accepted; P2 campaign expansion is next. This documentation-only update
+adds no test execution. Earlier pending milestone statements are historical;
+unperformed scenario checks, missing media, unit coverage, whole-process leaks,
+Windows/ABI, hosted CI and separate M3 findings retain their recorded status.
+See [the current acceptance ledger](NATIVE_TERRAN_CAMPAIGN.md#p1c-completed-by-user-acceptance-2026-10-15).
+
+## Original-family font input supplied (2026-10-15)
+
+The user now provides all four Arial Narrow faces privately. The local source
+folder is explicitly ignored and no font is tracked. Runtime uses copies and a
+nine-entry mapping outside the repository: actual original Arial Regular/Bold,
+Arial Narrow Regular/Bold and the original available Bauhaus face at the source
+resource weights. Font files are not bundled in source, builds or CI artifacts.
+This supersedes earlier same-day statements that the Narrow input is unavailable.
+
+The supplied OpenType family groups Narrow under typographic Arial (nameID16),
+while its original GDI family Arial Narrow is nameID1. FreeType reports Arial;
+the bold PostScript name also carries its style suffix. The strict native owner
+now additionally validates bounded authored UTF16BE legacy family names from
+Unicode/Microsoft nameID1 records. It does not infer families from filenames,
+remove arbitrary suffixes, substitute faces or relax weight validation. The
+first strict startup correctly refused the old incomplete identity comparison;
+that failed interval is not mission-rendering evidence.
+
+Corrected strict startup and the entire original catalogue execute under fatal
+ASan/UBSan with the supplied family map and no media exclusions. The prior native
+allocation-pair errors are repaired; the interval still fails final LSan3124bytes/
+sixallocations with DBus allocation stacks, including unresolved unloaded callers.
+This is not a whole-process sanitizer pass or a campaign resource-growth pass.
+Two actual Clang F8/F7 cycles with the new strict map now complete and exit0,
+with correct original objective-dialog captures after reload, visible fleet/HUD
+and both minimaps, audio0/idle hints on close, and original portrait frame/draw
+activity. Full player visual/audible assessment remains open.
+Strict glyph/layout appearance after ordinary save/load and user acceptance are
+recorded separately; supplying fonts alone does not close presentation acceptance.
+
+## P1c transition media ownership (2026-10-15)
+
+Latest user feedback confirms Cruiser construction and save/load, and reports
+incorrect missile trajectories and a nonworking objectives menu. Native missile
+pitch/muzzle ownership and the original objective dialog are now connected;
+visible weapon/UI behavior and restoration after repeated F8 remain explicit
+runtime checks. Broader unit-owner integration retains models, textures, effects,
+portraits and sound requests; compiling a factory does not prove complete media.
+The retail flagship and Wormhole persistence gaps are recorded in
+[unit coverage](NATIVE_UNIT_COVERAGE.md).
+
+
+The user now reports the preceding briefing/muzzle/camera corrections work and
+continued TM2 play reaches a Missile Cruiser construction crash. The diagnosed
+missing original VLaunch/CloakLauncher factories are now in the native graph;
+new-cruiser model/weapon/audio/save restoration still requires the genuine
+queue/completion/reload test. Existing user feedback does not close strict fonts,
+effect/depletion-audio findings, process leaks or full transition-resource checks.
+
+Native feedback repairs now retain the original briefing border pixels/palette
+and corners at the actual animation-cell extent, convert cinematic camera angles
+through the exact runtime `TRANSFORM` convention, and align fixed gunboat muzzle
+frames with the original hull-model axes. Fresh post-opening capture before F8
+shows planet, stations and the starting fleet in the playable view; actual F7/F8
+also executes. Required media stays requested, with the existing interim-font
+limitation. Precise inactive-frame appearance, moving weapon origins, ordinary
+selection/orders/zoom and complete media after reload remain user retest items.
+See the [feedback contracts](NATIVE_TERRAN_CAMPAIGN.md#feedback-repair-contracts-2026-10-15)
+and [muzzle owner](GAME_MATERIAL_PATH.md#second-terran-fixed-barrel-origin-feedback-2026-10-15).
+
+Latest user feedback confirms successful TM1-to-TM2 transition and mostly working
+briefing/opening, but reports undersized inactive portrait frames, below-hull
+Mantis weapon origins and an empty/unusable view after the cinematic. These are
+open correct-start/presentation blockers; prior bounded render/save evidence
+does not constitute visual or player-control acceptance.
+
+P1c retains every required presentation/media path. The original materials and
+lighting configuration now applies to a direct second-mission diagnostic as well
+as the first-mission campaign entry; ordinary transitions retain that same
+configuration. No media exclusion option is added to the transition loop.
+Mission close now retires detached spatial one-shots and looping playback,
+clears status text/name ownership, and clears global system-map fullscreen/input,
+rally/zone and old-system ping state. Existing owner regressions cover those
+concrete stale-resource defects. The original speech/portrait/subtitle/teletype
+close notifications, map/terrain texture cleanup and music load/playlist owners
+remain in use. Source review of them does not prove visible/audible transitions.
+
+Original TM2 briefing/Start, opening, F7/F8/F7 and normal close now execute
+through 3005 source frames in the full-media Clang candidate. Original speech
+requests find their real files; two portraits execute253 frame changes/750 draws.
+The original authored cinematic cameras load and ChangeCamera no longer uses an
+unavailable-owner path. Mission close reports audio0 and idle hints. This remains
+bounded render/lifecycle evidence with the explicitly interim single external
+font, not strict typography or full visible/audible acceptance. Complete TM2
+models/effects, both minimaps, portrait switch/clear and speech/music/spatial sound
+before/after genuine result-driven transitions remain user checks.
+A strict whole-process second-mission ASan/UBSan close still fails LSan;
+recorded unloaded frames are mapped to NVIDIA/PipeWire/SPA boundaries alongside
+DBus stacks. Allocation cleanup cause remains open. The focused synthetic
+sanitizer checks do not turn that failure into a pass, and no suppression is used.
+The user confirms no strict font map is currently available; original Arial
+Narrow remains an external input requirement. Colorful impact/explosion artifacts,
+missing depletion recordings and whole-process mission LeakSanitizer findings
+are carried forward explicitly. See the
+[P1c acceptance ledger](NATIVE_TERRAN_CAMPAIGN.md#p1c-integration-and-acceptance-ledger-2026-10-15).
+
 ## P1b completed by user acceptance (2026-10-15)
 
 The user explicitly requested that P1b be marked completed after the full
@@ -1214,3 +1319,155 @@ FORWARD/END restart. Read-only private capture review shows extended Fabricator
 wings beside the HQ. This establishes the repaired script admission and a visible
 open pose in that interval; it does not yet establish a controlled complete
 opening/closing sequence, all reload timings or full user presentation acceptance.
+
+### Planet hover and construction-slot visibility (2026-10-15)
+
+User feedback identifies missing planet transparency under the mouse, especially
+when building. Native Planetoid now uses its original `bMouseOver` condition in
+normal play and construction, and the original faded-pass contract forwards
+per-instance alpha to PolyMesh. It does not modify shared materials, saves,
+simulation or Windows. The selected64/255 opacity is provisional: neither an
+exact retail opacity value nor its historical interpolation curve is established.
+
+**Bounded retail runtime:** the strict full-media Clang22.1.8 Debug candidate
+loads a separate, unchanged copy of a genuine ready-HQ TM1 save. Actual compositor
+pointer events show a faded planet on hover and opaque restoration on leaving;
+private captures retain ships, background, HUD and both maps. Normal F7/F8
+followed by renewed pointer input restores the hovered appearance; regular close
+returns result4/exit0 after4285 frames with zero mission-audio streams, idle hints
+and active portrait playback. No objective/progress value was modified. A first input
+attempt only warped the pointer and an over-eager focus loop recentered it; those
+images are not pointer-leave evidence. A compositor responsiveness notice during
+synchronous load clears when loading completes; no permanent hang is inferred.
+
+Existing material CPU/host-Vulkan tests pass under GCC16.2.1 and Clang22.1.8;
+fatal focused Clang ASan/UBSan also passes, without suppressions. See
+[the exact owner and regression scope](GAME_MATERIAL_PATH.md#native-planet-hover-opacity-2026-10-15).
+Construction-slot visibility/clickability, exact fade appearance and full TM2
+visual acceptance remain user checks. This does not close P1c, all-unit admission,
+whole-process leak, native Windows/ABI, actual CI or M3 gates.
+
+### HUD actions and Capture cursor feedback (2026-10-15)
+
+The user clarifies capture works on click, while the old forbidden cursor remains.
+The native cursor table omitted original Capture.cur135; embedding now preserves
+its actual glyph and hotspot(3,0), with exact XOR/AND bitmap extents. Existing
+source decoder and actual GCC/Clang host-SDL cursor checks pass. Capture and
+research rules are unchanged; renewed in-game target feedback remains a user check.
+
+Exact retail semantic/command mappings also restore Objectives, Repair, Sell
+and Assault buttons, their hints and command events. Clang genuine latest-TM2
+checkpoint runtime opens Objectives by real mouse click before and after normal
+F7/F8, displaying six original goal/completion rows. Normal close returns exit0,
+audio0/idle hints with active portraits. Repair/sell final execution remains a
+user check. Both maps, background, models, HUD, fonts and media stay enabled.
+GCC/Clang additionally start original TM3 briefing/map, F7/F8 and close; this is
+bounded entry evidence, not full TM3 audiovisual or mission acceptance. Details,
+failed early attempts and remaining Windows/ABI/CI/P1c gates are in
+[the campaign ledger](NATIVE_TERRAN_CAMPAIGN.md#tm2-completion-hud-commands-capture-cursor-and-tm3-entry-2026-10-15).
+
+### Reproduced cross-mission effect texture artifacts (2026-10-15)
+
+The user's TM3 screenshot and new genuine F7 checkpoint narrow the persistent
+effect report. A fresh source TM3 intro reproduces a rectangular hull texture
+on a transient effect; the App batcher's stale texture cache after direct
+Engine/Optics draws is independently reproduced and repaired. Original textures
+and effects stay enabled. Before/after intro captures and the existing real
+batcher regression support this exact fix, not blanket acceptance of every
+impact/explosion artifact. See
+[owner and validation evidence](GAME_MATERIAL_PATH.md#effect-textures-after-direct-ship-draws-2026-10-15).
+
+The user confirms that the texture artifacts are gone in the corrected build,
+but fighters remain invisible and Hive Carriers appear to deal no damage.
+The earlier 40-vertex/60-index CPU batch observation did not prove GPU output
+or correct fighter gameplay. A separate read-only debugger run with the genuine
+TM3 checkpoint now reproduces launched Scout fighters descending from Z20 to
+below Z-53000. Sampled weapon attempts return without firing and retain supplies.
+The fighter/control frame mismatch is under repair; Hive Carrier damage and
+visible fighter acceptance remain open. External saves, captures and fonts stay
+outside source control and CI.
+
+### Fighter flight-frame regression (2026-10-15)
+
+**Reproduced retail-input runtime:** the unchanged genuine TM3 battle checkpoint
+launches Scout fighters, but the old native build drives them from Z20 below
+Z-53000. Sampled firing attempts fail before damage is scheduled. The original
+fighter uses -K for launch, propulsion, formations, collisions and its model;
+shared control reads J-based navigation angles and applies roll about J.
+
+The native exact `FIGHTER_SAVELOAD` control specialization now selects the
+existing z-based angles and K roll axis. Fighter steering and target-facing
+checks use the same frame. Authored launch poses, model transforms, acceleration,
+timing, weapon conditions, random calls and persistent layouts are retained.
+Ordinary ship control and Windows expressions retain their existing behavior.
+No fighter or weapon is fabricated or substituted.
+
+**Automated synthetic execution:** the existing material-manager probe already
+executes production TRANSFORM/quaternion contracts for native weapon frames.
+Its extension protects this concrete fighter regression in four heading
+quadrants, signed elevation/bank, physical pitch/roll rotation signs and the
+unchanged ordinary-ship selector. Restoring the previous J selector in an
+external temporary header makes that same check fail; the corrected selector
+passes. This checks the frame contract, not the complete ObjectControl loop.
+No new standalone probe or fake simulation owner is introduced.
+
+**Bounded retail-input runtime:** the corrected Clang full-media build loads
+the same unmodified checkpoint. Observed fighters remain near the battle plane,
+consume supplies during attacks and return; actual 40-vertex/60-index fighter
+geometry reaches the GPU with positive clip W and projected in-viewport bounds.
+Normal close releases mission audio streams and leaves hint ownership idle.
+The corrected GCC full-media build also loads the user's newer unchanged TM3
+checkpoint. A genuine Hive Carrier launches fighters and delivers eight original
+five-point damage events to a Terran Missile Cruiser: its actual hull decreases
+from 150 to 110 through EventScheduler and Gunboat damage application. No
+observer error occurs in that GCC combat run.
+
+A second corrected Clang run executes F8 into the original battle, then F7 and
+two further F8 loads within the same process, and closes normally after 2261
+source frames with audio streams zero and hint ownership idle. This bounded
+cycle does not establish resource-growth or result-transition acceptance.
+Four synchronized successful Present captures are tied to the actual fighter
+GPU submissions and verified owned window. Correct SDL NDC-to-window Y and
+physical/logical scaling place one fighter behind the HUD and another partly
+behind a large hull; the selected frames do not establish identifiable pixels.
+An auxiliary damage observer in this Clang capture run cannot resolve one DWARF
+member and disables that observer; the independent GCC damage proof above is
+unaffected. Renewed user visual/combat confirmation remains pending.
+
+**Technical validation:** Linux x86_64 GCC16.2.1 and Clang22.1.8 full-media graphs
+build (`p1c-fighters-clang-20261015` and `frontierx-p1c-gcc`, with FreeType and
+shared-LGPL FFmpeg audio/video enabled); their existing non-host suites pass.
+Execute with `cmake --build BUILD`
+and `ctest --test-dir BUILD -LE host --output-on-failure`. The affected existing
+`portability.game_material_manager`, `portability.view_parser`,
+`portability.layout` and `portability.native_shell` checks pass in the fatal
+Clang ASan/UBSan graph with `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. These synthetic/shell checks
+are distinct from complete-mission sanitizer evidence. Native Windows
+Debug/Final/module ABI, actual hosted CI and full M3 comparison remain unexecuted.
+
+The subsequent **plain fatal sanitizer retail-input run** uses the same genuine
+Scout checkpoint with full media, first F8, ordinary F7 and second F8. It reaches
+1573 source frames and normal mission cleanup with audio streams zero and hints
+idle, without an invalid-access or UBSan report. Whole-process LeakSanitizer
+still fails at exit: **3604 bytes in ten allocations**, exit1. Of these, 3284
+bytes/six allocations have DBus allocation stacks, including SDL/PipeWire device
+startup; 320 bytes/four allocations end in an unloaded unknown module and remain
+unattributed. This is a failed leak check, not a clean sanitizer mission pass or
+proof that mission resources do not grow. Earlier 3316/3396-byte findings remain
+separate; no suppression, disabled leak detection or weakened assertion is used.
+
+### HUD command identity after ship/building selection (2026-10-15)
+
+The broader Sell/Repair/F8 report exposes incorrect bindings in additional HUD
+resources, including unlabelled and mutable action buttons. Native HotButton
+and MultiHotButton now translate the complete reviewed retail command enum at
+initialization. Displayed shortcut hints, flashing and clicks share one stored
+current command; tooltip changes do not change ability slot identity. Physical
+F8 remains the original Quickload event. The external audit covers all 1039
+button fields across the three retail races; unit capabilities and original
+repair/selling rules are preserved. See
+[the command owner, regression and runtime ledger](NATIVE_TERRAN_CAMPAIGN.md#hud-command-bindings-across-all-ship-and-structure-panels-2026-10-15).
+The user confirms the previously failing Infiltrator action works; the real
+Clang runtime emits canonical generic-ability events without Quickload. Other
+ship/building actions remain pending gameplay confirmation.

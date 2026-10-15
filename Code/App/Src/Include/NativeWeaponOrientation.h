@@ -8,7 +8,7 @@ namespace FrontierX
 {
 inline SINGLE NativeWeaponSightPitch(const TRANSFORM & orientation)
 {
-    // Turret hardpoints aim along -K, unlike the ship navigation J axis.
+    // Weapon sights and missile flight use -K, unlike ship navigation's J axis.
     return orientation.get_pitch_zbased();
 }
 }

@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 #endif
 
 #include "IGameProgress.h"
@@ -196,7 +197,17 @@ bool GameProgress::loadGameProgress (void)
 			return false;
 		}
 
+		#if defined(_WIN32)
 		file->ReadFile(0, &progressData, sizeof(progressData), &dwRead, 0);
+#else
+		PROGRESS_DATA loaded = {};
+		if (!file->ReadFile(0, &loaded, sizeof(loaded), &dwRead, 0) ||
+			dwRead != sizeof(loaded))
+		{
+			throw std::runtime_error("Native GameProgress could not read the complete player.gpf record");
+		}
+		progressData = loaded;
+#endif
 	}
 	return true;
 }
@@ -236,7 +247,15 @@ bool GameProgress::saveGameProgress (void)
 			return false;
 		}
 
+		#if defined(_WIN32)
 		file->WriteFile(0, &progressData, sizeof(progressData), &dwWritten, 0);
+#else
+		if (!file->WriteFile(0, &progressData, sizeof(progressData), &dwWritten, 0) ||
+			dwWritten != sizeof(progressData))
+		{
+			throw std::runtime_error("Native GameProgress could not write the complete player.gpf record");
+		}
+#endif
 	}
 
 	return true;
@@ -348,6 +367,64 @@ void GameProgress::ReInitialize (void)
 //
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+bool CheckNativeGameProgressPersistence(IFileSystem *directory)
+{
+	// Scratch-only regression for the production profile owner. This never
+	// supplies progression to a mission or represents a campaign transition.
+	if (!directory) return false;
+	struct Scope
+	{
+		IFileSystem *previous = SAVEDIR;
+		U32 temporary = g_tempMissionsCompleted;
+		bool intro = g_bForcedIntroMovie;
+		~Scope()
+		{
+			SAVEDIR = previous;
+			g_tempMissionsCompleted = temporary;
+			g_bForcedIntroMovie = intro;
+		}
+	} scope;
+	SAVEDIR = directory;
+	g_bForcedIntroMovie = false;
+	DAComponent<GameProgress> owner;
+	const PROGRESS_DATA expected = {2U, 4U, 8U};
+	owner.progressData = expected;
+	if (!owner.saveGameProgress()) return false;
+	owner.ReInitialize();
+	if (owner.GetMissionsCompleted() != expected.missionsCompleted ||
+		owner.GetMoviesSeen() != expected.moviesSeen ||
+		owner.GetMissionsSeen() != expected.missionsSeen) return false;
+	DAFILEDESC descriptor = GPF_FILE;
+	descriptor.lpImplementation = "DOS";
+	descriptor.dwDesiredAccess = GENERIC_READ;
+	descriptor.dwCreationDistribution = OPEN_EXISTING;
+	COMPTR<IFileSystem> file;
+	if (directory->CreateInstance(&descriptor, file) != GR_OK) return false;
+	PROGRESS_DATA observed = {};
+	DWORD count = 0;
+	if (file->GetFileSize(0, nullptr) != sizeof(expected) ||
+		!file->ReadFile(0, &observed, sizeof(observed), &count, nullptr) ||
+		count != sizeof(observed) || std::memcmp(&observed, &expected, sizeof(expected))) return false;
+	file.free();
+	descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	descriptor.dwCreationDistribution = CREATE_ALWAYS;
+	if (directory->CreateInstance(&descriptor, file) != GR_OK ||
+		!file->WriteFile(0, &expected, sizeof(U32), &count, nullptr) || count != sizeof(U32)) return false;
+	file.free();
+	bool rejected = false;
+	try { owner.GetMissionsCompleted(); }
+	catch (const std::runtime_error &) { rejected = true; }
+	descriptor.dwDesiredAccess = GENERIC_READ;
+	descriptor.dwCreationDistribution = OPEN_EXISTING;
+	if (!rejected || directory->CreateInstance(&descriptor, file) != GR_OK ||
+		file->GetFileSize(0, nullptr) != sizeof(U32) ||
+		std::memcmp(&owner.progressData, &expected, sizeof(expected))) return false;
+	file.free();
+	return directory->DeleteFile(GPF_FILE) != 0;
+}
+#endif
+
 struct _gameProgress : GlobalComponent
 {
 	virtual void Startup (void)

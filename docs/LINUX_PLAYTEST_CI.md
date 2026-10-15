@@ -1,5 +1,93 @@
 # Linux playtest preparation (P0, 2026-10-13)
 
+## P1c accepted by the user (2026-10-15)
+
+The user explicitly closes P1c in the delivered native Linux scope. P1b was
+already accepted; P2 campaign expansion is next. This documentation-only update
+adds no test execution. Earlier pending milestone statements are historical;
+unperformed scenario checks, missing media, unit coverage, whole-process leaks,
+Windows/ABI, hosted CI and separate M3 findings retain their recorded status.
+See [the current acceptance ledger](NATIVE_TERRAN_CAMPAIGN.md#p1c-completed-by-user-acceptance-2026-10-15).
+
+## P1c candidate preparation (2026-10-15)
+
+The latest user-supplied Arial Narrow input now permits a strict original-family
+candidate with external `FRONTIERX_PLAYTEST_FONT_MAP`; its default launcher must
+use that mapping rather than `--single-font-interim`. The private source-local
+font folder is ignored and runtime copies/map stay outside the repository.
+No font payload belongs in the build or CI artifacts. Earlier same-day missing-
+font instructions below are superseded for this host, not for unknown runners.
+Face identity/weight, visible rendering and actual user acceptance remain
+separate from merely supplying files.
+
+
+The subsequent missiles/objectives candidate must retain the new genuine Cruiser
+checkpoint privately and batch missile-direction, objective-dialog and repeated
+F7/F8 checks. The exclusive native `--unit-catalog-check` diagnostic exercises
+actual external unit archetype admission without a mission simulation; its
+output remains private, its failures remain failures, and it does not establish
+build/combat/save capability. No new CI workflow or uploaded retail artifact is
+needed; technical checks remain in the existing layout/schema/math/shell suites.
+See [unit coverage](NATIVE_UNIT_COVERAGE.md) for concrete unsupported owners.
+
+
+A subsequent private Cruiser candidate integrates the original vertical/cloak
+launcher factories exposed by the user's real construction crash. Existing
+layout/app-schema tests protect their data contracts; the current CPU sanitizer
+filter already selects those owners/checks. Complete standard/full-media builds
+and non-host suites pass locally, while actual queue/completion/cruiser reload
+awaits a genuine prebuild checkpoint. Candidate instructions must state this
+unexecuted scope and preserve user save/progress files unchanged. The previous
+briefing/muzzle/camera fixes are user-confirmed in their bounded gameplay scope;
+that is not complete second-mission/P1c acceptance. No new CI workflow or uploaded
+retail/save/core artifact is added.
+
+The next private feedback candidate batches the reported briefing-frame,
+Mantis-muzzle and post-opening camera repairs. It carries an unchanged copy of
+the player's genuine `player.gpf` so the already unlocked second mission can be
+started directly through original selection. Fresh TM2 entry applies the camera
+repair; old checkpoints keep their recorded camera state. Retain immutable
+before/after original F7/F8 inputs privately. No win/progress/objective setter or
+retail/save CI artifact is added. Existing `native_shell`, `net_buffer` and
+`game_material_manager` checks cover the reproduced defects and are already
+selected by the technical sanitizer scope. Local verification is recorded in
+[BUILD_GRAPH](BUILD_GRAPH.md); actual CI execution remains pending.
+
+The existing `playtest.py --mission terran1` entry remains the campaign launch;
+its checklist now includes genuine TM1 victory/statistics/Continue, original
+TM2 briefing/start, defeat/retry without completion, restart persistence, saves
+in both missions and repeated cycles with complete media. No debug win, progress
+setter or replacement progression store is added. Use the original campaign
+selector to choose unlocked missions; retry reuses the original selected mission
+and briefing rules. Keep each user's genuine checkpoint immutable and work on a
+copy in a separate external save root. Never upload saves/profiles/runtime logs.
+
+The preserved new user checkpoint is an unfinished near-end BeaconRecovered
+state, not a fabricated victory. A strict final candidate still requires the
+external original-family font map. Without Arial Narrow, `--single-font-interim`
+is an explicitly incomplete typography candidate requesting the other complete
+media paths; it cannot satisfy the full presentation gate. Existing effect,
+depletion-speech and process-leak findings remain visible in the handoff.
+
+The existing technical sanitizer filter now includes `script02_schema` and the
+camera-manager save contract in `net_buffer`; the existing driver regression
+requires both to be selected. No new workflow, runner, host automation or M3
+comparison track is added. Full non-host default/optional suites also select the
+new schema case normally. Local GCC/Clang standard/full-media suites, focused
+fatal leak-enabled sanitizers and driver regressions execute as recorded in
+[BUILD_GRAPH](BUILD_GRAPH.md).
+
+The prepared private handoff retains a complete source/binary/cache/shader
+fingerprint, exact launch scripts, separate save/config/runtime directories and
+an immutable genuine pre-end checkpoint. The user checklist covers the remaining
+natural result/defeat/restart/switch/media gates; technical checks do not mark
+them passed. Strict typography launch remains unavailable until the external
+original-family font map is supplied. No retail inputs or candidate are uploaded.
+
+Local build/test execution is distinct from protected CI: no GitHub Actions or
+native Windows/ABI result is inferred. Technical evidence and pending user gates
+are recorded in the [P1c ledger](NATIVE_TERRAN_CAMPAIGN.md#p1c-integration-and-acceptance-ledger-2026-10-15).
+
 Current local feedback candidate (2026-10-14): the user's first-Terran victory
 and save/load are reported, with selection/warp/effect observations and a
 confirmed unit-communication abort. The bundled private targeted handoff records
@@ -1117,3 +1205,88 @@ transient position correction allowed process termination, and no owned window
 or process remains. No normal mission close or final leak result is established
 for that interval. This failure does not invalidate the synthetic key contracts
 or upgrade them to actual saved-mission continuation evidence.
+
+### Planet-hover candidate (2026-10-15)
+
+A new private Clang22.1.8 Debug full-media candidate bundles the preceding missile,
+objectives, fonts and unit-owner changes with native planet hover transparency.
+Its private `start.sh`, `candidate.json`, `source-validation.json` and TESTSTAND.md
+record the build, unchanged genuine Cruiser checkpoint, exact launch command,
+strict external font/dependency inputs and open gates. Use the original campaign
+selector and existing F8 checkpoint; no repeated full TM1 playthrough is needed.
+No display/media exclusion is used. The user checklist adds normal/build-mode
+planet hover, pointer-leave restoration, slot visibility/interaction and F7/F8.
+The older handed-over build remains intact. Technical validation is recorded in
+BUILD_GRAPH; actual CI execution and Windows/ABI remain unperformed.
+
+### TM2 actions/Capture and TM3 entry candidate (2026-10-15)
+
+The next private full-media Clang Debug candidate supersedes the planet-hover
+candidate for the reported Objectives/Repair/Sell/Capture feedback and TM3 entry
+abort. It retains strict original-family fonts, all media and original progression,
+using the existing genuine user saves. The private immutable checkpoint is the
+latest pre-TM3-crash TM2 save; the earlier Cruiser checkpoint is also retained.
+Normal campaign selection permits testing TM3 directly with genuine unlocked
+progress rather than another complete TM2 playthrough. Revision, dirty-source
+and binary/shader/configuration fingerprints, external prerequisites, exact
+start.sh and the focused checklist are included in the private handoff; no fonts,
+retail inputs, saves or runtime captures enter source control or CI artifacts.
+
+The existing technical sanitizer selection now also names `script03_schema`;
+source program/layout/resource checks and existing cursor/event regressions are
+local technical evidence. Actual hosted CI and native Windows/ABI remain open,
+as do the documented defeat/retry, repeated result-transition/resource-growth
+and renewed user action/media checks.
+
+### Effect texture handoff candidate (2026-10-15)
+
+The new private full-media Clang Debug candidate bundles the shared App-batcher
+texture-ownership fix with the preceding HUD, Capture-cursor and TM3 entry
+repairs. It retains the original-family font map and all required media. Its
+private checkpoint is the user's new unchanged TM3 combat F7 save; the prior
+TM2 save remains separately preserved. Launch uses the existing live save and
+original progress, so choose unlocked Mission3 and use F8 after its opening.
+The already running earlier binary does not acquire this fix without restart.
+
+Private TESTSTAND.md/candidate.json/source-validation.json record exact launch,
+revision/configuration/build path, fingerprints, external dependencies, genuine
+checkpoint provenance and open limits. The short user checklist covers the same
+fight's impact/explosion flashes, launched fighter visibility, F7/F8, both maps,
+portraits and audio; no complete mission replay is required for that retest.
+Technical local validation and ordinary-vs-explicit-fixture resize failures are
+recorded in BUILD_GRAPH. Existing registered batcher checks cover the reproduced
+owner conflict; no new CI/M3 observer framework is added. Actual hosted CI and
+Windows/ABI execution remain open. Retail/save/font/capture inputs stay private.
+
+### Fighter regression candidate (2026-10-15)
+
+The private P1c fighter candidate retains strict original-family fonts, full
+rendering/audio/video and the genuine TM3 checkpoints. GCC16.2.1 and Clang22.1.8
+full-media builds and existing non-host suites pass; focused fatal Clang
+ASan/UBSan frame/material, layout, parser and shell checks pass. This is local
+execution, not hosted CI. The existing material probe now fails with the old
+Fighter/J selector and passes with matching -K control. Genuine runtime confirms
+Hive damage delivery and bounded repeated F7/F8 continuation; identifiable fighter
+appearance remains a user check. See
+[the exact owner and runtime scope](NATIVE_TERRAN_MEDIA.md#fighter-flight-frame-regression-2026-10-15).
+Whole-process leaks, native Windows/ABI, ordinary-compositor resize and M3 retain
+their documented separate status; no assertion, media exclusion or sanitizer
+suppression is added.
+
+A subsequent plain full-media fatal sanitizer F8/F7/F8 battle run reaches normal
+mission cleanup but fails process-exit leak detection:3604 bytes/ten allocations
+(3284 bytes in DBus stacks;320 bytes ending in an unloaded unknown module remain
+unattributed). No invalid-access/UBSan report precedes exit. Keep this failed
+retail-input leak check separate from the passing focused synthetic checks.
+
+### Complete HUD binding regression (2026-10-15)
+
+Local GCC16.2.1 and Clang22.1.8 full-media builds and their non-host suites pass
+for the complete HotButton/MultiHotButton retail-command adapter. The existing
+`portability.native_shell` check exercises representative resource initialization
+values through the real canonical sender/EventSystem queue; physical F8 remains
+untranslated. The fatal Clang ASan/UBSan shell check passes with leak detection.
+A separate read-only external-data audit checks all 1039 authored fields; private
+schemas/records/results are not CI fixtures or artifacts. Hosted CI and native
+Windows/ABI remain unexecuted; earlier whole-process leak failures remain open.
+[Focused HUD scope](NATIVE_TERRAN_CAMPAIGN.md#hud-command-bindings-across-all-ship-and-structure-panels-2026-10-15).

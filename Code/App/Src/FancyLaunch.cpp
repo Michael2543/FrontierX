@@ -117,7 +117,7 @@ void FancyLaunch::init (PARCHETYPE _pArchetype, PARCHETYPE _pBoltType)
 }
 //---------------------------------------------------------------------------
 //
-void FancyLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void FancyLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	const BT_FANCY_LAUNCH * data = (const BT_FANCY_LAUNCH *) ARCHLIST->GetArchetypeData(pArchetype);
 

@@ -162,7 +162,22 @@ bool CheckPhysicalMovieLimits(const std::filesystem::path &root)
     std::string error;
     if (!FrontierX::OpenNativeDirectoryFileSystem(directory, &standard, error) ||
         !FrontierX::OpenNativeDirectoryFileSystem(directory, &movies, error, FrontierX::NativePhysicalFileLimit::Movies)) return false;
-    bool valid = rejects(standard, "large.mpg") && read(movies, "large.mpg") && rejects(movies, "oversize.mpg") &&
+    // MScript::IsAudioThere gates Helper::DoSpeech on file attributes, before
+    // choosing original audio/portrait or text fallback. OpenChild alone did
+    // not detect the adapter's unconditional "missing" result. Attribute lookup
+    // must not read payloads or inherit the movie/ordinary file-size limit.
+    bool valid = standard->GetFileAttributes("large.mpg") == FILE_ATTRIBUTE_NORMAL &&
+        standard->GetFileAttributes("oversize.mpg") == FILE_ATTRIBUTE_NORMAL &&
+        standard->GetFileAttributes("Nested\\large.mpg") == FILE_ATTRIBUTE_NORMAL &&
+        standard->GetFileAttributes("\\large.mpg") == FILE_ATTRIBUTE_NORMAL &&
+        standard->GetFileAttributes("Nested") == FILE_ATTRIBUTE_DIRECTORY &&
+        standard->GetFileAttributes("\\") == FILE_ATTRIBUTE_DIRECTORY &&
+        standard->GetFileAttributes("missing.mpg") == 0xffffffffU &&
+        standard->GetFileAttributes("LARGE.mpg") == 0xffffffffU &&
+        standard->GetFileAttributes("Nested\\..\\large.mpg") == 0xffffffffU &&
+        standard->GetFileAttributes(nullptr) == 0xffffffffU &&
+        standard->GetFileAttributes("") == 0xffffffffU &&
+        rejects(standard, "large.mpg") && read(movies, "large.mpg") && rejects(movies, "oversize.mpg") &&
         !FrontierX::OpenNativeDirectoryFileSystem(directory, &invalid, error,
             static_cast<FrontierX::NativePhysicalFileLimit>(1U)) && !invalid;
     for (const char *name : {"\\", "Nested"})
@@ -608,6 +623,15 @@ int RunSelfTest()
 	// nested Windows-style mesh path; the archive must resolve it safely.
 	IFileSystem *archive = nullptr;
 	if (!FrontierX::OpenNativeUtfFileSystem(root / "maps", &archive, utfError)) return 1;
+    const bool attributesValid =
+        archive->GetFileAttributes("Campaign\\Marker") == FILE_ATTRIBUTE_NORMAL &&
+        archive->GetFileAttributes("campaign\\marker") == FILE_ATTRIBUTE_NORMAL &&
+        archive->GetFileAttributes("Campaign") == FILE_ATTRIBUTE_DIRECTORY &&
+        archive->GetFileAttributes("campaign") == FILE_ATTRIBUTE_DIRECTORY &&
+        archive->GetFileAttributes("\\") == FILE_ATTRIBUTE_DIRECTORY &&
+        archive->GetFileAttributes("Campaign\\missing") == 0xffffffffU &&
+        archive->GetFileAttributes("Campaign\\..\\Marker") == 0xffffffffU &&
+        archive->GetFileAttributes("Campaign\\*") == 0xffffffffU;
 	DAFILEDESC nested("Campaign\\Marker");
 	IFileSystem *nestedFile = nullptr;
 	const GENRESULT nestedResult = archive->CreateInstance(
@@ -621,7 +645,7 @@ int RunSelfTest()
 	if (traversed) traversed->Release();
 	if (nestedFile) nestedFile->Release();
 	archive->Release();
-	if (nestedResult != GR_OK || !nestedOpened || traversalResult == GR_OK || traversalOpened)
+	if (!attributesValid || nestedResult != GR_OK || !nestedOpened || traversalResult == GR_OK || traversalOpened)
 	{
 		std::cerr << "Nested archive child or traversal validation failed\n";
 		return 1;
@@ -659,7 +683,13 @@ int RunSelfTest()
             absoluteRead == 1 && absoluteValue == 'M';
         if (absolute != INVALID_HANDLE_VALUE) mounted = files->CloseHandle(absolute) && mounted;
         mounted = mounted && files->SetCurrentDirectory("..") == FALSE &&
-            files->SetCurrentDirectory("\\") != FALSE;
+            files->SetCurrentDirectory("\\") != FALSE &&
+            files->GetFileAttributes("Marker") == FILE_ATTRIBUTE_NORMAL &&
+            files->GetFileAttributes("\\Marker") == FILE_ATTRIBUTE_NORMAL &&
+            files->GetFileAttributes("marker") == FILE_ATTRIBUTE_NORMAL &&
+            files->GetFileAttributes("\\") == FILE_ATTRIBUTE_DIRECTORY &&
+            files->GetFileAttributes("..\\Marker") == 0xffffffffU &&
+            files->GetFileAttributes("\\Multiplayer") == 0xffffffffU;
 
 		files->Release();
 	}

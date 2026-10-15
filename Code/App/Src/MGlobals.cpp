@@ -1870,6 +1870,7 @@ BOOL32 MGlobals::Load (IFileSystem * inFile)
 	FrontierX::GlobalDataDiskBytes buffer = {};
 	FrontierX::GlobalDataDiskBytes correlated = {};
 	MT_GlobalData loadedData = {};
+	bool loadedBytes = false, loadedSchema = false;
 #else
 	U8 buffer[sizeof(globalData) * 2];
 #endif
@@ -1881,10 +1882,14 @@ BOOL32 MGlobals::Load (IFileSystem * inFile)
 		goto Done;
 
 #ifndef _WIN32
-	if (inFile->GetFileSize(hFile, 0) == buffer.size() &&
+	loadedBytes = inFile->GetFileSize(hFile, 0) == buffer.size() &&
 		inFile->ReadFile(hFile, buffer.data(), buffer.size(), &dwRead, 0) &&
-		dwRead == buffer.size() &&
-		MISSION->CorrelateSymbol("MT_GlobalData", buffer.data(), correlated.data()) == GR_OK)
+		dwRead == buffer.size();
+	loadedSchema = loadedBytes &&
+		MISSION->CorrelateSymbol("MT_GlobalData", buffer.data(), correlated.data()) == GR_OK;
+	if (!loadedBytes) std::fputs("Native MGlobals load rejected Globals byte extent/read\n", stderr);
+	else if (!loadedSchema) std::fputs("Native MGlobals load rejected Globals schema correlation\n", stderr);
+	if (loadedSchema)
 	{
 		FrontierX::DecodeGlobalData(correlated, loadedData);
 		result = 1;
@@ -1903,6 +1908,7 @@ BOOL32 MGlobals::Load (IFileSystem * inFile)
 	#ifndef _WIN32
 	if (!updateGlobalViewer())
 	{
+		std::fputs("Native MGlobals load rejected GlobalValues archetype\n", stderr);
 		result = 0;
 		goto Done;
 	}

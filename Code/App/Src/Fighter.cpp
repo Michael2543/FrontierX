@@ -78,6 +78,32 @@ using std::max;
 #include <BASECAM.H>
 
 
+// The fighter's authored geometry, propulsion and formations use -K forward.
+static SINGLE fighterYaw(const TRANSFORM &frame)
+{
+#if defined(_WIN32)
+    return frame.get_yaw();
+#else
+    return NativeObjectControlFrame<FIGHTER_SAVELOAD>::Yaw(frame);
+#endif
+}
+static SINGLE fighterPitch(const TRANSFORM &frame)
+{
+#if defined(_WIN32)
+    return frame.get_pitch();
+#else
+    return NativeObjectControlFrame<FIGHTER_SAVELOAD>::Pitch(frame);
+#endif
+}
+static SINGLE fighterRoll(const TRANSFORM &frame)
+{
+#if defined(_WIN32)
+    return frame.get_roll();
+#else
+    return NativeObjectControlFrame<FIGHTER_SAVELOAD>::Roll(frame);
+#endif
+}
+
 #define WINGX  100.0
 #define WINGY  100.0
 #define WINGZ  50.0
@@ -1243,7 +1269,7 @@ void Fighter::doLaunch (IFighter * parent)
 
 	if (parent==0 || formationMove(parent)==false)
 	{
-		rotateShip(0, 0, (10*MUL_DEG_TO_RAD) - transform.get_pitch());
+		rotateShip(0, 0, (10*MUL_DEG_TO_RAD) - fighterPitch(transform));
 		setThrustersOn();
 	}
 }
@@ -1262,8 +1288,8 @@ void Fighter::doCircle (IFighter * parent)
 	{
 		SINGLE yaw, pitch, relYaw, relRoll, relPitch, relAlt;
 
-		yaw = transform.get_yaw();
-		pitch = transform.get_pitch();
+		yaw = fighterYaw(transform);
+		pitch = fighterPitch(transform);
 
 		if (fabs(pitch) > (45 * MUL_DEG_TO_RAD))
 		{
@@ -1293,7 +1319,7 @@ void Fighter::doCircle (IFighter * parent)
 			relVec.z = 0;
 
 			relYaw = getCircleYaw(relVec, yaw);
-			relRoll = 0 - transform.get_roll();
+			relRoll = 0 - fighterRoll(transform);
 			relAlt = alt - transform.translation.z;
 			relPitch = getRelPitch(pitch, relAlt);
 		}
@@ -1372,8 +1398,8 @@ void Fighter::doReturn (IFighter * parent)
 	{
 		SINGLE yaw, pitch, relYaw, relRoll;
 
-		yaw = transform.get_yaw();
-		pitch = transform.get_pitch();
+		yaw = fighterYaw(transform);
+		pitch = fighterPitch(transform);
 
 		if (fabs(pitch) > (45 * MUL_DEG_TO_RAD))
 		{
@@ -1406,7 +1432,7 @@ void Fighter::doReturn (IFighter * parent)
 			if (relYaw > PI)
 				relYaw -= PI*2;
 
-			relRoll = 0 - transform.get_roll();
+			relRoll = 0 - fighterRoll(transform);
 			relVec.z = alt - transform.translation.z;
 			relPitch = getRelPitch(pitch, relVec.z);
 			rotateShip(relYaw, relRoll, relPitch);
@@ -1436,10 +1462,10 @@ void Fighter::doEnter (IFighter * parent)
 	if (--generalCounter < 0)
 		patrolState = ENTERING2;
 
-//	SINGLE pitch = transform.get_pitch();
+//	SINGLE pitch = fighterPitch(transform);
 	Vector relVec = owner.Ptr()->GetPosition();
 	relVec -= transform.get_position();
-	SINGLE relYaw = fixAngle(TRANSFORM::get_yaw(relVec) - transform.get_yaw());
+	SINGLE relYaw = fixAngle(TRANSFORM::get_yaw(relVec) - fighterYaw(transform));
 
 	rotateShip(relYaw, 0, 0);
 
@@ -1503,8 +1529,8 @@ void Fighter::doAttack (IFighter * parent)
 	{
 		SINGLE yaw, pitch, relYaw, relRoll, relPitch, relAlt;
 
-		yaw = transform.get_yaw();
-		pitch = transform.get_pitch();
+		yaw = fighterYaw(transform);
+		pitch = fighterPitch(transform);
 
 		if (fabs(pitch) > (45 * MUL_DEG_TO_RAD))
 		{
@@ -1537,7 +1563,7 @@ void Fighter::doAttack (IFighter * parent)
 			relVec.z = 0;
 
 			relYaw = getAttackYaw(parent, relVec, yaw, bOverTarget);
-			relRoll = 0 - transform.get_roll();
+			relRoll = 0 - fighterRoll(transform);
 			relAlt = alt - transform.translation.z;
 			relPitch = getRelPitch(pitch, relAlt);
 		}
@@ -1570,7 +1596,7 @@ void Fighter::doKamikaze (IFighter * parent)
 
 	if (target==0 || target.Ptr()->IsVisibleToPlayer(playerID)==false || target.Ptr()->GetSystemID()!=systemID)
 	{
-		rotateShip(0, 0 - transform.get_roll(), (70 * MUL_DEG_TO_RAD) - transform.get_pitch());
+		rotateShip(0, 0 - fighterRoll(transform), (70 * MUL_DEG_TO_RAD) - fighterPitch(transform));
 		setThrustersOn();
 
 		// if we have gone past the camera, our job is finished
@@ -1601,8 +1627,8 @@ void Fighter::doKamikaze (IFighter * parent)
 	relVec.z -= transform.translation.z;
  	SINGLE yaw, pitch, relYaw, relRoll;
 
- 	yaw = transform.get_yaw();
- 	pitch = transform.get_pitch();
+	yaw = fighterYaw(transform);
+	pitch = fighterPitch(transform);
 
 	if (fabs(pitch) > (45 * MUL_DEG_TO_RAD))
 	{
@@ -1635,7 +1661,7 @@ void Fighter::doKamikaze (IFighter * parent)
 		if (relYaw > PI)
 			relYaw -= PI*2;
 
-		relRoll = 0 - transform.get_roll();
+		relRoll = 0 - fighterRoll(transform);
 		relVec.z = alt - transform.translation.z;
 		relPitch = getRelPitch(pitch, relVec.z);
 		rotateShip(relYaw, relRoll, relPitch);
@@ -1936,7 +1962,7 @@ bool Fighter::calculateTargetTransform (TRANSFORM & result, Vector & targetPos, 
 	relVec = targetPos - transform.translation;
 	distance = relVec.magnitude();
 
-	SINGLE relYaw = get_angle(relVec.x, relVec.y) - transform.get_yaw();
+	SINGLE relYaw = get_angle(relVec.x, relVec.y) - fighterYaw(transform);
 
 	if (relYaw < -PI)
 		relYaw += PI*2;
@@ -2037,16 +2063,16 @@ bool Fighter::formationMove (IFighter * parent)
 		{
 			const TRANSFORM & trans = parent->GetTransform();
 			Vector goal = trans.rotate_translate(formation[formationType][formationIndex]) - transform.translation;
-			SINGLE relYaw = get_angle(goal.x, goal.y) - transform.get_yaw();
+			SINGLE relYaw = get_angle(goal.x, goal.y) - fighterYaw(transform);
 			if (relYaw < -PI)
 				relYaw += PI*2;
 			else
 			if (relYaw > PI)
 				relYaw -= PI*2;
 			SINGLE relPitch = sqrt(goal.x * goal.x  + goal.y * goal.y);
-			relPitch = get_angle(goal.z, relPitch) - transform.get_pitch();
+			relPitch = get_angle(goal.z, relPitch) - fighterPitch(transform);
 
-			rotateShip(relYaw, 0 - transform.get_roll(), relPitch);
+			rotateShip(relYaw, 0 - fighterRoll(transform), relPitch);
 
 			// if heading away from leader, or leader heading towards us
 			if (fabs(relYaw) > 10 * MUL_DEG_TO_RAD || dot_product(trans.get_k(), transform.get_k()) < 0)
@@ -2078,19 +2104,19 @@ bool Fighter::formationMove (IFighter * parent)
 //				SINGLE parentVelMag = parentVel.fast_magnitude();
 
 				SINGLE relYaw, relRoll, relPitch;
-				relYaw = trans.get_yaw() - transform.get_yaw();
+				relYaw = fighterYaw(trans) - fighterYaw(transform);
 				if (relYaw < -PI)
 					relYaw += PI*2;
 				else
 				if (relYaw > PI)
 					relYaw -= PI*2;
-				relPitch = trans.get_pitch() - transform.get_pitch();
+				relPitch = fighterPitch(trans) - fighterPitch(transform);
 				if (relPitch < -PI)
 					relPitch += PI*2;
 				else
 				if (relPitch > PI)
 					relPitch -= PI*2;
-				relRoll = 0 - transform.get_roll();
+				relRoll = 0 - fighterRoll(transform);
 				rotateShip(relYaw, relRoll, relPitch);
 
 				Vector relVec = trans.rotate_translate(formation[formationType][formationIndex]) - transform.translation;
@@ -2130,16 +2156,16 @@ bool Fighter::formationMove (IFighter * parent)
 			if (bRight)
 			{
 				parentAngle += 30 * MUL_DEG_TO_RAD;
-				relRoll = (0 * MUL_DEG_TO_RAD) - transform.get_roll();
+				relRoll = (0 * MUL_DEG_TO_RAD) - fighterRoll(transform);
 			}
 			else
 			{
 				parentAngle -= 30 * MUL_DEG_TO_RAD;
-				relRoll = (-0 * MUL_DEG_TO_RAD) - transform.get_roll();
+				relRoll = (-0 * MUL_DEG_TO_RAD) - fighterRoll(transform);
 			}
 
 			relYaw = parentAngle - myAngle;
-			relPitch = trans.get_pitch() - transform.get_pitch();
+			relPitch = fighterPitch(trans) - fighterPitch(transform);
 
 			rotateShip(relYaw, relRoll, relPitch);
 			setThrustersOn();

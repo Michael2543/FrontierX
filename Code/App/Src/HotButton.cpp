@@ -50,43 +50,7 @@ using namespace FrontierX::NativeAppUi;
 #include <HKEvent.h>
 
 #if !defined(_WIN32)
-namespace
-{
-U32 nativeCommandHotkey(U32 resourceHotkey, HBTNTXT::BUTTON_TEXT text)
-{
-    // Resolve only source-confirmed retail resource/semantic pairs.
-    switch (text)
-    {
-    case HBTNTXT::PATROL:
-        if (resourceHotkey == 81) return IDH_PATROL;
-        break;
-    case HBTNTXT::RALLYPOINT:
-        if (resourceHotkey == 86) return IDH_RALLY_POINT;
-        break;
-    case HBTNTXT::STANCE_ATTACK:
-        if (resourceHotkey == 134) return IDH_STANCE_ATTACK;
-        break;
-    case HBTNTXT::STANCE_DEFEND:
-        if (resourceHotkey == 135) return IDH_STANCE_DEFENSIVE;
-        break;
-    case HBTNTXT::STANCE_STANDGROUND:
-        if (resourceHotkey == 137) return IDH_STANCE_STANDGROUND;
-        break;
-    case HBTNTXT::STANCE_IDLE:
-        if (resourceHotkey == 136) return IDH_STANCE_IDLE;
-        break;
-    default:
-        break;
-    }
-    return resourceHotkey;
-}
-
-GENRESULT postNativeCommand(IEventSystem *events, U32 resourceHotkey, HBTNTXT::BUTTON_TEXT text)
-{
-    return events->Post(CQE_HOTKEY, reinterpret_cast<void *>(
-        static_cast<std::uintptr_t>(nativeCommandHotkey(resourceHotkey, text))));
-}
-}
+#include "Include/NativeRetailHudHotkey.h"
 
 namespace FrontierX
 {
@@ -104,23 +68,40 @@ bool CheckNativeHotButtonCommands()
         std::fprintf(stderr, "Native hot-button isolated event owner unavailable\n");
         return false;
     }
-    struct Command { U32 resource; HBTNTXT::BUTTON_TEXT text; U32 expected; };
+    struct Command { U32 resource; U32 expected; };
+    // Independent representative bindings cover every HUD command family,
+    // including resources without text and mutable multi-button states.
     const Command commands[] = {
-        {134, HBTNTXT::STANCE_ATTACK, IDH_STANCE_ATTACK},
-        {135, HBTNTXT::STANCE_DEFEND, IDH_STANCE_DEFENSIVE},
-        {137, HBTNTXT::STANCE_STANDGROUND, IDH_STANCE_STANDGROUND},
-        {136, HBTNTXT::STANCE_IDLE, IDH_STANCE_IDLE},
-        {81, HBTNTXT::PATROL, IDH_PATROL},
-        {86, HBTNTXT::RALLYPOINT, IDH_RALLY_POINT},
-        {86, HBTNTXT::NOTEXT, 86},
-        {IDH_RALLY_POINT, HBTNTXT::RALLYPOINT, IDH_RALLY_POINT},
-        {81, HBTNTXT::NOTEXT, 81},
-        {IDH_PATROL, HBTNTXT::PATROL, IDH_PATROL},
-        {134, HBTNTXT::NOTEXT, 134},
-        {IDH_STANCE_ATTACK, HBTNTXT::STANCE_ATTACK, IDH_STANCE_ATTACK}
+        {0, 0}, {0xFFFFFFFFU, 0xFFFFFFFFU},
+        {6, IDH_CANCEL_COMMAND}, {12, IDH_CONTEXT_A}, {37, IDH_CONTEXT_Z},
+        {45, IDH_FABRICATOR}, {46, IDH_FIGHTER_NORMAL}, {47, IDH_FIGHTER_PATROL},
+        {54, IDH_FORM_FLEET}, {56, IDH_GAME_OPTIONS},
+        {78, IDH_MISSION_OBJ}, {81, IDH_PATROL},
+        {84, IDH_QUICK_LOAD}, {85, IDH_QUICK_SAVE}, {86, IDH_RALLY_POINT},
+        {88, IDH_REPAIR}, {89, IDH_REPAIR_FLEET}, {92, IDH_RESUPPLY_FLEET},
+        {93, IDH_ROTATE_0_WORLD}, {109, IDH_SELECT_ALL_FLEET},
+        {112, IDH_SELL}, {113, IDH_SPECIAL_ABILITY},
+        {114, IDH_SPECIAL_AEGIS}, {115, IDH_SPECIAL_ASSAULT},
+        {118, IDH_SPECIAL_CLOAK}, {122, IDH_SPECIAL_MIMIC},
+        {127, IDH_SPECIAL_REPULSOR}, {131, IDH_SPECIAL_TEMPEST},
+        {133, IDH_SPECIAL_WORMHOLE},
+        {134, IDH_STANCE_ATTACK}, {135, IDH_STANCE_DEFENSIVE},
+        {136, IDH_STANCE_IDLE}, {137, IDH_STANCE_STANDGROUND},
+        {138, IDH_SUPPLY_STANCE_FULLYAUTO}, {139, IDH_SUPPLY_STANCE_NOAUTO},
+        {140, IDH_SUPPLY_STANCE_RESUPPLY}, {143, IDH_TOGGLE_TOOLBAR},
+        {147, IDH_ZOOM_IN}, {148, IDH_ZOOM_OUT}
     };
     for (const auto &command : commands)
-        if (postNativeCommand(events, command.resource, command.text) != GR_OK) return false;
+    {
+        const U32 stored = NativeRetailHudHotkey(command.resource);
+        if (stored != command.expected || PostNativeHudHotkey(events, stored) != GR_OK)
+            return false;
+    }
+    // Already canonical commands, including physical F8, are posted unchanged.
+    const U32 canonical[] = {IDH_QUICK_LOAD, IDH_SELL, IDH_REPAIR,
+                             IDH_SPECIAL_ABILITY, IDH_FLEET_SPORDER_1};
+    for (const U32 command : canonical)
+        if (PostNativeHudHotkey(events, command) != GR_OK) return false;
     eventOwner->Update();
     for (U32 index = 0; index < sizeof(commands)/sizeof(commands[0]); ++index)
     {
@@ -133,6 +114,14 @@ bool CheckNativeHotButtonCommands()
                 index, commands[index].expected, reinterpret_cast<std::uintptr_t>(parameter), message);
             return false;
         }
+    }
+    for (U32 index = 0; index < sizeof(canonical)/sizeof(canonical[0]); ++index)
+    {
+        U32 message = 0;
+        void *parameter = nullptr;
+        if (events->Peek(sizeof(commands)/sizeof(commands[0]) + index, &message, &parameter) != GR_OK ||
+            message != CQE_HOTKEY || reinterpret_cast<std::uintptr_t>(parameter) != canonical[index])
+            return false;
     }
     return true;
 }
@@ -282,7 +271,7 @@ struct DACOM_NO_VTABLE HotButton : BaseHotRect, IHotButton
 #if defined(_WIN32)
                 EVENTSYS->Post(CQE_HOTKEY, (void *)hotkeyID);
 #else
-                postNativeCommand(EVENTSYS, hotkeyID, buttonText);
+                FrontierX::PostNativeHudHotkey(EVENTSYS, hotkeyID);
 #endif
             }
 			parent->PostMessage(CQE_LHOTBUTTON, (void*)controlID);
@@ -327,7 +316,11 @@ void HotButton::InitHotButton (const HOTBUTTON_DATA & data, BaseHotRect * _paren
 		szButtonText = _wcsdup(_localLoadStringW(buttonText));
 	//	wcsncpy(szButtonText, _localLoadStringW(buttonText), sizeof(szButtonText)/sizeof(wchar_t));
 
+#if defined(_WIN32)
 	hotkeyID = data.hotkey;
+#else
+    hotkeyID = FrontierX::NativeRetailHudHotkey(data.hotkey);
+#endif
 	statusTextID = data.buttonInfo;
 	hintboxID = data.buttonHint;
 
@@ -604,11 +597,7 @@ void HotButton::draw (void)
 	BATCH->set_state(RPR_BATCH,FALSE);
 	U32 state;
 
-	#if defined(_WIN32)
     bool bFlash = INTERMAN->RenderHotkeyFlashing(hotkeyID);
-#else
-    bool bFlash = INTERMAN->RenderHotkeyFlashing(nativeCommandHotkey(hotkeyID, buttonText));
-#endif
 	
 	if(bFlash)
 	{
@@ -653,11 +642,7 @@ void HotButton::setStatus (void)
 			int i;
 
 			wcscpy(ext, ptr+1);		// copy everything after the mark
-			#if defined(_WIN32)
             len = HOTKEY->GetHotkeyText(hotkeyID, keytext, sizeof(keytext));
-#else
-            len = HOTKEY->GetHotkeyText(nativeCommandHotkey(hotkeyID, buttonText), keytext, sizeof(keytext));
-#endif
 			#ifdef _WIN32
 
 			i = MultiByteToWideChar(CP_ACP, 0, keytext, len, ptr, sizeof(buffer)/sizeof(buffer[0]));

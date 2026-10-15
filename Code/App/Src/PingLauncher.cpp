@@ -127,7 +127,7 @@ BOOL32 PingLaunch::Update (void)
 }
 //---------------------------------------------------------------------------
 //
-void PingLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void PingLaunch::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	const BT_PING_LAUNCHER * data = (const BT_PING_LAUNCHER *) ARCHLIST->GetArchetypeData(pArchetype);
 

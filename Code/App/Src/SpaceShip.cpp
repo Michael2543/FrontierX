@@ -1621,6 +1621,9 @@ template struct SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT>;
 template struct SpaceShip<HARVEST_SAVELOAD, HARVEST_INIT>;
 template struct SpaceShip<SUPPLYSHIP_SAVELOAD, SUPPLYSHIP_INIT>;
 template struct SpaceShip<MINELAYER_SAVELOAD, MINELAYER_INIT>;
+template struct SpaceShip<FLAGSHIP_SAVELOAD, FLAGSHIP_INIT>;
+template struct SpaceShip<TROOPSHIP_SAVELOAD, TROOPSHIP_INIT>;
+template struct SpaceShip<RECONPROBE_SAVELOAD, RECONPROBE_INIT>;
 
 bool IsNativePersistentSpaceShip(IBaseObject *object)
 {
@@ -1628,7 +1631,10 @@ bool IsNativePersistentSpaceShip(IBaseObject *object)
 		dynamic_cast<SpaceShip<GUNBOAT_SAVELOAD, GUNBOAT_INIT> *>(object) ||
 		dynamic_cast<SpaceShip<HARVEST_SAVELOAD, HARVEST_INIT> *>(object) ||
 		dynamic_cast<SpaceShip<SUPPLYSHIP_SAVELOAD, SUPPLYSHIP_INIT> *>(object) ||
-		dynamic_cast<SpaceShip<MINELAYER_SAVELOAD, MINELAYER_INIT> *>(object);
+		dynamic_cast<SpaceShip<MINELAYER_SAVELOAD, MINELAYER_INIT> *>(object) ||
+        dynamic_cast<SpaceShip<FLAGSHIP_SAVELOAD, FLAGSHIP_INIT> *>(object) ||
+        dynamic_cast<SpaceShip<TROOPSHIP_SAVELOAD, TROOPSHIP_INIT> *>(object) ||
+        dynamic_cast<SpaceShip<RECONPROBE_SAVELOAD, RECONPROBE_INIT> *>(object);
 }
 #endif
 

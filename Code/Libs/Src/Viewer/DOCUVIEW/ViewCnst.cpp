@@ -64,7 +64,8 @@ extern SymbolManager SymbolTable;
 
 static BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData
 #if !defined(_WIN32)
-	, SYMBOL optionalLegacyMetadata = nullptr, SYMBOL optionalLegacySlotChallenge = nullptr
+	, SYMBOL optionalLegacyMetadata = nullptr, SYMBOL optionalLegacySlotChallenge = nullptr,
+	  SYMBOL optionalLegacyCommandLimit = nullptr
 #endif
 );
 void COMAPI CreateDataParser (SYMBOL symbol, IDataParser ** pParser);
@@ -492,9 +493,9 @@ bool CorrelateNativeViewSymbols(IViewConstructor2 *provider, SYMBOL oldSymbol,
 bool CorrelateNativeMissionGlobals(IViewConstructor2 *provider, SYMBOL oldSymbol,
 	const void *oldData, SYMBOL newSymbol, void *newData)
 {
-	// Retail initial maps omit the later maxPlayers lobby metadata nibble.
-	// The Windows provider clears the destination and leaves that absent field
-	// zero. Do not relax any other required field or the fixed Globals extent.
+	// Retail initial maps omit later lobby metadata and use older OPTIONS.
+	// The Windows provider clears the destination and leaves absent fields
+	// zero. Pin those schema variants; retain every other required field.
 	if (!dynamic_cast<ViewConstructor *>(provider) || !oldSymbol || !newSymbol ||
 		!oldData || !newData) return false;
 	SYMBOL oldType = ResolveViewSymbolType(oldSymbol);
@@ -581,9 +582,52 @@ bool CorrelateNativeMissionGlobals(IViewConstructor2 *provider, SYMBOL oldSymbol
 	// The added four-bit lobby/standard-AI difficulty slot is absent from retail
 	// maps. Preserve the original Windows zero default; do not invent AI rules.
 	SYMBOL optionalChallenge = missingChallenge ? challenge : nullptr;
+	const auto options = [&](SYMBOL globals) {
+		SYMBOL game = field(globals, "gameSettings");
+		if (!game || game->offset != 3160) return SYMBOL(nullptr);
+		SYMBOL value = field(ResolveViewSymbolType(game), "OPTIONS");
+		if (!value || value->offset != 68) return SYMBOL(nullptr);
+		value = ResolveViewSymbolType(value);
+		return value && value->kind == RECORDSYM && value->size == 8 ? value : SYMBOL(nullptr);
+	};
+	SYMBOL oldOptions = options(oldType), newOptions = options(newType);
+	if (!oldOptions || !newOptions) return false;
+	SYMBOL command = field(newOptions, "commandLimit");
+	SYMBOL oldCommand = field(oldOptions, "commandLimit");
+	const auto integerBits = [](SYMBOL value, unsigned bit, unsigned count, const char *legacyEnum = nullptr) {
+		if (!value || value->offset != 4 || value->bit_offset != bit || value->bit_count != count)
+			return false;
+		SYMBOL type = ResolveViewSymbolType(value);
+		return type->size == 4 && (type->kind == BASICTYPE ||
+			(type->kind == ENUMSYM && legacyEnum && type->name && !std::strcmp(type->name, legacyEnum)));
+	};
+	if (!integerBits(command, 30, 2) || (oldCommand && !integerBits(oldCommand, 30, 2, "COMMANDLIMIT"))) return false;
+	const bool legacyOptions = oldCommand == nullptr;
+	// The older OPTIONS record spends six bits on gameSpeed and has no
+	// commandLimit. Correlate named values through the original provider and
+	// retain its zero default only for that absent field, never raw-copy bits.
+	struct OptionField { const char *name; unsigned bit; unsigned count; const char *legacyEnum; };
+	const OptionField optionFields[] = {{"gameType",0,3,"GAMETYPE"}, {"gameSpeed",3,5,nullptr},
+		{"regenOn",8,1,nullptr}, {"spectatorsOn",9,1,nullptr}, {"lockDiplomacyOn",10,1,nullptr},
+		{"numSystems",11,5,nullptr}, {"money",16,2,"MONEY"}, {"mapType",18,2,"MAPTYPE"},
+		{"templateType",20,2,"RANDOM_TEMPLATE"}, {"mapSize",22,2,"MAPSIZE"},
+		{"terrain",24,2,"TERRAIN"}, {"units",26,2,"STARTING_UNITS"}, {"visibility",28,2,"VISIBILITYMODE"}};
+	for (const auto &expected : optionFields)
+	{
+		const unsigned oldBit = expected.bit + (legacyOptions && expected.bit > 3 ? 1U : 0U);
+		const unsigned oldCount = expected.count +
+			(legacyOptions && !std::strcmp(expected.name, "gameSpeed") ? 1U : 0U);
+		if (!integerBits(field(newOptions, expected.name), expected.bit, expected.count) ||
+			!integerBits(field(oldOptions, expected.name), oldBit, oldCount, expected.legacyEnum)) return false;
+	}
+	SYMBOL oldVersion = field(oldOptions, "version"), newVersion = field(newOptions, "version");
+	if (!oldVersion || !newVersion || oldVersion->offset || newVersion->offset ||
+		oldVersion->bit_count || newVersion->bit_count ||
+		ResolveViewSymbolType(oldVersion)->size != 4 || ResolveViewSymbolType(newVersion)->size != 4) return false;
 	std::memset(newData, 0, newType->size);
 	return ::CorrelateSymbol(oldSymbol, const_cast<char *>(static_cast<const char *>(oldData)),
-		newSymbol, static_cast<char *>(newData), optionalMetadata, optionalChallenge) != 0;
+		newSymbol, static_cast<char *>(newData), optionalMetadata, optionalChallenge,
+        legacyOptions ? command : nullptr) != 0;
 }
 #endif
 
@@ -784,7 +828,7 @@ static SYMBOL GetTypeByName (SYMBOL list, SYMBOL match)
 //
 BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, char *pNewData
 #if !defined(_WIN32)
-	, SYMBOL optionalLegacyMetadata, SYMBOL optionalLegacySlotChallenge
+	, SYMBOL optionalLegacyMetadata, SYMBOL optionalLegacySlotChallenge, SYMBOL optionalLegacyCommandLimit
 #endif
 )
 {
@@ -826,12 +870,13 @@ BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, ch
 				if ((pOldSubType = GetTypeByName(pOldSymbol, type)) != 0)
 					result &= CorrelateSymbol(pOldSubType, pOldData+pOldSubType->offset, type, pNewData+type->offset
 #if !defined(_WIN32)
-						, optionalLegacyMetadata, optionalLegacySlotChallenge
+						, optionalLegacyMetadata, optionalLegacySlotChallenge, optionalLegacyCommandLimit
 #endif
 					);
 				else
 #if !defined(_WIN32)
-				if (type != optionalLegacyMetadata && type != optionalLegacySlotChallenge)
+				if (type != optionalLegacyMetadata && type != optionalLegacySlotChallenge &&
+                    type != optionalLegacyCommandLimit)
 #endif
 					result = 0;
 
@@ -867,7 +912,7 @@ BOOL32 CorrelateSymbol (SYMBOL pOldSymbol, char *pOldData, SYMBOL pNewSymbol, ch
 			{
 				result &= CorrelateSymbol(pOldSymbol, pOldData, type, pNewData
 #if !defined(_WIN32)
-					, optionalLegacyMetadata, optionalLegacySlotChallenge
+					, optionalLegacyMetadata, optionalLegacySlotChallenge, optionalLegacyCommandLimit
 #endif
 				);
 				pOldData+=pOldSymbol->size;

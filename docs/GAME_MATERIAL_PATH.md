@@ -1,5 +1,26 @@
 # Game Mesh and Material Ownership for Milestone 5
 
+## Second-Terran fixed-barrel origin feedback (2026-10-15)
+
+The user observes Mantis weapons firing below their hulls in the second-mission
+opening. Actual retail-type inspection identifies fixed gunboat barrels using
+PlasmaBolt. `Turret::getSighting` now inserts the original ship-model axis
+conversion at the rigid ship root while retaining the complete Engine child
+frame and authored hardpoint. It corrects actual native launch position/axes;
+it does not add a visual offset trajectory. The classification is independent
+of graphics settings. Targets, call/RNG order, timing, saved fields, jointed
+launchers, platforms and Windows remain unchanged. Native positional behavior
+is intentionally repaired, not claimed bit-identical to the previous faulty run.
+
+The existing material/math regression checks an asymmetric rotated ship root,
+rotated/nonuniformly scaled child and rotated muzzle, with independent numerical
+world-point/basis expectations and unchanged input/nonselected paths. GCC/Clang
+complete graphs, affected non-host checks and fatal Clang ASan/UBSan execute as
+recorded in [BUILD_GRAPH](BUILD_GRAPH.md). The fresh actual TM2 opening executes;
+precise visible weapon-origin acceptance remains the user's focused retest.
+No cross-platform determinism or native Windows/ABI execution is inferred.
+
+
 ## Native speaking-marker anchor (2026-10-14)
 
 User feedback identifies the red two-half-circle speaker symbol swinging like a
@@ -3593,3 +3614,97 @@ private normal/zoom captures execute, followed by normal close after594 source
 frames (result4, audio0, idle hints, exit0). No presentation-exclusion flags are
 used. This proves selected-source/render/input/close execution, not full corner
 visibility acceptance or effect correctness; the user checks those next.
+
+## Native planet hover opacity (2026-10-15)
+
+**Concrete user regression:** planets must reveal otherwise occluded construction
+slots when hovered. Source review finds the original `TestHighlight` mouse-over
+owner and `IsRenderingFaded` contract, but no assignment to `alphaMod` in the
+published source and commented-out faded-pass gates in ObjectList. The mouse-over
+condition is independent of `BUILDARCHEID`; terraform transitions retain their
+existing early return. Exact retail opacity/ramp has not been established.
+
+The native Planetoid now initializes/reset its presentation alpha and applies
+64/255 opacity while hovered. ObjectList restores its original opaque/faded pass
+gates. A scoped native render-instance flag forwards opacity through the existing
+Engine/RenderMgr/PolyMesh call, multiplying authored alpha and selecting source
+alpha blending without depth writes for faded instances. Shared materials and
+sibling instances remain unchanged. No simulation order, RNG, saved field, object
+layout, virtual signature or Windows branch is changed. The provisional opacity
+requires visual acceptance; this is not a measured retail fade-curve match.
+
+The existing material probe represents this actual Engine/RenderMgr/PolyMesh
+caller: it checks opacity160/0/255/repeat160, authored-alpha multiplication,
+submission-time blend/depth state, adjacent ordinary draws and no shared material
+mutation. Its existing GPU variant checks faded/zero/restored pixels and an
+ordinary sibling. No separate probe or gameplay completion mechanism is added.
+
+**Automated synthetic execution:** Linux x86_64 GCC16.2.1 and Clang22.1.8 Debug
+full-media builds pass `ctest --test-dir "$build" -R
+'^portability.game_material_(manager|gpu)$' --output-on-failure`, with
+`SDL_VIDEODRIVER=x11` for actual host Vulkan execution (neither GPU result skipped).
+The Clang ASan/UBSan build passes the existing layout, parser, app-schema, material
+and shell checks with `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. Inputs for these checks are
+repository-generated fixtures. Genuine-save host captures additionally show opaque/hovered/restored rendering
+and renewed hover after normal F7/F8; the focused media entry records that bounded
+retail execution. Construction-slot interaction, exact opacity acceptance and
+native Windows Debug/Final/ABI remain distinct gates.
+
+## Effect textures after direct ship draws (2026-10-15)
+
+**Concrete user blocker:** intermittent ship/fire/explosion artifacts across
+missions; a TM3 screenshot shows large flat ship-texture shapes, with possible
+invisible fighters. A fresh original TM3 intro independently reproduces a flat
+Mantis hull-atlas rectangle among normal explosions. The bounded debris observer
+finds finite local vertices and rigid instance transforms in the sampled pieces;
+no geometry-clamping or split simulation repair is justified by those samples.
+
+**Confirmed owner defect:** Engine/PolyMesh and Optics bind textures directly to
+PIPE. App RenderBatcher retains a separate `commitedTextureID` cache. A following
+effect requests the same texture it previously used, so the batcher can skip the
+bind even though PIPE now holds a ship texture. Turret/PlasmaBolt/Trail/anim2d
+callers explicitly select their correct textures; substituting effect textures
+or changing their geometry would hide the ownership fault.
+
+The seven existing App batcher binding paths now reassert native texture
+ownership, consistent with the already defensive native verify_state path.
+Windows keeps its original cached comparison. Texture data, transforms, lighting,
+shader selection, simulation/RNG, serialized data and public ABI are unchanged.
+This is a shared rendering correction, not a mission-specific effect exclusion.
+
+**Falsifiable regression:** extend the existing real App batcher runtime probe.
+Effect A draws, a direct PIPE owner binds hull B, then the same BATCH A draws
+again. Submission-time texture bindings must be A on both supported stages.
+Immediate direct, indexed and pooled GetPrimBuffer/Release/flush paths each fail
+against the preserved pre-fix owner (0/0/0), then pass with the repair. Existing
+invalid-handle/state/transform checks and production assertions remain intact.
+The first new fixture left unused stages2/3 unterminated; fatal ASan exposed
+four original texture-validity assertions and early-exit leaks. Explicitly
+disabling unused stages, as the real SetupDiffuseBlend caller does, repairs the
+fixture; the corrected fixture still fails against pre-fix code. No assertion,
+leak check or stage validation is weakened.
+
+**Bounded retail-input runtime:** source TM3 intro capture before the repair
+contains the rectangle; the subsequent native GCC full-media40-screenshot interval
+contains original blasts/debris without that reproduced rectangle. This is not
+a full cross-platform or determinism comparison. A separate Clang run loads the
+user's unchanged genuine TM3 battle checkpoint. The original Scout carrier
+launches two fighters; both are marked visible and prepare40vertices/60indices
+with finite positions/UVs and source-consistent mesh/facegroup counts20/10.
+That CPU observation alone proves neither GPU submission nor correct fighter
+appearance or gameplay. The texture repair changes no Fighter gameplay code. A first wing observer failed by reading `this` in a static
+helper and terminated its own debug run; the corrected read-only observer
+completes normally. Later screen captures without active-window verification
+are not visual evidence while the user's old game is also open. A follow-up
+verified four battle captures, then stopped when its owned window lost focus.
+The user subsequently confirms that the texture artifacts are gone, but fighters
+remain invisible and Hive Carriers appear ineffective. A read-only debugger run
+on the same genuine checkpoint reproduces a separate fighter flight fault:
+launched fighters descend below Z-53000 and sampled firing attempts fail before
+damage is queued. CPU batch counts do not establish GPU output or correct combat;
+the fighter/control owner repair and renewed acceptance remain open.
+
+Exact local compiler/build/CTest/sanitizer/host-GPU results and the retained
+ordinary-compositor resize failures are in BUILD_GRAPH. Native Windows
+Debug/Final/module ABI, actual CI, all-effect coverage and P1c remain open.

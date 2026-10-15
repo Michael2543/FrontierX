@@ -100,7 +100,7 @@ struct _NO_VTABLE BuffLauncher : IBaseObject, ILauncher, ISaveLoad, BUFF_LAUNCHE
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 	
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial)
@@ -336,7 +336,7 @@ BOOL32 BuffLauncher::Update (void)
 }
 //---------------------------------------------------------------------------
 //
-void BuffLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void BuffLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	CQASSERT(_owner);
 	_owner->QueryInterface(ILaunchOwnerID, owner, LAUNCHVOLATILEPTR);

@@ -22,6 +22,9 @@
 #include <DGlobalData.h>
 #include <DMusic.h>
 #include <DMBaseData.h>
+#include <DMovieCamera.h>
+#include <DVLaunch.h>
+#include <DCloakLauncher.h>
 #include <DShipSave.h>
 #include "NetVector.h"
 #define _ADB
@@ -38,6 +41,10 @@
 #include <DReconLaunch.h>
 #include <DPingLauncher.h>
 #include <DTalorianLauncher.h>
+#include <DFlagship.h>
+#include <DTroopship.h>
+#include <DWormholeLauncher.h>
+#include <DMultiCloakLauncher.h>
 #include <DEndGame.h>
 #include <DConfirm.h>
 #undef _ADB
@@ -54,6 +61,8 @@
 #include "NativeAppSchema.h"
 #include "NativeSolTrainSchema.h"
 #include "Scripts/Script02T/Script01T/NativeScript01Resources.h"
+#include "Scripts/Script02T/NativeScript02Resources.h"
+#include "Scripts/Script03T/NativeScript03Resources.h"
 #include "NativeSolTrainStrings.h"
 #include "Scripts/Sol_T/resource.h"
 
@@ -257,6 +266,13 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
     SYMBOL oldSlot = ResolveViewSymbolType(oldArray->datatype);
     SYMBOL gameField = namedField(record, "gameSettings");
     SYMBOL baseField = namedField(ResolveViewSymbolType(gameField), "_CQGAME");
+    SYMBOL optionsField = namedField(ResolveViewSymbolType(gameField), "OPTIONS");
+    if (!optionsField) return false;
+    const std::size_t optionsOffset = gameField->offset + optionsField->offset;
+    const U32 optionsVersion = 0x10203040U, optionsWord = 0xe9abcdefU;
+    if (optionsOffset + 8U > currentGlobals.size()) return false;
+    std::memcpy(currentGlobals.data() + optionsOffset, &optionsVersion, sizeof(optionsVersion));
+    std::memcpy(currentGlobals.data() + optionsOffset + 4U, &optionsWord, sizeof(optionsWord));
     const std::size_t slotsOffset = gameField->offset + baseField->offset + currentSlots->offset;
     const U32 slotWord = 1U | (5U << 3) | (1U << 7) | (1U << 10) | (9U << 14) | (3U << 19) | (2U << 23);
     for (unsigned slot = 0; slot < 8U; ++slot)
@@ -283,6 +299,98 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
     if (!Expect(CorrelateNativeMissionGlobals(constructor, record, currentGlobals.data(), record, canonicalGlobals.data()) &&
                 canonicalGlobals == currentGlobals,
                 "real Globals canonical correlation retains explicit maxPlayers")) return false;
+    // TM2's retail initial Globals also predates OPTIONS::commandLimit.
+    // Exercise the actual Mission::ParseDefFile migration and retain all other
+    // option bits; accepting this permits the original second mission to load.
+    std::string oldOptionsText = removeField(oldGlobalText, "commandLimit");
+    const auto oldOptionsAt = oldOptionsText.find("struct OPTIONS");
+    const auto speedAt = oldOptionsText.find("gameSpeed:5", oldOptionsAt);
+    if (oldOptionsAt == std::string::npos || speedAt == std::string::npos) return false;
+    oldOptionsText.replace(speedAt, std::strlen("gameSpeed:5"), "gameSpeed:6");
+    HANDLE oldOptionsSymbols = constructor->ParseNewMemory(oldOptionsText.c_str());
+    SYMBOL oldOptionsGlobal = ResolveViewSymbolType(constructor->GetSymbol(oldOptionsSymbols, "MT_GlobalData"));
+    SYMBOL oldOptionsGame = namedField(oldOptionsGlobal, "gameSettings");
+    SYMBOL oldOptionsBase = namedField(ResolveViewSymbolType(oldOptionsGame), "OPTIONS");
+    SYMBOL oldOptions = ResolveViewSymbolType(oldOptionsBase);
+    SYMBOL newOptions = ResolveViewSymbolType(optionsField);
+    SYMBOL commandLimit = namedField(newOptions, "commandLimit");
+    SYMBOL visibility = namedField(oldOptions, "visibility");
+    SYMBOL oldSpeed = namedField(oldOptions, "gameSpeed");
+    if (!oldOptionsSymbols || !oldOptionsGlobal || !oldOptions || !commandLimit || !visibility || !oldSpeed)
+        return false;
+    std::vector<unsigned char> oldOptionsData(3236U, 0), restoredOptions(3236U, 0);
+    auto expectedOptions = expectedGlobals;
+    const U32 defaultCommandWord = optionsWord & 0x3fffffffU;
+    std::memcpy(expectedOptions.data() + optionsOffset + 4U, &defaultCommandWord, sizeof(defaultCommandWord));
+    if (!Expect(oldOptionsGlobal->size == 3236 && oldOptions->size == 8 &&
+                CorrelateNativeViewSymbols(constructor, record, currentGlobals.data(), oldOptionsGlobal, oldOptionsData.data()) &&
+                !CorrelateNativeViewSymbols(constructor, oldOptionsGlobal, oldOptionsData.data(), record, restoredOptions.data()) &&
+                CorrelateNativeMissionGlobals(constructor, oldOptionsGlobal, oldOptionsData.data(), record, restoredOptions.data()) &&
+                restoredOptions == expectedOptions,
+                "TM2 Globals defaults only absent commandLimit and retains version/options/slots/IDs")) return false;
+    std::string enumOptionsText = oldOptionsText;
+    struct LegacyOptionType { const char *field; const char *type; };
+    const LegacyOptionType legacyOptionTypes[] = {
+        {"gameType", "GAMETYPE"}, {"money", "MONEY"}, {"mapType", "MAPTYPE"},
+        {"templateType", "RANDOM_TEMPLATE"}, {"mapSize", "MAPSIZE"},
+        {"terrain", "TERRAIN"}, {"units", "STARTING_UNITS"}, {"visibility", "VISIBILITYMODE"}};
+    for (const auto &option : legacyOptionTypes)
+    {
+        const std::string declaration = std::string("int ") + option.field + ':';
+        const auto at = enumOptionsText.find(declaration, oldOptionsAt);
+        if (at == std::string::npos) return false;
+        enumOptionsText.replace(at, 4U, std::string(option.type) + ' ');
+    }
+    HANDLE enumOptionsSymbols = constructor->ParseNewMemory(enumOptionsText.c_str());
+    SYMBOL enumOptionsGlobal = ResolveViewSymbolType(constructor->GetSymbol(enumOptionsSymbols, "MT_GlobalData"));
+    if (!enumOptionsGlobal) return false;
+    // The original enum-to-int provider parses the symbolic identifier as zero.
+    // Use valid -1 enumerators, retaining that Windows behavior and all adjacent
+    // non-enum bits instead of treating arbitrary packed values as enum names.
+    constexpr U32 enumMask = 0x3fff0007U;
+    auto enumInput = currentGlobals, expectedEnums = expectedOptions;
+    const U32 enumInputWord = optionsWord | enumMask;
+    const U32 enumOutputWord = optionsWord & ~(enumMask | 0xc0000000U);
+    std::memcpy(enumInput.data() + optionsOffset + 4U, &enumInputWord, sizeof(enumInputWord));
+    std::memcpy(expectedEnums.data() + optionsOffset + 4U, &enumOutputWord, sizeof(enumOutputWord));
+    if (!Expect(CorrelateNativeViewSymbols(constructor, record, enumInput.data(), enumOptionsGlobal, oldOptionsData.data()) &&
+                CorrelateNativeMissionGlobals(constructor, enumOptionsGlobal, oldOptionsData.data(), record, restoredOptions.data()) &&
+                restoredOptions == expectedEnums,
+                "TM2 enum options retain original Windows enum-to-int values and surrounding controls")) return false;
+    constructor->DestroySymbols(enumOptionsSymbols);
+    const int optionsSize = oldOptions->size;
+    oldOptions->size = 12;
+    const bool wrongOptionsExtentRejected = !CorrelateNativeMissionGlobals(constructor,
+        oldOptionsGlobal, oldOptionsData.data(), record, restoredOptions.data());
+    oldOptions->size = optionsSize;
+    const unsigned visibilityBit = visibility->bit_offset;
+    visibility->bit_offset = visibilityBit + 1U;
+    const bool wrongOptionsBitsRejected = !CorrelateNativeMissionGlobals(constructor,
+        oldOptionsGlobal, oldOptionsData.data(), record, restoredOptions.data());
+    visibility->bit_offset = visibilityBit;
+    const unsigned speedBits = oldSpeed->bit_count;
+    oldSpeed->bit_count = 4U;
+    const bool wrongOptionsWidthRejected = !CorrelateNativeMissionGlobals(constructor,
+        oldOptionsGlobal, oldOptionsData.data(), record, restoredOptions.data());
+    oldSpeed->bit_count = speedBits;
+    const unsigned commandBit = commandLimit->bit_offset;
+    commandLimit->bit_offset = commandBit - 1U;
+    const bool wrongCommandBitsRejected = !CorrelateNativeMissionGlobals(constructor,
+        oldOptionsGlobal, oldOptionsData.data(), record, restoredOptions.data());
+    commandLimit->bit_offset = commandBit;
+    std::string missingOptionText = oldOptionsText;
+    const auto optionsAt = missingOptionText.find("struct OPTIONS");
+    const auto versionAt = missingOptionText.find("version", optionsAt);
+    if (optionsAt == std::string::npos || versionAt == std::string::npos) return false;
+    missingOptionText.replace(versionAt, 7U, "MissingRequiredVersion");
+    HANDLE missingOptionSymbols = constructor->ParseNewMemory(missingOptionText.c_str());
+    SYMBOL missingOptionGlobal = ResolveViewSymbolType(constructor->GetSymbol(missingOptionSymbols, "MT_GlobalData"));
+    if (!Expect(missingOptionGlobal && missingOptionGlobal->size == 3236 &&
+                !CorrelateNativeMissionGlobals(constructor, missingOptionGlobal, oldOptionsData.data(), record, restoredOptions.data()) &&
+                wrongOptionsExtentRejected && wrongOptionsBitsRejected && wrongOptionsWidthRejected && wrongCommandBitsRejected,
+                "TM2 optional command limit rejects required version loss, wrong extent and overlapping bits")) return false;
+    constructor->DestroySymbols(missingOptionSymbols);
+    constructor->DestroySymbols(oldOptionsSymbols);
     std::string badGlobalsText = oldGlobalText;
     const auto requiredAt = badGlobalsText.find("lastPartID");
     if (requiredAt == std::string::npos) return false;
@@ -397,6 +505,128 @@ bool ParseAppSchema(IViewConstructor2 * constructor,
         valid = valid && jumpRestored.jumpPlatSaveload.jumpGateID == 37 &&
             jumpRestored.jumpPlatSaveload.bOwnGate && jumpRestored.jumpPlatSaveload.bLockGate;
     }
+    // TM2's real ChangeCamera(MissionCamStart) caller requires the original
+    // MovieCamera object. Its existing Mission save/load must retain both
+    // object transform and authored camera view rather than a placeholder.
+    const SYMBOL movieCamera = ResolveViewSymbolType(constructor->GetSymbol(symbols, "MOVIE_CAMERA_SAVELOAD"));
+    const SYMBOL movieCameraArchetype = ResolveViewSymbolType(constructor->GetSymbol(symbols, "BT_MOVIE_CAMERA_DATA"));
+    MOVIE_CAMERA_SAVELOAD cameraSaved{}, cameraRestored{};
+    cameraSaved.trans_SL.position = Vector(1, 2, 3);
+    cameraSaved.baseSave.dwMissionID = 0x12345678U;
+    cameraSaved.baseSave.systemID = 2;
+    std::strcpy(cameraSaved.baseSave.partName.string, "MissionCamStart");
+    cameraSaved.baseSave.cam_lookAt = Vector(4, 5, 6);
+    cameraSaved.baseSave.cam_position = Vector(7, 8, 9);
+    cameraSaved.baseSave.cam_FOV_x = 0.75F;
+    cameraSaved.baseSave.cam_FOV_y = 0.5F;
+    if (!movieCamera || movieCamera->size != 176 || sizeof(cameraSaved) != 176 ||
+        !movieCameraArchetype || movieCameraArchetype->size != 112 ||
+        sizeof(BT_MOVIE_CAMERA_DATA) != 112 ||
+        reinterpret_cast<const unsigned char *>(&cameraSaved.baseSave) -
+            reinterpret_cast<const unsigned char *>(&cameraSaved) != 40 ||
+        reinterpret_cast<const unsigned char *>(&cameraSaved.baseSave.cam_lookAt) -
+            reinterpret_cast<const unsigned char *>(&cameraSaved) != 144 ||
+        reinterpret_cast<const unsigned char *>(&cameraSaved.baseSave.cam_FOV_y) -
+            reinterpret_cast<const unsigned char *>(&cameraSaved) + sizeof(SINGLE) != 176)
+        valid = false;
+    else
+    {
+        valid = valid && CorrelateNativeViewSymbols(constructor, movieCamera, &cameraSaved,
+                                                   movieCamera, &cameraRestored) &&
+            cameraRestored.trans_SL.position.x == 1 && cameraRestored.trans_SL.position.y == 2 &&
+            cameraRestored.trans_SL.position.z == 3 && cameraRestored.baseSave.dwMissionID == 0x12345678U &&
+            cameraRestored.baseSave.systemID == 2 &&
+            std::strcmp(cameraRestored.baseSave.partName.string, "MissionCamStart") == 0 &&
+            cameraRestored.baseSave.cam_lookAt.x == 4 && cameraRestored.baseSave.cam_lookAt.y == 5 &&
+            cameraRestored.baseSave.cam_lookAt.z == 6 && cameraRestored.baseSave.cam_position.x == 7 &&
+            cameraRestored.baseSave.cam_position.y == 8 && cameraRestored.baseSave.cam_position.z == 9 &&
+            cameraRestored.baseSave.cam_FOV_x == 0.75F && cameraRestored.baseSave.cam_FOV_y == 0.5F;
+    }
+    // BuildPlat -> MGlobals::CreateInstance -> Gunboat needs both original
+    // Missile Cruiser launcher owners. Protect their real schema extents and
+    // Cloak launcher's persisted flags without manufacturing a created ship.
+    const SYMBOL verticalType = ResolveViewSymbolType(constructor->GetSymbol(symbols, "BT_VERTICAL_LAUNCH"));
+    const SYMBOL cloakType = ResolveViewSymbolType(constructor->GetSymbol(symbols, "BT_CLOAK_LAUNCHER"));
+    const SYMBOL cloakRecord = ResolveViewSymbolType(constructor->GetSymbol(symbols, "CLOAK_LAUNCHER_SAVELOAD"));
+    CLOAK_LAUNCHER_SAVELOAD cloakSaved{}, cloakRestored{};
+    cloakSaved.bCloakEnabled = true;
+    cloakSaved.bPrepareToggle = true;
+    cloakSaved.cloakSupplyCount = 0.375F;
+    valid = valid && verticalType && verticalType->size == 796 &&
+        sizeof(BT_VERTICAL_LAUNCH) == 796 && cloakType && cloakType->size == 84 &&
+        sizeof(BT_CLOAK_LAUNCHER) == 84 && cloakRecord && cloakRecord->size == 8 &&
+        sizeof(cloakSaved) == 8 &&
+        CorrelateNativeViewSymbols(constructor, cloakRecord, &cloakSaved, cloakRecord, &cloakRestored) &&
+        cloakRestored.bCloakEnabled && cloakRestored.bPrepareToggle &&
+        cloakRestored.cloakSupplyCount == 0.375F;
+    // Catalogue integration must retain the actual ship/launcher saved records;
+    // these correlations exercise schema ownership without creating game units.
+    const auto schemaExtent = [&](const char *name, std::size_t size)
+    {
+        const SYMBOL symbol = ResolveViewSymbolType(constructor->GetSymbol(symbols, name));
+        return symbol && symbol->size >= 0 && static_cast<std::size_t>(symbol->size) == size;
+    };
+    valid = valid && schemaExtent("BT_FLAGSHIP_DATA", sizeof(BT_FLAGSHIP_DATA)) &&
+        schemaExtent("BT_RECONPROBE_DATA", sizeof(BT_RECONPROBE_DATA)) &&
+        schemaExtent("BT_WORMHOLE_LAUNCHER", sizeof(BT_WORMHOLE_LAUNCHER)) &&
+        schemaExtent("BT_MULTICLOAK_LAUNCHER", sizeof(BT_MULTICLOAK_LAUNCHER)) &&
+        schemaExtent("BT_SYNTHESIS_DATA", sizeof(BT_SYNTHESIS_DATA));
+    const auto correlateRecord = [&](const char *name, const auto &source, auto &destination)
+    {
+        const SYMBOL symbol = ResolveViewSymbolType(constructor->GetSymbol(symbols, name));
+        return symbol && symbol->size == sizeof(source) &&
+            CorrelateNativeViewSymbols(constructor, symbol, &source, symbol, &destination);
+    };
+    FLAGSHIP_SAVELOAD flagshipSaved{}, flagshipRestored{};
+    flagshipSaved.flagshipSaveLoad.knownFormations[MAX_FORMATIONS - 1] = 0x12345678U;
+    flagshipSaved.flagshipSaveLoad.commandKitsArchID[MAX_KNOWN_KITS - 1] = 0x23456789U;
+    flagshipSaved.flagshipSaveLoad.bRovingAllowed = true;
+    flagshipSaved.flagshipSaveLoad.buildTime = 0.375F;
+    valid = valid && correlateRecord("FLAGSHIP_SAVELOAD", flagshipSaved, flagshipRestored) &&
+        flagshipRestored.flagshipSaveLoad.knownFormations[MAX_FORMATIONS - 1] == 0x12345678U &&
+        flagshipRestored.flagshipSaveLoad.commandKitsArchID[MAX_KNOWN_KITS - 1] == 0x23456789U &&
+        flagshipRestored.flagshipSaveLoad.bRovingAllowed &&
+        flagshipRestored.flagshipSaveLoad.buildTime == 0.375F;
+    TROOPSHIP_SAVELOAD troopSaved{}, troopRestored{};
+    troopSaved.troopSaveLoad.dwTargetID = 0x12345678U;
+    troopSaved.troopSaveLoad.attackAgentID = 37;
+    troopSaved.troopSaveLoad.bTakeoverApproved = true;
+    TROOPPOD_SAVELOAD podSaved{0x23456789U}, podRestored{};
+    valid = valid && correlateRecord("TROOPSHIP_SAVELOAD", troopSaved, troopRestored) &&
+        troopRestored.troopSaveLoad.dwTargetID == 0x12345678U &&
+        troopRestored.troopSaveLoad.attackAgentID == 37 && troopRestored.troopSaveLoad.bTakeoverApproved &&
+        correlateRecord("TROOPPOD_SAVELOAD", podSaved, podRestored) && podRestored.dwTargetID == 0x23456789U;
+    RECONPROBE_SAVELOAD probeSaved{}, probeRestored{};
+    probeSaved.baseSaveLoad.probeTimer = 0.375F;
+    probeSaved.baseSaveLoad.goal = Vector(1, 2, 3);
+    probeSaved.baseSaveLoad.workingID = 37;
+    probeSaved.baseSaveLoad.bLauncherDelete = true;
+    valid = valid && correlateRecord("RECONPROBE_SAVELOAD", probeSaved, probeRestored) &&
+        probeRestored.baseSaveLoad.probeTimer == 0.375F && probeRestored.baseSaveLoad.goal.z == 3 &&
+        probeRestored.baseSaveLoad.workingID == 37 && probeRestored.baseSaveLoad.bLauncherDelete;
+    WORMHOLE_LAUNCHER_SAVELOAD wormSaved{}, wormRestored{};
+    wormSaved.numTargets = MAX_WORM_VICTIMS;
+    wormSaved.targetIDs[MAX_WORM_VICTIMS - 1] = 0x12345678U;
+    wormSaved.mode = WORMHOLE_LAUNCHER_SAVELOAD::WORM_WORKING;
+    valid = valid && correlateRecord("WORMHOLE_LAUNCHER_SAVELOAD", wormSaved, wormRestored) &&
+        wormRestored.numTargets == MAX_WORM_VICTIMS &&
+        wormRestored.targetIDs[MAX_WORM_VICTIMS - 1] == 0x12345678U &&
+        wormRestored.mode == WORMHOLE_LAUNCHER_SAVELOAD::WORM_WORKING;
+    MULTICLOAK_LAUNCHER_SAVELOAD multiSaved{}, multiRestored{};
+    multiSaved.cloakTargetID = 0x23456789U;
+    multiSaved.decloakTime = 37;
+    multiSaved.bCloakingTarget = multiSaved.bPrepareToggle = true;
+    valid = valid && correlateRecord("MULTICLOAK_LAUNCHER_SAVELOAD", multiSaved, multiRestored) &&
+        multiRestored.cloakTargetID == 0x23456789U && multiRestored.decloakTime == 37 &&
+        multiRestored.bCloakingTarget && multiRestored.bPrepareToggle;
+    SYNTHESIS_SAVELOAD synthesisSaved{}, synthesisRestored{};
+    synthesisSaved.stage = SYN_ABSORB;
+    synthesisSaved.hullPointsPer = 0.375F;
+    synthesisSaved.targetID = 0x12345678U;
+    synthesisSaved.trans_SL.position = Vector(1, 2, 3);
+    valid = valid && correlateRecord("SYNTHESIS_SAVELOAD", synthesisSaved, synthesisRestored) &&
+        synthesisRestored.stage == SYN_ABSORB && synthesisRestored.hullPointsPer == 0.375F &&
+        synthesisRestored.targetID == 0x12345678U && synthesisRestored.trans_SL.position.z == 3;
     const SYMBOL gun = ResolveViewSymbolType(constructor->GetSymbol(symbols, "GUNPLAT_SAVELOAD"));
     GUNPLAT_SAVELOAD gunSaved{}, gunRestored{};
     gunSaved.gunplatSaveload.dwTargetID = 0x12345672;
@@ -944,6 +1174,103 @@ bool ParseTerranSchema(IViewConstructor2 *constructor, const std::filesystem::pa
     return valid;
 }
 
+// TM1 Continue selects TM2's independent MScript schema/resource. Extend the
+// existing parser gate: a Sol_T/TM1 schema cannot restore TM2's saved actors.
+bool ParseSecondTerranSchema(IViewConstructor2 *constructor, const std::filesystem::path &path)
+{
+    std::ifstream source(path, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(source)), {});
+    std::size_t length = 0;
+    const void *embedded = FrontierX::GetNativeScript02Schema(length);
+    if (bytes.empty() || !embedded || length != bytes.size() ||
+        std::memcmp(embedded, bytes.data(), length)) return false;
+    std::string text = bytes;
+    const HANDLE symbols = constructor->ParseNewMemory(text.data());
+    if (!symbols) return false;
+    const auto global = ResolveViewSymbolType(constructor->GetSymbol(symbols, "MissionData"));
+    const auto briefing = ResolveViewSymbolType(constructor->GetSymbol(symbols, "TM2_Briefing_Data"));
+    const auto scene = ResolveViewSymbolType(constructor->GetSymbol(symbols, "TM2_InGameScene_Save"));
+    const auto jump = ResolveViewSymbolType(constructor->GetSymbol(symbols, "TM2_ForbiddenJump_Data"));
+    bool corvette = false, blackwell = false, end = false;
+    for (auto field = global ? global->datatype : nullptr; field; field = field->link)
+    {
+        if (!field->name) continue;
+        if (!std::strcmp(field->name, "corvette1")) corvette = field->offset == 36;
+        if (!std::strcmp(field->name, "Blackwell")) blackwell = field->offset == 132;
+        if (!std::strcmp(field->name, "failureID")) end = field->offset + field->size == 408;
+    }
+    const auto name = FrontierX::GetNativeScript02CountedString(2014);
+    bool valid = global && global->size == 408 && corvette && blackwell && end &&
+        briefing && briefing->size == 24 && scene && scene->size == 120 &&
+        jump && jump->size == 32 && name && name[0] == 20 &&
+        std::wmemcmp(name + 1, L"Rescue Captured Crew", 20) == 0 &&
+        !FrontierX::GetNativeScript02CountedString(0);
+    if (valid)
+    {
+        std::vector<unsigned char> saved(408, 0), restored(408, 0);
+        const U32 actorID = 0x12345671U, failureID = 42U;
+        std::memcpy(saved.data() + 136, &actorID, sizeof(actorID));
+        std::memcpy(saved.data() + 404, &failureID, sizeof(failureID));
+        valid = CorrelateNativeViewSymbols(constructor, global, saved.data(), global, restored.data()) &&
+            std::memcmp(saved.data() + 136, restored.data() + 136, sizeof(actorID)) == 0 &&
+            std::memcmp(saved.data() + 404, restored.data() + 404, sizeof(failureID)) == 0;
+    }
+    constructor->DestroySymbols(symbols);
+    if (valid) std::cout << "Script02T source schema/resource and saved actor IDs checked\n";
+    return valid;
+}
+
+// Original TM2 Continue loads Script03, not the previous module's schema.
+bool ParseThirdTerranSchema(IViewConstructor2 *constructor, const std::filesystem::path &path)
+{
+    std::ifstream source(path, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(source)), {});
+    std::size_t length = 0;
+    const void *embedded = FrontierX::GetNativeScript03Schema(length);
+    if (bytes.empty() || !embedded || length != bytes.size() ||
+        std::memcmp(embedded, bytes.data(), length)) return false;
+    std::string text = bytes;
+    const HANDLE symbols = constructor->ParseNewMemory(text.data());
+    if (!symbols) return false;
+    const auto global = ResolveViewSymbolType(constructor->GetSymbol(symbols, "MissionData"));
+    const auto extent = [&](const char *name, int size) {
+        const auto symbol = ResolveViewSymbolType(constructor->GetSymbol(symbols, name));
+        return symbol && symbol->size == size;
+    };
+    bool blackwell = false, bin = false, end = false;
+    for (auto field = global ? global->datatype : nullptr; field; field = field->link)
+    {
+        if (!field->name) continue;
+        if (!std::strcmp(field->name, "blackwellsShip")) blackwell = field->offset == 148;
+        if (!std::strcmp(field->name, "mantisBuildBin")) bin = field->offset == 372 && field->size == 64;
+        if (!std::strcmp(field->name, "failureID")) end = field->offset + field->size == 492;
+    }
+    const auto objective = FrontierX::GetNativeScript03CountedString(3088);
+    constexpr wchar_t objectiveText[] = L"Troopship Hawkes' prison.";
+    bool valid = global && global->size == 492 && blackwell && bin && end &&
+        extent("TM3_BriefingData", 12) && extent("TM3_MissionIntroData", 216) &&
+        extent("TM3_InitialMantisAttackData", 1) && extent("TM3_VisibilityHandlerData", 24) &&
+        extent("TM3_BlackwellIsDeadData", 8) && extent("TM3_CheckForCapturedPrisonData", 12) &&
+        extent("TM3_DisplayObjectiveHandlerData", 8) && extent("TM3_MissionStartData", 0) &&
+        extent("TM3_MissionSuccessData", 0) && objective &&
+        objective[0] == std::size(objectiveText) - 1 &&
+        std::wmemcmp(objective + 1, objectiveText, std::size(objectiveText) - 1) == 0 &&
+        !FrontierX::GetNativeScript03CountedString(0);
+    if (valid)
+    {
+        std::vector<unsigned char> saved(492, 0), restored(492, 0);
+        const U32 actorID = 0x12345671U, lastBinActor = 0x23456781U, failureID = 42U;
+        std::memcpy(saved.data() + 152, &actorID, sizeof(actorID));
+        std::memcpy(saved.data() + 424, &lastBinActor, sizeof(lastBinActor));
+        std::memcpy(saved.data() + 488, &failureID, sizeof(failureID));
+        valid = CorrelateNativeViewSymbols(constructor, global, saved.data(), global, restored.data()) &&
+            std::memcmp(saved.data(), restored.data(), saved.size()) == 0;
+    }
+    constructor->DestroySymbols(symbols);
+    if (valid) std::cout << "Script03T source schema/resource, actor array and empty programs checked\n";
+    return valid;
+}
+
 // MScript::SetScriptData consumes the selected script's generated schema.
 // This check decides whether native preprocessing can supply that contract.
 bool ParseScriptSchema(IViewConstructor2 * constructor,
@@ -1333,13 +1660,18 @@ int main(int argc, char ** argv)
     const bool scriptSchema = argc == 3 &&
         std::strcmp(argv[1], "--script-schema") == 0;
     const bool terranSchema = argc == 3 && std::strcmp(argv[1], "--terran-script-schema") == 0;
+    const bool secondTerranSchema = argc == 3 && std::strcmp(argv[1], "--second-terran-script-schema") == 0;
+    const bool thirdTerranSchema = argc == 3 && std::strcmp(argv[1], "--third-terran-script-schema") == 0;
     const bool missionSchema = argc == 4 &&
         std::strcmp(argv[1], "--mission-schema") == 0 &&
         !std::strchr(argv[3], '/') && !std::strchr(argv[3], '\\');
-    if (argc != 1 && !appSchema && !scriptSchema && !terranSchema && !missionSchema)
+    if (argc != 1 && !appSchema && !scriptSchema && !terranSchema && !secondTerranSchema && !thirdTerranSchema && !missionSchema)
     {
         std::cerr << "Usage: frontierx_view_parser_probe [--app-schema data.i | "
                      "--script-schema DataDef.i | "
+                     "--terran-script-schema DataDef.i | "
+                     "--second-terran-script-schema DataDef.i | "
+                     "--third-terran-script-schema DataDef.i | "
                      "--mission-schema data-root mission-name]\n";
         return 1;
     }
@@ -1447,6 +1779,10 @@ int main(int argc, char ** argv)
                              "repository App Data.i schema")) return 1;
     if (terranSchema && !Expect(ParseTerranSchema(view2, argv[2]),
                                 "selected Script01T schema/resource")) return 1;
+    if (secondTerranSchema && !Expect(ParseSecondTerranSchema(view2, argv[2]),
+                                "selected Script02T schema/resource")) return 1;
+    if (thirdTerranSchema && !Expect(ParseThirdTerranSchema(view2, argv[2]),
+                                "selected Script03T schema/resource")) return 1;
     if (scriptSchema && !Expect(ParseScriptSchema(view2, argv[2]),
                                 "selected Sol_T script schema")) return 1;
     if (missionSchema && !Expect(ParseMissionSchema(view2, argv[2], argv[3]),

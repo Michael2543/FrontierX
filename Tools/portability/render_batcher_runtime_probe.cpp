@@ -83,6 +83,7 @@ bool rejectModelview = false;
 bool rejectProjection = false;
 struct DrawTransform { Transform modelview; Matrix4 projection; std::array<int, 4> viewport; std::array<float, 3> firstPosition; };
 std::vector<DrawTransform> drawTransforms;
+std::vector<std::array<U32, 2>> submittedTextures;
 GENRESULT DACOM_CDECL RecordModelview(void *, const Transform &transform)
 {
     if (rejectModelview) return GR_GENERIC;
@@ -168,6 +169,7 @@ GENRESULT DACOM_CDECL CaptureSubmission(
 {
     if (!submission.IsValid())
         return GR_INVALID_PARMS;
+    submittedTextures.push_back(recordedTextures);
     drawTransforms.push_back({recordedModelview, recordedProjection, recordedViewport,
         {{submission.vertices[0].x, submission.vertices[0].y, submission.vertices[0].z}}});
     const bool directSmoke =
@@ -211,9 +213,11 @@ extern "C"
 DA_ERROR_HANDLER FDUMP = IgnoreDiagnostic;
 }
 
-bool ICQImage::Assert(const char *, void *, unsigned)
+bool ICQImage::Assert(const char *expression, void *file, unsigned line)
 {
     ++assertionCount;
+    std::cerr << "production batcher assertion: " << expression << " at "
+              << static_cast<const char *>(file) << ':' << line << '\n';
     return false;
 }
 
@@ -552,6 +556,88 @@ int main()
             << "; rejected-view=" << rejectedViewPreserved << '\n';
         if (!Expect(passed, "cached getters and world/HUD boundaries preserve real transform ownership and failure")) return 1;
         std::cout << "Original pooled world projection/viewport barriers and transactional modelview cache checked\n";
+    }
+    // Reproduced TM3 effect regression: Engine/Optics bind a hull through PIPE
+    // between two BATCH draws requesting the same effect texture. The batcher's
+    // committed cache must not mistake that external binding for its own.
+    {
+        U32 effectTexture = 0, hullTexture = 0;
+        const PixelFormat format(PF_RGBA8);
+        if (!Expect(pipeline.create_texture(2, 2, format, 1, 0, effectTexture) == GR_OK &&
+            pipeline.create_texture(2, 2, format, 1, 0, hullTexture) == GR_OK,
+            "effect/hull regression owns distinct real native texture handles")) return 1;
+        bool restored[3] = {};
+        for (unsigned mode = 0; mode != 3; ++mode)
+        {
+            PIPE = &pipeline;
+            void *raw = nullptr;
+            if (!Expect(components->CreateInstance(&batchDescriptor, &raw) == GR_OK && raw,
+                "effect/hull texture regression creates original batcher")) return 1;
+            auto *batcher = static_cast<IRenderPrimitive *>(raw);
+            IAggregateComponent *aggregate = nullptr;
+            ICQBatch *batch = nullptr;
+            if (!Expect(batcher->QueryInterface(IID_IAggregateComponent,
+                    reinterpret_cast<void **>(&aggregate)) == GR_OK && aggregate->Initialize() == GR_OK &&
+                batcher->QueryInterface(IID_ICQBatch, reinterpret_cast<void **>(&batch)) == GR_OK,
+                "effect/hull regression initializes original batch and primitive-buffer interfaces")) return 1;
+            aggregate->Release();
+            batch->SetIdentityModelview();
+            if (!Expect(batcher->set_state(RPR_BATCH, mode == 2) == GR_OK &&
+                batcher->set_state(RPR_STATE_ID, mode == 2 ? 91 : 0) == GR_OK &&
+                batcher->set_state(RPR_STATE_FLAGS, BM_M_F_HAS_TEXTURE) == GR_OK,
+                "effect/hull fixture selects original immediate or pooled path")) return 1;
+            // The original pool walks stage state until COLOROP_DISABLE. As in
+            // the preceding two-stage fixture, terminate unused stages rather
+            // than snapshot unsupported/uninitialized third/fourth samplers.
+            for (U32 stage = 2; stage < BM_NUM_STAGES; ++stage)
+                if (!Expect(batcher->set_texture_stage_state(stage, D3DTSS_COLOROP, D3DTOP_DISABLE) == GR_OK,
+                    "effect/hull fixture terminates unused texture stages")) return 1;
+            const auto drawEffect = [&]() {
+                for (U32 stage = 0; stage != 2; ++stage)
+                    if (batcher->set_texture_stage_state(stage, D3DTSS_COLOROP, D3DTOP_MODULATE) != GR_OK ||
+                        batcher->set_texture_stage_texture(stage, effectTexture) != GR_OK) return false;
+                if (mode == 0) return FrontierX::SubmitRenderSmokeScene(batcher) == GR_OK;
+                if (mode == 1) return FrontierX::SubmitIndexedRenderSmokeScene(batcher) == GR_OK;
+                BATCHDESC descriptor{};
+                descriptor.num_verts = FrontierX::RenderSmokeVertexCount;
+                descriptor.type = D3DPT_TRIANGLELIST;
+                descriptor.vertex_format = D3DFVF_RPVERTEX;
+                if (!batch->GetPrimBuffer(&descriptor)) return false;
+                auto *vertices = static_cast<RPVertex *>(descriptor.verts);
+                for (int index = 0; index != descriptor.num_verts; ++index)
+                {
+                    vertices[index].pos = Vector(float(index % 3), float((index + 1) % 3), 0.5F);
+                    vertices[index].color = 0xffffffffU;
+                    vertices[index].u = vertices[index].v = 0;
+                }
+                batch->ReleasePrimBuffer(&descriptor);
+                return batcher->flush(U32(-1)) == GR_OK;
+            };
+            const auto before = submittedTextures.size();
+            if (!Expect(drawEffect() && submittedTextures.size() == before + 1 &&
+                submittedTextures.back() == std::array<U32, 2>{{effectTexture, effectTexture}} &&
+                pipeline.set_texture_stage_texture(0, hullTexture) == GR_OK &&
+                pipeline.set_texture_stage_texture(1, hullTexture) == GR_OK &&
+                recordedTextures == std::array<U32, 2>{{hullTexture, hullTexture}},
+                "original effect draw commits A before real PIPE hull binding B")) return 1;
+            restored[mode] = drawEffect() && submittedTextures.size() == before + 2 &&
+                submittedTextures.back() == std::array<U32, 2>{{effectTexture, effectTexture}};
+            batch->Release();
+            batcher->Release();
+        }
+        if (!Expect(pipeline.set_texture_stage_texture(0, 0) == GR_OK &&
+            pipeline.set_texture_stage_texture(1, 0) == GR_OK &&
+            pipeline.destroy_texture(effectTexture) == GR_OK && pipeline.destroy_texture(hullTexture) == GR_OK &&
+            cpuTextures.empty() && !BATCHER && !PIPE,
+            "effect/hull regression releases all real texture and batch owners")) return 1;
+        if (!Expect(restored[0] && restored[1] && restored[2],
+            "same requested effect texture replaces external hull texture for direct/indexed/primitive-buffer draws"))
+        {
+            std::cerr << "effect texture recovery direct/indexed/pooled primitive-buffer: " <<
+                restored[0] << '/' << restored[1] << '/' << restored[2] << '\n';
+            return 1;
+        }
+        std::cout << "Original effect texture ownership recovers after direct PIPE hull bindings\n";
     }
     if (!Expect(assertionCount == 0U, "no production assertions")) return 1;
     nativePrimitive->Release();

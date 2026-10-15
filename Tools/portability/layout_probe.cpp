@@ -3,6 +3,7 @@
 #include <MPartRef.h>
 
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeRetailFlagshipData.h"
 #include "CQTrace.h"
 #include "resource.h"
 #if defined(__GNUC__)
@@ -13,9 +14,17 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
 #endif
 #include <DataDef.h>
 #include <DMBaseData.h>
+#include <DMovieCamera.h>
+#include <DVLaunch.h>
+#include <DCloakLauncher.h>
+#include <DFlagship.h>
+#include <DTroopship.h>
+#include <DWormholeLauncher.h>
+#include <DMultiCloakLauncher.h>
 #include <DButton.h>
 #include <DPingLauncher.h>
 #include <DSpecial.h>
@@ -35,6 +44,8 @@
 #include <cstring>
 #include <iostream>
 #include <type_traits>
+#include <array>
+#include <limits>
 // Script01T DLL-local records use the same fixed-width storage contract as Sol_T.
 #undef DATADEF_H
 namespace Script01Layout
@@ -47,6 +58,82 @@ static_assert(offsetof(Script01Layout::MissionData, Blackwell) == 152);
 static_assert(offsetof(Script01Layout::MissionData, failureID) + sizeof(U32) == 376);
 static_assert(sizeof(Script01Layout::TM1_Briefing_Save) == 32);
 static_assert(sizeof(Script01Layout::TM1_MissionStart_Save) == 4);
+
+// TM2 MScript saves these source records through its selected script schema.
+// Keep the Win32 MPartRef slots even when native debugger pointers are wider.
+#undef DATADEF_H
+namespace Script02Layout
+{
+#include "Scripts/Script02T/DataDef.h"
+}
+static_assert(sizeof(Script02Layout::MissionData) == 408);
+static_assert(offsetof(Script02Layout::MissionData, corvette1) == 36);
+static_assert(offsetof(Script02Layout::MissionData, Blackwell) == 132);
+static_assert(offsetof(Script02Layout::MissionData, failureID) + sizeof(U32) == 408);
+static_assert(sizeof(Script02Layout::TM2_Briefing_Data) == 24);
+static_assert(sizeof(Script02Layout::TM2_InGameScene_Save) == 120);
+static_assert(offsetof(Script02Layout::TM2_InGameScene_Save, timer) == 112);
+static_assert(sizeof(Script02Layout::TM2_MantisAttack_Data) == 24);
+static_assert(sizeof(Script02Layout::TM2_ScoutAlkaid_Data) == 8);
+static_assert(sizeof(Script02Layout::TM2_ForbiddenJump_Data) == 32);
+
+// TM2 Continue reaches Script03's distinct Win32-shaped actor/program records.
+#undef DATADEF_H
+namespace Script03Layout
+{
+#include "Scripts/Script03T/DataDef.h"
+}
+static_assert(sizeof(Script03Layout::MissionData) == 492);
+static_assert(offsetof(Script03Layout::MissionData, blackwellsBogeysTrigger) == 68);
+static_assert(offsetof(Script03Layout::MissionData, blackwellsShip) == 148);
+static_assert(offsetof(Script03Layout::MissionData, mantisBuildBin) == 372);
+static_assert(offsetof(Script03Layout::MissionData, mantisBuildBinIndex) == 436);
+static_assert(offsetof(Script03Layout::MissionData, failureID) + sizeof(U32) == 492);
+static_assert(sizeof(Script03Layout::TM3_BriefingData) == 12);
+static_assert(sizeof(Script03Layout::TM3_MissionIntroData) == 216);
+static_assert(offsetof(Script03Layout::TM3_MissionIntroData, mantisFrigates) == 8);
+static_assert(offsetof(Script03Layout::TM3_MissionIntroData, terranRepair) == 184);
+static_assert(sizeof(Script03Layout::TM3_InitialMantisAttackData) == 1);
+static_assert(sizeof(Script03Layout::TM3_VisibilityHandlerData) == 24);
+static_assert(sizeof(Script03Layout::TM3_BlackwellIsDeadData) == 8);
+static_assert(sizeof(Script03Layout::TM3_CheckForCapturedPrisonData) == 12);
+static_assert(sizeof(Script03Layout::TM3_DisplayObjectiveHandlerData) == 8);
+// TM2_MissionStart changes to the authored MissionCamStart object; its normal
+// Mission save/load uses these original fixed-width camera records.
+static_assert(sizeof(BASE_MOVIE_CAMERA_SAVELOAD) == 136);
+static_assert(sizeof(MOVIE_CAMERA_SAVELOAD) == 176);
+static_assert(sizeof(BT_MOVIE_CAMERA_DATA) == 112);
+static_assert(sizeof(MOVIE_CAMERA_VIEW) == 64);
+// BuildPlat creates the Terran Missile Cruiser through Gunboat's real vertical
+// and cloak launcher factories. Their data remains the original Win32 schema.
+static_assert(sizeof(BT_VERTICAL_LAUNCH) == 796);
+static_assert(sizeof(BT_VERTICAL_LAUNCH::_salvo) == 24);
+static_assert(sizeof(VLAUNCH_SAVELOAD) == 36);
+static_assert(offsetof(VLAUNCH_SAVELOAD, salvo) + sizeof(S32) == 36);
+static_assert(sizeof(BT_CLOAK_LAUNCHER) == 84);
+static_assert(sizeof(CLOAK_LAUNCHER_SAVELOAD) == 8);
+static_assert(offsetof(CLOAK_LAUNCHER_SAVELOAD, cloakSupplyCount) == 4);
+
+// Original all-race catalogue owners retain their Win32 data/save extents.
+// Actual factory admission is separate from this storage contract.
+static_assert(sizeof(BT_FLAGSHIP_DATA) == 1384);
+static_assert(sizeof(BASE_FLAGSHIP_SAVELOAD) == 104);
+static_assert(sizeof(FLAGSHIP_SAVELOAD) == 616);
+static_assert(sizeof(BASE_TROOPSHIP_SAVELOAD) == 12);
+static_assert(sizeof(TROOPSHIP_SAVELOAD) == 436);
+static_assert(sizeof(TROOPPOD_SAVELOAD) == 4);
+static_assert(offsetof(TROOPPOD_SAVELOAD, dwTargetID) == 0);
+static_assert(sizeof(BT_RECONPROBE_DATA) == 680);
+static_assert(sizeof(BASE_RECONPROBE_SAVELOAD) == 28);
+static_assert(sizeof(RECONPROBE_SAVELOAD) == 452);
+static_assert(sizeof(BT_WORMHOLE_LAUNCHER) == 80);
+static_assert(sizeof(WORMHOLE_LAUNCHER_SAVELOAD) == 112);
+static_assert(offsetof(WORMHOLE_LAUNCHER_SAVELOAD, mode) == 108);
+static_assert(sizeof(BT_MULTICLOAK_LAUNCHER) == 88);
+static_assert(sizeof(MULTICLOAK_LAUNCHER_SAVELOAD) == 16);
+static_assert(sizeof(BT_SYNTHESIS_DATA) == 64);
+static_assert(sizeof(BASE_SYNTHESIS_SAVELOAD) == 16);
+static_assert(sizeof(SYNTHESIS_SAVELOAD) == 56);
 
 
 // The source AI saves assignment records, never native linked-list pointers.
@@ -238,8 +325,65 @@ bool checkCapabilityBits()
 }
 }
 
+// Raw744 flagship records are not CQ2 BT_FLAGSHIP_DATA. Validate only the
+// bounded interoperability decoder; this does not create a working admiral.
+static bool checkRetailFlagshipDecoder()
+{
+    using FrontierX::NativeRetailFlagshipData;
+    std::array<unsigned char, 745> bytes{};
+    const auto put = [&](std::size_t offset, const auto &value) {
+        std::memcpy(bytes.data() + offset, &value, sizeof(value));
+    };
+    put(644, 1.5F);
+    put(648, U32{6});
+    for (std::size_t offset = 652; offset != 700; offset += 4) put(offset, 0.375F);
+    put(716, U32{0x12345678U});
+    bytes[720] = bytes[723] = bytes[725] = 1;
+    put(740, U32{0x23456789U});
+    NativeRetailFlagshipData decoded{};
+    if (!FrontierX::DecodeNativeRetailFlagshipData(bytes.data(), 744, decoded) ||
+        decoded.attackRadius != 1.5F || decoded.admiralHotkey != 6 ||
+        decoded.general.damage != 0.375F || decoded.favored.sensors != 0.375F ||
+        decoded.favoredShips[4] != 0x12345678U || !decoded.antiSolarian ||
+        decoded.antiTerran || !decoded.superFighters || !decoded.evasiveManuvers ||
+        decoded.toolbarHint != 0x23456789U) return false;
+    const auto rejected = [&](const void *data, std::size_t size) {
+        const NativeRetailFlagshipData before = decoded;
+        return !FrontierX::DecodeNativeRetailFlagshipData(data, size, decoded) &&
+            std::memcmp(&before, &decoded, sizeof(decoded)) == 0;
+    };
+    if (!rejected(nullptr, 744) || !rejected(bytes.data(), 743) ||
+        !rejected(bytes.data(), 745)) return false;
+    put(648, U32{7});
+    if (!rejected(bytes.data(), 744)) return false;
+    put(648, U32{6});
+    for (std::size_t offset = 720; offset != 726; ++offset)
+    {
+        const auto previous = bytes[offset];
+        bytes[offset] = 2;
+        if (!rejected(bytes.data(), 744)) return false;
+        bytes[offset] = previous;
+    }
+    for (std::size_t index = 0; index != 13; ++index)
+    {
+        const std::size_t offset = index ? 648 + index * 4 : 644;
+        const float previous = index ? 0.375F : 1.5F;
+        put(offset, std::numeric_limits<float>::quiet_NaN());
+        if (!rejected(bytes.data(), 744)) return false;
+        put(offset, std::numeric_limits<float>::infinity());
+        if (!rejected(bytes.data(), 744)) return false;
+        put(offset, previous);
+    }
+    return true;
+}
+
 int main()
 {
+    if (!checkRetailFlagshipDecoder())
+    {
+        std::cerr << "Retail flagship decoder accepted invalid data or changed failed output\n";
+        return 1;
+    }
     // These original value-type records use inheritance and are not standard
     // layout. Measure real subobject addresses rather than apply offsetof to a
     // conditionally supported type or suppress its compiler diagnostic.

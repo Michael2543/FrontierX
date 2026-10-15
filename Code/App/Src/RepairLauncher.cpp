@@ -80,7 +80,7 @@ struct _NO_VTABLE RepairLauncher : IBaseObject, ILauncher, ISaveLoad, REPAIR_LAU
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 	
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial)
@@ -326,7 +326,7 @@ void RepairLauncher::Render (void)
 }
 //---------------------------------------------------------------------------
 //
-void RepairLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void RepairLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	CQASSERT(_owner);
 	_owner->QueryInterface(ILaunchOwnerID, owner, LAUNCHVOLATILEPTR);

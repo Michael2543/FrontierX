@@ -135,7 +135,7 @@ struct _NO_VTABLE BarrageLauncher : IBaseObject, ILauncher, ISaveLoad,BARRAGE_LA
 
 	/* ILauncher methods */
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 	
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
@@ -466,7 +466,7 @@ void BarrageLauncher::PhysicalUpdate (SINGLE dt)
 }
 //---------------------------------------------------------------------------
 //
-void BarrageLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE _range)
+void BarrageLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE _range)
 {
 	CQASSERT(_owner);
 	_owner->QueryInterface(ILaunchOwnerID, owner, LAUNCHVOLATILEPTR);

@@ -11,8 +11,39 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <DEffectOpts.h>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cwchar>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "ITroopship.h"
 #include "TSpaceShip.h"
@@ -364,10 +395,19 @@ bool Troopship::doAssault (bool bIsMaster)
 	CQASSERT(target != NULL && target->GetSystemID() == systemID && (bIsMaster==0 || attackAgentID==0));
 
 	// do the takeover
+#if defined(_WIN32)
 	VOLPTR(IMissionActor) victim = target;
+#else
+	VOLPTR(IMissionActor) victim;
+	target->QueryInterface(IMissionActorID, victim);
+#endif
 	CQASSERT(victim != 0);
 
+#if defined(_WIN32)
 	MPartNC part = target;
+#else
+	MPartNC part(target.Ptr());
+#endif
 
 	if (bIsMaster && ((target->GetPlayerID() == playerID) || (!(part->bReady))) )
 	{
@@ -454,11 +494,21 @@ bool Troopship::doAssault (bool bIsMaster)
 			// tell mission scripts that unit is captured
 			MScript::RunProgramsWithEvent(CQPROGFLAG_TROOPSHIPED, part->dwMissionID);
 			// tell playerAI that unit is captured
+#if defined(_WIN32)
 			EVENTSYS->Send(CQE_OBJECT_PRECAPTURE, (void *) part->dwMissionID);
+#else
+			EVENTSYS->Send(CQE_OBJECT_PRECAPTURE,
+				reinterpret_cast<void *>(std::uintptr_t(part->dwMissionID)));
+#endif
 
 			// change the player ID of the victim
 			victim->TakeoverSwitchID(newDwTargetID);
+#if defined(_WIN32)
 			EVENTSYS->Send(CQE_OBJECT_POSTCAPTURE, (void *) newDwTargetID);
+#else
+			EVENTSYS->Send(CQE_OBJECT_POSTCAPTURE,
+				reinterpret_cast<void *>(std::uintptr_t(newDwTargetID)));
+#endif
 		}
 	}
 	else	// bIsMaster==0    (must do this in reverse order on client side)
@@ -690,6 +740,13 @@ HANDLE TroopshipFactory::CreateArchetype (const char *szArchname, OBJCLASS objCl
 
 			result = new OBJTYPE();
 			result->podType = ARCHLIST->LoadArchetype(buffer);
+#if !defined(_WIN32)
+			if (!result->podType)
+			{
+				std::fprintf(stderr, "Native required troopship pod missing: %s -> %s\n", szArchname, buffer);
+				goto Error;
+			}
+#endif
 			if (result->podType)
 				ARCHLIST->AddRef(result->podType, OBJREFNAME);
 
@@ -711,7 +768,9 @@ BOOL32 TroopshipFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -730,8 +789,15 @@ IBaseObject * TroopshipFactory::CreateInstance (HANDLE hArchetype)
 //
 void TroopshipFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
+#if defined(_WIN32)
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)hArchetype;
+	(void)info;
+	std::fputs("Native ship editor insertion is unavailable\n", stderr);
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

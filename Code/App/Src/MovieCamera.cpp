@@ -23,7 +23,17 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstddef>
+#include <cmath>
+#include <initializer_list>
 #include <EventSys.h>
+#include <ICamera.h>
+#include <ENGINE.H>
+#include <IMeshManager.h>
+#include <renderer.h>
+#include <TSmartPointer.h>
+#include <3dmath.h>
+#include <cstring>
+#include <cmath>
 #endif
 
 #include "TObjFrame.h"
@@ -54,6 +64,16 @@
 #include "DMovieCamera.h"
 #include "Startup.h"
 
+#if !defined(_WIN32)
+static_assert(sizeof(BASE_MOVIE_CAMERA_SAVELOAD) == 136 && sizeof(MOVIE_CAMERA_SAVELOAD) == 176,
+    "Win32 movie-camera save record sizes");
+static_assert(sizeof(MT_QCAMERALOAD) == 36, "Win32 quick movie-camera record size");
+static_assert(offsetof(MT_QCAMERALOAD, look) == 4 &&
+    offsetof(MT_QCAMERALOAD, at) == 16 && offsetof(MT_QCAMERALOAD, fovX) == 28 &&
+    offsetof(MT_QCAMERALOAD, fovY) + sizeof(SINGLE) == 36,
+    "Win32 quick movie-camera record offsets");
+#endif
+
 #if defined(_WIN32)
 #include <FileSys.h>
 #else
@@ -68,7 +88,6 @@ static struct MovieCamera * firstMovieCamera = NULL;
 static struct MovieCamera * lookCam;
 static bool bViewingCam;
 
-#if defined(_WIN32)
 struct MOVIECAMERA_INIT : RenderArch
 {
 	PARCHETYPE pArchetype;
@@ -291,6 +310,7 @@ void MovieCamera::MapRender (bool bPing)
 //
 void MovieCamera::View (void)
 {
+#if defined(_WIN32)
 	MOVIE_CAMERA_VIEW viewStruct;
 	viewStruct.cam_FOV_x = cam_FOV_x;
 	viewStruct.cam_FOV_y = cam_FOV_y;
@@ -306,6 +326,10 @@ void MovieCamera::View (void)
 		partName = viewStruct.partName;
 		ResetCamera();
 	}
+#else
+	std::fputs("Native movie-camera editor is unavailable\n", stderr);
+	std::abort();
+#endif
 }
 //--------------------------------------------------------------------------------------
 //
@@ -345,7 +369,12 @@ BOOL32 MovieCamera::Save (struct IFileSystem * inFile)
 
 	FRAME_save(save);
 
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+		goto Done;
+#endif
 	
 	result = 1;
 
@@ -367,8 +396,18 @@ BOOL32 MovieCamera::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol(fdesc.lpFileName, buffer, &load);
+#else
+	{
+		const DWORD size = file->GetFileSize(0, nullptr);
+		if (size != sizeof(MOVIE_CAMERA_SAVELOAD) || size > sizeof(buffer) ||
+			!file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0) || dwRead != size ||
+			MISSION->CorrelateSymbol(fdesc.lpFileName, buffer, &load) != GR_OK)
+			goto Done;
+	}
+#endif
 	FRAME_load(load);
 
 	*((BASE_MOVIE_CAMERA_SAVELOAD *)this) = load.baseSave;
@@ -390,7 +429,11 @@ void MovieCamera::ResolveAssociations (void)
 //
 void MovieCamera::QuickSave (struct IFileSystem * file)
 {
+#if defined(_WIN32)
 	DAFILEDESC fdesc = partName;
+#else
+	DAFILEDESC fdesc = partName.string;
+#endif
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_QCAMERALOAD");
@@ -416,8 +459,18 @@ void MovieCamera::QuickSave (struct IFileSystem * file)
 		qload.fovX = cam_FOV_x;
 		qload.fovY = cam_FOV_y;
 
+#if defined(_WIN32)
 		file->WriteFile(hFile, &qload, sizeof(qload), &dwWritten, 0);
 		file->CloseHandle(hFile);
+#else
+		const bool written = file->WriteFile(hFile, &qload, sizeof(qload), &dwWritten, 0) &&
+			dwWritten == sizeof(qload);
+		if (!file->CloseHandle(hFile) || !written)
+		{
+			std::fputs("Native movie-camera quick save failed\n", stderr);
+			std::abort();
+		}
+#endif
 	}
 }
 //--------------------------------------------------------------------------------------
@@ -425,7 +478,16 @@ void MovieCamera::QuickSave (struct IFileSystem * file)
 void MovieCamera::QuickLoad (const char *szSaveLoadType, const char *szInstanceName, void * buffer, U32 bufferSize)
 {
 	MT_QCAMERALOAD qload;
+#if defined(_WIN32)
 	MISSION->CorrelateSymbol(szSaveLoadType, buffer, &qload);
+#else
+	if (!buffer || bufferSize != sizeof(qload) ||
+		MISSION->CorrelateSymbol(szSaveLoadType, buffer, &qload) != GR_OK)
+	{
+		std::fputs("Native movie-camera quick-load record or correlation failed\n", stderr);
+		std::abort();
+	}
+#endif
 
 	cam_position = qload.at;
 	cam_lookAt = qload.look;
@@ -545,7 +607,9 @@ struct DACOM_NO_VTABLE MovieCameraFactory : public IObjectFactory, IEventCallbac
 		::free(ptr);
 	}
 
+#if defined(_WIN32)
 	static BOOL CALLBACK CameraListDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam);
+#endif
 
 	// IObjectFactory methods 
 
@@ -682,8 +746,15 @@ IBaseObject * MovieCameraFactory::CreateInstance (HANDLE hArchetype)
 //
 void MovieCameraFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
+#if defined(_WIN32)
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)hArchetype;
+	(void)info;
+	std::fputs("Native movie-camera editor insertion is unavailable\n", stderr);
+	std::abort();
+#endif
 }
 //-------------------------------------------------------------------
 //
@@ -691,6 +762,7 @@ GENRESULT MovieCameraFactory::Notify (U32 message, void *param)
 {
 	switch (message)
 	{
+#if defined(_WIN32)
 	case CQE_DEBUG_HOTKEY:
 		if (CQFLAGS.bGameActive)
 		switch ((U32)param)
@@ -706,6 +778,7 @@ GENRESULT MovieCameraFactory::Notify (U32 message, void *param)
 	
 		}
 		break;
+#endif
 	case CQE_UPDATE:
 		{
 			if (bCameraMode)
@@ -722,6 +795,7 @@ GENRESULT MovieCameraFactory::Notify (U32 message, void *param)
 			}
 		}
 		break;
+#if defined(_WIN32)
 	case WM_RBUTTONDOWN:
 		if (bCameraMode && ownsResources())
 		{
@@ -778,11 +852,13 @@ GENRESULT MovieCameraFactory::Notify (U32 message, void *param)
 			}
 		}
 		break;
+#endif
 	}
 	return GR_OK;
 }
 //-------------------------------------------------------------------
 //
+#if defined(_WIN32)
 BOOL MovieCameraFactory::CameraListDlgProc (HWND hwnd, UINT message, UINT wParam, LONG lParam)
 {
 	BOOL result=0;
@@ -1016,6 +1092,7 @@ BOOL MovieCameraFactory::CameraListDlgProc (HWND hwnd, UINT message, UINT wParam
 	}
 	return result;
 }
+#endif
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------
 //---------------------------------------------------------------------------
@@ -1036,6 +1113,9 @@ struct _movieCam : GlobalComponent
 	}
 };
 
+// The isolated packet/camera-save probe has no ObjectList composition. It
+// exercises the manager's disk contract; mission builds register this factory.
+#if !defined(FRONTIERX_CAMERA_MANAGER_CHECK)
 static _movieCam __movieCam;
 #endif
 
@@ -1249,11 +1329,6 @@ MovieCameraManager::~MovieCameraManager()
   	//for switching to a specific camera object
 void MovieCameraManager::ChangeCamera(IBaseObject * camera, SINGLE time, U32 flags)
 {
-#if !defined(_WIN32)
-	// The selected training mission has no movie-camera objects. Fail if one is requested.
-	std::fputs("MovieCameraManager: cinematic camera objects are unavailable in the native mission path\n", stderr);
-	std::abort();
-#else
 	if(!camera)
 	{
 		CQASSERT(camera);
@@ -1283,7 +1358,6 @@ void MovieCameraManager::ChangeCamera(IBaseObject * camera, SINGLE time, U32 fla
 		CreateLastSpot();
 		PhysUpdate(0.01);		// do it now!
 	}
-#endif
 };
 //--------------------------------------------------------------------------//
 //
@@ -1843,6 +1917,66 @@ Vector MovieCameraManager::InterVector(Vector v1, Vector v2, SINGLE t)
 }
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+static void NativeMovieCameraAngles(const TRANSFORM &transform, SINGLE &rotation, SINGLE &pitch)
+{
+	// Authored cameras look along -K. The ship's J-forward yaw reverses the
+	// ground target. Camera::cam2World uses TRANSFORM's +Y-forward Euler
+	// initializer, so its pitch is the optical elevation from the XY plane.
+	const Vector k = transform.get_k();
+	if (k.x == 0 && k.y == 0)
+	{
+		// Looking straight along Z leaves yaw undefined; retain the authored
+		// right axis chosen by SetCamera's vertical-camera branch.
+		const Vector i = transform.get_i();
+		rotation = get_angle(-i.y,i.x) * MUL_RAD_TO_DEG;
+	}
+	else
+		rotation = transform.get_yaw_zbased() * MUL_RAD_TO_DEG;
+	pitch = transform.get_pitch_zbased() * MUL_RAD_TO_DEG;
+}
+
+bool CheckNativeMovieCameraAim()
+{
+	// Protect the TM2 cinematic/player-camera handoff through the actual native
+	// conversion. Reconstruct Camera's world rotation and local X pitch and
+	// require its -K ray to hit the requested direction in every quadrant.
+	for (Vector k : {Vector(0,-1.1917536F,1), Vector(1,1,1),
+		Vector(-1,1,2), Vector(1,-1,2), Vector(-1,-1,2), Vector(0,0,1),
+		Vector(0,0,-1), Vector(0,1,0), Vector(0,-1,0), Vector(1,0,0), Vector(-1,0,0)})
+	{
+		k /= std::sqrt(k.x*k.x + k.y*k.y + k.z*k.z);
+		Vector i = std::fabs(k.z) == 1.0F ? cross_product(Vector(0,1,0),k) :
+			cross_product(Vector(0,0,1),k);
+		i /= std::sqrt(i.x*i.x + i.y*i.y + i.z*i.z);
+		const Vector j = cross_product(k,i);
+		TRANSFORM authored;
+		authored.set_orientation(Matrix(i,j,k));
+		SINGLE rotation, pitch;
+		NativeMovieCameraAngles(authored, rotation, pitch);
+		TRANSFORM world;
+		world.rotate_about_k(rotation * MUL_DEG_TO_RAD);
+		// Camera::cam2World is TRANSFORM: its Euler initializer deliberately
+		// differs from Matrix/Transform and must be exercised here.
+		TRANSFORM local;
+		local.set_orientation(pitch, 0, 0);
+		const Vector actual(world.d[0][0]*local.d[0][2] + world.d[0][1]*local.d[1][2],
+			world.d[1][0]*local.d[0][2] + world.d[1][1]*local.d[1][2], local.d[2][2]);
+		const Vector difference = actual-k;
+		const Vector rightDifference = world.get_i()-i;
+		const Vector actualUp(world.d[0][0]*local.d[0][1] + world.d[0][1]*local.d[1][1],
+			world.d[1][0]*local.d[0][1] + world.d[1][1]*local.d[1][1], local.d[2][1]);
+		const Vector upDifference = actualUp-j;
+		if (difference.x*difference.x + difference.y*difference.y + difference.z*difference.z > 1.0e-10F ||
+			rightDifference.x*rightDifference.x + rightDifference.y*rightDifference.y +
+			rightDifference.z*rightDifference.z > 1.0e-10F ||
+			upDifference.x*upDifference.x + upDifference.y*upDifference.y + upDifference.z*upDifference.z > 1.0e-10F)
+			return false;
+	}
+	return true;
+}
+#endif
+
 void MovieCameraManager::SetCamera(Vector position,Vector lookAt,U32 systemID)
 {
 	SECTOR->SetCurrentSystem(systemID);
@@ -1865,7 +1999,13 @@ void MovieCameraManager::SetCamera(Vector position,Vector lookAt,U32 systemID)
 
 	transform.set_orientation(Matrix(i,j,k));
 
+#if defined(_WIN32)
 	CAMERA->SetWorldRotationPitchRoll(transform.get_yaw()*MUL_RAD_TO_DEG,transform.get_pitch()*MUL_RAD_TO_DEG,transform.get_roll()*MUL_RAD_TO_DEG,0);
+#else
+	SINGLE rotation, pitch;
+	NativeMovieCameraAngles(transform, rotation, pitch);
+	CAMERA->SetWorldRotationPitchRoll(rotation, pitch, 0, 0);
+#endif
 	Vector temp = transform.translation;
 	CAMERA->SetPosition(&(transform.translation), 1);
 }

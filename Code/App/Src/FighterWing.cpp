@@ -120,7 +120,7 @@ void FighterWing::init (PARCHETYPE _pArchetype, PARCHETYPE _pFighterType)
 }
 //---------------------------------------------------------------------------
 //
-void FighterWing::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void FighterWing::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	const BT_FIGHTER_WING * data = (const BT_FIGHTER_WING *) ARCHLIST->GetArchetypeData(pArchetype);
 

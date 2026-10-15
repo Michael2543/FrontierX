@@ -48,6 +48,18 @@ def describe_external_face(filename):
 
 
 class NativeShellTests(unittest.TestCase):
+    def test_unit_catalog_requires_exclusive_diagnostic(self):
+        result = self.run_shell('--unit-catalog-check')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('requires exclusive --mission-start', result.stderr)
+        result = self.run_shell('--unit-catalog-check', '--unit-catalog-check')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('duplicate option: --unit-catalog-check', result.stderr)
+        for mode in ('--mission-campaign', '--mission-briefing'):
+            result = self.run_shell('--unit-catalog-check', '--mission-start', mode)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('requires exclusive --mission-start', result.stderr)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -189,15 +201,23 @@ class NativeShellTests(unittest.TestCase):
                 family, bold = describe_external_face(FONT_FILE)
                 weight = 700 if bold else 400
                 good = f'{family},{weight}={FONT_FILE}\n'
-                wrong_family = 'Arial' if ''.join(family.split()).casefold() != 'arial' else 'Arial Narrow'
+                # A face can expose Arial as typographic family and Arial Narrow
+                # as its legitimate legacy SFNT family. Neither is a negative
+                # fixture for the other; use an unrelated synthetic family.
+                wrong_family = 'FrontierX Unrelated Synthetic Family'
                 mapping = self.root / 'font-map.txt'
-                for contents, error in [
+                invalid_mappings = [
                     ('Arial,400 font.ttf\n', 'Expected font mapping Family,weight=filename'),
                     ('Arial,0=font.ttf\n', 'Invalid font mapping family or weight'),
                     (good + good, 'Duplicate font family/weight mapping'),
                     (f'{wrong_family},{weight}={FONT_FILE}\n',
                      'Mapped face does not match the original font family'),
-                ]:
+                ]
+                if ''.join(family.split()).casefold() != 'bauhausmditctt':
+                    wrong_weight = 400 if bold else 700
+                    invalid_mappings.append((f'{family},{wrong_weight}={FONT_FILE}\n',
+                        'Mapped face does not match the requested font weight'))
+                for contents, error in invalid_mappings:
                     mapping.write_text(contents)
                     rejected = self.run_shell('--data-root', self.data,
                         '--system-profile', profile, '--mission-source', 'Sol_Train.dmission',

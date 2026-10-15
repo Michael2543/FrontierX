@@ -163,7 +163,7 @@ struct _NO_VTABLE Mimic : public IBaseObject,ISaveLoad, ILauncher, IMimic, BASE_
 	
 	// ILauncher
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
 
@@ -410,7 +410,7 @@ void Mimic::Render (void)
 
 // ILauncher
 
-void Mimic::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void Mimic::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	CQASSERT(_owner);
 	//ownerID = _owner->GetPartID();

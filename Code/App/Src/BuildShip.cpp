@@ -100,11 +100,16 @@ struct SHUTTLE_INIT : BUILDSHIP_INIT, RenderArch
 	PARCHETYPE pArchetype;
 	S32 archIndex;
 	IMeshArchetype * meshArch;
-	S32 animArchetype;
+	SCRIPT_SET_ARCH animArchetype;
 
 	PARCHETYPE pExplosion;
 	AnimArchetype * sparkAnmArch;
 };
+
+#if !defined(_WIN32)
+static_assert(sizeof(decltype(SHUTTLE_INIT::animArchetype)) == sizeof(void *),
+	"BuildShip retains the native animation archetype pointer token until release");
+#endif
 
 struct _NO_VTABLE BuildShip : public ObjectRender<ObjectFControl<ObjectTransform<ObjectFrame<IBaseObject,SPACESHIP_SAVELOAD,SHUTTLE_INIT> > > >, IShuttle//, ROCKING_DATA
 {

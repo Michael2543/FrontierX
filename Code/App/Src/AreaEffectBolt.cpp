@@ -13,14 +13,47 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+#include <memory>
+#include <IUTFWriter.h>
+#include "MyVertex.h"
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TObject.h"
 #include "Camera.h"
 #include "Sector.h"
-#include "Objlist.h"
-#include "sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "IConnection.h"
 #include "Startup.h"
 #include "SuperTrans.h"
@@ -30,7 +63,7 @@
 #include "TObjFrame.h"
 #include "Mesh.h"
 #include "ArchHolder.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "FogOfWar.h"
 #include "UserDefaults.h"
 #include "Mission.h"
@@ -44,17 +77,17 @@
 #include "IVertexBuffer.h"
 #include "TObjRender.h"
 
-#include <Renderer.h>
+#include <renderer.h>
 #include <TComponent.h>
-#include <Engine.h>
-#include <Vector.h>
-#include <Matrix.h>
-#include <IHardpoint.h>
+#include <ENGINE.H>
+#include <vector.h>
+#include <matrix.h>
+#include <IHardPoint.h>
 #include <ITextureLibrary.h>
 #include <stdlib.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <ICamera.h>
-#include <Pixel.h>
+#include <pixel.h>
 //#include <RPUL\PrimitiveBuilder.h>
 #include <IRenderPrimitive.h>
 
@@ -80,16 +113,52 @@ struct AEBoltMesh : IVertexBufferOwner
 	U32 vb_handle;
 	
 	virtual void RestoreVertexBuffers();
+#if !defined(_WIN32)
+	unsigned nativeUsers = 0;
+	ICQ_VB_Manager *nativeRegistry = nullptr;
+
+	bool AcquireNative()
+	{
+		if (!nativeUsers)
+		{
+			if (!vb_mgr || !PIPE || !TMANAGER) return false;
+			nativeRegistry = vb_mgr;
+			nativeRegistry->Add(this);
+		}
+		++nativeUsers;
+		return true;
+	}
+
+	void ReleaseNative()
+	{
+		CQASSERT(nativeUsers != 0);
+		if (--nativeUsers) return;
+		if (ringTexID) TMANAGER->ReleaseTextureRef(ringTexID);
+		if (moveTexID) TMANAGER->ReleaseTextureRef(moveTexID);
+		if (vb_handle)
+		{
+			const GENRESULT result = PIPE->destroy_vertex_buffer(vb_handle);
+			CQASSERT(result == GR_OK);
+		}
+		ringTexID = moveTexID = vb_handle = 0;
+		nativeRegistry->Delete(this);
+		nativeRegistry = nullptr;
+	}
+#endif
 
 	AEBoltMesh()
 	{
 		vb_handle = 0;
+#if defined(_WIN32)
 		vb_mgr->Add(this);
+#endif
 	}
 
 	~AEBoltMesh()
 	{
+#if defined(_WIN32)
 		vb_mgr->Delete(this);
+#endif
 	}
 
 }aeBoltMesh;
@@ -733,14 +802,25 @@ BOOL32 AEBolt::Save (struct IFileSystem * inFile)
 
 	FRAME_save(save);
 
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (numFound > MAX_AOE_VICTIMS ||
+		!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save)) goto Done;
+#endif
 
 	fdesc.lpFileName = "TARGETS";
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->WriteFile(0,targUnitID,sizeof(U32)*numFound,&dwWritten, 0);
 	file->WriteFile(0,distances,sizeof(U32)*numFound,&dwWritten, 0);
+#else
+	if (numFound &&
+		(!file->WriteFile(0,targUnitID,sizeof(U32)*numFound,&dwWritten, 0) || dwWritten != sizeof(U32)*numFound ||
+		 !file->WriteFile(0,distances,sizeof(U32)*numFound,&dwWritten, 0) || dwWritten != sizeof(U32)*numFound)) goto Done;
+#endif
 
 	result = 1;
 
@@ -761,9 +841,14 @@ BOOL32 AEBolt::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	if (file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0) == 0)
 		goto Done;
 	MISSION->CorrelateSymbol("AEBOLT_SAVELOAD", buffer, &load);
+#else
+	if (!LoadNativeMissionRecord(MISSION,"AEBOLT_SAVELOAD",file,&load,sizeof(load)) ||
+		load.numFound > MAX_AOE_VICTIMS) goto Done;
+#endif
 
 	FRAME_load(load);
 
@@ -779,10 +864,16 @@ BOOL32 AEBolt::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	if (file->ReadFile(0,targUnitID,sizeof(U32)*numFound,&dwRead, 0) == 0)
 		goto Done;
 	if (file->ReadFile(0,distances,sizeof(U32)*numFound,&dwRead, 0) == 0)
 		goto Done;
+#else
+	if (file->GetFileSize() != 2*sizeof(U32)*numFound || (numFound &&
+		(!file->ReadFile(0,targUnitID,sizeof(U32)*numFound,&dwRead, 0) || dwRead != sizeof(U32)*numFound ||
+		 !file->ReadFile(0,distances,sizeof(U32)*numFound,&dwRead, 0) || dwRead != sizeof(U32)*numFound))) goto Done;
+#endif
 
 	result = 1;
 
@@ -818,11 +909,21 @@ struct DACOM_NO_VTABLE AEBoltFactory : public IObjectFactory
 {
 	struct OBJTYPE : AEBOLT_INIT
 	{
+#if !defined(_WIN32)
+		bool nativeMeshOwned = false;
+#endif
 		void * operator new (size_t size)
 		{
 			return calloc(size,1);
 		}
 		
+#if !defined(_WIN32)
+        void operator delete (void *memory)
+        {
+            ::free(memory);
+        }
+#endif
+
 		OBJTYPE (void)
 		{
 			archIndex = -1;
@@ -831,6 +932,9 @@ struct DACOM_NO_VTABLE AEBoltFactory : public IObjectFactory
 		
 		~OBJTYPE (void)
 		{
+#if !defined(_WIN32)
+			if (nativeMeshOwned) aeBoltMesh.ReleaseNative();
+#endif
 			ENGINE->release_archetype(archIndex);
 			if (pExplosion)
 				ARCHLIST->Release(pExplosion, OBJREFNAME);
@@ -929,6 +1033,14 @@ HANDLE AEBoltFactory::CreateArchetype (const char *szArchname, OBJCLASS objClass
 			if ((objArch->archIndex = ENGINE->create_archetype(fdesc.lpFileName, objFile)) == INVALID_ARCHETYPE_INDEX)
 				goto Error;
 
+#if !defined(_WIN32)
+			// Register the shared mesh only while real native archetypes own it.
+			// This avoids static-initialization order and premature shared-VB release.
+			if (!aeBoltMesh.AcquireNative()) goto Error;
+			objArch->nativeMeshOwned = true;
+			if (aeBoltMesh.nativeUsers == 1)
+			{
+#endif
 			//build the global mesh
 			for(U32 i = 0; i < AEBOLT_SEGMENTS; ++i)
 			{
@@ -941,11 +1053,19 @@ HANDLE AEBoltFactory::CreateArchetype (const char *szArchname, OBJCLASS objClass
 			else
 				aeBoltMesh.moveTexID = 0;
 			
+#if !defined(_WIN32)
+			if (!aeBoltMesh.ringTexID || (CQRENDERFLAGS.bMultiTexture && !aeBoltMesh.moveTexID)) goto Error;
+#endif
 			aeBoltMesh.RestoreVertexBuffers();
-			
+#if !defined(_WIN32)
+			}
+#endif
 			if (data->explosionEffect[0])
 			{
 				objArch->pExplosion = ARCHLIST->LoadArchetype(data->explosionEffect);
+#if !defined(_WIN32)
+				if (!objArch->pExplosion) goto Error;
+#endif
 				ARCHLIST->AddRef(objArch->pExplosion, OBJREFNAME);
 			}
 		
@@ -965,6 +1085,7 @@ BOOL32 AEBoltFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	TMANAGER->ReleaseTextureRef(aeBoltMesh.ringTexID);
 	if (aeBoltMesh.moveTexID)
 		TMANAGER->ReleaseTextureRef(aeBoltMesh.moveTexID);
@@ -973,6 +1094,7 @@ BOOL32 AEBoltFactory::DestroyArchetype (HANDLE hArchetype)
 		PIPE->destroy_vertex_buffer(aeBoltMesh.vb_handle);
 		aeBoltMesh.vb_handle = 0;
 	}
+#endif
 	delete objtype;
 
 	return 1;

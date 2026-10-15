@@ -15,10 +15,20 @@
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
 
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "local.h"
-
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript03Resources.h"
+namespace FrontierXScript03
+{
+#include "DataDef.h"
+#endif
 
 //  TM3 #define's
 
@@ -52,6 +62,35 @@ static void AddAndDisplayObjective
 //--------------------------------------------------------------------------
 
 CQSCRIPTDATA( MissionData, missionData );
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    missionData = MissionData{};
+}
+extern "C" bool FrontierXCheckScript03Reset(void)
+{
+    const MissionData previous = missionData;
+    missionData.failureID = 123;
+    missionData.primaryHandle = 456;
+    ResetNativeMissionData();
+    const bool reset = !missionData.failureID && !missionData.primaryHandle;
+    missionData = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript03(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript03Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript03ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
+
 
 //--------------------------------------------------------------------------//
 //	Mission Briefing
@@ -1980,3 +2019,6 @@ bool TM3_DisplayObjectiveHandler::Update
 
     return true;
 }
+#if !defined(_WIN32)
+} // namespace FrontierXScript03
+#endif

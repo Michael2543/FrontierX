@@ -1261,6 +1261,15 @@ GENRESULT POLYMESH::render_facegroup_with_material( U32 rwm_flags, MeshInstance 
 	if ( mat->flags & MF_ENABLE_DEPTH_WRITES_ALWAYS )
 		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZWRITEENABLE, TRUE ) );
 
+#if !defined(_WIN32)
+	if( FrontierX::NativeInstanceOpacity(rwm_flags) < 255 ) {
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ALPHABLENDENABLE, TRUE ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_SRCBLEND, D3DBLEND_SRCALPHA ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA ) );
+		PM_CHECK_STATE( renderprimitive->set_render_state( D3DRS_ZWRITEENABLE, FALSE ) );
+	}
+#endif
+
 	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_COLOROP, D3DTOP_DISABLE ) );
 	PM_CHECK_STATE( renderprimitive->set_texture_stage_state( stage_cnt, D3DTSS_ALPHAOP, D3DTOP_DISABLE ) );
 
@@ -1637,6 +1646,10 @@ vis_state POLYMESH::render( ICamera * camera, INSTANCE_INDEX object_index, MeshI
 		else {
 			rwm_flags = 0;
 		}
+
+#if !defined(_WIN32)
+		rwm_flags |= flags & (FrontierX::NativeInstanceOpacityFlag | FrontierX::NativeInstanceOpacityMask);
+#endif
 
 		ILight *lights[8];
 		int num_lights = 0;
@@ -2020,7 +2033,11 @@ vis_state POLYMESH::render( ICamera * camera, INSTANCE_INDEX object_index, MeshI
 							current_mt.r = (U8)r;
 							current_mt.g = (U8)g;
 							current_mt.b = (U8)b;
+#if defined(_WIN32)
 							current_mt.a = mat->transparency;
+#else
+							current_mt.a = U8(U32(mat->transparency) * FrontierX::NativeInstanceOpacity(flags) / 255);
+#endif
 
 							if (object->animated_txt_vertex_list)
 							{

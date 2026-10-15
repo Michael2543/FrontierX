@@ -2485,7 +2485,12 @@ HANDLE GunplatFactory::CreateArchetype (const char *szArchname, OBJCLASS objClas
 			result = new OBJTYPE();
 
 			if (result->loadPlatformArchetype(data, ARCHLIST->GetArchetype(szArchname)) == false)
+			{
+#if !defined(_WIN32)
+				std::fprintf(stderr, "Native required gun-platform load failed: %s -> %s\n", szArchname, data->fileName);
+#endif
 				goto Error;
+			}
 
 			for (i = 0; i < MAX_GUNPLAT_LAUNCHERS; i++)
 			{

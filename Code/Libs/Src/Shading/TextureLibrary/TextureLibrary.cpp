@@ -2308,7 +2308,7 @@ HRESULT TextureLibrary::load_texture_normal_1_6( IFileSystem *IFS, const char* t
 		{
 			height	>>=1;
 		}
-		delete	buf;
+		delete[] buf;
 	}
 
 	if(!build_normal_object(rp_id, tname, hndl, boost_ref))

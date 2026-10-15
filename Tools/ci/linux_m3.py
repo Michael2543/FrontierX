@@ -62,7 +62,7 @@ def main():
                '--no-tests=error', '--output-junit', str(junit)]
     if args.track == 'technical' and args.scope == 'sanitizers':
         # Integrated save/layout/input/render owners; no host GPU in CPU sanitizers.
-        command += ['-R', '^portability\\.(layout|app_schema|sol_t_schema|script01_schema|data_root|native_shell|native_window_manager|native_heap|event_system|hotkey_event|vertex_buffer_manager|render_submission|render_batcher_runtime|render_pipeline|state_material|game_material_manager.*|view_parser)$']
+        command += ['-R', '^portability\\.(layout|app_schema|sol_t_schema|script01_schema|script02_schema|script03_schema|net_buffer|data_root|native_shell|native_window_manager|native_heap|event_system|hotkey_event|vertex_buffer_manager|render_submission|render_batcher_runtime|render_pipeline|state_material|game_material_manager.*|view_parser)$']
     # Technical CPU runners need no display; the existing cursor owner joins
     # GPU tests on the desktop host. M3 retains its historical scope selection.
     host_label = 'host' if args.track == 'technical' else 'gpu'

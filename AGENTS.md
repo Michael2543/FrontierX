@@ -496,8 +496,10 @@ absent host checks remain untested and full gameplay remains user-operated.
 P1a now binds the first Terran `T_Mission1`/`script01.dll` source mission through
 original campaign controls; the user judged its bounded entry sufficient to
 proceed. P1b was completed by explicit user acceptance on 2026-10-15 after the
-reported mission victory/save-load and presentation fixes. P1c is the next active
-step. Keep documented technical follow-ups, unexecuted CI/Windows/ABI checks and
+reported mission victory/save-load and presentation fixes. P1c was explicitly
+accepted by the user on 2026-10-15 after the transition, save/load and feedback
+repairs. P2 campaign expansion is the next planned step. Keep documented
+technical follow-ups, unexecuted CI/Windows/ABI checks and
 separate M3 status explicit; acceptance does not invent missing test evidence.
 Current evidence:
 [Terran integration](docs/NATIVE_TERRAN_CAMPAIGN.md) and

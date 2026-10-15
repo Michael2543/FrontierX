@@ -11,8 +11,28 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+struct IDrawAgent;
+#endif
 
 #include "Startup.h"
 #include "ObjSet.h"
@@ -21,7 +41,7 @@
 #include "IBuildShip.h"
 #include "MPart.h"
 #include "Mission.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "FogOfWar.h"
 #include "ObjMap.h"
 
@@ -29,9 +49,9 @@
 #include <DSpaceship.h>
 
 #include <IConnection.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TSmartPointer.h>
-#include <IHardpoint.h>
+#include <IHardPoint.h>
 
 #define OPPRINT0(exp) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), exp)
 #define OPPRINT1(exp,p1) FDUMP(ErrorCode(ERR_GENERAL, SEV_TRACE_1), exp, p1)
@@ -159,7 +179,7 @@ BOOL32 Trooppod::Update (void)
 	else
 	if (target)
 	{
-		MPartNC part = target;
+		MPartNC part(target.Ptr());
 
 		part->playerID = (part->dwMissionID & PLAYERID_MASK);	// make sure color matches the missionID
 	}
@@ -258,7 +278,12 @@ BOOL32 Trooppod::Save (struct IFileSystem * inFile)
 	//
 	// only save control information if on patrol
 	// 
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(TROOPPOD_SAVELOAD), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+		goto Done;
+#endif
 	
 	result = 1;
 
@@ -280,8 +305,15 @@ BOOL32 Trooppod::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("TROOPPOD_SAVELOAD", buffer, &load);
+#else
+	if (file->GetFileSize(0, nullptr) != sizeof(TROOPPOD_SAVELOAD) ||
+		!file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0) || dwRead != sizeof(load) ||
+		MISSION->CorrelateSymbol("TROOPPOD_SAVELOAD", buffer, &load) != GR_OK)
+		goto Done;
+#endif
 
 	memcpy(static_cast<TROOPPOD_SAVELOAD *>(this), &load, sizeof(TROOPPOD_SAVELOAD));
 
@@ -413,6 +445,14 @@ HANDLE TrooppodFactory::CreateArchetype (const char *szArchname, OBJCLASS objCla
 			if(data->podType[0])
 			{
 				result->pPodType = ARCHLIST->LoadArchetype(data->podType);
+#if !defined(_WIN32)
+				if (!result->pPodType)
+				{
+					std::fprintf(stderr, "Native required troop-pod shuttle missing: %s -> %s\n", szArchname, data->podType);
+					delete result;
+					return 0;
+				}
+#endif
 				ARCHLIST->AddRef(result->pPodType, OBJREFNAME);
 			}
 			result->pArchetype = ARCHLIST->GetArchetype(szArchname);
@@ -427,7 +467,9 @@ BOOL32 TrooppodFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -445,8 +487,15 @@ IBaseObject * TrooppodFactory::CreateInstance (HANDLE hArchetype)
 //
 void TrooppodFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
+#if defined(_WIN32)
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)hArchetype;
+	(void)info;
+	std::fputs("Native troop-pod editor insertion is unavailable\n", stderr);
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //

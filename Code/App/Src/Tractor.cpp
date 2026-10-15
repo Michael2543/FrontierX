@@ -163,7 +163,7 @@ struct _NO_VTABLE Tractor : IBaseObject, ISaveLoad, ILauncher, TRACTOR_SAVELOAD
 
 	// IRecon
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial) {}
 
@@ -720,7 +720,7 @@ void Tractor::shootTarget()
 	}
 }
 
-void Tractor::InitLauncher(IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void Tractor::InitLauncher(IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	_owner->QueryInterface(ILaunchOwnerID,owner,LAUNCHVOLATILEPTR);
 

@@ -13,23 +13,42 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include "MyVertex.h"
+struct IDrawAgent;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "DEffect.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "IWormholeBlast.h"
-#include "Objlist.h"
-#include "CQlight.h"
+#include "ObjList.h"
+#include "CQLight.h"
 #include "Camera.h"
-#include "Objmap.h"
+#include "ObjMap.h"
 #include "TManager.h"
 
-#include <FileSys.h>
+#include <Filesys.h>
 
 #define NUM_FLARES 4
 #define FLAIR_CIRC_COUNT 45
@@ -547,6 +566,13 @@ HANDLE WormholeBlastManager::CreateArchetype(const char *szArchname, OBJCLASS ob
 
 			handle->textureID = TMANAGER->CreateTextureFromFile("solarianworm_64.tga", TEXTURESDIR, DA::TGA,PF_4CC_DAA4);
 
+#if !defined(_WIN32)
+			if (!handle->textureID)
+			{
+				delete handle;
+				return 0;
+			}
+#endif
 			return handle;
 		}
 	}
@@ -559,6 +585,9 @@ BOOL32 WormholeBlastManager::DestroyArchetype(HANDLE hArchetype)
 {
 	WormholeBlastArchetype *deadguy = (WormholeBlastArchetype *)hArchetype;
 
+#if !defined(_WIN32)
+	if (deadguy->textureID) TMANAGER->ReleaseTextureRef(deadguy->textureID);
+#endif
 	delete deadguy;
 	return 1;
 }

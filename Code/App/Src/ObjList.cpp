@@ -1593,7 +1593,9 @@ void ObjectList::Render (void)
 			OBJPTR<IPlanet> planet;
 			if (ptr && ptr->QueryInterface(IPlanetID, planet))
 			{
-			//	if (!planet->IsRenderingFaded())
+#if !defined(_WIN32)
+                if (!planet->IsRenderingFaded())
+#endif
 				{
 					if ((ptr->objClass & CF_RENDER2ND) == 0 && (ptr->objClass & CF_RENDEROVERFOG) == 0)
 					{
@@ -1615,7 +1617,9 @@ void ObjectList::Render (void)
 		{
 			OBJPTR<IPlanet> planet;
 			if (ptr && ptr->QueryInterface(IPlanetID, planet))
-			//if (!planet->IsRenderingFaded())
+#if !defined(_WIN32)
+                if (!planet->IsRenderingFaded())
+#endif
 			{
 				renderNow = false;
 			}
@@ -3907,6 +3911,50 @@ BOOL32 ObjectList::New (void)
 }
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+static bool NativeQuickSaveNeedsFactory(IFileSystem *archetype)
+{
+	// An unavailable camera factory silently discarded MissionCamStart. Require
+	// the provider for actual saved objects, not empty editor metadata folders.
+	WIN32_FIND_DATA typeData;
+	const HANDLE types = archetype->FindFirstFile("*.*", &typeData);
+	if (types == INVALID_HANDLE_VALUE) return false;
+	bool needsFactory = false;
+	do
+	{
+		if (!(typeData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+		DAFILEDESC descriptor(typeData.cFileName);
+		descriptor.lpImplementation = "DOS";
+		descriptor.dwDesiredAccess = GENERIC_READ;
+		descriptor.dwShareMode = 0;
+		descriptor.hFindFirst = types;
+		COMPTR<IFileSystem> records;
+		if (archetype->CreateInstance(&descriptor, records) != GR_OK)
+		{
+			needsFactory = true;
+			break;
+		}
+		WIN32_FIND_DATA instanceData;
+		const HANDLE instances = records->FindFirstFile("*.*", &instanceData);
+		if (instances != INVALID_HANDLE_VALUE)
+		{
+			do
+			{
+				if (!(instanceData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+				{
+					needsFactory = true;
+					break;
+				}
+			} while (records->FindNextFile(instances, &instanceData));
+			records->FindClose(instances);
+			if (needsFactory) break;
+		}
+	} while (archetype->FindNextFile(types, &typeData));
+	archetype->FindClose(types);
+	return needsFactory;
+}
+#endif
+
 BOOL32 ObjectList::Load (struct IFileSystem * inFile,bool bNoDynamics, bool bOnlyDynamics)
 {
 	BOOL32 result=0;
@@ -3993,6 +4041,8 @@ BOOL32 ObjectList::Load (struct IFileSystem * inFile,bool bNoDynamics, bool bOnl
 #else
 								if (!pSaveLoad->Load(file2))
 								{
+                                    std::fprintf(stderr, "Native saved object load failed: %s; instance %s\n",
+                                        GetArchName(node), data.cFileName);
 									pSaveLoad.Null();
 									delete obj;
 									obj = nullptr;
@@ -4028,6 +4078,9 @@ BOOL32 ObjectList::Load (struct IFileSystem * inFile,bool bNoDynamics, bool bOnl
 			MGlobals::ResetResourceMax();
 
 		OBJPTR<IQuickSaveLoad> pSaveLoad;
+#if !defined(_WIN32)
+		bool missingFactory = false;
+#endif
 		bWasQuickLoad = true;
 
 		if ((handle = inFile->FindFirstFile("*.*", &data)) != INVALID_HANDLE_VALUE)
@@ -4122,10 +4175,21 @@ BOOL32 ObjectList::Load (struct IFileSystem * inFile,bool bNoDynamics, bool bOnl
 					CQBOMB1("Load Warning: Dynamic object in terrain map :%s",data.cFileName);
 				}
 			}
+#if !defined(_WIN32)
+			else if (NativeQuickSaveNeedsFactory(file))
+			{
+				std::fprintf(stderr, "Native quick mission load has no provider for saved archetype %s\n", data.cFileName);
+				missingFactory = true;
+				break;
+			}
+#endif
 
 		} while (inFile->FindNextFile(handle, &data));
 
 		inFile->FindClose(handle);
+#if !defined(_WIN32)
+		if (missingFactory) goto Done;
+#endif
 	}
 
 	ENGINE->update(0);		// make sure child objects get initialized properly

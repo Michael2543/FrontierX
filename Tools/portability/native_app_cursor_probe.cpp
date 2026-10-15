@@ -65,7 +65,7 @@ int main()
 	// Original ObjComm, SysMap and MScroll requests must retain their resource ID.
 	const U32 required[] = {
 		IDC_CURSOR_DEFAULT, IDC_CURSOR_ARROW, IDC_CURSOR_BUILD,
-		IDC_CURSOR_MOVEOBJECT, IDC_CURSOR_ATTACK, IDC_CURSOR_BAN,
+		IDC_CURSOR_MOVEOBJECT, IDC_CURSOR_ATTACK, IDC_CURSOR_BAN, IDC_CURSOR_CAPTURE,
 		IDC_CURSOR_HARVEST, IDC_CURSOR_JUMP, IDC_CURSOR_FABREPAIR,
 		IDC_CURSOR_REPAIR, IDC_CURSOR_RESUPPLY, IDC_CURSOR_SELLOBJECT,
 		IDC_CURSOR_DEFEND, IDC_CURSOR_PATROL, IDC_CURSOR_RALLY,
@@ -79,6 +79,11 @@ int main()
 	{
 		if (!CURSOR->SetCursor(id) || CURSOR->GetCursor() != id) return 10;
 	}
+	// A valid capture must replace a preceding forbidden-target cursor. The
+	// absent original capture resource used to retain BAN while clicks still worked.
+	for (const U32 id : {IDC_CURSOR_BAN, IDC_CURSOR_CAPTURE, IDC_CURSOR_BAN, IDC_CURSOR_CAPTURE})
+		if (!CURSOR->SetCursor(id) || CURSOR->GetCursor() != id) return 11;
+	if (CURSOR->SetCursor(0xFFFFFFFFU) || CURSOR->GetCursor() != IDC_CURSOR_CAPTURE) return 12;
 	CURSOR->SetBusy(TRUE);
 	CURSOR->SetBusy(TRUE);
 	if (CURSOR->IsValid() || !CURSOR->SetCursor(IDC_CURSOR_HARVEST) ||

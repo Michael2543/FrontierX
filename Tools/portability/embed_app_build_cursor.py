@@ -15,7 +15,7 @@ REQUIRED = (
     'DOWNRIGHT', 'DOWNLEFT', 'SELLOBJECT', 'MOVEOBJECT', 'BAN',
     'MICRO_MOVE', 'MICRO_GOTO', 'ATTACK', 'SPECIAL_ATTACK', 'HARVEST',
     'REPAIR', 'PATROL', 'JUMP', 'BUILD', 'ARROW', 'DEFEND', 'RESUPPLY',
-    'RALLY', 'MICRO_RALLY', 'FABREPAIR',
+    'RALLY', 'MICRO_RALLY', 'FABREPAIR', 'CAPTURE',
 )
 
 
@@ -34,7 +34,9 @@ def decode(data):
     image_size, _, _, used, important = struct.unpack_from('<IiiII', data, offset + 20)
     count = 1 << bits
     stride = ((width * bits + 31) // 32) * 4
-    if used not in (0, count) or important > count or image_size not in (0, stride * height):
+    # Original Capture.cur counts both XOR pixels and the AND plane in biSizeImage.
+    if used not in (0, count) or important > count or image_size not in (
+            0, stride * height, stride * height + height * 4):
         raise ValueError('invalid cursor DIB palette/image metadata')
     palette_offset = offset + header
     pixels_offset = palette_offset + count * 4
@@ -118,6 +120,14 @@ def self_check(source):
             except ValueError:
                 continue
             raise AssertionError('accepted invalid cursor extent')
+    # ObjComm/Menu_AdmiralBar request CAPTURE for a valid assault. Omitting it
+    # formerly preserved the preceding BAN cursor despite a valid click order.
+    capture = next(result for identifier, path, result in originals
+                   if identifier == 'IDC_CURSOR_CAPTURE')
+    ban = next(result for identifier, path, result in originals
+               if identifier == 'IDC_CURSOR_BAN')
+    assert capture != ban
+    assert capture[:2] == (3, 0)
     # Distinct top/bottom pixels protect bottom-up rows, BGR palette order and AND alpha.
     color = bytearray(next(path.read_bytes() for identifier, path, result in originals
                            if identifier == 'IDC_CURSOR_BUILD'))

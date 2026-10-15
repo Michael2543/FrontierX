@@ -11,14 +11,33 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <algorithm>
+struct IDrawAgent;
+#endif
 
 #include "MultiCloakLauncher.h"
 
 #include "SuperTrans.h"
 #include "ObjList.h"
-#include "sfx.h"
+#include "SFX.h"
 
 #include "Mission.h"
 #include "IMissionActor.h"
@@ -29,10 +48,10 @@
 #include "MPart.h"
 #include "OpAgent.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <IAnim.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <IConnection.h> 
 #include <MGlobals.h>
@@ -220,7 +239,7 @@ BOOL32 MultiCloakLauncher::Update (void)
 }
 //---------------------------------------------------------------------------
 //
-void MultiCloakLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE _range)
+void MultiCloakLauncher::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE _range)
 {
 	const BT_MULTICLOAK_LAUNCHER * data = (const BT_MULTICLOAK_LAUNCHER *) ARCHLIST->GetArchetypeData(pArchetype);
 
@@ -261,7 +280,11 @@ BOOL32 MultiCloakLauncher::Save (struct IFileSystem * inFile)
 
 	save = *static_cast<MULTICLOAK_LAUNCHER_SAVELOAD *>(this);
 
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save)) goto Done;
+#endif
 	
 	result = 1;
 
@@ -283,8 +306,14 @@ BOOL32 MultiCloakLauncher::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("MULTICLOAK_LAUNCHER_SAVELOAD", buffer, &load);
+#else
+	if (file->GetFileSize(0, nullptr) != sizeof(load) ||
+		!file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0) || dwRead != sizeof(load) ||
+		MISSION->CorrelateSymbol("MULTICLOAK_LAUNCHER_SAVELOAD", buffer, &load) != GR_OK) goto Done;
+#endif
 
 	*static_cast<MULTICLOAK_LAUNCHER_SAVELOAD *>(this) = load;
 		
@@ -321,7 +350,13 @@ bool MultiCloakLauncher::checkSupplies()
 void MultiCloakLauncher::enableCloak(bool bEnabled)
 {
 	CQASSERT(bEnabled != bCloakEnabled);
+#if defined(_WIN32)
 	VOLPTR(ICloak) cloakShip = owner;
+#else
+    VOLPTR(ICloak) cloakShip;
+    owner.Ptr()->QueryInterface(ICloakID, cloakShip);
+    CQASSERT(cloakShip);
+#endif
 	cloakShip->EnableCloak(bEnabled);
 	bCloakEnabled = bEnabled;
 }
@@ -372,6 +407,12 @@ struct DACOM_NO_VTABLE MultiCloakLauncherFactory : public IObjectFactory
 		{
 			return calloc(size,1);
 		}
+#if !defined(_WIN32)
+		void operator delete (void *ptr)
+		{
+			::free(ptr);
+		}
+#endif
 
 		OBJTYPE (void)
 		{

@@ -1,3 +1,153 @@
+2026-10-15 P1c technical snapshot: native Linux x86_64 GCC16.2.1 and
+
+## Cruiser missiles, objectives, unit owners and strict fonts (2026-10-15)
+
+Linux x86_64 GCC16.2.1/Clang22.1.8 rebuild complete standard preset and full-media
+Debug graphs, plus the full Clang ASan/UBSan graph. SDL3/FreeType/shared-LGPL
+FFmpeg versions are unchanged from the following entry. Each standard/full-media
+suite runs54/54 non-host checks with no failures/skips using:
+
+```sh
+ctest --test-dir "$BUILD" -LE host --output-on-failure
+```
+
+The existing focused sanitizer selection executes5/5 without failures/skips:
+
+```sh
+env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir "$SAN_BUILD" \
+  -R 'portability\.(layout|view_parser|app_schema|native_shell|game_material_manager)$' \
+  --output-on-failure
+```
+
+These checks include the actual TRANSFORM missile convention, new ship/launcher
+layouts/schemas, exact original SupplyShip468-byte file restoration and malformed
+extent rejection, raw catalogue discriminator classification and three raw-TGA1.6
+load/upload/release cycles. Original-family identity/weight negative checks also
+execute in the existing hidden shell lifecycle with the supplied external Arial
+Narrow Bold face. No new probe target, workflow or M3 observer is introduced.
+
+**Actual retail-input runtime:** an immutable genuine Cruiser checkpoint drives
+two normal F8/F7 cycles under GCC and two under Clang with interim typography;
+Clang opens/closes the original objective dialog and exits0 with mission audio0/
+idle hints. After new user-provided fonts, two further Clang cycles run with the
+strict original-family mapping and no media exclusion flags,1768 modalframes,
+exit0, audio0/idle hints; original portraits report2starts/255framechanges/751draws.
+Captures show the four correct mission objectives and both minimaps after reload.
+This is bounded UI/lifecycle evidence, not actual missile-combat visual acceptance.
+The original external progress record reloads in a fresh process with completed1/
+seen3; full defeat/retry/restart-progression acceptance remains user-operated.
+
+**Actual catalogue runtime:** original factories admit142/164 selected records;
+20 retail flagship contracts and2 absent authored platform models remain failures.
+The actual strict instrumented interval reaches the same counts and teardown with
+no preceding invalid-access/UBSan/allocation-pair report, then **fails LSan**,3124
+bytes/six allocations, DBus allocation frames with unresolved unloaded callers.
+Earlier fatal raw-enum, texture new[]/delete and launcher calloc/delete findings
+are recorded and repaired, never suppressed. Whole-process cleanliness, repeated
+mission-resource growth and affected Windows Debug/Final/moduleABI/actualCI remain
+open; these results do not replace P1c user acceptance or the separate M3 gates.
+See [unit coverage](NATIVE_UNIT_COVERAGE.md) and the
+[campaign ledger](NATIVE_TERRAN_CAMPAIGN.md).
+
+## Missile Cruiser factory closure validation (2026-10-15)
+
+Complete Linux x86_64 GCC16.2.1/Clang22.1.8 standard preset and full-media Debug
+graphs build with original VLaunch/CloakLauncher owners linked into the existing
+gunboat target. SDL3 3.4.16, FreeType2.14.3 and reviewed external shared-LGPL
+FFmpeg9.0.1 configuration remains unchanged. Each full non-host CTest suite
+executes54/54 without failure/skip. Existing layout/app-schema checks now pin the
+vertical/cloak archetypes and original cloak state; this is not real construction
+evidence. No new probe target or CI machinery is introduced.
+
+The complete Clang full-media ASan/UBSan graph rebuilds with the previously
+recorded sanitizer/linker flags. The final command executes4/4 without failure or
+skip and with leak detection active:
+
+```sh
+env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir "$P1C_SAN_BUILD" \
+  -R 'portability\.(layout|view_parser|app_schema|native_shell)$' \
+  --output-on-failure
+```
+
+Actual user crash evidence and missing genuine prebuild/checkpoint execution are
+recorded in [NATIVE_TERRAN_CAMPAIGN](NATIVE_TERRAN_CAMPAIGN.md#missile-cruiser-construction-feedback-2026-10-15).
+A successfully created/built/reloaded cruiser is not inferred from compilation,
+source review or synthetic checks. Whole-process mission LSan, native Windows
+Debug/Final/module ABI and protected CI execution remain open; M3 stays separate.
+
+
+## P1c user-feedback repair validation (2026-10-15)
+
+Linux x86_64 GCC16.2.1/Clang22.1.8: complete `linux-gcc-debug` and
+`linux-clang-debug` preset graphs plus both full-media Debug graphs rebuilt with
+SDL3 3.4.16, FreeType2.14.3 and reviewed external shared-LGPL FFmpeg9.0.1.
+Each complete non-host CTest suite executes54/54 without failure or skip after
+the final camera/briefing/muzzle corrections. The optional flags and dependency
+configuration remain as recorded below; no rendering/media exclusion is added.
+
+The complete Clang full-media ASan/UBSan graph also rebuilds with
+`-fsanitize=address,undefined -fno-omit-frame-pointer` and matching linker flags.
+The final focused command executes5/5 without failure/skip:
+
+```sh
+env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir "$P1C_SAN_BUILD" \
+  -R 'portability\.(layout|app_schema|net_buffer|native_shell|game_material_manager)$' \
+  --output-on-failure
+```
+
+These cover the actual camera `TRANSFORM` convention, indexed palette/image
+bounds, border geometry and fixed-barrel model/world conversion in existing
+checks. Earlier intermediate image-format and camera candidates failed integrated
+execution and were corrected; their results are not passes. Actual fresh TM2
+render/save/reload evidence and outstanding user/media/lifecycle gates belong in
+[NATIVE_TERRAN_CAMPAIGN](NATIVE_TERRAN_CAMPAIGN.md). Whole-process mission LSan
+findings remain open; this focused scope is not a full-process sanitizer pass.
+Native Windows Debug/Final/module ABI and actual protected CI remain unexecuted;
+M3 remains separate. No new CI machinery or artificial mission result is added.
+
+Clang22.1.8 standard Debug (fonts/audio/video OFF) and optional full-media Debug
+(FreeType2.14.3, reviewed external shared-LGPL FFmpeg9.0.1 audio/video ON) graphs
+build completely. Each of these four configurations executes54 non-host CTests
+with zero failures/skips via `ctest --test-dir BUILD -LE host --output-on-failure`.
+The new Script02 schema case extends the existing parser executable. The complete
+Clang ASan/UBSan full-media graph also builds; the focused layout/view_parser/
+app_schema/script01_schema/script02_schema/sol_t_schema/data_root/net_buffer/
+native_shell set executes9/9 with leak detection and fatal sanitizer errors.
+`python3 Tools/ci/test_ci_gates.py` executes 17 tests successfully, including
+mandatory selection of Script02 schema and camera-manager save checks by the
+existing technical sanitizer filter. Native Windows
+Debug/Final, module ABI and actual protected CI remain unexecuted; host GPU fixture
+and full comparative M3 are not inferred from CPU checks. No broad assertion or
+leak suppression is used.
+
+The expanded cinematic-camera factory exposed an isolated packet/manager-save
+probe dependency: that probe intentionally has no ObjectList. Its existing
+manager-save contract now compiles the same source with only the unrelated
+object-factory registrar excluded; the production shell retains the full factory.
+Probe-only UI pointers are null and unexercised object-ID/player access throws.
+The initial null-ObjectList sanitizer failure is resolved by this explicit test
+composition, not by weakening production initialization or save assertions.
+Actual camera objects/ChangeCamera execute only in the full-shell runtime evidence.
+
+Separate strict whole-process TM2 startup/render/close fails LSan (initial
+3540 bytes/13 allocations; mapped retry3460 bytes/12), without a preceding invalid
+access/UBSan report. Unloaded frames map to NVIDIA/PipeWire/SPA and DBus stacks;
+cleanup cause remains open, not suppressed or accepted. This is not included in
+the successful focused CPU scope. See the P1c record and private handoff.
+
+Visible external-input checks separately execute TM1's genuine late checkpoint
+two F8 loads/F7/window close, and original TM2 briefing/Start/F7/F8/F7/window close
+through 3005 source frames. All graphics/media are requested, with the declared
+single-font interim limitation. These are bounded runtime checks, not a genuine
+victory transition, complete media acceptance or full-process leak pass. Focused
+commands and open user gates: [P1c record](NATIVE_TERRAN_CAMPAIGN.md#p1c-integration-and-acceptance-ledger-2026-10-15).
+
 2026-10-14 speaking-marker follow-up: all five standard/full-media GCC/Clang
 Debug and strict Clang sanitizer graphs rebuild/link. The existing focused
 layout, batcher header/runtime, three material variants and native shell checks
@@ -2767,3 +2917,84 @@ vs-clamped sampler readbacks, existing resize/presentation and repeated scene
 checks actually executed. No persistent desktop configuration was changed.
 Native Windows Debug/Final/affected ABI, actual protected CI execution, full
 mission user acceptance and further evolving P1b media changes remain open.
+
+### Planet-hover regression validation (2026-10-15)
+
+Linux x86_64 GCC16.2.1/Clang22.1.8 Debug standard presets and both full-media
+graphs rebuild after the native Planetoid/ObjectList/PolyMesh repair. Each runs
+`ctest --test-dir "$build" -LE host --output-on-failure`:54/54 pass, zero skips.
+The existing `portability.game_material_gpu` additionally executes successfully
+on the actual Vulkan host under both compilers with `SDL_VIDEODRIVER=x11`;
+these are synthetic instance-opacity pixel/state checks, not retail acceptance.
+Clang full-media ASan/UBSan with fatal errors and leak detection executes the
+existing layout/view-parser/app-schema/material/native-shell scope:5/5 pass.
+The whole-process external-library catalogue leak finding remains unchanged;
+this narrow pass does not supersede it. Native Windows, module ABI and actual CI
+remain unexecuted; focused behavior and limits are in GAME_MATERIAL_PATH.
+
+### TM2 command/cursor and TM3 entry repair validation (2026-10-15)
+
+Linux x86_64 GCC16.2.1/Clang22.1.8 Debug standard presets and both full-media
+Debug configurations build complete graphs with `cmake --build "$build" -j6`.
+`ctest --test-dir "$build" -LE host --output-on-failure` executes55/55 in each,
+zero failures/skips. The additional check is original Script03T schema/resources
+in the existing layout/parser closure. No new game-state test driver is added.
+
+Clang full-media ASan/UBSan builds the complete graph. With
+`ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`, the selection
+`^portability.(layout|view_parser|app_schema|script0[123]_schema|native_shell)$|^frontierx_app_cursor_source_check$`
+executes8/8 without failure/skip. The CPU cursor check now covers28 original
+source-owned resources, including Capture135 and exact pixel/mask-size contracts.
+The separate existing `^portability.app_cursor$` check runs on the actual host
+with `SDL_VIDEODRIVER=x11` under GCC and Clang:1/1 each, no skip. The existing
+HotButton shell event regression checks the four exact retail semantic/raw pairs,
+canonical IDs and preservation of raw F8/Quick Load. `python3 Tools/ci/test_ci_gates.py` executes17 tests; the existing technical sanitizer filter
+now includes script03_schema. Actual hosted CI execution remains unperformed.
+
+Original TM3 source/schema and negative cursor inputs are repository-owned;
+actual GCC/Clang briefing/start/F7/F8/close and Clang genuine-TM2 Objectives mouse
+checks use lawfully external maps/media and unchanged private input copies.
+Their bounded retail results and limits are in NATIVE_TERRAN_CAMPAIGN. Prior
+whole-process catalogue LSan findings remain open without suppression. Native
+Windows Debug/Final, affected module ABI and M3 remain unexecuted/separate.
+
+### Cross-owner effect texture repair (2026-10-15)
+
+Linux x86_64 GCC16.2.1/Clang22.1.8 Debug standard presets and both full-media
+graphs build. Final `ctest --test-dir "$build" -LE host --output-on-failure`
+executes55/55 in each with zero failures/skips. The existing
+portability.render_batcher_runtime check now observes submission-time textures
+for effect A→direct PIPE hull B→same BATCH effect A. The preserved pre-fix owner
+fails direct/indexed/pooled primitive-buffer paths0/0/0; the corrected native
+owner passes all three, retaining original assertions and negative checks.
+
+The initial new fixture's unused sampler stages were not explicitly terminated.
+Fatal Clang sanitizer execution exposed original texture-validity assertions and
+leaks caused by the fixture's early return. Disabling unused stages2/3 like its
+real SetupDiffuseBlend caller repairs that invalid fixture; the valid fixture
+still fails against pre-fix code. Final complete Clang sanitizer graph builds,
+then `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 ctest --test-dir "$san_build"
+-R '^portability.(render_batcher_runtime|render_pipeline|game_material_manager|native_shell)$'
+--output-on-failure` executes4/4 with no failure/skip or suppression.
+
+Both host-GPU checks (game_material_gpu and sdl3_gpu) pass under GCC and Clang
+using the existing explicit `gpu_host_setup.run` hyprland-x11 fixture with
+`FRONTIERX_M3_GPU_SETUP=hyprland-x11` and command
+`ctest --test-dir "$build" -L gpu --output-on-failure`:2/2 per compiler, no skip.
+The fixture floats only its mapped descendant test window; all resize/repeat
+assertions remain enabled. Earlier ordinary X11 GPU runs fail at resize and an
+ordinary Wayland retry fails unchanged-size detection; they remain failed host
+modes, not game-rendering regression passes or blanket-suppressed findings.
+
+Bounded full-media retail runtime: corrected GCC original TM3 intro,40 private
+screenshots, normal F7/F8/close1433frames; Clang unchanged genuine user TM3 battle
+checkpoint, original two-Scout-fighter launch/visibility/batch observations and
+normal close6159frames. Both close with zero mission-audio streams and idle hints.
+A separate visual follow-up retains four active-window-verified battle captures,
+then abandons capture on focus loss rather than attributing another window's
+pixels to the test. These are bounded observations, not all-effect/fighter
+appearance or repeated-transition-resource acceptance. Details and failed
+observer attempts are in GAME_MATERIAL_PATH. Whole-process catalogue LSan, actual
+CI, native Windows Debug/Final/module ABI, user acceptance and M3 remain open.

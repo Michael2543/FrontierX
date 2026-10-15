@@ -22,6 +22,7 @@
 #include "Include/NativeShipVisualTransform.h"
 #include "Include/NativeShipWarpInTransform.h"
 #include "Include/NativeWeaponOrientation.h"
+#include "Include/NativeObjectControlFrame.h"
 #include "Include/NativeAsteroidDistanceOrder.h"
 #include "BRadix.h"
 #include <DEffectOpts.h>
@@ -192,6 +193,8 @@ struct TextureCapture
     unsigned creates = 0U;
     unsigned uploads = 0U;
     unsigned destroys = 0U;
+    U32 lastUploadWidth = 0U, lastUploadHeight = 0U;
+    std::size_t lastUploadBytes = 0U;
     U32 firstHandle = 0U;
 #if defined(FRONTIERX_GAME_GPU)
     FrontierX::SdlGpuRenderer * gpu = nullptr;
@@ -233,6 +236,9 @@ GENRESULT UploadTexture(void *context, U32 handle, const std::uint8_t *pixels,
             {pixels, width, height, byteCount});
         if (result != GR_OK) return result;
         ++capture.uploads;
+        capture.lastUploadWidth = width;
+        capture.lastUploadHeight = height;
+        capture.lastUploadBytes = byteCount;
         if ((width == 4U && height == 4U && byteCount == 64U) ||
             (width == 2U && height == 2U && byteCount == 16U) ||
             (width == 16U && height == 16U && byteCount == 1024U))
@@ -247,6 +253,9 @@ GENRESULT UploadTexture(void *context, U32 handle, const std::uint8_t *pixels,
             (width == 16U && height == 16U && byteCount == 1024U)))
         return GR_INVALID_PARMS;
     ++capture.uploads;
+    capture.lastUploadWidth = width;
+    capture.lastUploadHeight = height;
+    capture.lastUploadBytes = byteCount;
     std::memcpy(capture.pixels.data(), pixels, byteCount);
     return GR_OK;
 }
@@ -270,6 +279,8 @@ GENRESULT DestroyTexture(void *context, U32 handle)
 }
 
 unsigned gameDrawCalls = 0;
+FrontierX::RenderStateSnapshot gameMeshStateAtSubmit;
+extern FrontierX::RenderStateSnapshot capturedLegacyState;
 unsigned gameMeshDrawCalls = 0;
 unsigned gameStandardDrawCalls = 0;
 unsigned nativeLegacyDrawCalls = 0;
@@ -301,6 +312,7 @@ GENRESULT DACOM_CDECL CaptureGameMeshDraw(
 {
     if (!submission.IsValid()) return GR_INVALID_PARMS;
     ++gameMeshDrawCalls;
+    gameMeshStateAtSubmit = capturedLegacyState;
     gameMeshIndices = submission.indexCount;
     gameMeshSecondUvMatches = true;
     gameMeshDiffuse.clear();
@@ -441,6 +453,7 @@ GENRESULT DACOM_CDECL SubmitGameMeshGpu(
 GENRESULT DACOM_CDECL ApplyGameStateGpu(
     void * context, const FrontierX::RenderStateSnapshot & state)
 {
+    capturedLegacyState = state;
     return static_cast<GameTransformCapture *>(context)->gpu->SetRenderState(state);
 }
 
@@ -1121,6 +1134,44 @@ int main(int argc, char **argv)
                 std::fabs(cargoLongAxis.x + 1) < 1e-5F &&
                 std::fabs(cargoLongAxis.y) < 1e-5F && std::fabs(cargoLongAxis.z) < 1e-5F,
                 "original ship visual axes align attachment and cargo without mutating simulation or nondirect hull")) return 1;
+    // TM2's Mantis Frigate fixed turrets feed this frame to PlasmaBolt. The
+    // previous world-node*hardpoint origin missed the visible corrected hull.
+    // A scaled/rotated child must retain its local frame with no second root
+    // translation or model correction. This extends the existing axis check.
+    Transform barrelLocal;
+    barrelLocal.set_identity();
+    barrelLocal.d[0][0] = 0; barrelLocal.d[0][1] = -3;
+    barrelLocal.d[1][0] = 2; barrelLocal.d[1][1] = 0; barrelLocal.d[2][2] = 4;
+    barrelLocal.translation = Vector(5,7,11);
+    const Transform barrelWorld = shipWorld * barrelLocal;
+    Transform muzzle;
+    muzzle.set_identity();
+    muzzle.rotate_about_i(0.31F);
+    muzzle.translation = Vector(1,2,3);
+    const Transform originalBarrel = barrelWorld, originalMuzzleFrame = muzzle;
+    const Transform correctedMuzzle = NativeShipHardpointTransform(shipWorld, barrelWorld, muzzle, true);
+    const Transform unchangedMuzzle = NativeShipHardpointTransform(shipWorld, barrelWorld, muzzle, false);
+    const Transform legacyMuzzle = barrelWorld * muzzle;
+    bool muzzleFrameValid = true;
+    for (const Vector &point : {Vector(0,0,0), Vector(1,0,0), Vector(0,1,0), Vector(0,0,1)})
+    {
+        const Vector local = barrelLocal * (muzzle * point);
+        // Numeric product of the independently pinned shipWorld and original
+        // Rx90/Ry180 basis above: (x,y,z) maps to (-z,-x,y)+(10,20,30).
+        const Vector expected(10-local.z, 20-local.x, 30+local.y);
+        const Vector actual = correctedMuzzle * point;
+        muzzleFrameValid &= std::fabs(actual.x-expected.x) < 1e-4F &&
+            std::fabs(actual.y-expected.y) < 1e-4F && std::fabs(actual.z-expected.z) < 1e-4F;
+    }
+    if (!Expect(muzzleFrameValid &&
+                std::fabs(correctedMuzzle.translation.x + 13) < 1e-4F &&
+                std::fabs(correctedMuzzle.translation.y - 21) < 1e-4F &&
+                std::fabs(correctedMuzzle.translation.z - 39) < 1e-4F &&
+                std::memcmp(&unchangedMuzzle, &legacyMuzzle, sizeof(Transform)) == 0 &&
+                std::memcmp(&shipWorld, &originalWorld, sizeof(Transform)) == 0 &&
+                std::memcmp(&barrelWorld, &originalBarrel, sizeof(Transform)) == 0 &&
+                std::memcmp(&muzzle, &originalMuzzleFrame, sizeof(Transform)) == 0,
+                "fixed ship muzzle shares hull correction exactly once and preserves scaled child/nondirect frames")) return 1;
     // Harvester hp_tractor is a model-space muzzle. A model-Z displacement
     // must follow the corrected hull axis instead of lowering the beam in world Z.
     // Keep the original endpoint/transform available to simulation and fast hulls.
@@ -1905,6 +1956,79 @@ int main(int argc, char **argv)
                     "production PolyMesh submits ambient-dependent vertex colors")) return 1;
         lights->set_ambient_light(255, 255, 255);
     }
+    // Planet hover passes opacity per Engine instance. The shared archetype
+    // retains its authored transparency; the next instance must render normally.
+    auto *opacityMesh = renderer->get_instance_mesh(engineInstance, nullptr);
+    if (!Expect(opacityMesh && opacityMesh->material_list,
+                "instance opacity uses the real shared PolyMesh material")) return 1;
+    const U8 authoredAlpha = opacityMesh->material_list[0].transparency;
+    const U32 authoredFlags = opacityMesh->material_list[0].flags;
+    const auto opacitySibling = engine->create_instance2(engineArchetype, nullptr);
+    if (!Expect(opacitySibling != INVALID_INSTANCE_INDEX,
+                "opacity sibling shares the actual Engine archetype")) return 1;
+    const U32 ordinaryFlags = RF_DONT_CULL_FRUSTUM | RF_DONT_CULL_FACES;
+    const bool oldAcceptPolyMesh = acceptPolyMeshCpuDraw;
+    acceptPolyMeshCpuDraw = true;
+    engine->render_instance(&camera, engineInstance, EN_DONT_RECURSE, 1.0F, ordinaryFlags, nullptr);
+    const auto opaqueColors = gameMeshDiffuse;
+    const auto opaqueState = gameMeshStateAtSubmit;
+    if (!Expect(!opaqueColors.empty() && (opaqueColors[0] >> 24) == authoredAlpha,
+                "ordinary instance retains authored material alpha")) return 1;
+#if defined(FRONTIERX_GAME_GPU)
+    FrontierX::SdlGpuReadback ordinaryOpacityImage;
+    std::string opacityGpuError;
+    if (gpuMode && !Expect(gpu.renderer.Readback64(ordinaryOpacityImage, opacityGpuError) &&
+        ordinaryOpacityImage.rgbValid && ordinaryOpacityImage.changedPixels > 0,
+        "ordinary shared-instance opacity reaches Vulkan readback")) return 1;
+#endif
+    for (const U8 opacity : {U8(160), U8(0), U8(255), U8(160)})
+    {
+        const auto drawsBefore = gameMeshDrawCalls;
+        engine->render_instance(&camera, engineInstance, EN_DONT_RECURSE, 1.0F,
+            ordinaryFlags | FrontierX::EncodeNativeInstanceOpacity(opacity), nullptr);
+        const U32 expectedAlpha = U32(authoredAlpha) * opacity / 255;
+        bool colorsMatch = gameMeshDiffuse.size() == opaqueColors.size();
+        for (std::size_t i = 0; colorsMatch && i != gameMeshDiffuse.size(); ++i)
+            colorsMatch = gameMeshDiffuse[i] == ((opaqueColors[i] & 0xffffffU) | (expectedAlpha << 24));
+        if (!Expect(gameMeshDrawCalls == drawsBefore + 1 && colorsMatch &&
+            opacityMesh->material_list[0].transparency == authoredAlpha &&
+            opacityMesh->material_list[0].flags == authoredFlags &&
+            (opacity == 255 || (gameMeshStateAtSubmit.alphaBlendEnabled &&
+                gameMeshStateAtSubmit.sourceBlend == D3DBLEND_SRCALPHA &&
+                gameMeshStateAtSubmit.destinationBlend == D3DBLEND_INVSRCALPHA &&
+                !gameMeshStateAtSubmit.depthWriteEnabled)),
+            "scoped instance opacity multiplies authored alpha and exposes geometry behind without shared mutation")) return 1;
+#if defined(FRONTIERX_GAME_GPU)
+        if (gpuMode)
+        {
+            FrontierX::SdlGpuReadback fadedImage;
+            if (!Expect(gpu.renderer.Readback64(fadedImage, opacityGpuError) && fadedImage.rgbValid &&
+                (opacity == 255 ? fadedImage.checksum == ordinaryOpacityImage.checksum :
+                    fadedImage.checksum != ordinaryOpacityImage.checksum) &&
+                (opacity != 0 || fadedImage.changedPixels == 0),
+                "Vulkan instance opacity exposes background and full opacity restores original image")) return 1;
+        }
+#endif
+        engine->render_instance(&camera, opacitySibling, EN_DONT_RECURSE, 1.0F, ordinaryFlags, nullptr);
+        if (!Expect(gameMeshDiffuse == opaqueColors &&
+            gameMeshStateAtSubmit.depthWriteEnabled == opaqueState.depthWriteEnabled &&
+            gameMeshStateAtSubmit.alphaBlendEnabled == opaqueState.alphaBlendEnabled &&
+            gameMeshStateAtSubmit.sourceBlend == opaqueState.sourceBlend &&
+            gameMeshStateAtSubmit.destinationBlend == opaqueState.destinationBlend,
+            "adjacent shared-archetype instance restores ordinary color, blending and depth writes")) return 1;
+#if defined(FRONTIERX_GAME_GPU)
+        if (gpuMode)
+        {
+            FrontierX::SdlGpuReadback restoredImage;
+            if (!Expect(gpu.renderer.Readback64(restoredImage, opacityGpuError) && restoredImage.rgbValid &&
+                restoredImage.checksum == ordinaryOpacityImage.checksum,
+                "adjacent ordinary instance restores the original Vulkan image")) return 1;
+        }
+#endif
+    }
+    engine->destroy_instance(opacitySibling);
+    acceptPolyMeshCpuDraw = oldAcceptPolyMesh;
+    std::cout << "Original Engine/RenderMgr/PolyMesh instance opacity and shared-material restoration checked\n";
     Transform observedModelview(false);
     if (!Expect(camera.inverseQueries != 0U &&
                     transformCapture.modelviewCalls != 0U &&
@@ -2974,6 +3098,63 @@ int main(int argc, char **argv)
         if (std::fabs(look.x - std::sin(heading)) > 1.0e-5F ||
             std::fabs(look.y - std::cos(heading)) > 1.0e-5F) return 1;
     }
+    // FighterWing launches authored -K-forward frames. ObjectControl's exact
+    // Fighter specialization must measure that flight ray, while ordinary ship
+    // instantiations keep their existing J-navigation contract.
+    struct OrdinaryShipSave;
+    using FighterFrame = NativeObjectControlFrame<FIGHTER_SAVELOAD>;
+    using ShipFrame = NativeObjectControlFrame<OrdinaryShipSave>;
+    const auto integrateAngularVelocity = [](TRANSFORM frame, const Vector &angularVelocity)
+    {
+        // Same world-axis quaternion derivative as ObjectPhysics::physUpdate.
+        Quaternion orientation;
+        orientation.set(frame);
+        const Quaternion omega(angularVelocity);
+        const Quaternion derivative = omega * orientation * 0.5F;
+        orientation.w += derivative.w * 0.001F;
+        orientation.x += derivative.x * 0.001F;
+        orientation.y += derivative.y * 0.001F;
+        orientation.z += derivative.z * 0.001F;
+        orientation.normalize();
+        static_cast<Matrix &>(frame) = orientation;
+        return frame;
+    };
+    for (const SINGLE heading : {-2.4F, -0.7F, 0.7F, 2.4F})
+    for (const SINGLE elevation : {-0.25F, 0.0F, 0.25F})
+    for (const SINGLE bank : {-0.35F, 0.0F, 0.35F})
+    {
+        TRANSFORM fighter;
+        fighter.rotate_about_i(90 * MUL_DEG_TO_RAD);
+        fighter.rotate_about_j(heading);
+        fighter.rotate_about_i(elevation);
+        fighter.rotate_about_k(bank);
+        const Vector forward = -fighter.get_k();
+        const Vector expected(std::sin(heading) * std::cos(elevation),
+                              std::cos(heading) * std::cos(elevation), std::sin(elevation));
+        const TRANSFORM pitched = integrateAngularVelocity(fighter, fighter.get_i());
+        const TRANSFORM rolled = integrateAngularVelocity(fighter, -FighterFrame::RollAxis(fighter));
+        const Vector rollAxisError = FighterFrame::RollAxis(fighter) - fighter.get_k();
+        const Vector defaultAxisError = ShipFrame::RollAxis(fighter) - fighter.get_j();
+        if (!Expect((forward - expected).magnitude() < 1.0e-5F &&
+                    std::fabs(FighterFrame::Yaw(fighter) - heading) < 1.0e-5F &&
+                    std::fabs(FighterFrame::Pitch(fighter) - elevation) < 1.0e-5F &&
+                    std::fabs(FighterFrame::Roll(fighter) -
+                              std::asin(std::sin(bank) * std::cos(elevation))) < 1.0e-5F &&
+                    FighterFrame::Pitch(pitched) > FighterFrame::Pitch(fighter) &&
+                    FighterFrame::Roll(rolled) > FighterFrame::Roll(fighter) &&
+                    rollAxisError.magnitude() < 1.0e-6F &&
+                    ShipFrame::Yaw(fighter) == fighter.get_yaw() &&
+                    ShipFrame::Pitch(fighter) == fighter.get_pitch() &&
+                    ShipFrame::Roll(fighter) == fighter.get_roll() &&
+                    defaultAxisError.magnitude() < 1.0e-6F,
+                    "Fighter control measures actual -K flight and preserves ordinary ship navigation")) return 1;
+        TRANSFORM inverted = fighter;
+        inverted.rotate_about_k(PI - bank);
+        if (!Expect(std::fabs(FighterFrame::Roll(inverted)) > 3.0F &&
+                    std::fabs(FighterFrame::Pitch(inverted) - elevation) < 1.0e-5F,
+                    "inverted fighter frame retains authored roll rather than normalizing its axes")) return 1;
+    }
+    std::cout << "Fighter control frame and original quaternion angular axes checked\n";
     // Projectile/PlasmaBolt retain their original pitch-correction formula.
     // Their turret sight is -K-forward, so the J-forward navigation getter
     // must not redirect a real world target into a nearly vertical shot.
@@ -3003,6 +3184,33 @@ int main(int argc, char **argv)
         }
     }
     std::cout << "Original projectile sight-axis pitch correction checked\n";
+    // Missile starts with Rx90 and later rebuilds that frame around a changed
+    // heading in setup_ang_velocity. Its curved-path pitch must keep the -K
+    // flight elevation; the J-navigation getter spuriously reports ~90 deg.
+    for (const SINGLE heading : {0.0F, 0.73F, -1.21F})
+    for (const SINGLE elevation : {0.0F, 0.23F, -0.31F})
+    {
+        TRANSFORM missile;
+        missile.rotate_about_i(90 * MUL_DEG_TO_RAD);
+        missile.rotate_about_j(heading);
+        missile.rotate_about_i(elevation);
+        const SINGLE flightPitch = FrontierX::NativeWeaponSightPitch(missile);
+        const Vector goalDirection = -missile.get_k();
+        const SINGLE goalPitch = TRANSFORM::get_pitch(goalDirection);
+        TRANSFORM steered;
+        steered.rotate_about_i(90 * MUL_DEG_TO_RAD);
+        steered.rotate_about_j(heading + 0.4F);
+        steered.rotate_about_i(flightPitch);
+        const Vector ray = -steered.get_k();
+        const Vector expected(std::sin(heading+0.4F)*std::cos(elevation),
+            std::cos(heading+0.4F)*std::cos(elevation), std::sin(elevation));
+        const Vector error = ray-expected;
+        if (!Expect(std::fabs(flightPitch-elevation) < 1e-5F &&
+                    std::fabs(flightPitch-goalPitch) < 1e-5F &&
+                    error.x*error.x + error.y*error.y + error.z*error.z < 1e-9F &&
+                    std::fabs(missile.get_pitch()-elevation) > 1.0F,
+                    "missile constructor, curved-goal pitch and heading reset preserve actual -K elevation")) return 1;
+    }
 
     bool app2dSubmitted = false;
     {
@@ -3191,6 +3399,40 @@ int main(int argc, char **argv)
         "Original TextureLibrary indexed palette reaches real native upload owner")) return 1;
     indexedDirectory->Release();
     indexedArchive->Release();
+    // Real external IonCannonFX reached normal_1_6, whose raw MIP0 TGA buffer
+    // used new[]/delete. Existing indexed fixtures above use another loader.
+    const auto rawTgaPath = std::filesystem::path(meshPath.string() + ".raw-tga");
+    IFileSystem *rawTgaArchive = nullptr;
+    IFileSystem *rawTgaDirectory = nullptr;
+    // Pin the original 1.6 loader's row orientation as well as palette colors.
+    const std::array<std::uint8_t, 16> rawTgaExpected{{
+        0, 0, 255, 255, 255, 255, 255, 255,
+        255, 0, 0, 255, 0, 255, 0, 255}};
+    if (!Expect(FrontierXTest::WriteRawTgaTextureFixture(rawTgaPath) &&
+        FrontierX::OpenNativeUtfFileSystem(rawTgaPath, &rawTgaArchive, error) &&
+        rawTgaArchive->CreateInstance(&indexedDescriptor,
+            reinterpret_cast<void **>(&rawTgaDirectory)) == GR_OK,
+        "raw MIP0 indexed TGA fixture opens through original texture directory")) return 1;
+    for (unsigned cycle = 0; cycle != 3; ++cycle)
+    {
+        ITL_TEXTURE_ID texture = ITL_INVALID_ID;
+        const unsigned destroyedBefore = textureCapture.destroys;
+        const unsigned uploadedBefore = textureCapture.uploads;
+        const GENRESULT rawLoaded = textures->load_texture(rawTgaDirectory, "RawTgaTile");
+        const GENRESULT rawId = textures->get_texture_id("RawTgaTile", &texture);
+        if (!Expect(rawLoaded == GR_OK && rawId == GR_OK &&
+            texture != ITL_INVALID_ID && textureCapture.uploads == uploadedBefore + 1 &&
+            textureCapture.lastUploadWidth == 2 && textureCapture.lastUploadHeight == 2 &&
+            textureCapture.lastUploadBytes == rawTgaExpected.size() &&
+            std::equal(rawTgaExpected.begin(), rawTgaExpected.end(), textureCapture.pixels.begin()),
+            "original 1.6 raw TGA loader uploads all indexed colors without allocation mismatch") ||
+            !Expect(textures->release_texture_id(texture) == GR_OK &&
+                textureCapture.destroys == destroyedBefore + 1 &&
+                textures->has_texture_id("RawTgaTile") != GR_OK,
+                "raw TGA texture releases and reloads without retained cache ownership")) return 1;
+    }
+    rawTgaDirectory->Release();
+    rawTgaArchive->Release();
     textures->Release();
     textureAggregate->Release();
     textureInner->Release();

@@ -15,7 +15,11 @@
 #define DATADEF_H
 
 #ifndef US_TYPEDEFS
+#if defined(_WIN32)
 #include <typedefs.h>
+#else
+#include <TYPEDEFS.H>
+#endif
 #endif
 
 #ifndef MPARTREF_H
@@ -23,7 +27,7 @@
 #endif
 
 #ifndef DMTECHNODE_H
-#include <..\..\dinclude\DMTechNode.h>
+#include <DMTechNode.h>
 #endif
 
 #define MANTIS_UNITS_PER_ATTACK_WAVE    4

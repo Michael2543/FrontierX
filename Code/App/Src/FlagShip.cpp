@@ -11,8 +11,40 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeRetailFlagshipData.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <DEffectOpts.h>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cwchar>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TSpaceShip.h"
 #include "ObjList.h"
@@ -35,12 +67,12 @@
 
 #include <TComponent.h>
 #include <IConnection.h>
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
 #include <HKEvent.h>
-#include <3DMath.h>
-#include <Physics.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <physics.h>
+#include <Filesys.h>
 #include <WindowManager.h>
 #include <IAnim.h>
 #include <IHardPoint.h>
@@ -776,7 +808,7 @@ void Flagship::OnFleetShipDamaged (IBaseObject * victim, U32 attackerID)
 {
 	if (targetID == 0 && mode != MOVING)
 	{
-		MPart part = targets[0];
+		MPart part(targets[0].Ptr());
 		if (part.isValid() == 0)
 		{
 			idleTimer = -1;
@@ -1945,7 +1977,7 @@ void Flagship::updateGroupNormal(FleetGroup * group)
 				int cnt1 = 0;
 				int cnt2 = 0;
 				IBaseObject * targ = NULL;
-				MPart part1 = group->ai.targets[1];
+				MPart part1(group->ai.targets[1].Ptr());
 
 				for (U32 i = 0; i < nAvailableGunboats; i++)
 				{
@@ -2156,7 +2188,7 @@ void Flagship::updateGroupRover(FleetGroup * group)
 				int cnt1 = 0;
 				int cnt2 = 0;
 				IBaseObject * targ = NULL;
-				MPart part1 = group->ai.targets[1];
+				MPart part1(group->ai.targets[1].Ptr());
 
 				for (U32 i = 0; i < nAvailableGunboats; i++)
 				{
@@ -2315,7 +2347,7 @@ void Flagship::updateGroupSpotter(FleetGroup * group)
 				int cnt1 = 0;
 				int cnt2 = 0;
 				IBaseObject * targ = NULL;
-				MPart part1 = group->ai.targets[1];
+				MPart part1(group->ai.targets[1].Ptr());
 
 				for (U32 i = 0; i < nAvailableGunboats; i++)
 				{
@@ -2424,7 +2456,7 @@ void Flagship::updateGroupStriker(FleetGroup * group)
 				int cnt2 = 0;
 				int cnt3 = 0;
 				IBaseObject * targ = NULL;
-				MPart part1 = group->ai.targets[1];
+				MPart part1(group->ai.targets[1].Ptr());
 
 				for (U32 i = 0; i < nAvailableGunboats; i++)
 				{
@@ -2965,8 +2997,8 @@ IBaseObject * Flagship::FleetShipTargetDestroyed (IBaseObject * ship)
 
 		if(admiralTactic == AT_DEFEND || admiralTactic == AT_SEEK)
 		{
-			MPart part1 = targets[0];
-			MPart part2 = targets[1];
+			MPart part1(targets[0].Ptr());
+			MPart part2(targets[1].Ptr());
 
 			if (part1.isValid() == 0 && part2.isValid() == 0 && admiralTactic == AT_SEEK)
 			{
@@ -3002,8 +3034,8 @@ IBaseObject * Flagship::FleetShipTargetDestroyed (IBaseObject * ship)
 		}
 		else if(admiralTactic == AT_HOLD)
 		{
-			MPart part1 = targets[0];
-			MPart part2 = targets[1];
+			MPart part1(targets[0].Ptr());
+			MPart part2(targets[1].Ptr());
 
 			if (part1.isValid() == 0 && part2.isValid() == 0)
 			{
@@ -3058,7 +3090,7 @@ IBaseObject * Flagship::FleetShipTargetDestroyed (IBaseObject * ship)
 				int cnt1 = 0;
 				int cnt2 = 0;
 				IBaseObject * targ = NULL;
-				MPart part1 = group->ai.targets[1];
+				MPart part1(group->ai.targets[1].Ptr());
 
 				// only assign attack commands if the ship is in the same system as the admiral
 				targ = NULL;
@@ -3924,7 +3956,12 @@ bool Flagship::CanResearchKits()
 //
 BOOL32 Flagship::Save (struct IFileSystem * inFile)
 {
+#if defined(_WIN32)
 	SpaceShip<FLAGSHIP_SAVELOAD, FLAGSHIP_INIT>::Save(inFile);
+#else
+	if (fleetSet.numObjects > MAX_SELECTED_UNITS ||
+		!SpaceShip<FLAGSHIP_SAVELOAD, FLAGSHIP_INIT>::Save(inFile)) return 0;
+#endif
 	//
 	// save the group
 	//
@@ -3939,9 +3976,18 @@ BOOL32 Flagship::Save (struct IFileSystem * inFile)
 
 	if (inFile->CreateInstance(&fdesc, file) == GR_OK)
 	{
+#if defined(_WIN32)
 		if (fleetSet.numObjects)
 			file->WriteFile(0, fleetSet.objectIDs, fleetSet.numObjects * sizeof(U32), &dwWritten, 0);
+#else
+		const U32 size = fleetSet.numObjects * sizeof(U32);
+		if (size && (!file->WriteFile(0, fleetSet.objectIDs, size, &dwWritten, 0) || dwWritten != size))
+			return 0;
+#endif
 	}
+#if !defined(_WIN32)
+	else return 0;
+#endif
 
 	return 1;
 }
@@ -3949,7 +3995,11 @@ BOOL32 Flagship::Save (struct IFileSystem * inFile)
 //
 BOOL32 Flagship::Load (struct IFileSystem * inFile)
 {
+#if defined(_WIN32)
 	SpaceShip<FLAGSHIP_SAVELOAD, FLAGSHIP_INIT>::Load(inFile);
+#else
+	if (!SpaceShip<FLAGSHIP_SAVELOAD, FLAGSHIP_INIT>::Load(inFile)) return 0;
+#endif
 	//
 	// load the group, if it's not loaded already
 	//
@@ -3959,8 +4009,16 @@ BOOL32 Flagship::Load (struct IFileSystem * inFile)
 
 	if (inFile->CreateInstance(&fdesc, file) == GR_OK)
 	{
+#if defined(_WIN32)
 		fleetSet.numObjects = file->GetFileSize() / sizeof(U32);
 		file->ReadFile(0, fleetSet.objectIDs, fleetSet.numObjects * sizeof(U32), &dwRead, 0);
+#else
+		const U32 size = file->GetFileSize();
+		if (size % sizeof(U32) || size > sizeof(fleetSet.objectIDs)) return 0;
+		if (size && (!file->ReadFile(0, fleetSet.objectIDs, size, &dwRead, 0) || dwRead != size))
+			return 0;
+		fleetSet.numObjects = size / sizeof(U32);
+#endif
 	}
 
 	netAdmiralTactic = admiralTactic;
@@ -4921,7 +4979,7 @@ void Flagship::smartFleetTargetSelection (void)
 			int cnt1 = 0;
 			int cnt2 = 0;
 			IBaseObject * targ = NULL;
-			MPart part1 = targets[1];
+			MPart part1(targets[1].Ptr());
 
 			for (i = 0; i < nAvailableGunboats; i++)
 			{
@@ -4979,7 +5037,7 @@ void Flagship::smartFleetTargetSelection (void)
 			int cnt1 = 0;
 			int cnt2 = 0;
 			IBaseObject * targ = NULL;
-			MPart part1 = targets[1];
+			MPart part1(targets[1].Ptr());
 
 			for (i = 0; i < nAvailableGunboats; i++)
 			{
@@ -6108,10 +6166,42 @@ HANDLE FlagshipFactory::CreateArchetype (const char *szArchname, OBJCLASS objCla
 
 	if (objClass == OC_SPACESHIP)
 	{
+#if !defined(_WIN32)
+		struct DataExtent : IArchetypeEnum
+		{
+			const void *requested;
+			U32 size = 0;
+			explicit DataExtent(const void *value) : requested(value) {}
+			BOOL32 __stdcall ArchetypeEnum(const char *, void *data, U32 bytes) override
+			{
+				if (data != requested) return true;
+				size = bytes;
+				return false;
+			}
+		} extent(_data);
+		ARCHLIST->EnumerateArchetypeData(&extent);
+		if (!_data || extent.size < sizeof(BASE_SPACESHIP_DATA)) return 0;
+#endif
 		BT_FLAGSHIP_DATA * data = (BT_FLAGSHIP_DATA *) _data;
 
 		if (data->type == SSC_FLAGSHIP)	   
 		{
+#if !defined(_WIN32)
+			if (extent.size == sizeof(FrontierX::NativeRetailFlagshipData))
+			{
+				FrontierX::NativeRetailFlagshipData retail;
+				const bool decoded = FrontierX::DecodeNativeRetailFlagshipData(_data, extent.size, retail);
+				std::fprintf(stderr, "Native flagship rejected: %s; %s\n", szArchname,
+					decoded ? "retail shields/abilities and authored hotkeys need their original behavior; CQ2 formations/kits are absent" :
+					"invalid 744-byte retail record");
+				return 0;
+			}
+			if (extent.size != sizeof(BT_FLAGSHIP_DATA))
+			{
+				std::fprintf(stderr, "Native flagship record extent rejected: %s (%u bytes)\n", szArchname, extent.size);
+				return 0;
+			}
+#endif
 			result = new OBJTYPE();
 			if (result->loadSpaceshipArchetype(data, ARCHLIST->GetArchetype(szArchname)) == false)
 				goto Error;
@@ -6131,7 +6221,9 @@ BOOL32 FlagshipFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -6147,8 +6239,15 @@ IBaseObject * FlagshipFactory::CreateInstance (HANDLE hArchetype)
 //
 void FlagshipFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
+#if defined(_WIN32)
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+	(void)hArchetype;
+	(void)info;
+	std::fputs("Native ship editor insertion is unavailable\n", stderr);
+	std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

@@ -16,10 +16,20 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#include <cstdlib>
+#if defined(_WIN32)
 #include "DataDef.h"
-#include "stdlib.h"
-
 #include "..\helper\helper.h"
+#else
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript02Resources.h"
+// Keep original DLL-local data and program types separate in the native link.
+namespace FrontierXScript02
+{
+#include "DataDef.h"
+#endif
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -107,6 +117,36 @@ CQBRIEFINGITEM slotAnim;
 //--------------------------------------------------------------------------//
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    // Match a fresh Windows DLL instance before correlating any saved state.
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript02Reset(void)
+{
+    // Only the existing hidden synthetic owner check calls this with no mission.
+    const MissionData previous = data;
+    data.mission_over = true;
+    data.mhandle = data.shandle = UINT32_MAX;
+    ResetNativeMissionData();
+    const bool reset = !data.mission_over && !data.mhandle && !data.shandle;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript02(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript02Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript02ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 
 CQSCRIPTPROGRAM(TM2_GlobalProc, TM2_GlobalProc_Data,0);
 
@@ -1891,3 +1931,7 @@ bool TM2_MissionSuccess::Update (void)
 
 //--------------------------------End Script02T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript02
+#endif

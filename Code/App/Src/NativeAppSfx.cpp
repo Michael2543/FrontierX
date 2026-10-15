@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
@@ -107,8 +108,36 @@ struct NativeSfx : ISFX, IEventCallback
         return true;
     }
 
-    GENRESULT COMAPI Notify(U32 message, void *) override
+    GENRESULT COMAPI Notify(U32 message, void *parameter) override
     {
+        if (message == CQE_MISSION_CLOSE)
+        {
+            if (!parameter)
+            {
+                // Objects still own their HSOUNDs until ObjectList::Close.
+                // Retire playback without invalidating those logical handles.
+                for (SoundEffect *effect : handles)
+                {
+                    ReleaseInstance(*effect, true);
+                    effect->flags = 0;
+                    effect->systemID = 0;
+                }
+                for (auto &instance : instances)
+                {
+                    // One-shots can outlive their released logical owner.
+                    if (instance.stream && !streamer->CloseHandle(instance.stream))
+                        Failure("mission-close unowned instance close");
+                    instance.stream = nullptr;
+                    instance.id = 0;
+                }
+                currentSystemID = 0;
+                gameActive = false;
+                cameraMoved = true;
+            }
+            else if (spatialAudio && source)
+                spatialAudio->ForgetSamples(source);
+            return GR_OK;
+        }
         if (message == CQE_CAMERA_MOVED) cameraMoved = true;
         if (message != CQE_UPDATE || !cameraMoved || !active) return GR_OK;
         cameraMoved = false;
@@ -413,7 +442,30 @@ struct NativeSfx : ISFX, IEventCallback
         if (!Play(first, 0, nullptr, SFXPLAYF_LOOPING | SFXPLAYF_NORESTART) ||
             firstEffect->instance != owned || std::rand() != expectedUnchanged ||
             !Stop(first)) return false;
-        return CloseHandle(first) && CloseHandle(second) && DEBUG_GetNumHandles() == before;
+        if (!CloseHandle(first) || !CloseHandle(second) || DEBUG_GetNumHandles() != before)
+            return false;
+        // Mission::close announces teardown before objects release their
+        // logical handles, and again afterwards. Both live loops and detached
+        // one-shots must be silent before the next mission can load.
+        HSOUND loop = Open(SFX::BUTTONPRESS1), shot = Open(SFX::BUTTONPRESS1);
+        if (!loop || !shot || !Play(loop, 0, nullptr, SFXPLAYF_LOOPING) ||
+            !Play(shot, 0, nullptr, 0)) return false;
+        auto *shotEffect = FindHandle(shot);
+        if (!shotEffect || shotEffect->instance < 0) return false;
+        const int detached = shotEffect->instance;
+        if (!CloseHandle(shot) || instances[detached].owner || !instances[detached].stream)
+            return false;
+        Notify(CQE_MISSION_CLOSE, nullptr);
+        auto *loopEffect = FindHandle(loop);
+        if (!loopEffect || loopEffect->stream || loopEffect->started || loopEffect->flags)
+            return false;
+        for (const auto &instance : instances)
+            if (instance.owner || instance.stream) return false;
+        Notify(CQE_MISSION_CLOSE, nullptr);
+        Notify(CQE_MISSION_CLOSE, reinterpret_cast<void *>(std::uintptr_t(1)));
+        if (!Play(loop, 0, nullptr, SFXPLAYF_LOOPING) ||
+            !FindHandle(loop)->stream || !CloseHandle(loop)) return false;
+        return DEBUG_GetNumHandles() == before;
     }
 
 private:

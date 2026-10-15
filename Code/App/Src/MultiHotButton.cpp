@@ -48,6 +48,9 @@ using namespace FrontierX::NativeAppUi;
 #include <TComponent.h>
 #include <Filesys.h>
 #include <HKEvent.h>
+#if !defined(_WIN32)
+#include "Include/NativeRetailHudHotkey.h"
+#endif
 
 //--------------------------------------------------------------------------//
 //
@@ -212,7 +215,13 @@ struct DACOM_NO_VTABLE MultiHotButton : BaseHotRect, IHotButton, IMultiHotButton
 		if (bPostMessageBlocked==false)
 		{
 			if (hotkeyID != 0xFFFFFFFF)
-				EVENTSYS->Post(CQE_HOTKEY, (void *)hotkeyID);
+            {
+#if defined(_WIN32)
+                EVENTSYS->Post(CQE_HOTKEY, (void *)hotkeyID);
+#else
+                FrontierX::PostNativeHudHotkey(EVENTSYS, hotkeyID);
+#endif
+            }
 			parent->PostMessage(CQE_LHOTBUTTON, (void*)buttonText);
 			SFXMANAGER->Play(hSound);
 			bPostMessageBlocked = true;
@@ -270,7 +279,11 @@ void MultiHotButton::InitMultiHotButton (const MULTIHOTBUTTON_DATA & data, BaseH
 	}
 
 	hintboxID = 0;
+#if defined(_WIN32)
 	hotkeyID = data.hotkey;
+#else
+    hotkeyID = FrontierX::NativeRetailHudHotkey(data.hotkey);
+#endif
 	statusTextID = 0;
 	bSingleShape = data.bSingleShape;
 

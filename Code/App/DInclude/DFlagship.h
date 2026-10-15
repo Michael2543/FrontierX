@@ -140,7 +140,7 @@ struct AdmiralBonuses
 	bool dNoArmorFavored:1;
 	bool dLightArmorFavored:1;
 	bool dMediumArmorFavored:1;
-	bool dHeavyArmorFavored:1;;
+	bool dHeavyArmorFavored:1;
 };
 
 struct BT_FORMATION : BASIC_DATA

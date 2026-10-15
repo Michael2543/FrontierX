@@ -11,19 +11,52 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <DEffectOpts.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+#include <memory>
+#include <IUTFWriter.h>
+#include "MyVertex.h"
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+struct IDrawAgent;
+#include "TObjFrame.h"
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DEffect.h"
-#include "Objlist.h"
-#include "Anim2D.h"
-#include "CQlight.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "anim2d.h"
+#include "CQLight.h"
+#include "SFX.h"
 #include "TObjTrans.h"
-#include "TobjFrame.h"
+#include "TObjFrame.h"
 #include "Startup.h"
 #include "IBlast.h"
 #include "DSpecial.h"
@@ -31,17 +64,17 @@
 #include "IFighter.h"
 #include "ILauncher.h"
 #include "Mission.h"
-#include "Mpart.h"
+#include "MPart.h"
 #include "GridVector.h"
 #include "ObjMapIterator.h"
 #include "OpAgent.h"
 #include "IShipDamage.h"
 
 #include <Mesh.h>
-#include <FileSys.h>
-#include <Engine.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <IRenderPrimitive.h>
-#include <Renderer.h>
+#include <renderer.h>
 
 #define FPS 10
 #define RADIUS 5000.0
@@ -155,7 +188,7 @@ struct _NO_VTABLE Aegis : public ObjectTransform<ObjectFrame<IBaseObject,AEGIS_S
 
 	// ILauncher
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
 
@@ -336,7 +369,7 @@ void Aegis::InitWeapon (IBaseObject * owner, const class TRANSFORM & orientation
 
 // ILauncher
 
-void Aegis::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range)
+void Aegis::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range)
 {
 	CQASSERT(_owner);
 	//ownerID = _owner->GetPartID();
@@ -435,9 +468,12 @@ BOOL32 Aegis::Save (struct IFileSystem * outFile)
 
 	FRAME_save(save);
 	
+	#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
-	
 	result = 1;
+#else
+	result = file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) && dwWritten == sizeof(save);
+#endif
 
 Done:	
 	return result;
@@ -457,8 +493,12 @@ BOOL32 Aegis::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+	#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("AEGIS_SAVELOAD", buffer, &load);
+#else
+	if (!LoadNativeMissionRecord(MISSION, "AEGIS_SAVELOAD", file, &load, sizeof(load))) goto Done;
+#endif
 
 	*static_cast<BASE_AEGIS_SAVELOAD *>(this) = load;
 

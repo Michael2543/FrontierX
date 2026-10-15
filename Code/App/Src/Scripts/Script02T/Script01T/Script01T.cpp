@@ -60,8 +60,25 @@ static void TM1_TurnOnTheAI
 
 CQSCRIPTDATA(MissionData, data);
 #if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    // Match a fresh Windows DLL instance before correlating any saved state.
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript01Reset(void)
+{
+    // Only the existing hidden synthetic owner check calls this with no mission.
+    const MissionData previous = data;
+    data.mission_over = true;
+    data.mhandle = data.shandle = UINT32_MAX;
+    ResetNativeMissionData();
+    const bool reset = !data.mission_over && !data.mhandle && !data.shandle;
+    data = previous;
+    return reset;
+}
 extern "C" void FrontierXInitializeScript01(void)
 {
+    ResetNativeMissionData();
     if (!HEAP) HEAP = HEAP_Acquire();
     std::size_t length = 0;
     const void *schema = FrontierX::GetNativeScript01Schema(length);

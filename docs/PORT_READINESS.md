@@ -8,13 +8,125 @@ mission acceptance. This section supersedes the older milestone ordering and
 all historical “next M3” instructions below. It does not turn failed comparisons
 into passes or retract confirmed defects.
 
-**Next gameplay milestone (P1): one regular Terran campaign mission from the
-original entry through victory/defeat, normal save/load and transition to the
-next mission.** The first campaign mission is the default target; identify its
-original script/resource and required production owners before implementation.
-The user has reached first-Terran victory and exercised save/load. P1b is
-completed by explicit user acceptance on 2026-10-15, with the follow-ups below
-retained. P1c is the next active delivery step.
+**Current status:** P1a, P1b and P1c are accepted by the user in the delivered
+native Linux scope. P1b and P1c were explicitly accepted on 2026-10-15. The next
+planned gameplay milestone is **P2: broaden the campaign** through original
+mission owners, required units/abilities and normal persistent state.
+
+### P1c completed by user acceptance (2026-10-15)
+
+The user explicitly accepts P1c as completed on 2026-10-15, after the reported
+mission transitions, save/load and subsequent presentation, fighter and HUD
+repairs. Record this as user acceptance of the delivered native Linux scope.
+P1a, P1b and P1c are therefore accepted in that scope; P2 campaign expansion is
+the next planned delivery step.
+
+This status decision adds no test execution and does not invent confirmation
+for individual unreported scenarios. Detailed defeat/retry, complete restart
+persistence, result-driven resource-growth measurements, unresolved unit/hero
+coverage, missing media and whole-process leak findings remain tracked
+technical follow-ups. Native Windows Debug/Final/module ABI and hosted CI
+remain unexecuted; M3 stays separate and unaccepted. Earlier dated pending
+milestone statements below are implementation history, superseded by this
+acceptance decision, not by fabricated technical passes.
+
+### P1c implementation history before final acceptance (2026-10-15)
+
+Additional HUD feedback affects more ship/building actions. Complete authored
+resource-ID translation now replaces the partial tooltip mapping in both
+HotButton owners; all 1039 external button fields match the current command
+identities in an independent audit. Physical F8 and original gameplay capability
+checks remain unchanged. The user confirms the previously failing Infiltrator
+action now works; other actions retain their pending gameplay checks.
+Full-media candidate/runtime verification is recorded in
+[the HUD ledger](NATIVE_TERRAN_CAMPAIGN.md#hud-command-bindings-across-all-ship-and-structure-panels-2026-10-15).
+
+Latest presentation feedback: transient hull-texture effects are reproduced
+during the original TM3 opening. The shared App-batcher/direct-renderer texture
+ownership fault now has a failing-before/passing-after regression and a native
+repair; no required effect is excluded. The user confirms that texture artifacts
+are gone, but reports invisible fighters and ineffective Hive Carriers. A separate
+read-only debugger run with the genuine TM3 checkpoint reproduces fighters diving
+below the battlefield and failing sampled firing attempts. The native Fighter
+control-frame repair now keeps observed flight bounded; genuine Hive fighters
+schedule and deliver damage, reducing a Cruiser hull from 150 to 110. Repeated
+ordinary F7/F8 continuation closes normally in a bounded Clang run. Renewed user
+visual/combat confirmation and the broader P1c gates remain open.
+[Focused evidence](GAME_MATERIAL_PATH.md#effect-textures-after-direct-ship-draws-2026-10-15).
+
+Latest user evidence: TM2 runs through and capture succeeds on click, but
+Objectives/Repair/Sell commands, Capture cursor feedback and TM3 entry were
+reported broken. Exact retail/CQ2 button mappings and the omitted original
+Capture cursor are repaired; original Script03T entry/schema/resources are now
+linked. Renewed user acceptance remains pending. See
+[the focused ledger](NATIVE_TERRAN_CAMPAIGN.md#tm2-completion-hud-commands-capture-cursor-and-tm3-entry-2026-10-15).
+P1c closes after the original victory/result/progress/next-start, defeat/retry,
+restart persistence, ordinary checkpoint continuation and repeated-transition
+lifecycle/media gates are evidenced and the relevant user checks confirmed.
+TM2 completion alone does not close those gates; full TM3 completion is not
+required for this bounded start repair.
+
+The additional reported planet-hover/build-slot visibility regression now has a
+native presentation repair through the original highlight/faded-pass owners and
+scoped instance opacity. Existing material CPU/GPU and fatal focused sanitizer
+checks pass. Exact retail opacity and user construction-slot visibility/interaction
+remain open; see [material evidence](GAME_MATERIAL_PATH.md#native-planet-hover-opacity-2026-10-15).
+
+The subsequently supplied original Arial Narrow files resolve the missing-font
+input prerequisite. They remain private/ignored and are mapped externally;
+strict layout/glyph rendering still requires its actual runtime/user checks.
+Existing effect/audio/leak, defeat/retry, repeated-transition-resource and
+Windows/ABI/CI gates remain open.
+
+
+Latest feedback: Cruiser builds and save/load are user-confirmed; missile aim and
+the objective menu require corrections. These fixes and the authorized systematic
+Terran/Mantis/Celareon unit/hero expansion now advance original production owners.
+Track actual admission, gameplay and saveability separately in
+[unit coverage](NATIVE_UNIT_COVERAGE.md). Retail Admiral bonus/ability semantics
+and original Wormhole persistence remain explicit blockers; no placeholder
+success or automatic objective/progress changes are permitted.
+
+
+Latest user feedback confirms the preceding briefing/muzzle/camera repairs and
+continued TM2 gameplay, then reports a Missile Cruiser construction crash. The
+core identifies a null newly created ship after required vertical/cloak launcher
+factories were absent. Those original owners now compile/link under GCC/Clang, with focused schema and
+sanitizer checks; actual queue/completion/save/reload remains pending the genuine
+prebuild checkpoint. Earlier start fixes and an unlocked
+second mission do not constitute complete TM2 or P1c acceptance.
+
+The user now confirms regular TM1 completion and successful transition to TM2.
+TM2 acceptance is blocked by the reported empty/unusable post-opening view,
+misplaced Mantis weapon origins and undersized inactive briefing frames. These
+are P1c correct-start/presentation repairs; a successful transition alone does
+not establish playable TM2. The native border/model-axis/camera repairs now pass
+focused checks, and a fresh pre-F8/post-F8 capture shows planet/stations/start
+fleet correctly in the playable pane. User control/media retest remains open. Defeat/retry and restart persistence remain open.
+
+The native composition now returns victory/loss through original statistics and
+Continue, and quit/resign through the original campaign selector. Original
+MScript/GameProgress still own completion and unlocking. The original Script02T
+module/schema/resources are linked for the second mission; native static script
+records are reconstructed before saved-state loading. Concrete spatial audio,
+status text and map transient-state teardown defects are fixed in their owners.
+The actual second-map load exposed an older OPTIONS schema; the production
+correlator now accepts only that pinned migration, retaining required-field and
+extent checks and original Windows defaults.
+
+Bounded external-data execution now covers the genuine late TM1 checkpoint
+through two actual F8 loads/F7/window close, and original TM2 briefing/Start,
+opening, F7/F8/F7 and close through 3005 source frames. The latter executes animated
+portraits and closes with zero mission-audio streams and idle hint ownership.
+This is technical start/save/lifecycle evidence, not a genuine victory transition
+or complete TM2 presentation acceptance. Defeat/retry, actual victory progress
+persistence after restart, repeated result-driven switches, resource-growth
+assessment and user confirmation remain P1c gates. Full-media checks retain the
+carried font/effect/depletion-audio/leak findings; P1 remains open. Native Windows/
+ABI and actual CI are not executed; M3 remains separate.
+
+Owner contracts, falsifiable regressions, validation and the acceptance checklist:
+[P1c ledger](NATIVE_TERRAN_CAMPAIGN.md#p1c-integration-and-acceptance-ledger-2026-10-15).
 
 ### P1b completed by user acceptance (2026-10-15)
 
@@ -206,8 +318,8 @@ open.
 | P0 — CI preparation | Reuse existing build/test drivers; separate technical readiness jobs from M3 comparison acceptance. Provide a reproducible developer playtest build and launch recipe with external data/font/decoder inputs. | GCC/Clang default and playable optional configurations build; relevant CPU/layout/regression checks execute; focused sanitizer checks execute; a revision/configuration and exact launch instructions can be handed to the user. |
 | P1a — Original campaign entry | Follow `Menu_campaign` → original mission selector, briefing, script/resource loading and GameProgress. Identify the first Terran mission and add only its missing production dependencies. | CI compiles/checks the integration; a bounded load/close smoke executes where lawful external data is available; user can enter the real mission through original controls. |
 | P1b — Complete that mission **(completed: user acceptance 2026-10-15)** | Integrate required gameplay/save owners and the complete mission presentation/media scope specified below, including both minimaps and all required asset/material/shader paths. | User reaches original victory and verifies defeat, early/active-state save/load and continued play; complete visuals, audio and the system-connections minimap work before and after reload. No debug completion, fabricated saves or presentation exclusions qualify for full P1b acceptance. |
-| P1c — Continue and repeat **(next active step)** | Connect original result/return/progress and next-mission loading; check defeat/retry, restart and teardown. | User reaches the next mission after victory, exercises defeat/retry and closes/re-enters normally. Targeted automation protects any reproduced lifecycle/save regression. This completes P1, not the entire campaign. |
-| P2 — Broaden the campaign | Advance mission by mission; group checks around newly required factions, AI, abilities and persistent state. | Maintain a compact mission matrix of untested/blocked/passed with tested revision, configuration, limitations and user result. No campaign-wide claim from one mission. |
+| P1c — Continue and repeat **(completed: user acceptance 2026-10-15)** | Connect original result/return/progress and next-mission loading; check defeat/retry, restart and teardown. | User reaches the next mission after victory, exercises defeat/retry and closes/re-enters normally. Targeted automation protects any reproduced lifecycle/save regression. This completes P1, not the entire campaign. |
+| P2 — Broaden the campaign **(next planned step)** | Advance mission by mission; group checks around newly required factions, AI, abilities and persistent state. | Maintain a compact mission matrix of untested/blocked/passed with tested revision, configuration, limitations and user result. No campaign-wide claim from one mission. |
 | P3 — Complete the single-player experience | Restore remaining gameplay-relevant providers and audiovisual features outside already accepted mission scopes; improve launch/settings usability. Add skirmish only as a separately scoped follow-up requiring the real player AI. | Representative campaign playthroughs, usable launch flow and documented feature coverage. Packaging/release still requires legal, dependency and data-separation review. |
 | Later M3 — Compatibility and determinism | Reuse existing observers for a concrete discrepancy; plan controlled external events before demanding identical traces. Expand full-state/Windows/retail comparisons separately. | Explicit comparison evidence under a defined protocol. Multiplayer remains later and requires its own determinism/network acceptance. |
 

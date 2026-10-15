@@ -783,7 +783,11 @@ void Missile::InitWeapon (IBaseObject * owner, const class TRANSFORM & orientati
 	transform = startTrans;
 
 	Vector distance = targetPos - initialPos;
+#if defined(_WIN32)
 	SINGLE pitch = orientation.get_pitch();
+#else
+	SINGLE pitch = FrontierX::NativeWeaponSightPitch(orientation);
+#endif
 	SINGLE yaw = get_angle(distance.x,distance.y)+0.75*SPREAD*cos(3*theta);
 
 	transform.rotate_about_j(yaw);
@@ -822,7 +826,11 @@ void Missile::InitWeapon (IBaseObject * owner, const class TRANSFORM & orientati
 	//relative to the base point is greater than the pathLength(+some delta?)
 
 	//do a geometry thing to figure out the chord
+#if defined(_WIN32)
 	SINGLE rel_pitch = orientation.get_pitch();
+#else
+	SINGLE rel_pitch = FrontierX::NativeWeaponSightPitch(orientation);
+#endif
 	rel_pitch -= TRANSFORM::get_pitch(base);
 	SINGLE b = pathLength*0.5;
 	SINGLE theta2 = PI/2-rel_pitch;
@@ -939,7 +947,12 @@ BOOL32 Missile::setup_ang_velocity (SINGLE dt,SINGLE framerate_factor)
 			return 1;
 		}
 
+#if defined(_WIN32)
 		SINGLE pitch = transform.get_pitch();
+#else
+		// Preserve the missile's -K flight pitch when rebuilding its heading.
+		SINGLE pitch = FrontierX::NativeWeaponSightPitch(transform);
+#endif
 
 		SINGLE x = r*r-pow(pathLength*0.5-progress,2);
 		if (x < 0)

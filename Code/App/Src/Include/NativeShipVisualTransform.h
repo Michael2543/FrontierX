@@ -22,6 +22,20 @@ inline Transform NativeShipVisualTransform(const Transform &world,
     return directEngineHull ? world * NativeShipModelAxisCorrection() : world;
 }
 
+inline Transform NativeShipHardpointTransform(const Transform &shipWorld,
+                                             const Transform &nodeWorld,
+                                             const Transform &hardpoint,
+                                             bool correctedModelAxes)
+{
+    if (!correctedModelAxes) return nodeWorld * hardpoint;
+    // Ship simulation roots are rigid. Recover the complete child frame,
+    // including its authored scale, then insert the hull's model correction
+    // once at the root rather than rotating an already-world-space muzzle.
+    // This is the authored model frame, independent of graphics preferences.
+    const Transform nodeLocal = shipWorld.get_inverse() * nodeWorld;
+    return NativeShipVisualTransform(shipWorld, true) * nodeLocal * hardpoint;
+}
+
 inline Transform NativeShipSpeakerMarkerTransform(const Transform &world,
                                                   const Vector &center,
                                                   float angle)

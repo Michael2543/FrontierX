@@ -27,8 +27,12 @@ TERRAN_CHECKLIST = [
     'Both minimaps: system connections, original interactions, selection/target markers and restoration after load.',
     'F7/F8 early and during active orders, production and combat; continue correctly after each load.',
     'Inspect all models/parts/animations, textures/materials/lighting, background and weapon/particle/shield/drive effects throughout the mission and after load.',
-    'Verify portrait switch/clear/animation, HUD/text, speech/music/spatial sound; reach original victory and regular defeat. Following mission is P1c.',
-    'Normal close; privately report last objective, expected/observed result, visible/audible gaps and reproduction steps.']
+    'From a genuine pre-end save, reach regular victory, inspect original result/statistics and Continue; enter the second Terran briefing and mission with correct initial units, objectives and normal orders.',
+    'Reach regular defeat; inspect original result/return, retry and mission selection. Defeat, resign and cancelled briefings must not unlock victory progress.',
+    'Quit the whole program and restart with the same external save/configuration roots; verify original campaign progress and available missions.',
+    'Save/load before the first mission ends and after the second mission starts; continue with the correct objectives, orders, selection, both minimaps, animated portraits and full graphics/audio/media.',
+    'Repeat start/load/close/retry/mission-switch cycles in one process; record the cycle count and check for hangs, stale mission content, duplicate speech/music or surviving effects.',
+    'Normal close; privately report genuine checkpoint, last objective, cycle count, expected/observed result, visible/audible gaps and reproduction steps.']
 
 
 def mission_command(root, build, install, font, save, mission="training", bounded_presentation=False, font_mapping=None, single_font_interim=False, no_frame_limit=False):
@@ -128,10 +132,10 @@ def write_handoff(root, build, destination, env, mission="training", bounded_pre
                                      'FRONTIERX_PLAYTEST_FONT_MAP (required for full Terran)',
                                      'FRONTIERX_PLAYTEST_SAVE_ROOT', 'XDG_CONFIG_HOME (external writable directory)'],
               'known_limits': (EXCLUSIONS if reduced else []) + [
-                                           'P1b gameplay and complete presentation/media acceptance pending; unsupported owners fail explicitly',
+                                           'P1c victory/defeat, progress/restart, second-mission entry and repeated lifecycle acceptance require actual user confirmation; unsupported owners fail explicitly',
                                            'Wayland resize and whole-process GPU/library leak checks remain open'],
               'checklist': TERRAN_CHECKLIST if mission == 'terran1' else CHECKLIST,
-              'acceptance': 'Provenance only; report technical/host execution separately. P1b full user gameplay and presentation acceptance pending.'}
+              'acceptance': 'Provenance only; report technical/host execution separately. P1b user acceptance of the delivered first-Terran scope does not accept P1c transitions or resolve recorded presentation/media follow-ups.'}
     mapping = env.get('FRONTIERX_PLAYTEST_FONT_MAP')
     record['font_mapping_fingerprints'] = font_map_fingerprints(mapping) if mapping and not single_font_interim else None
     font = env.get('FRONTIERX_TEST_FONT_FILE', cache.get('FRONTIERX_TEST_FONT_FILE'))

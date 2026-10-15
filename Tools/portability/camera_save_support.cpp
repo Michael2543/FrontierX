@@ -9,6 +9,7 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 #include "IMovieCamera.h"
+#include "MGlobals.h"
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
@@ -19,6 +20,22 @@
 #include <memory>
 #include <stdexcept>
 #include <vector>
+
+// This probe exercises only MovieCameraManager's disk owner. MovieCamera's
+// actual object factory shares that production translation unit but requires
+// a live mission/UI; reject accidental entry instead of supplying fake IDs.
+IStatusBarResource *STATUS = nullptr;
+IHintResource *HINTBOX = nullptr;
+
+U32 MGlobals::CreateNewPartID(U32)
+{
+	throw std::logic_error("camera save probe unexpectedly entered mission object creation");
+}
+
+U32 MGlobals::GetThisPlayer()
+{
+	throw std::logic_error("camera save probe unexpectedly requested a mission player");
+}
 
 namespace
 {
@@ -170,8 +187,13 @@ void Put(std::vector<U8> &bytes, std::size_t offset, const T &value)
 }
 }
 
+bool CheckNativeMovieCameraAim();
+
 void CheckMovieCameraSaveRoundTrip()
 {
+	// The existing disk round trip cannot detect TM2's camera facing away after
+	// cinematic handoff. Exercise its production conversion before disk checks.
+	Require(CheckNativeMovieCameraAim(), "native cinematic camera did not aim at its requested target");
 	Require(CAMERAMANAGER != nullptr, "camera manager missing for save test");
 	// 44-byte position + 25-byte scalar header + 4-byte count + 1-byte flag.
 	std::vector<U8> serialized(111, 0);

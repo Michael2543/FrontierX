@@ -11,15 +11,36 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdint>
+#include <algorithm>
+using std::min;
+struct IDrawAgent;
+#endif
 
 #include "TObject.h"
 #include "IConnection.h"
 #include "Camera.h"
 #include "DEffect.h"
-#include "Objlist.h"
-#include "Sfx.h"
+#include "ObjList.h"
+#include "SFX.h"
 #include "TObjTrans.h"
 #include "TObjFrame.h"
 #include "TObjPhys.h"
@@ -35,24 +56,24 @@
 #include "MPart.h"
 #include "Sector.h"
 #include "CQLight.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "IShipDamage.h"
 #include "SimpleMesh.h"
 #include "CQBatch.h"
 #include "MeshRender.h"
-#include "Opagent.h"
+#include "OpAgent.h"
 #include "IBanker.h"
 #include "IShipMove.h"
 
-#include <IHardpoint.h>
+#include <IHardPoint.h>
 #include <DSpecial.h>
 #include <DMBaseData.h>
 #include <TSmartPointer.h>
 #include <Mesh.h>
-#include <FileSys.h>
-#include <Engine.h>
+#include <Filesys.h>
+#include <ENGINE.H>
 #include <IRenderPrimitive.h>
-#include <Renderer.h>
+#include <renderer.h>
 #include <IAnim.h>
 
 
@@ -194,7 +215,7 @@ struct _NO_VTABLE Synthesis : public ObjectPhysics<ObjectTransform<ObjectFrame<I
 	
 	// ILauncher
 
-	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, S32 animArcheIndex, SINGLE range);
+	virtual void InitLauncher (IBaseObject * owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE range);
 
 	virtual void AttackPosition (const struct GRIDVECTOR * position, bool bSpecial);
 
@@ -462,8 +483,13 @@ BOOL32 Synthesis::Update ()
 			owner = 0;
 			MPartNC targetPart(target.Ptr());
 			//finish
+#if defined(_WIN32)
 			targetPart->hullPoints = min(targetPart->hullPointsMax,targetPart->hullPoints+(hullPointsPer*targetPart->hullPointsMax));
 			targetPart->supplies = min(targetPart->supplyPointsMax,targetPart->supplies+(suppliesPer*targetPart->supplyPointsMax));
+#else
+			targetPart->hullPoints = std::min<SINGLE>(targetPart->hullPointsMax,targetPart->hullPoints+(hullPointsPer*targetPart->hullPointsMax));
+			targetPart->supplies = std::min<SINGLE>(targetPart->supplyPointsMax,targetPart->supplies+(suppliesPer*targetPart->supplyPointsMax));
+#endif
 			return 0;
 		}
 	}
@@ -545,7 +571,11 @@ void Synthesis::renderZap()
 
 	end = target.Ptr()->GetPosition();
 
+#if defined(_WIN32)
 	SINGLE progress = min(timer/ZAP_TIME,1.0);
+#else
+	SINGLE progress = std::min<double>(timer/ZAP_TIME,1.0);
+#endif
 #define FLARE 0.7
 
 	Vector dir= end-start;
@@ -568,7 +598,11 @@ void Synthesis::renderZap()
 
 #define TILE 0.01
 
+#if defined(_WIN32)
 	SINGLE dist = min(progress,FLARE)*length;
+#else
+	SINGLE dist = std::min<double>(progress,FLARE)*length;
+#endif
 	//draw some
 	v_list[0].pos = start-i*BM_WIDTH;
 	v_list[0].color = 0;
@@ -634,7 +668,13 @@ void Synthesis::renderZap()
 //
 void Synthesis::renderShield()
 {
+#if defined(_WIN32)
 	VOLPTR(IShipDamage) shipDamage = target;
+#else
+	VOLPTR(IShipDamage) shipDamage;
+	target.Ptr()->QueryInterface(IShipDamageID, shipDamage);
+	CQASSERT(shipDamage);
+#endif
 	SMesh *smesh = shipDamage->GetShieldMesh();
 	if (smesh == 0)
 		return;
@@ -765,12 +805,18 @@ void Synthesis::renderShield()
 
 // ILauncher
 
-void Synthesis::InitLauncher (IBaseObject * _owner, S32 ownerIndex, S32 animArcheIndex, SINGLE _range)
+void Synthesis::InitLauncher (IBaseObject * _owner, S32 ownerIndex, LAUNCHER_ANIM_ARCH animArcheIndex, SINGLE _range)
 {
 	CQASSERT(_owner);
 	_owner->QueryInterface(ILaunchOwnerID,owner,LAUNCHVOLATILEPTR);
 
+#if defined(_WIN32)
 	VOLPTR(IExtent) extentObj = owner;
+#else
+	VOLPTR(IExtent) extentObj;
+	owner.Ptr()->QueryInterface(IExtentID, extentObj);
+	CQASSERT(extentObj);
+#endif
 	CQASSERT(extentObj);
 
 //	mc = &extentObj->GetMeshChain();
@@ -884,7 +930,11 @@ BOOL32 Synthesis::Save (struct IFileSystem * outFile)
 
 	FRAME_save(save);
 	
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+	if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save)) goto Done;
+#endif
 	
 	result = 1;
 
@@ -906,8 +956,12 @@ BOOL32 Synthesis::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("SYNTHESIS_SAVELOAD", buffer, &load);
+#else
+	if (!LoadNativeMissionRecord(MISSION,"SYNTHESIS_SAVELOAD",file,&load,sizeof(load))) goto Done;
+#endif
 
 	*static_cast<BASE_SYNTHESIS_SAVELOAD *>(this) = load;
 
@@ -959,7 +1013,13 @@ void Synthesis::shootTarget()
 	//	ENGINE->set_instance_handler(owner.ptr->GetObjectIndex(),this);
 	//	ENGINE->set_transform(instanceIndex,trans);
 
+#if defined(_WIN32)
 		VOLPTR(IShipMove) smove = owner;
+#else
+		VOLPTR(IShipMove) smove;
+		owner.Ptr()->QueryInterface(IShipMoveID, smove);
+		CQASSERT(smove);
+#endif
 		CQASSERT(smove);
 		smove->RemoveFromMap();
 
@@ -968,7 +1028,13 @@ void Synthesis::shootTarget()
 		bActive = TRUE;
 		stage = SYN_ROTATE;
 
-		EVENTSYS->Send(CQE_OBJECT_DESTROYED, (void *) dwMissionID);
+		EVENTSYS->Send(CQE_OBJECT_DESTROYED,
+#if defined(_WIN32)
+			(void *) dwMissionID
+#else
+			reinterpret_cast<void *>(static_cast<std::uintptr_t>(dwMissionID))
+#endif
+		);
 		
 		systemID = owner.Ptr()->GetSystemID();
 		
@@ -979,7 +1045,13 @@ void Synthesis::shootTarget()
 	else if(!THEMATRIX->IsMaster())
 	{
 		OBJLIST->RemoveObject(owner.Ptr());
+#if defined(_WIN32)
 		VOLPTR(IShipMove) smove = owner;
+#else
+		VOLPTR(IShipMove) smove;
+		owner.Ptr()->QueryInterface(IShipMoveID, smove);
+		CQASSERT(smove);
+#endif
 		CQASSERT(smove);
 		smove->RemoveFromMap();
 		delete owner.Ptr();

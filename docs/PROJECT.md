@@ -1,5 +1,18 @@
 # FrontierX Project Charter
 
+## Delivery status (2026-10-15)
+
+The user explicitly accepts P1c as completed after mission-transition, save/load,
+presentation, fighter and HUD feedback repairs. P1a/P1b/P1c are accepted in the
+delivered native Linux scope. P2 campaign expansion is the next planned step.
+This acceptance does not add scenario-specific runtime evidence or clear
+unresolved unit/hero coverage, missing media, whole-process leaks, unexecuted
+Windows/ABI or hosted CI checks. M3 remains separate and unaccepted. See
+[the active plan](PORT_READINESS.md#p1c-completed-by-user-acceptance-2026-10-15)
+and [the retained evidence ledger](NATIVE_TERRAN_CAMPAIGN.md#p1c-integration-and-acceptance-ledger-2026-10-15).
+Earlier implementation checkpoints below predate this acceptance decision.
+
+
 ## Current direction (2026-10-13)
 
 The immediate goal is a playable native Linux single-player campaign. Prepare
@@ -14,7 +27,7 @@ The next gameplay milestone is the first regular Terran campaign mission through
 normal result, reload and next-mission entry. P1a connects original campaign
 selection and Script01 loading with bounded source-loop/close execution; the user
 judged it sufficient to proceed. P1b is completed by explicit user acceptance
-on 2026-10-15; P1c is the next active step. See
+on 2026-10-15; P1c is also accepted, and P2 is the next planned step. See
 [first Terran integration](NATIVE_TERRAN_CAMPAIGN.md).
 
 The user completed the first-Terran run, reported original victory and save/load,
@@ -835,3 +848,10 @@ fixture now also executes and captures through the supported Windows D3D9 path. 
 image passes the documented one-pixel-tolerant comparison with the visible Linux SDL/Vulkan
 capture; this is synthetic cross-backend runtime evidence, not retail gameplay parity. See
 [WINDOWS_BUILD_VALIDATION.md](WINDOWS_BUILD_VALIDATION.md).
+
+Latest focused P1c repair (2026-10-15): user TM2 completion is recorded separately
+from open acceptance. Native retail/CQ2 HUD command mapping, original Capture
+cursor embedding and original TM3 script/schema/briefing/start are integrated,
+with local GCC/Clang, focused sanitizer and bounded start/load evidence. Renewed
+repair/sell/cursor acceptance and existing lifecycle/defeat/Windows/CI gates remain
+open; see [the campaign ledger](NATIVE_TERRAN_CAMPAIGN.md#tm2-completion-hud-commands-capture-cursor-and-tm3-entry-2026-10-15).
