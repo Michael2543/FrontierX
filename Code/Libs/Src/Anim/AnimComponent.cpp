@@ -148,6 +148,9 @@ struct AnimComponent :  public IAnimation,
 													void* user_data = NULL);
 
 	void COMAPI release_script_inst (SCRIPT_INST inst);
+#if !defined(_WIN32)
+    bool configure_root_basis(SCRIPT_INST inst, INSTANCE_INDEX root, const Matrix &basis);
+#endif
 
 	int COMAPI script_start (SCRIPT_INST inst, 
 								unsigned int flags=FORWARD, 
@@ -452,6 +455,33 @@ void AnimComponent::release_script_inst (SCRIPT_INST inst)
 		aval->Release ();
 	}
 }
+
+#if !defined(_WIN32)
+bool AnimComponent::configure_root_basis(SCRIPT_INST inst, INSTANCE_INDEX root, const Matrix &basis)
+{
+    Script *script = nullptr;
+    if (!find_inst(inst, script)) return false;
+    bool configured = false;
+    for (auto *channel : script->channels)
+    {
+        const auto &target = channel->get_target();
+        if (target.type == OBJECT && target.object == root)
+        {
+            auto *stream = dynamic_cast<Channel::FullStream *>(channel);
+            if (!stream) return false;
+            configured = true;
+        }
+    }
+    if (!configured) return false;
+    for (auto *channel : script->channels)
+    {
+        const auto &target = channel->get_target();
+        if (target.type == OBJECT && target.object == root)
+            static_cast<Channel::FullStream *>(channel)->set_native_root_basis(basis);
+    }
+    return configured;
+}
+#endif
 
 int AnimComponent::script_start (SCRIPT_INST inst, unsigned int flags, float time, float scale, float transition_duration, float weight, float translation_scale, const Transform * start_xform)
 {
@@ -1754,6 +1784,13 @@ bool CheckNativeAnimationNodeRelease()
         new Channel::FullStream(&controller)};
     for (auto *stream : streams) delete stream;
     return true;
+}
+
+bool ConfigureNativeAnimationRootBasis(IAnimation *animation, int script, int root,
+                                      const Matrix &basis)
+{
+    auto *owner = dynamic_cast<AnimComponent *>(animation);
+    return owner && owner->configure_root_basis(script, root, basis);
 }
 
 bool RegisterNativeAnimation(ICOManager * manager)

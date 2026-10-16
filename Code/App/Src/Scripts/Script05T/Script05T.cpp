@@ -12,10 +12,31 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
-
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript05Resources.h"
+namespace FrontierXScript05
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 604, "Script05 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, mhandle) == 16, "Script05 speech handle offset");
+static_assert(offsetof(MissionData, PerilonJumpGate) == 24, "Script05 first part reference offset");
+static_assert(offsetof(MissionData, BlackHole) == 232, "Script05 BlackHole offset");
+static_assert(offsetof(MissionData, Blackwell) == 248, "Script05 Blackwell offset");
+static_assert(offsetof(MissionData, Hawkes) == 264, "Script05 Hawkes offset");
+static_assert(offsetof(MissionData, KerTak) == 456, "Script05 KerTak offset");
+static_assert(offsetof(MissionData, failureID) == 600, "Script05 failure offset");
+static_assert(offsetof(MissionData, failureID) + sizeof(MissionData::failureID) == 604,
+              "Script05 final field extent");
+#endif
 
 
 
@@ -124,6 +145,35 @@ bool SameObj(const MPartRef & obj1, const MPartRef & obj2)
 //--------------------------------------------------------------------------
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript05Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 123;
+    data.mhandle = 456;
+    data.BlackholeDeath = true;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle && !data.BlackholeDeath;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript05(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript05Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript05ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //	An attempt to try and monitor and manage the Enemy AI
@@ -1675,3 +1725,7 @@ bool TM5_MissionSuccess::Update (void)
 //--------------------------------------------------------------------------//
 //--------------------------------End Script05T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript05
+#endif

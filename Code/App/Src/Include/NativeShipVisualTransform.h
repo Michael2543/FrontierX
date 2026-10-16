@@ -49,6 +49,18 @@ inline Transform NativeShipSpeakerMarkerTransform(const Transform &world,
     return world * marker;
 }
 
+inline Transform NativeShipDamageSmokeTransform(const Transform &world,
+                                               const Transform &smokeLocal,
+                                               bool directEngineHull)
+{
+    Transform smokeWorld = world * smokeLocal;
+    // Extent slices use raw hull vertices. Correct their anchor only: smoke
+    // already has the original plume orientation, independent of hull axes.
+    if (directEngineHull)
+        smokeWorld.translation = NativeShipVisualTransform(world, true) * smokeLocal.translation;
+    return smokeWorld;
+}
+
 inline void NativeShipSelectionBounds(const float modelBox[6], bool directEngineHull,
                                       float selectionBox[6])
 {

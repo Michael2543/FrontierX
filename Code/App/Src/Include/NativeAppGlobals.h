@@ -254,6 +254,9 @@ void LineDraw(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1,
               COLORREF color, BOOL32 bSmooth = 0);
 void RectangleHash(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1, COLORREF color);
 void RectangleFill(const _pane *pane, S32 x0, S32 y0, S32 x1, S32 y1, COLORREF color);
+// Original health/supply bar geometry, emitted under one shared render state.
+void RectangleFillSegments(const _pane *pane, S32 x0, S32 y0,
+                           S32 filledLength, COLORREF color);
 }
 void OrthoView(const _pane *pane = nullptr);
 namespace DA {
@@ -459,6 +462,7 @@ BOOL32 LoadNativePersistedLauncher(struct ISaveLoad *saved, const struct BASIC_D
     IFileSystem *file, const char *directoryName);
 bool CheckNativeStatelessPingRestart(IFileSystem *directory);
 bool CheckNativeGunboatLauncherFailure(IFileSystem *file);
+bool CheckNativeSectorEffects();
 bool CheckNativeMimicPersistence(IFileSystem *directory);
 bool CheckNativeRepellentCloudPersistence(IFileSystem *directory);
 bool CheckNativeStasisBoltPersistence(IFileSystem *directory);
@@ -467,5 +471,6 @@ namespace FrontierX
 {
 void LoadNativeSystemMap(ISystemMap *map, IFileSystem *file, bool requireRecord);
 bool CheckNativeSystemMapPersistence(IFileSystem *directory, IUserDefaults *defaults);
+bool CheckNativeTrailTerminalFade();
 }
 #endif

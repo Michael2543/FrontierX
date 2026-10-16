@@ -573,7 +573,16 @@ void MenuBriefing::onButtonPressed (U32 buttonID)
 			BRF_LOG("IDS_START: before ChangeInterfaceRes\n");
 			ChangeInterfaceRes(IR_IN_GAME_RESOLUTION);
 			BRF_LOG("IDS_START: before Reload\n");
+#if defined(_WIN32)
 			MISSION->Reload();
+#else
+			if (!MISSION->Reload())
+			{
+				BRF_LOG("IDS_START: mission reload failed\n");
+				endDialog(0);
+				break;
+			}
+#endif
 			BRF_LOG("IDS_START: after Reload\n");
 			endDialog(1);
 			break;

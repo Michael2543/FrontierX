@@ -13,19 +13,47 @@
 */			    
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <DJumpGate.h>
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <IHardPoint.h>
+#include <renderer.h>
+#include <Viewer.h>
+#include <VFX.H>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <cstddef>
+#include <type_traits>
+#include <memory>
+#include <stdexcept>
+#include <string>
+using std::min;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+#endif
 
-#include "Resource.h"
+#include "resource.h"
 #include "Startup.h"
 #include "TCPoint.h"
-#include "Objlist.h"
+#include "ObjList.h"
 #include "IObject.h"
 #include "TObject.h"
 //#include "BlackHole.h"
-#include "camera.h"
+#include "Camera.h"
 #include "UserDefaults.h"
-#include "menu.h"
+#include "Menu.h"
 #include "DFog.h"
 #include "Camera.h"
 #include "BBMesh.h"
@@ -34,10 +62,10 @@
 #include "TObjFrame.h"
 #include "TObjTrans.h"
 #include "DBlackHole.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "Camera.h"
-#include "mission.h"
-#include "mesh.h"
+#include "Mission.h"
+#include "Mesh.h"
 #include "IShipMove.h"
 #include "ObjMapIterator.h"
 #include "SysMap.h"
@@ -54,17 +82,30 @@
 #include "ObjSet.h"
 
 #include <DQuickSave.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <TComponent.h>
 #include <TSmartPointer.h>
-#include <Heapobj.h>
+#include <HeapObj.h>
 #include <Viewer.h>
 #include <EventSys.h>
 #include <3dmath.h>
-#include <Engine.h>
-#include <Physics.h>
+#include <ENGINE.H>
+#include <physics.h>
 
 #include <malloc.h>
+
+#if !defined(_WIN32)
+static_assert(sizeof(BASE_BLACKHOLE_SAVELOAD) == 36, "BlackHole base save record size");
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, timer) == 20, "BlackHole timer offset");
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, workingID) == 24, "BlackHole operation offset");
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, waitingJumpPos) == 32, "BlackHole pending jump offset");
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, waitingJumpPos) + sizeof(NETGRIDVECTOR) == 35,
+              "BlackHole base final field extent");
+static_assert(sizeof(BLACKHOLE_SAVELOAD) == 180, "BlackHole complete save record size");
+static_assert(sizeof(MT_BLACKHOLE_QLOAD) == 20, "BlackHole quickload record size");
+static_assert(offsetof(MT_BLACKHOLE_QLOAD, targetSys) == 3, "BlackHole quickload targets offset");
+static_assert(offsetof(MT_BLACKHOLE_QLOAD, numTargetSys) == 19, "BlackHole quickload target count offset");
+#endif
 
 #define BLACKHOLE_RANGE 2.0
 #define OUTER_BLACKHOLE_RANGE 3.0
@@ -109,7 +150,12 @@ struct BLACKHOLE_INIT
 
 	~BLACKHOLE_INIT (void)
 	{
+#if defined(_WIN32)
 		ENGINE->release_archetype(archIndex);
+#else
+        if (archIndex != INVALID_ARCHETYPE_INDEX)
+            ENGINE->release_archetype(archIndex);
+#endif
 		for (int i=0;i<MAX_BB_MESHES;i++)
 		{
 			if (bb_anim_arch[i])
@@ -118,7 +164,14 @@ struct BLACKHOLE_INIT
 				bb_anim_arch[i] = 0;
 			}
 
+#if defined(_WIN32)
 			ENGINE->release_archetype(bb_mesh_archID[i]);
+#else
+            if (bb_mesh_archID[i] != INVALID_ARCHETYPE_INDEX)
+                ENGINE->release_archetype(bb_mesh_archID[i]);
+            if (bb_txm[i])
+                TMANAGER->ReleaseTextureRef(bb_txm[i]);
+#endif
 			if (mm_arch[i])
 			{
 				DestroyMorphMeshArchetype(mm_arch[i]);
@@ -659,7 +712,7 @@ BOOL32 BlackHole::Update (void)
 						THEMATRIX->SetLongTermState(workingID, true);
 					}
 
-					VOLPTR(IShipMove) ship=actor;
+					VOLPTR(IShipMove) ship=actor.Ptr();
 					ship->PushShipTo(dwMissionID,transform.translation,ship->GetCurrentCruiseVelocity());
 				}
 			}
@@ -766,7 +819,19 @@ void BlackHole::StashVertices(U32 mesh_id)
 		s_sort[v_pos].p = transform*(p_sort[v_cnt]+data->billboardMesh[mesh_id].offset);
 		s_sort[v_pos].params = params;
 	//	v_sort[v_pos] = (s_sort[v_cnt].p-cpos).magnitude();
+#if defined(_WIN32)
 		v_sort[v_pos] = -s_sort[v_cnt].p.y;
+#else
+        const float sortDepth = -s_sort[v_cnt].p.y;
+        if (!std::isfinite(sortDepth) || sortDepth < -2147483648.0F ||
+            sortDepth >= 2147483648.0F)
+        {
+            CQBOMB0("Native BlackHole depth sort coordinate out of range");
+            std::abort();
+        }
+        // Preserve the signed-truncation/wrap key used by the original sorter.
+        v_sort[v_pos] = static_cast<U32>(static_cast<S32>(sortDepth));
+#endif
 		v_pos++;
 	}
 }
@@ -1101,7 +1166,7 @@ void BlackHole::ResolveAssociations()
 //
 void BlackHole::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = static_cast<const char *>(partName);
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_BLACKHOLE_QLOAD");
@@ -1174,7 +1239,7 @@ void BlackHole::OnOperationCreation (U32 agentID, void *buffer, U32 bufferSize)
 	
 	VOLPTR(IMissionActor) actor=OBJLIST->FindObject(buf->dwMissionID);
 //	actor->PrepareTakeover(buf->dwMissionID,0);
-	VOLPTR(IShipMove) ship=actor;
+	VOLPTR(IShipMove) ship=actor.Ptr();
 	ship->PushShipTo(dwMissionID,transform.translation,ship->GetCurrentCruiseVelocity());
 
 	//you're doomed
@@ -1213,7 +1278,7 @@ void BlackHole::receiveOpData (U32 agentID, void *buffer, U32 bufferSize)
 		{						
 			VOLPTR(IMissionActor) actor=OBJLIST->FindObject(buf->dwMissionID);
 //			actor->PrepareTakeover(buf->dwMissionID,0);
-			VOLPTR(IShipMove) ship=actor;
+			VOLPTR(IShipMove) ship=actor.Ptr();
 			ship->PushShipTo(dwMissionID,transform.translation,ship->GetCurrentCruiseVelocity());
 
 			//you're doomed
@@ -1327,7 +1392,16 @@ HANDLE BlackHoleManager::CreateArchetype(const char *szArchname, OBJCLASS objCla
 {
 	if (objClass == OC_BLACKHOLE)
 	{
+#if defined(_WIN32)
 		BLACKHOLE_INIT *newguy = new BLACKHOLE_INIT;
+#else
+        std::unique_ptr<BLACKHOLE_INIT> pending(new BLACKHOLE_INIT);
+        BLACKHOLE_INIT *newguy = pending.get();
+        const auto requireResource = [](bool valid, const char *name) {
+            if (!valid)
+                throw std::runtime_error(std::string("Native BlackHole required resource failed: ") + name);
+        };
+#endif
 //		newguy->name = szArchname;
 		newguy->pData = (BT_BLACKHOLE_DATA *)data;
 		newguy->pArchetype = ARCHLIST->GetArchetype(szArchname);
@@ -1338,6 +1412,11 @@ HANDLE BlackHoleManager::CreateArchetype(const char *szArchname, OBJCLASS objCla
 		// LOAD BILLBOARD MESHES
 		for (int i=0;i<MAX_BB_MESHES;i++)
 		{
+#if !defined(_WIN32)
+            const auto &billboard = newguy->pData->billboardMesh[i];
+            requireResource(bool(billboard.mesh_name[0]) == bool(billboard.tex_name[0]),
+                            "incomplete billboard mesh/texture pair");
+#endif
 			if (newguy->pData->billboardMesh[i].mesh_name[0] && newguy->pData->billboardMesh[i].tex_name[0])
 			{
 				//Get mesh or animating mesh
@@ -1354,6 +1433,11 @@ HANDLE BlackHoleManager::CreateArchetype(const char *szArchname, OBJCLASS objCla
 					newguy->mm_arch[i] = CreateMorphMeshArchetype(newguy->pData->billboardMesh[i].mesh_name);
 				}
 
+#if !defined(_WIN32)
+                requireResource(newguy->bb_mesh_archID[i] != INVALID_ARCHETYPE_INDEX || newguy->mm_arch[i],
+                                billboard.mesh_name);
+#endif
+
 				//Get texture or animating texture
 				if (strstr(newguy->pData->billboardMesh[i].tex_name,".tga"))
 					newguy->bb_txm[i] = TMANAGER->CreateTextureFromFile(newguy->pData->billboardMesh[i].tex_name,TEXTURESDIR, DA::TGA,PF_4CC_DAA8);
@@ -1367,6 +1451,15 @@ HANDLE BlackHoleManager::CreateArchetype(const char *szArchname, OBJCLASS objCla
 				}
 				else
 					CQERROR1("Don't know how to load %s",newguy->pData->billboardMesh[i].tex_name);
+#if !defined(_WIN32)
+                const auto *animation = newguy->bb_anim_arch[i];
+                requireResource(newguy->bb_txm[i] ||
+                                (animation && animation->frames && animation->frame_cnt),
+                                billboard.tex_name);
+                if (animation)
+                    for (U32 frame = 0; frame < animation->frame_cnt; ++frame)
+                        requireResource(animation->frames[frame].texture != 0, billboard.tex_name);
+#endif
 			}
 		}
 
@@ -1377,17 +1470,27 @@ HANDLE BlackHoleManager::CreateArchetype(const char *szArchname, OBJCLASS objCla
 			{
 				newguy->archIndex = ENGINE->create_archetype(fdesc.lpFileName, file);
 			}
+#if !defined(_WIN32)
+            requireResource(newguy->archIndex != INVALID_ARCHETYPE_INDEX, newguy->pData->ringObjectName);
+#endif
 		}
 
 		if(newguy->pData->sysMapIcon[0])
 		{
 			newguy->sysMapIconID = SYSMAP->RegisterIcon(newguy->pData->sysMapIcon);
+#if !defined(_WIN32)
+            requireResource(newguy->sysMapIconID != U32(-1), newguy->pData->sysMapIcon);
+#endif
 		}
 		else
 			newguy->sysMapIconID = -1;
 
 
+#if defined(_WIN32)
 		return newguy;
+#else
+        return pending.release();
+#endif
 	}
 	else
 		return 0;
@@ -1402,7 +1505,9 @@ BOOL32 BlackHoleManager::DestroyArchetype(HANDLE hArchetype)
 	}*/
 
 	BLACKHOLE_INIT *deadguy = (BLACKHOLE_INIT *)hArchetype;
+#if defined(_WIN32)
 	EditorStopObjectInsertion(deadguy->pArchetype);
+#endif
 	delete deadguy;
 
 	return 1;
@@ -1437,7 +1542,14 @@ IBaseObject * BlackHoleManager::CreateInstance(HANDLE hArchetype)
 void BlackHoleManager::EditorCreateInstance(HANDLE hArchetype,const MISSION_INFO & _info)
 {
 	BLACKHOLE_INIT * objtype = (BLACKHOLE_INIT *) hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, _info);
+#else
+	(void)objtype;
+	(void)_info;
+	std::fprintf(stderr, "Native BlackHole editor insertion is unavailable\n");
+	std::abort();
+#endif
 }
 
 //----------------------------------------------------------------------------------------------

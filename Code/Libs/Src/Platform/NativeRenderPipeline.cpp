@@ -856,13 +856,18 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
         return GR_INVALID_PARMS;
     const bool rgba8 = IsRgba8(format) || IsRgbx8(format);
     const bool indexed8 = format.is_indexed() && format.ddpf.dwRGBBitCount == 8;
+    const bool rgb888 = format.ddpf.dwRGBBitCount == 24 &&
+        format.ddpf.dwRBitMask == 0x000000ffU &&
+        format.ddpf.dwGBitMask == 0x0000ff00U &&
+        format.ddpf.dwBBitMask == 0x00ff0000U &&
+        format.ddpf.dwRGBAlphaBitMask == 0U;
     const bool rgb565 = format.ddpf.dwRGBBitCount == 16 &&
         format.ddpf.dwRBitMask == 0xf800U &&
         format.ddpf.dwGBitMask == 0x07e0U &&
         format.ddpf.dwBBitMask == 0x001fU;
-    if ((!rgba8 && !rgb565 && !indexed8) ||
-        (indexed8 && !palette) || (palette && !rgb565 && !indexed8) ||
-        stride < width * (rgba8 ? 4 : indexed8 ? 1 : 2))
+    if ((!rgba8 && !rgb565 && !indexed8 && !rgb888) ||
+        (indexed8 && !palette) || (palette && !rgb565 && !indexed8 && !rgb888) ||
+        stride < width * (rgba8 ? 4 : indexed8 ? 1 : rgb888 ? 3 : 2))
         return GR_NOT_IMPLEMENTED;
     const std::size_t rowBytes = static_cast<std::size_t>(width) * 4U;
     const std::size_t byteCount = rowBytes * static_cast<std::size_t>(height);
@@ -883,6 +888,18 @@ GENRESULT NativeRenderPipeline::set_texture_level_data(
         const auto * sourceRow = source +
             static_cast<std::size_t>(row) * static_cast<std::size_t>(stride);
         if (rgba8) std::memcpy(destination, sourceRow, rowBytes);
+        else if (rgb888)
+        {
+            for (int column = 0; column < width; ++column)
+            {
+                const std::size_t sourceOffset = static_cast<std::size_t>(column) * 3U;
+                const std::size_t target = static_cast<std::size_t>(column) * 4U;
+                destination[target] = sourceRow[sourceOffset];
+                destination[target + 1U] = sourceRow[sourceOffset + 1U];
+                destination[target + 2U] = sourceRow[sourceOffset + 2U];
+                destination[target + 3U] = 255U;
+            }
+        }
         else if (indexed8)
         {
             for (int column = 0; column < width; ++column)

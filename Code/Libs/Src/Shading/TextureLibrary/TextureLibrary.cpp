@@ -1358,6 +1358,11 @@ HRESULT TextureLibrary::choose_texture_format( ITL_TEXTUREIMAGEDATA *data, Pixel
 #if !defined(_WIN32)
 	// The native pipeline converts this retail source format into its RGBA8 owner.
 	if( (data->format.is_indexed() && data->format.ddpf.dwRGBBitCount == 8) ||
+		(data->format.ddpf.dwRGBBitCount == 24 &&
+		data->format.ddpf.dwRBitMask == 0x000000ff &&
+		data->format.ddpf.dwGBitMask == 0x0000ff00 &&
+		data->format.ddpf.dwBBitMask == 0x00ff0000 &&
+		data->format.ddpf.dwRGBAlphaBitMask == 0) ||
 		(data->format.ddpf.dwRGBBitCount == 16 &&
 		data->format.ddpf.dwRBitMask == 0xf800 &&
 		data->format.ddpf.dwGBitMask == 0x07e0 &&

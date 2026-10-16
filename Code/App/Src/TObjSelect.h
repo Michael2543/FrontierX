@@ -466,7 +466,9 @@ void ObjectSelection< Base >::DrawHighlighted (void)
 
 			int xpos = x-(TBARLENGTH/2);
 			int max = S32(TBARLENGTH*hull);
+#if defined(_WIN32)
 			int xrc;
+#endif
 
 			// make sure at least one bar gets displayed for one health point
 			if (max == 0 && hull > 0.0f)
@@ -474,11 +476,15 @@ void ObjectSelection< Base >::DrawHighlighted (void)
 				max = 1;
 			}
 			
+#if !defined(_WIN32)
+			DA::RectangleFillSegments(pane, xpos, y, max, color);
+#else
 			for (int i = 0; i < max; i+=5)
 			{
 				xrc = xpos + i;
 				DA::RectangleFill(pane, xrc, y, xrc+3, y+2, color);
 			}
+#endif
 		}
 		if (supplies >= 0.0f)
 		{
@@ -499,7 +505,9 @@ void ObjectSelection< Base >::DrawHighlighted (void)
 
 					int xpos = x-(TBARLENGTH/2);
 					int max = S32(TBARLENGTH*supplies);
+#if defined(_WIN32)
 					int xrc;
+#endif
 
 					// make sure at least one bar gets displayed for one supply point
 					if (max == 0 && supplies > 0.0f)
@@ -507,11 +515,15 @@ void ObjectSelection< Base >::DrawHighlighted (void)
 						max = 1;
 					}
 					
+#if !defined(_WIN32)
+					DA::RectangleFillSegments(pane, xpos, y+5, max, color);
+#else
 					for (int i = 0; i < max; i+=5)
 					{
 						xrc = xpos + i;
 						DA::RectangleFill(pane, xrc, y+5, xrc+3, y+7, color);
 					}
+#endif
 				}
 			}
 			else	// don't know supply info

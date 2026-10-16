@@ -1,5 +1,87 @@
 # Linux playtest preparation (P0, 2026-10-13)
 
+## AI watcher and rendering regressions (2026-10-16)
+
+Existing technical checks now exercise poisoned-storage typed/base watcher
+copies through `native_shell`, exact grouped selection-bar geometry/counts
+through `game_material_manager`, and all 32 shared immutable sampler states,
+rollback and retained GPU output through `sdl3_gpu`. No workflow, uploaded retail
+fixture or new test target is added. Local GCC/Clang full-media Debug and focused
+fatal Clang ASan/UBSan evidence is recorded with the
+[owner repair](NATIVE_TERRAN_CAMPAIGN.md#ai-build-site-watcher-crash-2026-10-16)
+and [rendering change](GAME_MATERIAL_PATH.md#large-selection-and-sampler-churn-2026-10-16).
+Hosted CI and native Windows/ABI remain unexecuted. Real checkpoint profiles
+use isolated external save/config roots and the existing `--frame-stats` option;
+raw logs, captures and saves stay outside the repository and CI artifacts.
+
+The subsequent Rally tooltip regression requires a nonempty external
+`FRONTIERX_TEST_FONT_FILE` at configure time; an empty value skips the optional
+font branch and is not evidence for that repair. The existing font-enabled
+shell check now requires the original Rally resource CR/LF layout marker.
+The material probe also checks saved minus-J heading roundtrips, and the GPU
+probe checks stale-buffer pressure followed by complete reuse of 400 draws.
+Exact local execution and remaining runtime limits are in the linked ledgers.
+
+## Collector upgrade and F8 regression checks (2026-10-15)
+
+The existing `native_shell` check now exercises the real AI weak subscription
+owner across dirty-tail-padding saves, repeated loads and destructor cleanup.
+The existing `game_material_manager` check covers initialized extension subtree
+transfer and borrowed Engine ownership. Both are already selected by technical
+CI and its sanitizer filter; no new workflow or uploaded retail fixture is
+added. GCC16.2.1 and Clang22.1.8 shell/material rebuilds, focused source/schema
+checks and fatal Clang ASan/UBSan with leak detection execute locally as recorded
+in [the focused ledger](NATIVE_TERRAN_CAMPAIGN.md#collector-upgrade-and-repeated-f8-crash-repairs-2026-10-15).
+Hosted CI and native Windows/ABI remain unexecuted. Real mission verification
+uses an isolated copy of the user's unchanged checkpoint; raw data/logs remain
+external and are not CI artifacts.
+
+
+## P2 mission handoff and focused validation (2026-10-15)
+
+The existing `playtest.py --mission terran1` still enters the original campaign
+selector. Optional `--campaign-mission 2` records the P2 review target and
+mission-specific checklist; it neither selects nor unlocks a mission and is not
+forwarded to the game. Candidate validation rejects a changed or omitted target.
+The same option must accompany `--handoff` and `--candidate ... --play`.
+The checklist preserves the user's earlier complete TM2/save-load report and
+uses genuine checkpoints for missing scenarios instead of requiring an
+unconditional repeat. Each later target retains separate acceptance.
+
+**Compilation and automated execution:** local Linux x86_64 GCC16.2.1 and
+Clang22.1.8 Debug full-media builds executed with SDL3/GPU, native FreeType and
+reviewed external shared-LGPL FFmpeg audio/video enabled. Both builds execute
+the existing `layout`, `data_root`, `view_parser`, `app_schema`,
+`script01_schema`, `script02_schema`, `script03_schema`, `sol_t_schema`,
+`net_buffer`, `game_material_manager` and `native_shell` CTest checks without
+failure. These are generated/repository fixture and source-contract checks,
+not full mission gameplay or audiovisual acceptance.
+
+The Clang fatal ASan/UBSan build executes those same checks with
+`ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`, without reports. The first
+sandboxed attempt fails because LeakSanitizer cannot operate under ptrace;
+the approved rerun outside that sandbox passes without disabling detection.
+The exact focused CTest selection is:
+
+```sh
+cmake --build "$BUILD" -j 4
+ctest --test-dir "$BUILD" -R 'portability\.(layout|view_parser|app_schema|script0[123]_schema|sol_t_schema|data_root|net_buffer|native_shell|game_material_manager)$' --output-on-failure
+python3 -m unittest discover -s Tools/ci -p test_ci_gates.py
+```
+
+The existing CI-driver suite executes its 18 cases, including a regression
+checking target identity, target rejection before external inputs, TM2 checklist
+metadata and unchanged original campaign entry with no media exclusions. No new
+workflow or uploaded runtime input is added.
+
+A separate request to launch a new visible TM2 runtime/save-load smoke was
+cancelled at tool approval; the game did not launch and no new retail runtime
+result is claimed. Earlier focused runtime and user evidence remain as recorded.
+Hosted CI, native Windows Debug/Final/module ABI, full mission presentation,
+ordinary-compositor resize and whole-process runtime leak findings retain their
+separate documented status. See the [P2 matrix and handoff](NATIVE_TERRAN_P2.md).
+
 ## P1c accepted by the user (2026-10-15)
 
 The user explicitly closes P1c in the delivered native Linux scope. P1b was
@@ -1290,3 +1372,31 @@ A separate read-only external-data audit checks all 1039 authored fields; privat
 schemas/records/results are not CI fixtures or artifacts. Hosted CI and native
 Windows/ABI remain unexecuted; earlier whole-process leak failures remain open.
 [Focused HUD scope](NATIVE_TERRAN_CAMPAIGN.md#hud-command-bindings-across-all-ship-and-structure-panels-2026-10-15).
+
+## TM4 focused technical checks (2026-10-16)
+
+The original Script04 integration and next-briefing Script05 resources use the
+existing schema/layout/shell checks and private handoff workflow. No new hosted
+CI run is claimed. On the local Linux x86_64 full-media Debug builds, GCC16.2.1
+and Clang22.1.8 execute:
+
+```sh
+cmake --build /tmp/frontierx-p1c-clang --target frontierx_native_shell frontierx_view_parser_probe frontierx_layout_probe frontierx_game_material_manager_probe frontierx_sdl3_gpu_probe -j 3
+ctest --test-dir /tmp/frontierx-p1c-clang -R '^portability\.(layout|view_parser|app_schema|script0[12345]_schema|sol_t_schema|data_root|net_buffer|native_shell|game_material_manager)$' --no-tests=error --output-on-failure
+python3 Tools/ci/test_ci_gates.py
+```
+
+The corresponding GCC directory is `/tmp/frontierx-p1c-gcc`. The Clang sanitizer
+build `/tmp/frontierx-p1c-san` runs that same focused CTest selection outside
+the sandbox with `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. No suppression is added.
+The existing explicit host GPU runner executes `portability.sdl3_gpu` and
+`portability.game_material_gpu` under both compilers without skips. It validates
+the new RGB888 production upload with independent full-image RGBA8 reference,
+mutation and restoration rather than an opaque-fixture pixel-count predicate.
+The existing Python CI regression checks the TM4-specific handoff checklist.
+
+These are technical checks, not complete gameplay or hosted-CI acceptance.
+Original entry, genuine save/reload, failed intermediate runs and remaining
+user/Windows/ABI/whole-process gates are recorded in the
+[TM4 ledger](NATIVE_TERRAN_P2.md#tm4-production-integration-2026-10-16).

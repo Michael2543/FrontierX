@@ -43,6 +43,7 @@ using namespace FrontierX::NativeAppUi;
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
 using std::min;
 using std::max;
 #endif
@@ -2629,8 +2630,59 @@ void Sector::PrepareTexture()
 //
 SectorEffects * Sector::GetSectorEffects(U32 playerID, U32 systemID)
 {
+#if !defined(_WIN32)
+    const U32 physicalSystem = systemID & ~U32(HYPER_SYSTEM_MASK);
+    if (!playerID || playerID > MAX_PLAYERS || !physicalSystem || physicalSystem > MAX_SYSTEMS)
+    {
+        std::fputs("Native sector effect identifiers invalid\n", stderr);
+        std::abort();
+    }
+    if (systemID & HYPER_SYSTEM_MASK)
+    {
+        // Warp limbo uses dummy terrainMap[0], not the destination's sector.
+        // The legacy mutable API also has writers: discard writes to this
+        // non-sector on the next query so they cannot leak into any reader.
+        static SectorEffects hyperspaceEffects;
+        hyperspaceEffects.zero();
+        return &hyperspaceEffects;
+    }
+#endif
 	return &(sectorEffect[playerID-1][systemID-1]);
 }
+#if !defined(_WIN32)
+bool CheckNativeSectorEffects()
+{
+    // The existing shell lifecycle invokes this before CreateGlobalComponents.
+    // Sector destruction resets terrain allocation and OBJMAP: require that
+    // no world is active rather than disturbing an unrelated mission owner.
+    if (SECTOR || OBJMAP || TOOLBAR)
+        return false;
+    auto *owner = new DAComponent<Sector>;
+    struct OwnerScope
+    {
+        DAComponent<Sector> *owner;
+        ~OwnerScope() { owner->Release(); }
+    } scope{owner};
+
+    // Genuine TM4 saves include warp limbo 129 = 1 | HYPER_SYSTEM_MASK.
+    // Exercise the actual Sector boundary reached by Gunboat/AirDefense.
+    bool valid = true;
+    for (U32 player : {U32(1), U32(MAX_PLAYERS)})
+        for (U32 system : {U32(1), U32(MAX_SYSTEMS)})
+        {
+            auto *normal = owner->GetSectorEffects(player, system);
+            normal->bIntelegenceEffect = true;
+            auto *transit = owner->GetSectorEffects(player, system | HYPER_SYSTEM_MASK);
+            valid = valid && !transit->bIntelegenceEffect &&
+                transit->getWeaponRangeMod() == 0 && transit->getSupplyMod() == 0 &&
+                transit->getSpeedMod() == 0 && transit->getSensorMod() == 1;
+            transit->bIntelegenceEffect = true;
+            valid = !owner->GetSectorEffects(player, system | HYPER_SYSTEM_MASK)->bIntelegenceEffect &&
+                normal->bIntelegenceEffect && valid;
+        }
+    return valid;
+}
+#endif
 //--------------------------------------------------------------------------//
 //
 #define SRAD 16		// selection radius

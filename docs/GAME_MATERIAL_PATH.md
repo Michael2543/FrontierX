@@ -1,5 +1,66 @@
 # Game Mesh and Material Ownership for Milestone 5
 
+## Corvette damage-smoke anchor (2026-10-15)
+
+**User retail-input runtime:** the player reports that TM2 ran perfectly, with
+one small defect: damage smoke begins above a Corvette instead of at its hull.
+This report accepts the mission run and identifies a narrow presentation follow-up.
+
+**Source review and local hypothesis:** `ObjectDamage::updateDamage` selects a
+smoke anchor from mesh extent slices. `SPACESHIP_INIT` is calloc-initialized;
+its runtime `extent` is populated from raw archetype vertices in
+`ObjectExtent::initExtents`, not loaded from a persistent mission record.
+`damagePostRender` previously submitted that raw point through the simulation
+transform alone. The direct `SpaceShip::renderSpaceShip` hull additionally applies
+Rx90/Ry180. A raw model-Z displacement therefore appeared as world height rather
+than following the visible hull. Existing glow/muzzle checks did not protect
+the distinct smoke requirement: correcting its anchor while retaining its
+already initialized plume orientation.
+
+The native damage post-render owner now corrects only the anchor through the
+existing hull model transform. It keeps the original `world * smokeLocal`
+orientation. Platforms, special rendering and an active fast instance-mesh path
+retain their original placement. The Windows statement is unchanged. No RNG,
+damage selection, thresholds, timers, simulation transforms, local fire records,
+save layouts, fields or vtables change. This is a presentation-only repair.
+
+**Synthetic automated execution:** the existing
+`frontierx_game_material_manager_probe` now checks an asymmetric anchor on a
+rotated/translated hull against independent coordinates `(7,19,32)`, instead of
+the old height `33`. It also checks unchanged plume basis, nonselected-path
+output and immutable input transforms. With the old placement this check fails;
+with the anchor correction it passes. It does not establish visible plume contact
+on every retail hull.
+
+Linux x86_64 Clang22.1.8 and GCC16.2.1 full-media Debug builds execute:
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell frontierx_game_material_manager_probe -j 4
+ctest --test-dir "$BUILD" -R '^portability\.(game_material_manager|native_shell|script0[123]_schema|sol_t_schema|app_schema|layout)$' --output-on-failure
+```
+
+`$BUILD` is `/tmp/frontierx-p1c-clang` or `/tmp/frontierx-p1c-gcc` for these
+executed local builds. All selected checks pass without skips. The rebuilt
+Clang full-media ASan/UBSan configuration at `/tmp/frontierx-p1c-san` also passes
+the existing expanded focused selection, outside the sandbox with fatal errors
+and leak detection enabled:
+
+```sh
+env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir /tmp/frontierx-p1c-san \
+  -R 'portability\.(layout|view_parser|app_schema|script0[123]_schema|sol_t_schema|data_root|net_buffer|native_shell|game_material_manager)$' \
+  --output-on-failure
+```
+
+The updated private full-media handoff retains an unchanged genuine TM2
+checkpoint and isolated save/configuration copies. No new visible mission run
+is claimed. Only a short damaged-Corvette visual check is pending; no complete
+TM2 replay is requested. Native Windows Debug/Final/module ABI, hosted CI,
+ordinary-compositor resize and previous whole-process leak findings remain open;
+the focused sanitizer result does not clear them. No content is hidden or
+reduced for this correction.
+
 ## Second-Terran fixed-barrel origin feedback (2026-10-15)
 
 The user observes Mantis weapons firing below their hulls in the second-mission
@@ -3708,3 +3769,216 @@ the fighter/control owner repair and renewed acceptance remain open.
 Exact local compiler/build/CTest/sanitizer/host-GPU results and the retained
 ordinary-compositor resize failures are in BUILD_GRAPH. Native Windows
 Debug/Final/module ABI, actual CI, all-effect coverage and P1c remain open.
+
+
+### Saved ship heading and Weaver construction facing (2026-10-16)
+
+The user reports that the Weaver builds with its back toward the planet.
+Source and lawfully external asset review identify the original Mantis
+`Fabricator`, its authored mouth/crane on model -Z and its exhaust on +Z.
+Production-math execution confirms the existing native hull correction maps
+that mouth to -J, matching the original Mantis construction heading. Adding a
+model-specific 180-degree flip would reverse the correct original facing.
+
+The concrete defect is in `ObjectTransform::loadTransform`: `saveTransform`
+stores `TRANSFORM::get_yaw`, which measures -J, but loading rotated an identity
+by that heading as though it measured +J. A stationary building unit can keep
+the reversed orientation after loading. Native loading now reconstructs the
+saved -J heading from an identity orientation; position and the original
+yaw-only save policy remain intact. The original Windows expression and all
+stored fields/bytes remain unchanged. Existing checkpoints that already saved
+an incorrect heading are not rewritten or inferred from a construction target.
+
+The existing production material/math probe checks nine angles including zero,
+both half-pi and both pi boundaries, three actual save-heading/load rounds,
+stale animated pitch/roll removal, unchanged translation and the corrected
+Weaver mouth direction. An isolated GCC16.2.1 execution passes; the same probe
+with the original reconstruction formula fails at the heading assertion.
+Linux x86_64 GCC16.2.1 and Clang22.1.8 full-media Debug rebuild the native shell
+and material probe. The focused layout, app/script01/script02/script03/Sol_T
+schema, material and font-enabled shell CTests pass. The corresponding fatal
+Clang ASan/UBSan checks, plus parser/data-root/network-buffer checks, pass with
+leak detection outside the sandbox. Visible Weaver construction/reload
+confirmation remains pending. These checks prove the load defect, not every
+animation or the user's entire observed construction sequence. Native Windows
+Debug/Final/module ABI and hosted CI remain unexecuted.
+
+The final full-media TM3 checkpoint run performs two real new F7/F8 rounds and
+normal close. Targeted training in its accepted scope and full-media TM1 each
+also perform ordinary F7/F8 and close successfully. Those runtime paths execute
+the new load owner; only the mathematical regression measures exact restored
+headings. The user's visible Weaver build-pose confirmation remains required.
+
+### Large selection and sampler churn (2026-10-16)
+
+**Renewed user feedback:** selected units still cause frame drops after the
+bar and sampler changes below. A later actual TM3 checkpoint run selects ten
+Missile Cruisers by normal hover and double-click, confirmed by the group HUD
+and selection markers. Five complete active-selection intervals record
+18.41 to 35.07 FPS, 204 to 246 draws/frame and 12.87 to 29.47 ms/frame in the
+backend's presentation queue-submit call. The preceding unselected interval
+records 58.95 FPS and 133 draws/frame. Combat continues between intervals, so
+this establishes the reported slowdown, not a static same-frame comparison.
+Pause hides the selection display and cannot serve as its rendering baseline.
+
+The concrete upload-pool defect is in frame retirement. Old unused entries and
+newly retired active entries shared one vector. Trimming its back after each
+insertion repeatedly discarded the active entries while preserving unsuitable
+old buffers. Actual selected frames reused only about 180 of 300 draws.
+Retirement now reserves room for the complete current frame by trimming only
+the old free entries first. The count bound grows from 256 to 512 because the
+actual 18-unit group requires 294 to 322 draws; the 64 MiB byte budget remains.
+Draw order, resource lifetime, GPU synchronization and all content remain intact.
+
+An experiment batching copy command buffers and making texture uploads
+asynchronous passed GPU image/lifecycle fixtures but did not resolve the real
+selection slowdown. Its regular close also failed to complete within the
+controller timeout. Both experimental behavior changes were removed before
+the candidate; their fixtures alone were not performance or lifecycle acceptance.
+
+The existing `--frame-stats` diagnostic additionally reports texture upload
+CPU time and counts. The genuine checkpoint run records about two updates per
+frame, costing about 1.5 to 2.5 ms/frame before this change. Those timings
+include driver waits and are not GPU timestamps.
+
+**Experimental GPU execution:** GCC16.2.1 and Clang22.1.8 full-media Debug builds execute
+`portability.sdl3_gpu` and `portability.game_material_gpu` through the existing
+explicit Hyprland/X11 host preparation. The existing map replacement regression
+now queues 23 alternating uploads before readback. It requires the current
+captured frame to remain byte-identical and the next frame to equal the original
+reference for the final queued color. Existing captured draw, mip, sampler,
+resize and repeated lifecycle assertions also pass. The pool regression now
+additionally fills stale indexed entries, switches to 400 direct draws and
+requires all 400 to be reused in the following frame with equal readback.
+The final pool fix passes both GCC and Clang prepared GPU test pairs, including
+all 400 active buffers reused and equal images. The pressure regression initially
+left its 400-overlapping-draw scene active, correctly failing the existing later
+retained-scene assertion. Running pressure before the original two-draw
+growth/shrink checks restores their intended scene; no assertion is weakened.
+**Final bounded retail-input execution:** Clang22.1.8 Debug, full-media Vulkan,
+strict external font mapping and the original `--no-frame-limit` option load
+an isolated byte-identical genuine TM3 checkpoint with ordinary F8. Normal
+empty-area clicks and the saved group-1 key alternate twice; independent
+screenshots confirm the real 18-unit group, markers, range circles and group
+HUD. Five complete five-second intervals per selected phase average 57.24 and
+55.97 FPS, versus 56.69 and 57.58 FPS in the corresponding unselected phases.
+Selected phases average 270.89/274.67 draws and 270.87/274.66 reused uploads
+per frame, with about 1.53 ms/frame in presentation queue submission. The
+previous buffer churn is absent. Simulation, AI and combat continue normally;
+these are reproducible input phases, not fixed-frame before/after determinism
+or a universal FPS guarantee. No rendering or media is excluded.
+
+The same run executes two ordinary F7/F8 rounds. Distinct new quicksave hashes
+and modification times, subsequent load-completion markers, rendered
+continuation and native exit 0 with audio streams zero/hints idle establish
+fresh saves and normal close. The original user checkpoint remains unchanged.
+Separate accepted-scope training and full-media TM1 runs each execute ordinary
+F7/F8 and normal close with exit 0, zero audio streams and idle hints. Training
+retains its previously accepted scope; its unsupported full-media dynamic-light
+path is not newly accepted. These narrow regressions do not establish a full
+mission run, every active mechanic or visible Weaver construction. User
+confirmation, whole-process leak freedom, Windows/module ABI and hosted CI
+remain pending. Raw checkpoints, hashes, profiles and captures stay external.
+
+The user reports frame drops with many selected units and heavy weapons fire.
+Source review identifies two repeated production costs. Native
+`ObjectSelection::DrawHighlighted` submitted each four-pixel health/supply segment
+through `DA::RectangleFill`, repeating its state setup. Native sampler changes
+created immutable SDL samplers and waited for the GPU even when captured draws
+retained earlier samplers.
+
+The native 2D owner now submits each complete segmented bar together. Segment
+spacing, partial final segments, inclusive rectangle edges, colors, vertex order,
+pane offsets and toolbar hiding remain unchanged. Windows keeps its original
+loop. The existing material probe compares actual production submissions:
+one full-health/full-supply unit uses two rather than 40 draws; 40 units use
+80 rather than 1600, with exactly the same 9600 vertices, colors and UV values.
+Empty and partial lengths 0/1/5/6/99 retain the reference geometry. This is a
+20-fold reduction in bar submissions, not a claim of 20-fold game frame rate.
+
+The SDL backend now owns at most 32 immutable samplers, keyed by the five
+supported address/filter properties and shared between texture stages. A state
+switch borrows its sampler; shutdown releases each cached sampler once after
+the existing GPU idle boundary. There is no per-switch GPU wait or sampler
+release. Unsupported states still reject transactionally. The existing GPU
+fixture exercises all 32 states twice across both stages, invalid-field rollback,
+and captured draws retaining their original sampler bindings and readback.
+No effect, texture stage, lighting, animation, simulation tick or RNG call is
+removed or simplified.
+
+**Local synthetic execution:** GCC16.2.1 and Clang22.1.8 full-media Debug material
+and shell builds/checks pass, as do the focused fatal Clang ASan/UBSan checks
+with leak detection outside the sandbox. Linked GPU readback and matched genuine
+checkpoint measurements are recorded below. Synthetic bar counts
+are not a substitute for a large-selection gameplay measurement. Native Windows,
+hosted CI, complete audiovisual parity and whole-process leak freedom remain
+unverified.
+
+
+**GPU execution:** both GCC16.2.1 and Clang22.1.8 execute
+`portability.game_material_gpu` and `portability.sdl3_gpu` without skips through
+the existing explicit `gpu_host_setup.run` Hyprland/X11 host preparation,
+`FRONTIERX_M3_GPU_SETUP=hyprland-x11`. The latter observes exactly 32 sampler
+creations after repeated two-stage state sweeps, preserves invalid-request
+rollback and captured-output readback, and completes resize and repeated
+scene shutdown/reinitialization. No resize assertion is disabled. Ordinary
+unprepared host runs pass the sampler/readback assertions but fail the known
+tiled-window resize check with unchanged swapchain size; those runs remain
+failures, not GPU passes. The explicit preparation floats only descendant test
+windows and changes no persistent desktop configuration.
+
+
+**Bounded retail-input profiling:** the existing `--frame-stats` counters run
+without per-draw debugger stops on Linux x86_64 Clang22.1.8 full-media Debug
+Vulkan, using the original `--no-frame-limit` option at normal game speed.
+In seven complete five-second fresh TM3 intervals before F8, frame-weighted
+sampler CPU time changes from 2.164 to 0.081 ms/frame. Corresponding average
+submission counts are 139.710 and 139.802 draws/frame, and sampler-switch counts
+are 38.797 and 39.108/frame. Both runs render all configured content. These are
+bounded comparable-source-scene measurements of this owner, not a heavy-fire
+or large-selection overall-FPS claim; presentation remains near its display
+limit. A true checkpoint copy also loads and continues normally with the repair,
+then closes with zero mission audio streams and idle hints.
+
+Automated attempts to produce a large-selection scene instead move the camera
+outside the fleet and leave an empty selection panel. They are explicitly
+rejected as large-selection/performance evidence. The synthetic 40-unit geometry
+and draw-count regression remains valid. Actual large-selection and heavy-fire
+perception/FPS need the short user-operated continuation from the genuine
+checkpoint; no full mission replay or inferred acceptance is required. Raw
+profiles, unsuccessful attempts, captures and checkpoints remain private.
+
+
+**Training baseline boundary:** a full-media fresh training attempt rejects the
+existing unsupported dynamic-light pipeline path before play. The preserved
+pre-change Clang binary rejects the same path. This is not a new sampler/bar
+regression or a full-training pass. A separate 1.5-second fixture-mode attempt
+in the documented bounded training scope reaches rendering/save/reload but
+correctly rejects its unmet moved-Forger/objective precondition; no normal
+selection/movement had been supplied. That attempt is not a pass either. The
+ordinary user-mode start/render/normal-close regressions below use the accepted
+bounded training scope and full-media TM1 respectively, retaining all assertions
+and without manufacturing objective completion.
+
+
+**Ordinary-path targeted regressions:** current Clang22.1.8 full-media Debug
+executes accepted-scope training start/render/normal-close for 102 source frames
+and full-media TM1 start/render/normal-close for 100 frames. Both return native
+0 with zero mission audio streams and idle hints. These short fresh starts do
+not exercise selection, combat, animated-portrait playback, mission victory or
+full training/campaign acceptance. Training retains only its already documented
+media/render exclusions; the Terran handoff has none.
+
+
+### Weaver root animation model basis (2026-10-16)
+
+The user's screenshot disproves the earlier inference from a negative-Z root
+sample to correct construction facing. The native ship renderer's model-axis
+correction also has to compose with authored Object-root motion. A per-script
+root basis now converts Weaver `Sc_build` at the Animation owner, leaving
+Joint motion and unconfigured callers unchanged. The existing material probe
+checks the complete rendered matrix, planet-facing anchor, child pose,
+translation and repeated script ownership. GCC/Clang and fatal sanitizers
+execute it; a genuine same-camera F8 before/after run shows the corrected tilt.
+Exact owner, target and remaining acceptance limits are recorded in
+[the media follow-up](NATIVE_TERRAN_MEDIA.md#weaver-screenshot-follow-up-2026-10-16).

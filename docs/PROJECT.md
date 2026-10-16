@@ -1,10 +1,41 @@
 # FrontierX Project Charter
 
-## Delivery status (2026-10-15)
+## Delivery status (2026-10-16)
+
+The user explicitly accepts TM3 as completely finished on 2026-10-16 after
+the final Weaver construction repair. TM4, **Friend or Foe?**, is now the active
+P2 mission. This supersedes the earlier pending TM3 confirmation statements
+below and preserves unperformed technical and Windows/ABI gates.
 
 The user explicitly accepts P1c as completed after mission-transition, save/load,
 presentation, fighter and HUD feedback repairs. P1a/P1b/P1c are accepted in the
-delivered native Linux scope. P2 campaign expansion is the next planned step.
+delivered native Linux scope. P2 campaign expansion is active. The user accepts
+the reported TM2 run apart from a small Corvette smoke offset, now repaired
+with a narrow visual recheck pending. TM3 is next. The [16-mission matrix](NATIVE_TERRAN_P2.md)
+tracks original order, new requirements, blockers, checked builds and user decisions.
+Subsequently reported Collector-upgrade and repeated-F8 crashes are repaired at
+native mesh-tree ownership and AI serialization boundaries; focused validation
+and bounded checkpoint evidence belong to
+[the campaign ledger](NATIVE_TERRAN_CAMPAIGN.md#collector-upgrade-and-repeated-f8-crash-repairs-2026-10-15).
+The later AI build-site watcher-copy crash has an owner repair with an
+old-versus-fixed reproducer; native selection bars and immutable sampler
+switches have focused rendering optimizations. See the
+[crash record](NATIVE_TERRAN_CAMPAIGN.md#ai-build-site-watcher-crash-2026-10-16)
+and [performance record](GAME_MATERIAL_PATH.md#large-selection-and-sampler-churn-2026-10-16).
+The renewed selection slowdown additionally required a native upload-pool
+retirement repair, verified on the genuine saved group with normal save/load
+and close. Rally tooltip CR/LF and native saved-heading reconstruction have
+focused owner fixes; their earlier pending visual/mission checks are superseded
+by the complete TM3 user acceptance recorded above.
+The user's next report confirms the earlier repairs and isolates remaining
+Weaver build tilt and the Hawkes rescue film. The original animation-load and
+film callers now have targeted repairs. A later screenshot additionally exposed
+the authored-root/model-axis mismatch, now repaired at the native Animation
+owner with same-checkpoint before/after visual evidence. The
+[TM3 media candidate](NATIVE_TERRAN_MEDIA.md#weaver-screenshot-follow-up-2026-10-16)
+was subsequently accepted by the user. TM4 is now integrated for its next
+playtest, with technical readiness tracked in the
+[P2 mission matrix](NATIVE_TERRAN_P2.md).
 This acceptance does not add scenario-specific runtime evidence or clear
 unresolved unit/hero coverage, missing media, whole-process leaks, unexecuted
 Windows/ABI or hosted CI checks. M3 remains separate and unaccepted. See

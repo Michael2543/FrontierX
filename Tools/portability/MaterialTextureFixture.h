@@ -9,7 +9,7 @@ namespace FrontierXTest
 // Generates repository-owned UTF material and RGB565 texture input for native checks.
 // Alpha mode protects selected Terran platform Palette/MIPn/Alpha 8 bit data.
 bool WriteMipTextureFixture(const std::filesystem::path &path, bool alphaPlanes = false,
-                            int levelTwoAlphaExtentDelta = 0);
+                            int levelTwoAlphaExtentDelta = 0, bool rgb888 = false);
 bool WriteMaterialFixture(const std::filesystem::path & path,
                           const std::string & simpleType = "DcDtOc",
                           const std::string & mipDirectory = "MIP0");

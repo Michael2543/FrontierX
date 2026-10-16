@@ -2087,8 +2087,8 @@ bool CheckNativeGunboatLauncherFailure(IFileSystem *file)
 	if (!file || LoadNativePersistedLauncher(&rejected, &data, nullptr, nullptr,
 		nullptr, file, "Turret-0") || rejected.calls != 1)
 		return false;
-	return !LoadNativePersistedLauncher(&rejected, nullptr, nullptr, nullptr,
-		nullptr, file, "Turret-0") && rejected.calls == 1;
+    return !LoadNativePersistedLauncher(&rejected, nullptr, nullptr, nullptr,
+        nullptr, file, "Turret-0") && rejected.calls == 1 && CheckNativeSectorEffects();
 }
 #endif
 

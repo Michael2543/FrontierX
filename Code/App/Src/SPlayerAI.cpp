@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <cwchar>
 #include <type_traits>
+#include <new>
 using std::min;
 using std::max;
 #define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
@@ -8577,6 +8578,16 @@ const char * SPlayerAI::getSaveLoadName (void) const
 //---------------------------------------------------------------------------//
 //  Save / Load functions
 //---------------------------------------------------------------------------//
+#if !defined(_WIN32)
+// LP64 reuses this base's tail padding for SPlayerAI::eventHandle. Disk I/O
+// must use a standalone record and never read or write the runtime token there.
+static constexpr size_t playerAIStateExtent =
+	offsetof(PLAYERAI_SAVELOAD, m_bShipRepair) + sizeof(PLAYERAI_SAVELOAD::m_bShipRepair);
+static_assert(playerAIStateExtent == 47602);
+static_assert(sizeof(PLAYERAI_SAVELOAD) == 47608);
+static_assert(playerAIStateExtent <= sizeof(PLAYERAI_SAVELOAD));
+#endif
+
 BOOL32 SPlayerAI::Load (struct IFileSystem * inFile) 
 {
 	DAFILEDESC fdesc;
@@ -8587,6 +8598,7 @@ BOOL32 SPlayerAI::Load (struct IFileSystem * inFile)
 	const U32 assignmentRecordSize = sizeof(ASSIGNMENT);
 #else
 	const U32 assignmentRecordSize = sizeof(PLAYERAI_ASSIGNMENT_RECORD);
+	PLAYERAI_SAVELOAD state;
 #endif
 	ASSIGNMENT* curass = NULL;
 
@@ -8598,9 +8610,10 @@ BOOL32 SPlayerAI::Load (struct IFileSystem * inFile)
 	file->ReadFile(0,static_cast<PLAYERAI_SAVELOAD *>(this),sizeof(PLAYERAI_SAVELOAD),&dwRead);
 #else
 	if (file->GetFileSize() != sizeof(PLAYERAI_SAVELOAD) ||
-		!file->ReadFile(0, static_cast<PLAYERAI_SAVELOAD *>(this), sizeof(PLAYERAI_SAVELOAD), &dwRead) ||
+		!file->ReadFile(0, &state, sizeof(state), &dwRead) ||
 		dwRead != sizeof(PLAYERAI_SAVELOAD))
 		goto Done;
+	memcpy(static_cast<PLAYERAI_SAVELOAD *>(this), &state, playerAIStateExtent);
 #endif
 
 	if (m_StrategicTargetID)
@@ -8665,6 +8678,12 @@ BOOL32 SPlayerAI::Save (struct IFileSystem * outFile)
 	BOOL32 result = 0;
 	DAFILEDESC fdesc;
 	ASSIGNMENT* node = pAssignments;
+#if !defined(_WIN32)
+	PLAYERAI_SAVELOAD state = {};
+	memcpy(&state, static_cast<PLAYERAI_SAVELOAD *>(this), playerAIStateExtent);
+	std::memset(reinterpret_cast<unsigned char *>(&state) + playerAIStateExtent,
+		0, sizeof(state) - playerAIStateExtent);
+#endif
 	
 	
 	fdesc.lpImplementation = "DOS";
@@ -8679,7 +8698,7 @@ BOOL32 SPlayerAI::Save (struct IFileSystem * outFile)
 #if defined(_WIN32)
 	file->WriteFile(0,static_cast<PLAYERAI_SAVELOAD *>(this),sizeof(PLAYERAI_SAVELOAD),&dwWritten);
 #else
-	if (!file->WriteFile(0, static_cast<PLAYERAI_SAVELOAD *>(this), sizeof(PLAYERAI_SAVELOAD), &dwWritten) ||
+	if (!file->WriteFile(0, &state, sizeof(state), &dwWritten) ||
 		dwWritten != sizeof(PLAYERAI_SAVELOAD))
 		goto Done;
 #endif
@@ -8899,6 +8918,60 @@ void SPlayerAI::Activate (bool bOnOff)
 bool CheckNativePlayerAISaveLifecycle(IFileSystem *directory)
 {
 	if (!directory) return false;
+	// ChooseBuildSite passes OBJPTR<IPlanet> by value to ShouldIBuild. A copy
+	// must start empty before InitObjectPointer can unlink any previous watch.
+	struct WatchTarget : IBaseObject
+	{
+		void *QueryInterface(OBJID, OBJPTR<IBaseObject> &, U32) override { return nullptr; }
+	};
+	const auto checkWatchCopies = [](auto *type, U32 interfaceOffset)
+	{
+		using Watch = std::remove_pointer_t<decltype(type)>;
+		WatchTarget target;
+		Watch source;
+		alignas(Watch) unsigned char storage[sizeof(Watch)];
+		const auto copyIntoUsedStorage = [&]()
+		{
+			std::memset(storage, 0xa5, sizeof(storage));
+			std::memset(storage + offsetof(Watch, playerID), 0, sizeof(U32));
+			return new (static_cast<void *>(storage)) Watch(source);
+		};
+		auto *copy = copyIntoUsedStorage();
+		bool valid = !copy->Ptr() && !copy->next && !copy->prev &&
+			copy->offset == 0 && copy->playerID == TOTALLYVOLATILEPTR;
+		copy->~Watch();
+		InitObjectPointer(source, TOTALLYVOLATILEPTR, &target, interfaceOffset);
+		copy = copyIntoUsedStorage();
+		valid = valid && copy->Ptr() == &target && copy->offset == interfaceOffset &&
+			copy->playerID == TOTALLYVOLATILEPTR && !copy->next && !copy->prev && !target.objwatch;
+		copy->~Watch();
+		source.Null();
+		InitObjectPointer(source, 1, &target, interfaceOffset);
+		copy = copyIntoUsedStorage();
+		valid = valid && target.objwatch == reinterpret_cast<OBJPTR<IBaseObject> *>(copy) &&
+			copy->next == &source && !copy->prev && source.prev == copy &&
+			copy->Ptr() == &target && copy->offset == interfaceOffset && copy->playerID == 1;
+		copy->~Watch();
+		valid = valid && target.objwatch == reinterpret_cast<OBJPTR<IBaseObject> *>(&source) &&
+			!source.next && !source.prev;
+		copy = copyIntoUsedStorage();
+		UnregisterWatchersForObject(&target);
+		valid = valid && !copy->Ptr() && !source.Ptr() && !copy->next && !copy->prev &&
+			!source.next && !source.prev && !target.objwatch;
+		copy->~Watch();
+		return valid;
+	};
+	if (!checkWatchCopies(static_cast<OBJPTR<IPlanet> *>(nullptr), 976) ||
+		!checkWatchCopies(static_cast<OBJPTR<IBaseObject> *>(nullptr), 0)) return false;
+	// F8 destroys the restored AI before CQE_MISSION_CLOSE reaches this weak
+	// callback point. Different live tokens must survive saved tail padding.
+	struct CallbackOwner
+	{
+		BaseHotRect *previous = FULLSCREEN;
+		BaseHotRect *owner = new BaseHotRect(static_cast<IDAComponent *>(nullptr));
+		CallbackOwner() { FULLSCREEN = owner; }
+		~CallbackOwner() { FULLSCREEN = previous; owner->Release(); }
+	} callbacks;
 	DAFILEDESC archiveDescriptor("AIRegression.mission");
 	archiveDescriptor.lpImplementation = "UTF";
 	archiveDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
@@ -8909,11 +8982,17 @@ bool CheckNativePlayerAISaveLifecycle(IFileSystem *directory)
 	auto *source = new DAComponent<SPlayerAI>;
 	sourceInterface = static_cast<ISPlayerAI *>(source);
 	source->Release();
+	if (reinterpret_cast<const char *>(&source->eventHandle) <
+		reinterpret_cast<const char *>(static_cast<PLAYERAI_SAVELOAD *>(source)) + playerAIStateExtent)
+		return false;
 	std::memset(static_cast<PLAYERAI_SAVELOAD *>(source), 0, sizeof(PLAYERAI_SAVELOAD));
+	if (callbacks.owner->point.Advise(source->getBase(), &source->eventHandle) != GR_OK)
+		return false;
 	source->strategy = MANTIS_FRIGATE_RUSH;
 	source->m_nRace = M_MANTIS;
 	source->m_Gas = 231;
 	source->m_AttackWaveSize = 7;
+	source->m_bShipRepair = true;
 	source->pAssignments = new ASSIGNMENT;
 	ASSIGNMENT *assignment = source->pAssignments;
 	assignment->Init();
@@ -8928,6 +9007,29 @@ bool CheckNativePlayerAISaveLifecycle(IFileSystem *directory)
 	assignment->set.objectIDs[0] = 0x1002;
 	assignment->set.objectIDs[1] = 0x1102;
 	if (!source->Save(archive)) return false;
+	// Save retains the fixed record extent but excludes the callback token.
+	DAFILEDESC stateDescriptor("StrategicAI");
+	COMPTR<IFileSystem> stateFile;
+	PLAYERAI_SAVELOAD state;
+	U32 stateBytes = 0;
+	if (archive->CreateInstance(&stateDescriptor, stateFile) != GR_OK ||
+		stateFile->GetFileSize() != sizeof(state) ||
+		!stateFile->ReadFile(0, &state, sizeof(state), &stateBytes) || stateBytes != sizeof(state))
+		return false;
+	const auto *stateData = reinterpret_cast<const unsigned char *>(&state);
+	for (size_t i = playerAIStateExtent; i < sizeof(state); ++i)
+		if (stateData[i] != 0) return false;
+	stateFile.free();
+	// Older native saves contain arbitrary padding, including the saved token.
+	std::memset(reinterpret_cast<unsigned char *>(&state) + playerAIStateExtent,
+		0xa6, sizeof(state) - playerAIStateExtent);
+	stateDescriptor.lpImplementation = "DOS";
+	stateDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	stateDescriptor.dwCreationDistribution = CREATE_ALWAYS;
+	if (archive->CreateInstance(&stateDescriptor, stateFile) != GR_OK ||
+		!stateFile->WriteFile(0, &state, sizeof(state), &stateBytes) || stateBytes != sizeof(state))
+		return false;
+	stateFile.free();
 
 	DAFILEDESC descriptor("Assignments");
 	COMPTR<IFileSystem> file;
@@ -8944,7 +9046,12 @@ bool CheckNativePlayerAISaveLifecycle(IFileSystem *directory)
 	auto *loaded = new DAComponent<SPlayerAI>;
 	loadedInterface = static_cast<ISPlayerAI *>(loaded);
 	loaded->Release();
+	if (callbacks.owner->point.Advise(loaded->getBase(), &loaded->eventHandle) != GR_OK)
+		return false;
+	const U32 loadedHandle = loaded->eventHandle;
 	if (!loaded->Load(archive) || loaded->strategy != MANTIS_FRIGATE_RUSH ||
+		loaded->eventHandle != loadedHandle || loadedHandle == source->eventHandle ||
+		!loaded->m_bShipRepair ||
 		loaded->m_Gas != 231 || loaded->m_AttackWaveSize != 7 ||
 		std::strcmp(loaded->getSaveLoadName(), "MANTIS_FRIGATE_RUSH") != 0 ||
 		!loaded->pAssignments || loaded->pAssignments->pNext ||
@@ -8980,7 +9087,10 @@ bool CheckNativePlayerAISaveLifecycle(IFileSystem *directory)
 	archiveDescriptor.dwCreationDistribution = OPEN_EXISTING;
 	if (directory->CreateInstance(&archiveDescriptor, archive) != GR_OK ||
 		!loaded->Load(archive) || !loaded->pAssignments ||
-		loaded->pAssignments->set != assignment->set || loaded->m_Gas != 231) return false;
-	return true;
+		loaded->pAssignments->set != assignment->set || loaded->m_Gas != 231 ||
+		loaded->eventHandle != loadedHandle || !loaded->m_bShipRepair) return false;
+	loadedInterface.free();
+	sourceInterface.free();
+	return callbacks.owner->point.pClientList == nullptr;
 }
 #endif

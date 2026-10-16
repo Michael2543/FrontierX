@@ -17,10 +17,29 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
-
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript04Resources.h"
+namespace FrontierXScript04
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 436, "Script04 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, Blackwell) == 32, "Script04 Blackwell offset");
+static_assert(offsetof(MissionData, Hawkes) == 48, "Script04 Hawkes offset");
+static_assert(offsetof(MissionData, numExits) == 172, "Script04 exit count offset");
+static_assert(offsetof(MissionData, exitID) == 176, "Script04 exit IDs offset");
+static_assert(offsetof(MissionData, failureID) == 432, "Script04 failure offset");
+static_assert(offsetof(MissionData, failureID) + sizeof(MissionData::failureID) == 436,
+              "Script04 final field extent");
+#endif
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -125,6 +144,37 @@ void SetTechLevel(U32 stage)
 //--------------------------------------------------------------------------//
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript04Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 123;
+    data.mhandle = 456;
+    data.numExits = 1;
+    data.exitID[0] = 789;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle && !data.numExits && !data.exitID[0];
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript04(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript04Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript04ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
+
 
 //--------------------------------------------------------------------------
 //	MISSION BRIEFING
@@ -2122,3 +2172,7 @@ bool TM4_DisplayObjectiveHandler::Update
 //--------------------------------------------------------------------------//
 //--------------------------------End Script04T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript04
+#endif

@@ -204,6 +204,16 @@ void Trail::PhysicalUpdate(SINGLE dt)
 		}
 	}
 	
+#if !defined(_WIN32)
+	// The final physical fade can cross zero before Update removes this trail.
+	// Render already omits that phase; do not convert its negative length to U8.
+	if (length <= 0)
+	{
+		numSections = 0;
+		extraLength = 0;
+		return;
+	}
+#endif
 	numSections = length/ANIM_LENGTH;
 	extraLength = length-numSections*ANIM_LENGTH;
 }
@@ -215,6 +225,44 @@ BOOL32 Trail::Update (void)
 
 	return (length >= 0);
 }
+#if !defined(_WIN32)
+// ObjectWarp::handleWarp creates this owner; ObjectList runs PhysicalUpdate
+// before a subsequent Update removes its terminal negative-length fade.
+namespace FrontierX
+{
+bool CheckNativeTrailTerminalFade()
+{
+	Trail *trail = new ObjectImpl<Trail>;
+	trail->bFading = TRUE;
+	trail->target.set(13000, 21000, 0);
+	trail->dir.set(1, 0, 0);
+	trail->length = 6500;
+	trail->cnt = 7;
+	trail->PhysicalUpdate(0);
+	bool valid = trail->length == 6500 && trail->numSections == 3 &&
+		trail->extraLength == 500 && trail->source.x == 6500 &&
+		trail->source.y == 21000 && trail->Update() && trail->cnt == 0;
+	trail->PhysicalUpdate(0.125F);
+	valid = valid && trail->length == 3500 && trail->numSections == 1 &&
+		trail->extraLength == 1500 && trail->source.x == 9500;
+	trail->length = 3000;
+	trail->PhysicalUpdate(0.125F);
+	valid = valid && trail->length == 0 && trail->numSections == 0 &&
+		trail->extraLength == 0 && trail->source.x == 13000 &&
+		trail->Update() && trail->cnt == 1;
+	trail->bVisible = TRUE;
+	trail->Render(); // Zero length must not touch a renderer or animation.
+	trail->PhysicalUpdate(0.125F);
+	valid = valid && trail->length == -3000 && trail->numSections == 0 &&
+		trail->extraLength == 0 && trail->source.x == 16000 &&
+		trail->source.y == 21000 && trail->bFading;
+	trail->Render(); // Negative length retains the same no-draw contract.
+	valid = valid && !trail->Update() && trail->cnt == 2;
+	delete trail;
+	return valid;
+}
+}
+#endif
 //----------------------------------------------------------------------------------
 //
 void Trail::Render (void)

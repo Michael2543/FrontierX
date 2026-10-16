@@ -663,6 +663,59 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
         renderer.Readback64(pointRestored, error) && pointRestored.structureValid &&
         pointRestored.checksum == modulated.checksum &&
         renderer.CurrentSamplerState().minFilter == D3DTEXF_POINT;
+    // Combat and large selections alternate two-stage filter/address states.
+    // All 32 supported immutable samplers must be shared across stages and
+    // reused without losing captured bindings or accepting invalid requests.
+    const auto savedSampler = renderer.CurrentSamplerState();
+    FrontierX::SamplerStateSnapshot savedSecondSampler{};
+    savedSecondSampler.stage = 1U;
+    bool samplerCacheValid = samplerValid &&
+        pipeline.get_sampler_state(1U, D3DSAMP_ADDRESSU, &savedSecondSampler.addressU) == GR_OK &&
+        pipeline.get_sampler_state(1U, D3DSAMP_ADDRESSV, &savedSecondSampler.addressV) == GR_OK &&
+        pipeline.get_sampler_state(1U, D3DSAMP_MINFILTER, &savedSecondSampler.minFilter) == GR_OK &&
+        pipeline.get_sampler_state(1U, D3DSAMP_MAGFILTER, &savedSecondSampler.magFilter) == GR_OK &&
+        pipeline.get_sampler_state(1U, D3DSAMP_MIPFILTER, &savedSecondSampler.mipFilter) == GR_OK;
+    auto exerciseSamplerCache = [&]() {
+        for (unsigned mask = 0; mask < 32; ++mask)
+        {
+            FrontierX::SamplerStateSnapshot state{};
+            state.addressU = mask & 1U ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP;
+            state.addressV = mask & 2U ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP;
+            state.minFilter = mask & 4U ? D3DTEXF_LINEAR : D3DTEXF_POINT;
+            state.magFilter = mask & 8U ? D3DTEXF_LINEAR : D3DTEXF_POINT;
+            state.mipFilter = mask & 16U ? D3DTEXF_LINEAR : D3DTEXF_POINT;
+            if (renderer.SetSamplerState(state) != GR_OK) return false;
+            const U32 count = renderer.SamplerCreations();
+            state.stage = 1U;
+            if (renderer.SetSamplerState(state) != GR_OK ||
+                renderer.SamplerCreations() != count) return false;
+        }
+        return renderer.SetSamplerState(savedSampler) == GR_OK &&
+            renderer.SetSamplerState(savedSecondSampler) == GR_OK;
+    };
+    samplerCacheValid = samplerCacheValid && exerciseSamplerCache() &&
+        renderer.SamplerCreations() == 32U && exerciseSamplerCache() &&
+        renderer.SamplerCreations() == 32U;
+    for (unsigned field = 0; samplerCacheValid && field < 6; ++field)
+    {
+        auto invalidSampler = savedSampler;
+        if (field == 0) invalidSampler.stage = 2U;
+        if (field == 1) invalidSampler.addressU = 0U;
+        if (field == 2) invalidSampler.addressV = 0U;
+        if (field == 3) invalidSampler.minFilter = 0U;
+        if (field == 4) invalidSampler.magFilter = 0U;
+        if (field == 5) invalidSampler.mipFilter = 0U;
+        samplerCacheValid = renderer.SetSamplerState(invalidSampler) == GR_NOT_IMPLEMENTED &&
+            renderer.SamplerCreations() == 32U;
+        const auto current = renderer.CurrentSamplerState();
+        samplerCacheValid = samplerCacheValid && current.stage == savedSampler.stage &&
+            current.addressU == savedSampler.addressU && current.addressV == savedSampler.addressV &&
+            current.minFilter == savedSampler.minFilter && current.magFilter == savedSampler.magFilter &&
+            current.mipFilter == savedSampler.mipFilter;
+    }
+    FrontierX::SdlGpuReadback samplerCacheRestored;
+    samplerCacheValid = samplerCacheValid && renderer.Readback64(samplerCacheRestored, error) &&
+        samplerCacheRestored.checksum == pointRestored.checksum;
     Transform shifted(false);
     for (unsigned row = 0U; row < 3U; ++row)
         for (unsigned column = 0U; column < 3U; ++column)
@@ -979,6 +1032,91 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
         alphaMipValid &= rejected;
     }
     if (alphaMipValid) std::cout << "Production palette alpha planes preserve nine mip RGBA levels and visible blending/restoration\n";
+    // TM4's BlackHole ring uses a single authored RGB888 mip and an independent
+    // alpha plane. Exercise that original UTF format through visible blending.
+    const auto rgb888Path = std::filesystem::path(utfFixturePath.string() + ".rgb888");
+    IFileSystem *rgb888Fixture = nullptr;
+    ITL_TEXTURE_ID rgb888ID = ITL_INVALID_ID;
+    ITL_TEXTUREFRAME_IRP rgb888Frame{};
+    PixelFormat rgb888Format;
+    RPLOCKDATA rgb888Lock{};
+    FrontierX::SdlGpuReadback rgb888Before, rgb888Reference, rgb888Opaque, rgb888Restored;
+    U32 rgb888ReferenceHandle = 0;
+    const std::array<unsigned char, 16> rgb888Expected{{17,34,51,0, 68,85,102,96,
+                                                     119,136,153,255, 170,187,204,0}};
+    bool rgb888Valid = FrontierXTest::WriteMipTextureFixture(rgb888Path, true, 0, true) &&
+        FrontierX::OpenNativeUtfFileSystem(rgb888Path, &rgb888Fixture, utfError) &&
+        textures->load_library(rgb888Fixture, nullptr) == GR_OK &&
+        textures->get_texture_id("Rgb888Tile", &rgb888ID) == GR_OK &&
+        textures->get_texture_frame(rgb888ID, 0, &rgb888Frame) == GR_OK &&
+        pipeline.get_texture_format(rgb888Frame.rp_texture_id, &rgb888Format) == GR_OK &&
+        rgb888Format.has_alpha_channel() &&
+        pipeline.lock_texture(rgb888Frame.rp_texture_id, 0, &rgb888Lock) == GR_OK;
+    const bool rgb888Loaded = rgb888Valid;
+    if (rgb888Valid)
+    {
+        rgb888Valid = rgb888Lock.width == 2 && rgb888Lock.height == 2 && rgb888Lock.pitch == 8 &&
+            std::memcmp(rgb888Lock.pixels, rgb888Expected.data(), rgb888Expected.size()) == 0;
+        rgb888Valid = pipeline.unlock_texture(rgb888Frame.rp_texture_id, 0) == GR_OK && rgb888Valid;
+    }
+    const bool rgb888Uploaded = rgb888Valid;
+    rgb888Valid = rgb888Valid &&
+        materialStates->set_render_state(D3DRS_ALPHABLENDENABLE, TRUE) == GR_OK &&
+        materialStates->set_render_state(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA) == GR_OK &&
+        materialStates->set_render_state(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA) == GR_OK &&
+        materialStates->set_texture_stage_texture(0, rgb888Frame.rp_texture_id) == GR_OK &&
+        material->apply() == GR_OK && renderer.Readback64(rgb888Before, error) &&
+        rgb888Before.rgbValid && rgb888Before.changedPixels > 0;
+    // structureValid describes the original opaque smoke fixture's mask. The
+    // authored transparent ring instead must match an independent RGBA8 image
+    // at every readback pixel under exactly the same geometry and states.
+    rgb888Valid = rgb888Valid &&
+        pipeline.create_texture(2, 2, rgbaFormat, 0, 0, rgb888ReferenceHandle) == GR_OK &&
+        pipeline.set_texture_level_data(rgb888ReferenceHandle, 0, 2, 2, 8, rgbaFormat,
+            rgb888Expected.data(), nullptr, nullptr) == GR_OK &&
+        materialStates->set_texture_stage_texture(0, rgb888ReferenceHandle) == GR_OK &&
+        material->apply() == GR_OK && renderer.Readback64(rgb888Reference, error) &&
+        rgb888Reference.rgbValid && rgb888Reference.rgb8 == rgb888Before.rgb8 &&
+        materialStates->set_texture_stage_texture(0, rgb888Frame.rp_texture_id) == GR_OK &&
+        pipeline.lock_texture(rgb888Frame.rp_texture_id, 0, &rgb888Lock) == GR_OK;
+    const bool rgb888Drawn = rgb888Valid;
+    if (rgb888Valid)
+    {
+        auto *pixels = static_cast<unsigned char *>(rgb888Lock.pixels);
+        for (unsigned i = 3; i < 16; i += 4) pixels[i] = 255;
+        rgb888Valid = pipeline.unlock_texture(rgb888Frame.rp_texture_id, 0) == GR_OK &&
+            material->apply() == GR_OK && renderer.Readback64(rgb888Opaque, error) &&
+            rgb888Opaque.checksum != rgb888Before.checksum &&
+            pipeline.lock_texture(rgb888Frame.rp_texture_id, 0, &rgb888Lock) == GR_OK;
+        if (rgb888Valid)
+        {
+            std::memcpy(rgb888Lock.pixels, rgb888Expected.data(), rgb888Expected.size());
+            rgb888Valid = pipeline.unlock_texture(rgb888Frame.rp_texture_id, 0) == GR_OK &&
+                material->apply() == GR_OK && renderer.Readback64(rgb888Restored, error) &&
+                rgb888Restored.rgbValid && rgb888Restored.rgb8 == rgb888Before.rgb8 &&
+                rgb888Restored.checksum == rgb888Before.checksum;
+        }
+    }
+    rgb888Valid = materialStates->set_render_state(D3DRS_ALPHABLENDENABLE, savedBlend) == GR_OK &&
+        materialStates->set_render_state(D3DRS_SRCBLEND, savedSourceBlend) == GR_OK &&
+        materialStates->set_render_state(D3DRS_DESTBLEND, savedDestBlend) == GR_OK &&
+        materialStates->set_texture_stage_texture(0, renderer.FixtureTextureHandle()) == GR_OK &&
+        material->apply() == GR_OK && rgb888Valid;
+    if (rgb888ReferenceHandle)
+        rgb888Valid &= pipeline.destroy_texture(rgb888ReferenceHandle) == GR_OK;
+    if (rgb888ID != ITL_INVALID_ID) rgb888Valid &= textures->release_texture_id(rgb888ID) == GR_OK;
+    rgb888Valid &= textures->free_library(TRUE) == GR_OK &&
+        (!rgb888Frame.rp_texture_id || pipeline.is_texture(rgb888Frame.rp_texture_id) != GR_OK);
+    if (rgb888Fixture) rgb888Fixture->Release();
+    if (rgb888Valid) std::cout << "Production RGB888 ring texture preserves RGB/alpha and visible blending/restoration\n";
+    else std::cerr << "RGB888 diagnostic: loaded=" << rgb888Loaded << " uploaded=" << rgb888Uploaded
+        << " drawn=" << rgb888Drawn << " handle=" << rgb888Frame.rp_texture_id
+        << " dims=" << rgb888Lock.width << 'x' << rgb888Lock.height << " pitch=" << rgb888Lock.pitch
+        << " alpha=" << rgb888Format.has_alpha_channel()
+        << " before=" << rgb888Before.checksum << " reference=" << rgb888Reference.checksum
+        << " opaque=" << rgb888Opaque.checksum
+        << " restored=" << rgb888Restored.checksum << " pixels=" << rgb888Before.changedPixels
+        << " structure=" << rgb888Before.structureValid << " error=" << error << '\n';
     FrontierX::SdlGpuReadback firstFrameDraw;
     FrontierX::SdlGpuReadback twoFrameDraws;
     Transform left(false);
@@ -1029,11 +1167,29 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
         FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
         renderer.Readback64(mapNext, error) && mapNext.changedPixels > 0U &&
         mapNext.checksum != mapBefore.checksum;
-    const bool mapReplacementReleased = renderer.BeginFrame(error) &&
+    // Repeated minimap/movie updates must preserve captured storage. Exercise
+    // transfer release and replacement before any readback, while the current
+    // captured draw borrows the original texture.
+    bool mapQueuedReplacementValid = mapReplacementValid;
+    for (unsigned update = 0; mapQueuedReplacementValid && update < 23U; ++update)
+    {
+        const auto &pixels = (update & 1U) ? mapGreen : mapRed;
+        mapQueuedReplacementValid = renderer.ReplaceTexture(mapHandle,
+            {pixels.data(), 2U, 2U, pixels.size()}) == GR_OK;
+    }
+    FrontierX::SdlGpuReadback mapQueuedCaptured, mapQueuedNext;
+    mapQueuedReplacementValid = mapQueuedReplacementValid &&
+        renderer.Readback64(mapQueuedCaptured, error) &&
+        mapQueuedCaptured.checksum == mapNext.checksum &&
+        renderer.BeginFrame(error) &&
+        FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
+        renderer.Readback64(mapQueuedNext, error) &&
+        mapQueuedNext.checksum == mapBefore.checksum;
+    const bool mapReplacementReleased = mapQueuedReplacementValid && renderer.BeginFrame(error) &&
         pipeline.set_texture_stage_texture(0U, renderer.FixtureTextureHandle()) == GR_OK &&
         (!mapHandle || renderer.DestroyTexture(mapHandle) == GR_OK);
     if (mapReplacementValid && mapReplacementReleased)
-        std::cout << "Captured map texture replacement preserves current frame and updates next frame\n";
+        std::cout << "Captured map texture replacement preserves current frame and applies queued uploads in order\n";
     // MovieScreen releases its last sampled texture after unbinding, while
     // presentation/readback can still replay that captured frame. Keep bound
     // and stale rejection, and require the real GPU image to survive retirement.
@@ -1201,6 +1357,30 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
     grownVertices.insert(grownVertices.end(), legacyVertices.begin(), legacyVertices.end());
     FrontierX::SdlGpuReadback pooledImages[3];
     bool uploadPoolValid = pipelineCacheValid;
+    // A large selection changes the mix of draws. Obsolete indexed entries
+    // must not evict the active direct buffers just retired into the pool.
+    // Four hundred draws also exceed the former 256-entry bring-up limit.
+    FrontierX::SdlGpuReadback selectionImages[2];
+    for (unsigned frame = 0; uploadPoolValid && frame < 3U; ++frame)
+    {
+        uploadPoolValid = renderer.BeginFrame(error) &&
+            FrontierX::ConfigureRenderSmokeState(&pipeline) == GR_OK &&
+            pipeline.set_texture_stage_texture(0U, renderer.FixtureTextureHandle()) == GR_OK;
+        const auto reused = renderer.GetTimings().reusedUploads;
+        for (unsigned draw = 0; uploadPoolValid && draw < 400U; ++draw)
+            uploadPoolValid = (frame == 0U ?
+                pipeline.draw_indexed_primitive(D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kRpVertexFvf,
+                    legacyVertices.data(), static_cast<int>(legacyVertices.size()),
+                    kIndices.data(), static_cast<int>(kIndices.size()), 0U) :
+                FrontierX::SubmitRenderSmokeScene(&pipeline)) == GR_OK;
+        uploadPoolValid = uploadPoolValid && renderer.FrameSubmissionCount() == 400U;
+        if (frame)
+            uploadPoolValid = uploadPoolValid && renderer.Readback64(selectionImages[frame - 1U], error);
+        if (frame == 2U)
+            uploadPoolValid = uploadPoolValid &&
+                renderer.GetTimings().reusedUploads - reused == 400U &&
+                selectionImages[0].checksum == selectionImages[1].checksum;
+    }
     for (unsigned frame = 0; uploadPoolValid && frame < 3; ++frame)
     {
         const auto * vertices = frame == 1 ? grownVertices.data() : legacyVertices.data();
@@ -1211,7 +1391,8 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
             pipeline.draw_indexed_primitive(D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kRpVertexFvf,
                 vertices, count, kIndices.data(), static_cast<int>(kIndices.size()), 0U) == GR_OK &&
             pipeline.set_modelview(right) == GR_OK && FrontierX::SubmitRenderSmokeScene(&pipeline) == GR_OK &&
-            renderer.FrameSubmissionCount() == 2U && pipeline.end_scene() == GR_OK &&
+            renderer.FrameSubmissionCount() == 2U && exerciseSamplerCache() &&
+            renderer.SamplerCreations() == 32U && pipeline.end_scene() == GR_OK &&
             renderer.Readback64(pooledImages[frame], error) && pooledImages[frame].changedPixels > 0U &&
             pipeline.swap_buffers() == GR_OK;
     }
@@ -1220,7 +1401,9 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
         pooledImages[0].checksum == pooledImages[2].checksum &&
         renderer.GetTimings().reusedUploads >= reuseBefore + 2U;
     if (uploadPoolValid)
-        std::cout << "Captured upload pool: indexed/direct growth/shrink, actual reuse and identical retained output\n";
+        std::cout << "Captured upload pool: growth/shrink, stale-format pressure, all 400 active draws reused and identical output\n";
+    if (samplerCacheValid && uploadPoolValid)
+        std::cout << "GPU sampler cache: 32 shared two-stage states, reuse, rejected rollback and captured snapshot readback\n";
     materialStates->Release();
     material->Release();
     vertexPipeline.destroy_vertex_buffer(materialBuffer);
@@ -1232,15 +1415,17 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
     textureInner->Release();
     primitive->Release();
     const GENRESULT shutdownResult = manager.ShutDown();
-    if (!abilityModulationValid || !alphaMipValid || !mipValid || !stage1Observed || !alphaTestValid || !stateValid || !indexedValid || !secondUvObserved || !directValid ||
-        !textureStageValid || !samplerValid || !transformValid || !viewportValid ||
+    if (!abilityModulationValid || !rgb888Valid || !alphaMipValid || !mipValid || !stage1Observed || !alphaTestValid || !stateValid || !indexedValid || !secondUvObserved || !directValid ||
+        !textureStageValid || !samplerValid || !samplerCacheValid || !transformValid || !viewportValid ||
         !windowViewportRestored || !lifecycleValid || !pipelineCacheValid || !uploadPoolValid ||
         !frameDrawsValid || !mapReplacementValid || !mapReplacementReleased || !capturedDestroyValid ||
         !textureBindingValid ||
         !productionTextureValid || !loadedReleased ||
         shutdownResult != GR_OK)
     {
-        if (!pipelineCacheValid)
+        if (!samplerCacheValid)
+            error = "immutable GPU sampler cache sharing/rollback/readback failed";
+        else if (!pipelineCacheValid)
             error = "fixed-state GPU pipeline reuse/pressure/rollback/readback failed";
         else if (!uploadPoolValid)
             error = "captured upload reuse/growth/shrink/readback failed";

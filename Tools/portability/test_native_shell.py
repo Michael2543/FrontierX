@@ -1,5 +1,6 @@
 """Process tests for the native SDL shell using synthetic empty data directories."""
 import os
+import re
 import ctypes
 import ctypes.util
 from pathlib import Path
@@ -48,6 +49,137 @@ def describe_external_face(filename):
 
 
 class NativeShellTests(unittest.TestCase):
+    def test_blackhole_required_resources_fail_closed_source_contract(self):
+        # Regression: TM4's real ring import returned INVALID_ARCHETYPE_INDEX,
+        # yet the factory published a BlackHole and instance init asserted later.
+        # This source check pins the production factory's boundary/rollback;
+        # actual retail resource failure and playback need an external run.
+        source = Path(__file__).resolve().parents[2] / 'Code/App/Src/blackhole.cpp'
+        text = re.sub(r'//[^\n]*|/\*.*?\*/', '', source.read_text(), flags=re.DOTALL)
+        create = text.split('HANDLE BlackHoleManager::CreateArchetype(', 1)[1].split(
+            'BOOL32 BlackHoleManager::DestroyArchetype', 1)[0]
+        self.assertIn('std::unique_ptr<BLACKHOLE_INIT> pending(new BLACKHOLE_INIT)', create)
+        self.assertIn('BLACKHOLE_INIT *newguy = pending.get()', create)
+        self.assertRegex(create, r'if\s*\(!valid\)\s*throw std::runtime_error')
+        for contract in (
+            'bool(billboard.mesh_name[0]) == bool(billboard.tex_name[0])',
+            'newguy->bb_mesh_archID[i] != INVALID_ARCHETYPE_INDEX || newguy->mm_arch[i]',
+            'animation && animation->frames && animation->frame_cnt',
+            'animation->frames[frame].texture != 0',
+            'newguy->archIndex != INVALID_ARCHETYPE_INDEX',
+            'newguy->sysMapIconID != U32(-1)',
+        ):
+            self.assertIn(contract, create)
+        self.assertGreater(create.index('return pending.release()'), create.rindex('requireResource('))
+        cleanup = text.split('~BLACKHOLE_INIT (void)', 1)[1].split('struct SortVertex', 1)[0]
+        for owned in ('if (archIndex != INVALID_ARCHETYPE_INDEX)',
+                      'if (bb_mesh_archID[i] != INVALID_ARCHETYPE_INDEX)',
+                      'TMANAGER->ReleaseTextureRef(bb_txm[i])',
+                      'delete bb_anim_arch[i]', 'DestroyMorphMeshArchetype(mm_arch[i])'):
+            self.assertIn(owned, cleanup)
+
+    def test_hawkes_rescue_movie_source_binding(self):
+        # Protect the missing original caller. This source check does not run a
+        # victory, manufacture progress, or stand in for MovieScreen playback.
+        source = Path(__file__).resolve().parents[2] / 'Code/App/Src'
+
+        def uncomment(filename):
+            return re.sub(r'//[^\n]*|/\*.*?\*/', '',
+                          (source / filename).read_text(), flags=re.DOTALL)
+
+        outcome = uncomment('Menu_EndGame.cpp').split(
+            'void MenuEndGame::checkForMovie (void)', 1)[1].split(
+            'void MenuEndGame::setStateInfo (void)', 1)[0]
+        self.assertRegex(outcome, r'if\s*\(bWon\)')
+        rescue = outcome.split('case 2:', 1)[1].split('case 8:', 1)[0]
+        native = rescue.split('#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)', 1)[1].split('#endif', 1)[0]
+        self.assertRegex(native, r'if\s*\(!CQFLAGS\.bSkipMovies\)\s*\{')
+        self.assertRegex(native, r'MovieScreen\(this, "cq_1\.mpg"\);')
+        self.assertLess(native.index('MovieScreen('), native.index('SetMovieSeen(1)'))
+        self.assertNotIn('GetMoviesSeen', native)
+
+        replay = uncomment('Menu_mission.cpp').split('case MOVIE_BUTTON_1:', 1)[1].split(
+            'case MOVIE_BUTTON_2:', 1)[0]
+        self.assertIn('#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)', replay)
+        self.assertRegex(replay, r'if\s*\(!CQFLAGS\.bSkipMovies\)\s*MovieScreen\(this, "cq_1\.mpg"\);')
+        self.assertNotIn('SetMissionCompleted', replay)
+        self.assertNotIn('SetMovieSeen', replay)
+
+    def test_tm4_script_startup_briefing_resources_and_map_source_binding(self):
+        # Source regression: TM4's compiled owner initially passed schema tests
+        # but its original briefing was rejected by a separate manual allowlist.
+        # TM5 is included only to preserve the TM4 Continue-to-next-briefing contract.
+        # This verifies binding coverage, not a mission entry or save/load run.
+        source = Path(__file__).resolve().parents[2]
+        def read(name):
+            return re.sub(r'//[^\n]*|/\*.*?\*/', '',
+                          (source / name).read_text(), flags=re.DOTALL)
+        script = read('Code/App/Src/MScript.cpp')
+        load = script.split('void MScript::Load (IFileSystem * inFile)', 1)[1].split(
+            'void MScript::LoadScript (void)', 1)[0]
+        briefing = script.split('void MScript::LoadScript (void)', 1)[1].split('#else', 1)[0]
+        for number in (3, 4, 5):
+            token = f'{number:02}'
+            self.assertIn(f'head = &nativeTerran{token}Programs', script)
+            self.assertIn(f'FrontierXCheckScript{token}Reset()', script)
+            self.assertIn(f'GetNativeScript{token}Schema(', script)
+            for alias in (f'Script{token}T.dll', f'script{token}.dll', f'Script{token}.dll'):
+                self.assertIn(f'"{alias}"', load)
+            self.assertIn(f'FrontierXInitializeScript{token}()', load)
+            self.assertIn(f'!findScript("TM{number}_Briefing")', briefing)
+            self.assertRegex(script, rf'GetNativeScript{token}ResourceHandle\(\)\)\s*'
+                             rf'counted = FrontierX::GetNativeScript{token}CountedString\(stringID\)')
+        # The actual TM5 retail header uses this uppercase module spelling.
+        self.assertIn('strcmp(scriptName, "SCRIPT05.dll") == 0', load)
+        self.assertIn('terran04 ? nativeTerran04Programs : terran05 ? nativeTerran05Programs : nullptr', load)
+        self.assertIn('"TM4_MissionStart"', load)
+        self.assertIn('runStartProgram(true)', briefing)
+        shell = read('Code/Launcher/NativeShell.cpp')
+        for ordinal, number in (('fourth', 4), ('fifth', 5)):
+            selected = shell.split(f'const bool {ordinal}TerranMission', 1)[1].split(
+                'Native App selected source script:', 1)[0]
+            for alias in (f'Script{number:02}T.dll', f'script{number:02}.dll', f'Script{number:02}.dll'):
+                self.assertIn(f'"{alias}"', selected)
+            self.assertIn(f'!{ordinal}TerranMission', selected)
+            if number == 5:
+                self.assertIn('std::strcmp(selectedScript, "SCRIPT05.dll") == 0', selected)
+        mission = read('Code/App/Src/Mission.cpp').split(
+            'static bool NativeLoadMissionSystemMap', 1)[1].split('#endif', 1)[0]
+        for alias in ('script03t.dll', 'script03.dll', 'script04t.dll', 'script04.dll', 'script05t.dll', 'script05.dll'):
+            self.assertIn(f'foldedScript == "{alias}"', mission)
+        self.assertIn('regularTerran && foldedExtension == ".mission"', mission)
+
+    def test_tm4_direct_source_retains_full_terran_effects_and_materials(self):
+        # The original selector starts from TM1; a direct TM4 diagnostic must
+        # still use the same full presentation owners, without reduced flags.
+        # TM5 is prepared here solely as the required next-entry contract.
+        source = (Path(__file__).resolve().parents[2] / 'Code/Launcher/NativeShell.cpp').read_text()
+        effects = source.split('if (options.missionStart)', 1)[1].split(
+            'InitializeNativeEffectsOptions();', 1)[0]
+        materials = source.split('NATIVE_USE_ORIGINAL_LEGACY_MATERIALS =', 1)[1].split(';', 1)[0]
+        for number in range(1, 6):
+            name = f'"T_Mission{number}.dmission"'
+            self.assertIn(name, effects)
+            self.assertIn(name, materials)
+        self.assertIn('!options.skipLegacyLighting', materials)
+
+    def test_briefing_start_rejects_failed_native_mission_reload_source_contract(self):
+        # Concrete source regression: a failed terrain/object load closes the
+        # partial mission. IDS_START previously ignored Reload's false result
+        # and reported success, allowing scripts to run against missing actors.
+        # This checks the caller's control flow, not a real mission load failure.
+        path = Path(__file__).resolve().parents[2] / 'Code/App/Src/Menu_Briefing.cpp'
+        source = re.sub(r'//[^\n]*|/\*.*?\*/', '', path.read_text(), flags=re.DOTALL)
+        start = source.split('case IDS_START:', 1)[1].split('case IDS_REPLAY:', 1)[0]
+        native = start.split('#else', 1)[1].split('#endif', 1)[0]
+        self.assertRegex(native, r'if\s*\(!MISSION->Reload\(\)\)\s*\{'
+                         r'[^{}]*endDialog\(0\);\s*break;\s*\}')
+        self.assertNotIn('endDialog(1)', native)
+        self.assertNotIn('endDialog(1)', start.split('#else', 1)[0])
+        self.assertIn('endDialog(1)', start.split('#endif', 1)[1])
+        windows = start.split('#if defined(_WIN32)', 1)[1].split('#else', 1)[0]
+        self.assertRegex(windows, r'MISSION->Reload\(\);')
+
     def test_unit_catalog_requires_exclusive_diagnostic(self):
         result = self.run_shell('--unit-catalog-check')
         self.assertNotEqual(result.returncode, 0)
@@ -229,6 +361,7 @@ class NativeShellTests(unittest.TestCase):
                 self.assertIn('Native source teletype counted string, pause, expiry and flush checked', result.stdout)
                 self.assertIn('subtitle wrapping and release checked', result.stdout)
                 self.assertIn('status/hint/scrolling lifecycle checked', result.stdout)
+                self.assertIn('Native source status Rally Point CR/LF metrics and draw geometry checked', result.stdout)
                 self.assertIn('hot-rectangle input/post/lifecycle checked', result.stdout)
                 self.assertIn('original VFX image reader checked', result.stdout)
                 self.assertIn('unit alert lifecycle checked', result.stdout)

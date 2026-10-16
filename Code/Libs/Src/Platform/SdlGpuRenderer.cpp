@@ -144,6 +144,18 @@ struct SdlGpuRenderer::Impl
     SDL_GPUTexture * depthTexture = nullptr;
     SDL_GPUSampler * sampler = nullptr;
     SDL_GPUSampler * secondSampler = nullptr;
+    // Five binary sampler properties form a fixed set shared by both stages.
+    // Captured draws borrow immutable entries until the idle-waited shutdown.
+    std::array<SDL_GPUSampler *, 32> samplerCache{};
+    Uint32 samplerCreations = 0U;
+    static std::size_t SamplerKey(const SamplerStateSnapshot & state)
+    {
+        return (state.addressU == D3DTADDRESS_WRAP ? 1U : 0U) |
+               (state.addressV == D3DTADDRESS_WRAP ? 2U : 0U) |
+               (state.minFilter == D3DTEXF_LINEAR ? 4U : 0U) |
+               (state.magFilter == D3DTEXF_LINEAR ? 8U : 0U) |
+               (state.mipFilter == D3DTEXF_LINEAR ? 16U : 0U);
+    }
     SDL_GPUTextureFormat colorTargetFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
     std::vector<std::uint8_t> texturePixels;
     std::string error;
@@ -184,6 +196,7 @@ struct SdlGpuRenderer::Impl
     std::uint64_t pipelineUse = 0U;
     bool timingsEnabled = false;
     Uint64 submissionTicks = 0, samplerTicks = 0, retirementTicks = 0, presentationTicks = 0;
+    Uint64 textureUploadTicks = 0, textureUploadCount = 0;
     Uint64 submissionCount = 0, samplerChanges = 0;
     Uint64 acquisitionTicks = 0, drawingTicks = 0, queueSubmitTicks = 0;
     std::vector<UploadSet> freeUploads;
@@ -194,7 +207,6 @@ struct SdlGpuRenderer::Impl
         if (upload.index) SDL_ReleaseGPUBuffer(device, upload.index);
         SDL_ReleaseGPUTransferBuffer(device, upload.transfer);
     }
-    std::vector<SDL_GPUSampler *> retiredSamplers;
     std::vector<SDL_GPUTexture *> retiredTextures;
 };
 
@@ -649,7 +661,10 @@ bool SdlGpuRenderer::Initialize(std::uint32_t windowId,
             impl_->device, impl_->extendedVertexShader, impl_->fragmentShader,
             impl_->colorTargetFormat, impl_->renderState, 3U);
     impl_->sampler = CreateSampler(impl_->device, impl_->samplerState);
-    impl_->secondSampler = CreateSampler(impl_->device, impl_->secondSamplerState);
+    impl_->samplerCache[Impl::SamplerKey(impl_->samplerState)] = impl_->sampler;
+    if (impl_->sampler) ++impl_->samplerCreations;
+    impl_->secondSampler = impl_->sampler;
+    impl_->secondSamplerState.stage = 1U;
     if (!impl_->pipeline || !impl_->linePipeline || !impl_->sampler || !impl_->secondSampler ||
         (impl_->extendedVertexShader && !impl_->extendedPipeline) ||
         (impl_->gameVertexShader && !impl_->gamePipeline) ||
@@ -1201,28 +1216,18 @@ GENRESULT SdlGpuRenderer::SetSamplerState(const SamplerStateSnapshot & state)
         state.minFilter == current.minFilter && state.magFilter == current.magFilter &&
         state.mipFilter == current.mipFilter)
         return GR_OK;
-    SDL_GPUSampler * candidate = CreateSampler(impl_->device, state);
+    SDL_GPUSampler * candidate = impl_->samplerCache[Impl::SamplerKey(state)];
     if (!candidate)
     {
-        impl_->error = SDL_GetError();
-        return GR_GENERIC;
-    }
-    if (!SDL_WaitForGPUIdle(impl_->device))
-    {
-        impl_->error = SDL_GetError();
-        SDL_ReleaseGPUSampler(impl_->device, candidate);
-        return GR_GENERIC;
-    }
-    if (impl_->frameCapture && !impl_->frameDraws.empty())
-    {
-        try { impl_->retiredSamplers.push_back(selected); }
-        catch (const std::bad_alloc &)
+        candidate = CreateSampler(impl_->device, state);
+        if (!candidate)
         {
-            SDL_ReleaseGPUSampler(impl_->device, candidate);
-            return GR_OUT_OF_MEMORY;
+            impl_->error = SDL_GetError();
+            return GR_GENERIC;
         }
+        impl_->samplerCache[Impl::SamplerKey(state)] = candidate;
+        ++impl_->samplerCreations;
     }
-    else SDL_ReleaseGPUSampler(impl_->device, selected);
     selected = candidate;
     if (impl_->timingsEnabled) ++impl_->samplerChanges;
     (state.stage == 0U ? impl_->samplerState : impl_->secondSamplerState) = state;
@@ -1238,6 +1243,8 @@ GENRESULT SdlGpuRenderer::RegisterTexture(SdlGpuTextureView texture, std::uint32
 GENRESULT SdlGpuRenderer::RegisterMipTexture(const NativeTextureLevel *levels,
                                              std::uint32_t count, std::uint32_t &handle)
 {
+    CpuTimer timer(impl_->textureUploadTicks, impl_->timingsEnabled);
+    if (impl_->timingsEnabled) ++impl_->textureUploadCount;
     handle = 0U;
     if (!impl_->device || !levels || !count || count > 31U ||
         impl_->nextTextureHandle > kMaxTextureStateId) return GR_INVALID_PARMS;
@@ -1593,34 +1600,47 @@ bool SdlGpuRenderer::BeginFrame(std::string & error)
         // Captured buffers are exclusively reusable only after the idle wait
         // above. Reserve before transferring ownership so allocation failure
         // preserves the current captured frame and its resources.
-        try { impl_->freeUploads.reserve(256U); }
+        constexpr std::size_t uploadLimit = 512U;
+        constexpr Uint64 budget = 64U * 1024U * 1024U;
+        try { impl_->freeUploads.reserve(uploadLimit); }
         catch (const std::bad_alloc &)
         { error = "captured upload pool allocation failed"; return false; }
+        // Reserve room for this frame before adding anything: trimming the
+        // mixed pool's back would discard the just-retired active draws while
+        // preserving stale entries that could not satisfy this frame's draws.
+        std::size_t retainedCount = 0;
+        Uint64 retainedBytes = 0;
+        for (const auto &draw : impl_->frameDraws)
+        {
+            const Uint64 bytes = Uint64(draw.vertexBytes) + draw.indexBytes + draw.transferBytes;
+            if (retainedCount < uploadLimit && bytes <= budget - retainedBytes)
+            { ++retainedCount; retainedBytes += bytes; }
+        }
+        while (!impl_->freeUploads.empty() &&
+            (impl_->freeUploads.size() + retainedCount > uploadLimit ||
+             impl_->freeUploadBytes > budget - retainedBytes))
+        {
+            impl_->freeUploadBytes -= impl_->freeUploads.back().Bytes();
+            impl_->ReleaseUpload(impl_->freeUploads.back());
+            impl_->freeUploads.pop_back();
+        }
+        retainedCount = 0;
+        retainedBytes = 0;
         for (const auto & draw : impl_->frameDraws)
         {
             const Impl::UploadSet upload{draw.vertex, draw.index, draw.transfer,
                 draw.vertexBytes, draw.indexBytes, draw.transferBytes};
-            constexpr Uint64 budget = 64U * 1024U * 1024U;
-            if (upload.Bytes() <= budget)
+            if (retainedCount < uploadLimit && upload.Bytes() <= budget - retainedBytes)
             {
-                while (!impl_->freeUploads.empty() &&
-                    (impl_->freeUploads.size() >= 256U ||
-                     impl_->freeUploadBytes + upload.Bytes() > budget))
-                {
-                    impl_->freeUploadBytes -= impl_->freeUploads.back().Bytes();
-                    impl_->ReleaseUpload(impl_->freeUploads.back());
-                    impl_->freeUploads.pop_back();
-                }
                 impl_->freeUploads.push_back(upload);
                 impl_->freeUploadBytes += upload.Bytes();
+                ++retainedCount;
+                retainedBytes += upload.Bytes();
             }
             else impl_->ReleaseUpload(upload);
             SDL_ReleaseGPUTexture(impl_->device, draw.uploadedTexture);
         }
         impl_->frameDraws.clear();
-        for (SDL_GPUSampler * sampler : impl_->retiredSamplers)
-            SDL_ReleaseGPUSampler(impl_->device, sampler);
-        impl_->retiredSamplers.clear();
         for (SDL_GPUTexture * texture : impl_->retiredTextures)
             SDL_ReleaseGPUTexture(impl_->device, texture);
         impl_->retiredTextures.clear();
@@ -2055,15 +2075,13 @@ void SdlGpuRenderer::Shutdown()
         if (impl_->depthTexture) SDL_ReleaseGPUTexture(impl_->device, impl_->depthTexture);
         for (const auto & texture : impl_->registeredTextures)
             SDL_ReleaseGPUTexture(impl_->device, texture.second.texture);
-        if (impl_->sampler) SDL_ReleaseGPUSampler(impl_->device, impl_->sampler);
-        if (impl_->secondSampler) SDL_ReleaseGPUSampler(impl_->device, impl_->secondSampler);
+        for (SDL_GPUSampler * sampler : impl_->samplerCache)
+            if (sampler) SDL_ReleaseGPUSampler(impl_->device, sampler);
         if (impl_->pipelineCache.empty())
             impl_->ReleasePipelines(impl_->ActivePipelines());
         else
             for (const auto & entry : impl_->pipelineCache)
                 impl_->ReleasePipelines(entry.second.set);
-        for (SDL_GPUSampler * sampler : impl_->retiredSamplers)
-            SDL_ReleaseGPUSampler(impl_->device, sampler);
         for (SDL_GPUTexture * texture : impl_->retiredTextures)
             SDL_ReleaseGPUTexture(impl_->device, texture);
         if (impl_->vertexShader) SDL_ReleaseGPUShader(impl_->device, impl_->vertexShader);
@@ -2087,7 +2105,8 @@ SdlGpuRenderer::Timings SdlGpuRenderer::GetTimings() const
             impl_->retirementTicks * scale, impl_->presentationTicks * scale,
             impl_->submissionCount, impl_->samplerChanges,
             impl_->acquisitionTicks * scale, impl_->drawingTicks * scale,
-            impl_->queueSubmitTicks * scale, impl_->reusedUploads};
+            impl_->queueSubmitTicks * scale, impl_->reusedUploads,
+            impl_->textureUploadTicks * scale, impl_->textureUploadCount};
 }
 const std::string & SdlGpuRenderer::LastError() const { return impl_->error; }
 const char * SdlGpuRenderer::PresentModeName() const { return "vsync"; }
@@ -2098,6 +2117,11 @@ const char * SdlGpuRenderer::DriverName() const
 std::uint32_t SdlGpuRenderer::DepthWidth() const { return impl_->depthWidth; }
 std::uint32_t SdlGpuRenderer::DepthHeight() const { return impl_->depthHeight; }
 std::uint32_t SdlGpuRenderer::DepthRecreations() const { return impl_->depthRecreations; }
+std::uint32_t SdlGpuRenderer::SamplerCreations() const
+{
+    return impl_->samplerCreations;
+}
+
 std::uint32_t SdlGpuRenderer::PipelineRebuilds() const { return impl_->pipelineRebuilds; }
 std::uint32_t SdlGpuRenderer::VertexCount() const { return impl_->vertexCount; }
 std::uint32_t SdlGpuRenderer::IndexCount() const { return impl_->indexCount; }

@@ -17,6 +17,7 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "Include/CQTrace.h"
+#include "Include/NativeShipVisualTransform.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
 #include <IHardPoint.h>
@@ -351,7 +352,13 @@ void ObjectDamage< Base >::damagePostRender (void)
 		if (fire[i].index != INVALID_INSTANCE_INDEX)
 		{
 			cnt++;
+#if defined(_WIN32)
 			ENGINE->set_transform(fire[i].index,transform.multiply(fire[i].trans));
+#else
+			ENGINE->set_transform(fire[i].index, NativeShipDamageSmokeTransform(transform,
+				fire[i].trans, this->objClass == OC_SPACESHIP && !this->bSpecialRender &&
+				(this->instanceMesh == NULL || CQEFFECTS.bFastRender == 0)));
+#endif
 			ENGINE->render_instance(MAINCAM,fire[i].index,0,LODPERCENT,0,0);
 		}
 		i++;

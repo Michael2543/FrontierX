@@ -134,7 +134,7 @@ class GateTests(unittest.TestCase):
                 if scope == 'sanitizers':
                     self.assertIn('-R', calls[2])
                     pattern = ctest[ctest.index('-R') + 1]
-                    for owner in ('script02_schema', 'script03_schema', 'net_buffer'):
+                    for owner in ('script02_schema', 'script03_schema', 'script04_schema', 'script05_schema', 'net_buffer'):
                         self.assertIsNotNone(re.fullmatch(pattern, 'portability.' + owner))
                 if scope.startswith('mission'):
                     self.assertIn('--technical-smoke', calls[-1])
@@ -191,6 +191,64 @@ class GateTests(unittest.TestCase):
             with patch.object(sys, 'argv', argv), patch.dict(os.environ, {}, clear=True):
                 with self.assertRaises(ValueError):
                     playtest.main()
+
+    def test_p2_candidate_pins_target_without_bypassing_campaign_entry(self):
+        # Regression: the earlier handoff always described TM1/P1c even when
+        # the genuine player checkpoint and requested playtest belonged to TM2.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build = root / 'build'
+            build.mkdir()
+            (build / 'frontierx_native_shell').write_bytes(b'synthetic binary')
+            (build / 'CMakeCache.txt').write_text('synthetic configuration')
+            candidate = root / 'candidate.json'
+            with patch('playtest.subprocess.check_output', side_effect=['a' * 40, b'']):
+                playtest.write_handoff(root, build, candidate, {}, mission='terran1', campaign_mission=2)
+            record = json.loads(candidate.read_text())
+            self.assertEqual(record['campaign_mission'], 2)
+            self.assertIn('--campaign-mission 2', record['launch_command'])
+            self.assertIn(playtest.P2_TM2_CHECKLIST[0], record['checklist'])
+            self.assertNotIn('does not accept P1c', record['acceptance'])
+            argv = ['playtest.py', '--build', str(build), '--mission', 'terran1',
+                    '--candidate', str(candidate), '--play']
+            for target in ([], ['--campaign-mission', '3']):
+                with patch.object(sys, 'argv', argv + target), patch.dict(os.environ, {}, clear=True):
+                    with self.assertRaisesRegex(ValueError, 'campaign target'):
+                        playtest.main()
+            with self.assertRaisesRegex(ValueError, 'Terran selector'):
+                playtest.write_handoff(root, build, candidate, {}, campaign_mission=2)
+            install = root / 'retail'
+            (install / 'DATA').mkdir(parents=True)
+            for name in ('stringpack.db', 'gendata.db', 'gametypes.db'):
+                (install / name).touch()
+            # A matching target reaches the ordinary game launch unchanged.
+            (build / 'CMakeCache.txt').write_text('FRONTIERX_BUILD_FFMPEG_VIDEO:BOOL=ON\n')
+            mapping = root / 'font-map'
+            mapping.write_text('# synthetic external map\n')
+            env = dict(FRONTIERX_RETAIL_ROOT=str(install),
+                       FRONTIERX_PLAYTEST_FONT_MAP=str(mapping),
+                       FRONTIERX_PLAYTEST_SAVE_ROOT=str(root / 'save'),
+                       XDG_CONFIG_HOME=str(root / 'config'))
+            with patch('playtest.subprocess.check_output', side_effect=['a' * 40, b'']):
+                playtest.write_handoff(root, build, candidate, env, mission='terran1', campaign_mission=2)
+            with patch.object(sys, 'argv', argv + ['--campaign-mission', '2']), \
+                 patch.dict(os.environ, env, clear=True), patch('playtest.subprocess.run') as launch:
+                playtest.main()
+                command = launch.call_args.args[0]
+
+            self.assertEqual(command[command.index('--mission-source') + 1], 'T_Mission1.dmission')
+            self.assertIn('--mission-campaign', command)
+            self.assertNotIn('--campaign-mission', command)
+            self.assertFalse(any(value.startswith('--skip-') or value == '--base-textures-only'
+                                 for value in command))
+
+    def test_tm4_checklist_preserves_campaign_entry_and_generic_acceptance(self):
+        checklist = playtest.campaign_checklist('terran1', 4)
+        self.assertEqual(checklist, playtest.P2_CHECKLIST + playtest.P2_TM4_CHECKLIST)
+        self.assertNotIn(playtest.P2_TM2_CHECKLIST[0], checklist)
+        self.assertEqual(playtest.MISSIONS['terran1'], 'T_Mission1.dmission')
+        with self.assertRaisesRegex(ValueError, 'Terran selector'):
+            playtest.campaign_checklist('training', 4)
 
     def test_playtest_launch_preserves_player_input_and_four_shader_order(self):
         with tempfile.TemporaryDirectory() as tmp:

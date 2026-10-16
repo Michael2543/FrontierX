@@ -108,7 +108,7 @@ bool WriteMaterialFixture(const std::filesystem::path & path,
 }
 
 bool WriteMipTextureFixture(const std::filesystem::path &path, bool alphaPlanes,
-                            int levelTwoAlphaExtentDelta)
+                            int levelTwoAlphaExtentDelta, bool rgb888)
 {
     struct Entry
     {
@@ -135,26 +135,34 @@ bool WriteMipTextureFixture(const std::filesystem::path &path, bool alphaPlanes,
             static_cast<unsigned char>(value >> 24)};
     };
     const U32 library = directory(0, "Texture library");
-    const U32 tile = directory(library, alphaPlanes ? "AlphaMipTile" : "MipTile");
-    file(tile, "Image X size", wordBytes(256));
-    file(tile, "Image Y size", wordBytes(256));
-    const U32 palette = directory(tile, "Palette 8 Bit");
+    // BlackHole's original ring uses Format_TRUE_3__8_8_8/MIP0 plus a separate
+    // alpha plane. A small two-row image pins its channel order and stride.
+    const U32 tile = directory(library, rgb888 ? "Rgb888Tile" : alphaPlanes ? "AlphaMipTile" : "MipTile");
+    file(tile, "Image X size", wordBytes(rgb888 ? 2 : 256));
+    file(tile, "Image Y size", wordBytes(rgb888 ? 2 : 256));
+    const U32 palette = directory(tile, rgb888 ? "Format_TRUE_3__8_8_8" : "Palette 8 Bit");
+    if (!rgb888)
+    {
     file(palette, "Palette color count", wordBytes(9));
     // Each source-authored mip has a distinct color; no generated mip substitute.
     file(palette, "Palette RGB 888", {240,40,80, 40,240,80, 40,80,240,
         200,160,40, 160,40,200, 40,200,160, 120,80,40, 80,40,120, 40,120,80});
-    for (U32 level = 0; level < 9; ++level)
+    }
+    for (U32 level = 0; level < (rgb888 ? 1U : 9U); ++level)
     {
         const U32 mip = directory(palette, "MIP" + std::to_string(level));
-        const U32 dimension = 256U >> level;
-        file(mip, "Image indices", std::vector<unsigned char>(dimension * dimension,
-                                                               static_cast<unsigned char>(level)));
+        const U32 dimension = (rgb888 ? 2U : 256U) >> level;
+        if (rgb888)
+            file(mip, "Image colors", {17,34,51, 68,85,102, 119,136,153, 170,187,204});
+        else
+            file(mip, "Image indices", std::vector<unsigned char>(dimension * dimension,
+                                                                   static_cast<unsigned char>(level)));
         if (alphaPlanes)
         {
             std::vector<unsigned char> alpha(dimension * dimension);
             for (U32 pixel = 0U; pixel < dimension * dimension; ++pixel)
                 alpha[pixel] = pixel % 3U == 0U ? 0U : pixel % 3U == 1U ? 96U : 255U;
-            if (level == 2U)
+            if (level == (rgb888 ? 0U : 2U))
             {
                 const int extent = static_cast<int>(alpha.size()) + levelTwoAlphaExtentDelta;
                 if (extent < 0) return false;

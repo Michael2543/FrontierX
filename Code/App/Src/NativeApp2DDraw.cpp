@@ -51,7 +51,7 @@ bool HiddenUnderToolbar(const PANE * pane, S32 y0, S32 y1)
 }
 
 void DrawRectangle(const PANE * pane, S32 x0, S32 y0, S32 x1, S32 y1,
-                   COLORREF color, bool hash)
+                   COLORREF color, bool hash, S32 filledLength = 0)
 {
     Check2D(pane);
     if (HiddenUnderToolbar(pane, y0, y1)) return;
@@ -97,10 +97,21 @@ void DrawRectangle(const PANE * pane, S32 x0, S32 y0, S32 x1, S32 y1,
     if (hash) PB.Color4ub(red, green, blue, 100U);
     else PB.Color3ub(red, green, blue);
     PB.Begin(PB_QUADS);
-    PB.Vertex3f(x0, y0, 0.0F);
-    PB.Vertex3f(x1 + 1, y0, 0.0F);
-    PB.Vertex3f(x1 + 1, y1 + 1, 0.0F);
-    PB.Vertex3f(x0, y1 + 1, 0.0F);
+    const auto quad = [y0, y1](S32 left, S32 right)
+    {
+        PB.Vertex3f(left, y0, 0.0F);
+        PB.Vertex3f(right + 1, y0, 0.0F);
+        PB.Vertex3f(right + 1, y1 + 1, 0.0F);
+        PB.Vertex3f(left, y1 + 1, 0.0F);
+    };
+    if (filledLength > 0)
+    {
+        // DrawHighlighted's original four-pixel rectangles at five-pixel
+        // intervals share all state. Keep their geometry and submission order.
+        for (std::int64_t i = 0; i < filledLength; i += 5)
+            quad(static_cast<S32>(x0 + i), static_cast<S32>(x0 + i + 3));
+    }
+    else quad(x0, x1);
     PB.End();
     if (!hash) Require2D(BATCH->set_state(RPR_STATE_ID, 0U), "restore batch state");
 }
@@ -144,6 +155,22 @@ void DA::RectangleFill(const PANE * pane, S32 x0, S32 y0, S32 x1, S32 y1,
                        COLORREF color)
 {
     DrawRectangle(pane, x0, y0, x1, y1, color, false);
+}
+
+void DA::RectangleFillSegments(const PANE * pane, S32 x0, S32 y0,
+                               S32 filledLength, COLORREF color)
+{
+    if (filledLength <= 0) return;
+    const std::int64_t lastX = static_cast<std::int64_t>(x0) +
+        ((static_cast<std::int64_t>(filledLength) - 1) / 5) * 5 + 3;
+    if (lastX >= std::numeric_limits<S32>::max() ||
+        y0 > std::numeric_limits<S32>::max() - 3)
+    {
+        ICQImage::Bomb("native App segmented bar bounds invalid");
+        std::abort();
+    }
+    DrawRectangle(pane, x0, y0, static_cast<S32>(lastX), y0 + 2,
+                  color, false, filledLength);
 }
 
 void DA::LineDraw(const PANE * pane, S32 x0, S32 y0, S32 x1, S32 y1,

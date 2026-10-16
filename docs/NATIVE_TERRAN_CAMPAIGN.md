@@ -1,5 +1,304 @@
 # First Terran campaign integration (2026-10-13)
 
+## TM4 integration boundary (2026-10-16)
+
+The user explicitly accepts the complete TM3 run after the final Weaver repair.
+TM4 now binds original `Script04.dll` entry/schema/resources and the required
+BlackHole terrain owner, with RGB888-plus-alpha ring texture admission at the
+existing renderer boundary. Original Script05 is linked for the next briefing
+only. Native briefing Start rejects failed reloads and native Teletype handles
+its authored trailing/blank lines. Gameplay order, objectives, saved bytes and
+Windows paths are preserved. Technical checks, genuine early/later saves,
+observed defeat/retry, failed intermediate runs and pending complete TM4 user
+acceptance are recorded in the [P2 mission ledger](NATIVE_TERRAN_P2.md#tm4-production-integration-2026-10-16).
+
+## Rally tooltip CR/LF crash (2026-10-16)
+
+**Confirmed user-core diagnosis:** the later abort occurs in
+`NativeFont::GetGlyph` while the original `StatusBarResource::redraw` draws
+`IDS_HINT_BUTTON_RALLY`. Its original resource contains a trailing LF. The
+single-line native font treated that formatting character as an unsupported
+printable glyph and aborted. This is distinct from the earlier AI watcher and
+save/upgrade defects; resource exhaustion is not indicated.
+
+The native font now gives CR and LF zero advance and no spans. Single-line
+agents retain one baseline; the existing multiline owner still interprets them
+as row breaks with its original contiguous-break handling. Printable ASCII
+validation and rejection of other unsupported controls/Unicode remain explicit.
+No resource text or individual tooltip is patched. Width and actual drawing use
+the same glyph/span path. Original Windows code, saved state and COM interfaces are
+unchanged. Exact GDI control-character metric parity remains unmeasured.
+
+**Compilation and synthetic execution:** Linux x86_64 GCC16.2.1 and Clang22.1.8
+full-media Debug `frontierx_native_shell` rebuild and execute
+`ctest --test-dir "$BUILD" -R '^portability.native_shell$' --output-on-failure`.
+For these runs `FRONTIERX_TEST_FONT_FILE` is explicitly configured to a lawfully
+external font; the prior shared cache left it empty, so its optional font branch
+would not have executed. The existing shell check now requires the Rally CR/LF
+marker. It uses the real StatusBar font and original resource ID, comparing
+width and the actual rendering span-layout function for trailing/embedded CR,
+LF and CRLF in single-/multiline modes, including empty and consecutive breaks.
+This is CPU text-geometry evidence, not a GPU tooltip-hover capture.
+The same font-enabled check passes under Clang ASan/UBSan outside the sandbox
+with leak detection and fatal errors enabled. The sandboxed sanitizer configure
+cannot complete its FFmpeg license runtime probe; the outside-sandbox rerun
+passes the unchanged reviewed-LGPL checks. No license validation is bypassed.
+
+Real hover/reload feedback, complete mission testing, hosted CI and affected
+native Windows execution remain separate. The user's renewed selection-FPS
+failure and reversed Weaver build pose have separate upload-pool and
+saved-heading owner repairs in
+[the rendering ledger](GAME_MATERIAL_PATH.md#large-selection-and-sampler-churn-2026-10-16).
+Previous sampler/bar measurements alone did not resolve the selection failure;
+narrow user performance/Weaver confirmation remains pending.
+
+## AI build-site watcher crash (2026-10-16)
+
+**Confirmed core diagnosis:** the subsequent user crash reaches
+`UninitObjectPointer` from the `OBJPTR<IPlanet>` copy constructor at the original
+`SPlayerAI::ChooseBuildSite` call to `ShouldIBuild`. Both typed and base watcher
+copy constructors passed uninitialized destination storage to `InitObjectPointer`.
+That routine first removes an existing watch, so arbitrary stack bytes became
+list links. This is separate from the earlier AI saved-tail-padding repair.
+
+Both constructors now delegate to their existing empty constructor before
+registering the copied watch. Field sizes, registration/volatility rules,
+interface offsets, save records, AI decisions, iteration and RNG are unchanged.
+The correction also applies to Windows source; native Windows Debug/Final and
+affected module ABI execution remain required and unperformed.
+
+**Differential synthetic execution:** a private Clang22.1.8 fixture links the
+production `Objwatch` owner and copies empty typed/base watches into poisoned
+storage. Each original constructor reproduces SIGSEGV; each fixed constructor
+returns normally. The existing `native_shell` AI lifecycle check additionally
+covers volatile and registered copies, a nonzero interface offset, destruction
+and target invalidation. No new probe target or retail fixture is added.
+
+**Local compilation and automated execution:** full-media Debug
+`frontierx_native_shell`, `frontierx_game_material_manager_probe` and
+`frontierx_sdl3_gpu_probe` build under Linux x86_64 GCC16.2.1 and Clang22.1.8.
+Both compilers execute the focused `layout`, `app_schema`, `script01_schema`,
+`script02_schema`, `script03_schema`, `sol_t_schema`, `game_material_manager` and
+`native_shell` checks. The Clang address/undefined sanitizer build executes
+those checks plus `view_parser`, `data_root` and `net_buffer` outside the sandbox
+with `detect_leaks=1:halt_on_error=1` and fatal UBSan enabled, without reports.
+These checks include the actual watcher regression and prior F8/mesh regressions.
+**Bounded retail-input execution:** the rebuilt Clang full-media shell loads an
+isolated unchanged copy of the latest genuine TM3 checkpoint through one normal
+F8. A parent debugger observes five original `ShouldIBuild` entries after that
+load, each with a real nonnull planet, interface offset 976, the original volatile
+player ID and empty links. Observation stops after the fifth entry. The run
+continues for about 120 seconds after the load marker, executes 4568 source
+modal frames in total and closes normally with no signal, zero mission audio
+streams and idle hints. The checkpoint copy remains byte-identical. This proves
+execution beyond the formerly crashing constructor in the restored AI path;
+it does not accept the whole mission or all future AI production.
+Targeted ordinary-path training and TM1 start/render/close checks are recorded in
+[the rendering ledger](GAME_MATERIAL_PATH.md#large-selection-and-sampler-churn-2026-10-16),
+including the unchanged training dynamic-light boundary and rejected fixture
+attempts.
+
+Hosted CI, complete mission replay and Windows/ABI remain unexecuted; the
+existing user acceptance and separate M3 boundary are unchanged.
+
+## Collector upgrade and repeated F8 crash repairs (2026-10-15)
+
+**User retail-input runtime and core diagnosis:** the reported TM2 teststand
+crashes in `MantisBuild::SetupMesh` when a player-2 `M_COLLECTOR` starts its
+original upgrade. Its Engine add-instance exists, but `add_mesh_info` is null.
+The native `ObjectExtension::initExtension` detached the Engine joint without
+transferring the already initialized mesh subtree. The effect then dereferenced
+the missing tree. This is independent of damage-smoke placement.
+
+A separate genuine F8 crash reaches a freed callback through `FullScreen`.
+Read-only core inspection and a private hardware-watchpoint runtime identify
+the owning write: native `SPlayerAI::Load` reads the entire 47608-byte
+`PLAYERAI_SAVELOAD` directly into a base subobject. On this LP64 layout,
+`SPlayerAI::eventHandle` occupies reused tail padding inside that extent. Loading
+an older saved token overwrites the live subscription token. AI destruction then
+unadvises the wrong token, leaving a freed callback. The weak connection point
+and UI traversal are not changed to conceal the stale owner.
+
+**Implemented owner repairs:** native extension initialization, start,
+completion and cancellation now transfer the existing initialized add/remove
+subtrees through their original `IMeshInfoTree` boundaries and refresh the main
+mesh chain. Renderer references are retained; no replacement model, omitted
+growth effect or alternate upgrade implementation is introduced. Native reload
+restores completed geometry before the active upgrade and preserves the saved
+percentage across `StartUpgrade` resetting its presentation state. The existing
+source timing policy remains unchanged.
+
+Duplicate extension aliases consult actual main-tree membership before
+transferring a subtree. Only the active upgrade that detached a removal owns
+that effect/tree for cancellation and teardown. Assertions retain the distinction
+between an expected shared alias and an inconsistent missing child. This avoids
+creating a tree cycle or destroying an earlier completed alias's detached mesh;
+no additional saved field or interface slot is required.
+
+Native AI serialization now reads into a standalone record and copies only the
+47602-byte extent through the final `m_bShipRepair` field into live state.
+Saving stages the same meaningful extent in a zero-initialized record. The
+existing 47608-byte disk record remains the same size; old nonzero padding is
+accepted without becoming a runtime token, and new saves do not leak that token
+into padding. Windows paths, fields, vtables and persistent field widths remain
+unchanged. No objectives, progress, balance or replacement AI is introduced;
+the original simulation/effect calls continue in their existing order.
+
+**Synthetic automated execution:** the existing shell AI lifecycle check uses
+the real weak callback point and production AI serializer with distinct source
+and restored tokens, old dirty disk padding, final-field restoration, repeated
+load and actual destructor unsubscription. The existing material check covers
+initialized real Engine/MeshInfo subtrees with siblings and a grandchild,
+add/remove transfer, repeated restoration and renderer/borrowed-instance
+ownership at teardown. It checks the tree contract used by the restored owner;
+it does not itself execute the complete `ObjectExtension` mission closure.
+
+Linux x86_64 GCC16.2.1 and Clang22.1.8 full-media Debug configurations rebuild
+`frontierx_native_shell` and `frontierx_game_material_manager_probe`, then execute:
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell frontierx_game_material_manager_probe -j 4
+ctest --test-dir "$BUILD" -R '^portability\.(game_material_manager|native_shell|script0[123]_schema|sol_t_schema|app_schema|layout)$' --output-on-failure
+```
+
+Here `$BUILD` is `/tmp/frontierx-p1c-gcc` or `/tmp/frontierx-p1c-clang`. All
+selected checks pass without skips. The rebuilt Clang ASan/UBSan configuration
+at `/tmp/frontierx-p1c-san` also executes the expanded existing selection outside
+the sandbox, with fatal errors and leak detection enabled:
+
+```sh
+env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+  UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir /tmp/frontierx-p1c-san \
+  -R 'portability\.(layout|view_parser|app_schema|script0[123]_schema|sol_t_schema|data_root|net_buffer|native_shell|game_material_manager)$' \
+  --output-on-failure
+```
+
+All selected checks pass without suppressions or skips.
+
+**Bounded lawful external-checkpoint execution:** an initial Clang run with the
+unique-subtree repair loads the genuine late user checkpoint, reaches five
+original Mantis morph/upgrade setup calls with valid initialized trees, saves
+and reloads during an active upgrade, and closes normally after 11152 source
+modal frames. After the final duplicate-alias ownership and explicit disk-padding
+changes, both GCC and Clang load the genuine active-upgrade checkpoint produced
+by that run, exercise ordinary physical F7/F8 and each reach two restored effect
+setups with non-null trees, then close normally. Original mission audio reports
+zero streams and idle hint ownership at close. These runs use strict mapped
+fonts and full media, with no goal/progress setter, forced build completion,
+resource injection or content exclusion.
+
+No regular upgrade-completion breakpoint was observed within those bounded
+intervals. Completion/cancellation tree transfer has synthetic contract evidence;
+complete mission outcomes, all duplicate-alias gameplay combinations and full
+growth-effect appearance are not claimed by the runtime checks. An initial
+automation attempt sent F8 during the original opening and lacked confirmed
+reload; it is not used as loaded-checkpoint evidence. The input observer was
+corrected to require the actual reload markers. No gameplay rule was relaxed
+to make that diagnostic attempt pass.
+
+Private core copies are deleted after
+analysis; core-derived details, checkpoints and raw debugger/runtime logs stay
+outside source control and CI artifacts. Native Windows Debug/Final/module ABI,
+hosted CI, ordinary-compositor resize and previously documented whole-process
+leak findings remain open. User TM2 acceptance remains recorded with the new
+concrete repairs and their individual evidence limits.
+
+## TM2 user acceptance and smoke repair (2026-10-15)
+
+The user reports that Mission 2 ran perfectly, apart from floating smoke above
+damaged Corvettes. This accepts the reported mission run; record the minor
+presentation follow-up separately from unreported individual scenario evidence.
+The original damage post-render owner now corrects only the raw model-space
+smoke anchor to match the native direct hull. Source state, damage/RNG, saved
+data, plume orientation and Windows behavior are preserved. The existing
+material regression fails before and passes after the repair; rebuilt
+GCC/Clang and focused fatal Clang ASan/UBSan checks pass. Commands and limits:
+[damage-smoke evidence](GAME_MATERIAL_PATH.md#corvette-damage-smoke-anchor-2026-10-15).
+A short visible damaged-Corvette check remains; no complete TM2 replay is
+requested. The [P2 matrix](NATIVE_TERRAN_P2.md) advances next mission work to TM3.
+
+## P2 second-mission gameplay audit (2026-10-15)
+
+The [P2 mission matrix](NATIVE_TERRAN_P2.md) tracks mission order, candidates,
+blockers, and separate user acceptance.
+
+**Source review:** the original selector identifies TM2 as "The Search for Hawkes"
+in `Globals.rc`; Script02T retains the older internal label "Rescue Captured Crew".
+`Menu_mission::onButtonPressed` selects `T_Mission2.dmission`, with the original
+`.qmission` fallback. `TM2_Briefing`, `TM2_InGameScene`, and `TM2_MissionStart`
+remain the original entry chain. This audit preserves the user's P1c acceptance
+and reported TM2 completion. It adds no complete P2 mission acceptance.
+
+The production sequence in `Scripts/Script02T/Script02t.cpp` requires these
+mechanics, including content created after the opening:
+
+- `TM2_BuildBallistics` observes Ballistics Lab construction and completion.
+  `TM2_ObjectBuilt` records fleet readiness at six Corvettes and three Missile
+  Cruisers. `TM2_BuildCruisers` also waits for destruction of the Mantis jump
+  platform before enabling Alkaid and advancing to `TM2_JumpToAlkaid`.
+- `TM2_JumpToAlkaid` creates two Scout Carriers in the asteroid fields, enables
+  Gate2, and waits for a player Cruiser or Corvette to cross systems.
+  `TM2_MantisAttack` creates three Frigates. Its live `Begin` branch advances to
+  `Wave2` after the timer; the separate `Wave1` branch is not entered by that
+  sequence. An additional scripted wave must not be invented from that dead branch.
+- Discovery of Alkaid2 starts `TM2_MantisBase`. The original Thripid queues a
+  Scout Carrier and `SetupAI` enables `MANTIS_FRIGATE_RUSH`. Subsequent speech
+  completion creates three Frigates and a Zorap against the player's jump
+  platform if that platform survives. Two more Frigates and another Scout Carrier
+  are created regardless. These late units require their complete media too.
+- `SetTechLevel(4)` unlocks Troopships and `T_RES_TROOPSHIP1`. Troopship
+  construction updates the objective list. Actual boarding and ownership transfer
+  remain with `Troopship`, `TroopPod`, and the original takeover operation.
+
+**Exact original outcomes:** `TM2_MantisBase::Update` starts success when
+`CountObjects(M_THRIPID, PLAYER_ID) > 0 ||
+CountObjects(M_COCOON, PLAYER_ID) > 0 ||
+CountObjects(M_BLASTFURNACE, PLAYER_ID) > 0 ||
+CountObjects(M_EYESTOCK, PLAYER_ID) > 0`.
+Capturing any one of those structure classes satisfies that predicate. The
+predicate does not require all four classes or an added system restriction.
+`TM2_MissionSuccess` then uses the original dialogue, teletype, and
+`EndMissionVictory(1)`. `TM2_ObjectDestroyed` starts failure if Blackwell is
+destroyed, or if destruction of Mantis-owned Eyestocks reduces
+`numMantisEyeStocksLeft` from its initial two to zero. The original failure
+dialogue ends in `EndMissionDefeat`. Damage to the friendly jump platform and
+its destruction have separate original warning programs, not an added defeat rule.
+
+**Persistence owners and limits:** Script02T's `MissionData` and program records
+retain the mission phase, actor references, triggers, wave timer, and flags.
+`MScript::Load` restores saved globals and programs for a checkpoint instead of
+replaying fresh mission initialization. `Troopship::save`, `load`, and `resolve`
+retain the target ID, attack-agent ID, and takeover approval through the original
+`TROOPSHIP_SAVELOAD`. `Trooppod::Save`, `Load`, and `ResolveAssociations` retain
+the original target association and validate native record reads and writes.
+`TROOPPOD_SAVELOAD` stores only the target ID. That schema evidence does not prove
+restoration of in-flight pod presentation. No persistent format or Windows
+behavior is changed by this audit.
+
+**Executed automated validation:** the existing Linux x86_64 GCC full-media Debug
+build at `/tmp/frontierx-p1c-gcc` executes the existing checks with:
+
+```sh
+ctest --test-dir /tmp/frontierx-p1c-gcc \
+  -R 'portability\.(layout|app_schema|script02_schema)$' --output-on-failure
+```
+
+All selected checks pass without skips. This execution uses existing binaries
+and synthetic schema inputs; no new source build or retail mission run is
+claimed. `view_parser_probe.cpp` correlates the troopship target, operation ID,
+approval flag, and pod target. Its Script02 mode checks the 408-byte mission
+record, actor IDs, final failure field, and source resources. Those checks do
+not establish continued AI queues, research, boarding, or media after real load.
+
+The TM2 P2 checklist therefore retains early and late normal saves, a save during
+production or research, continuation of AI reinforcements and multi-system orders,
+capture and its presentation after reload, both original defeat paths, retry,
+and the original result/Continue transition to TM3. Existing user feedback is
+evidence only for the scenarios actually reported. Complete media review,
+whole-process leak findings, native Windows Debug/Final and module ABI, hosted
+CI, and separate M3 work retain their documented open status.
+
 ## P1c integration and acceptance ledger (2026-10-15)
 
 ### P1c completed by user acceptance (2026-10-15)

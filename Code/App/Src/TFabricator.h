@@ -2,6 +2,8 @@
 #define TFABRICATOR_H
 #if !defined(_WIN32)
 #include <IMeshManager.h>
+#include "FrontierX/NativeAnimation.h"
+#include "Include/NativeShipVisualTransform.h"
 #include <stdexcept>
 #include <string>
 #endif
@@ -1011,6 +1013,10 @@ void TFabricator< Base >::initFabricator (const FABINITINFO & _data)
 	const SCRIPT_SET_ARCH scriptSet = _data.meshArch ?
 		_data.meshArch->GetAnimArchtype() : INVALID_SCRIPT_SET_ARCH;
 	animIndex = ANIM->create_script_inst(scriptSet, instanceIndex, "Sc_build");
+	if (_data.pData->missionData.mObjClass == M_WEAVER &&
+		!FrontierX::ConfigureNativeAnimationRootBasis(ANIM, animIndex, instanceIndex,
+			NativeShipModelAxisCorrection().get_orientation()))
+		throw std::runtime_error("Native Weaver requires its authored root build animation");
 	if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS &&
 		_data.pData->objClass == OC_SPACESHIP &&
 		_data.pData->missionData.race == M_TERRAN &&
@@ -1317,7 +1323,21 @@ void TFabricator< Base >::resolveFab (void)
 		buildee->AddFabToBuild(this);
 
 		if (animIndex != -1)
+		{
+#if !defined(_WIN32)
+			if (this->mObjClass == M_WEAVER)
+			{
+				// The save restores yaw only. Supply that heading explicitly:
+				// otherwise FullStream subtracts Sc_build's root END pitch and
+				// the next reverse animation tips the Weaver toward space.
+				const Transform heading = transform;
+				ANIM->script_start(animIndex, Animation::FORWARD, Animation::END,
+					1, 0, 1, 1, &heading);
+			}
+			else
+#endif
 			ANIM->script_start(animIndex, Animation::FORWARD, Animation::END);
+		}
 	}
 }
 //---------------------------------------------------------------------------

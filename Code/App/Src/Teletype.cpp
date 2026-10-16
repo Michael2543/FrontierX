@@ -30,6 +30,7 @@
 #include <cwchar>
 #include <cstdint>
 #include <limits>
+#include <initializer_list>
 #include <vector>
 #endif
 
@@ -511,16 +512,20 @@ struct TeletypeObj
 		
 		do 
 		{
+#if defined(_WIN32)
 			// take away any newline characters
 			if (text[idx] == 13 || text[idx] == 10)
 			{
 				idx++;
 			}
+#endif
 
 			next = getNextLineLength(&text[idx], nChars-idx);
 #if !defined(_WIN32)
-            if (next <= 0 || next >= MAX_CHARS)
+            if (next < 0 || next >= MAX_CHARS || next > nChars - idx)
             { std::fputs("Native teletype line exceeds source buffer\n", stderr); std::abort(); }
+            if (!next && idx < nChars && text[idx] != L'\r' && text[idx] != L'\n')
+            { std::fputs("Native teletype line made no progress\n", stderr); std::abort(); }
 #endif
 
 			memset(buffer, 0, sizeof(buffer));
@@ -534,6 +539,7 @@ struct TeletypeObj
 
 			lines.push_back(tl);
 
+#if defined(_WIN32)
 			if (next >= nChars - idx)// wcslen(&text[idx]))
 			{
 				// this is the last one we're adding
@@ -544,7 +550,29 @@ struct TeletypeObj
 				idx += next;
 				cnt++;
 			}
-		} while (next > 0);
+#else
+            idx += next;
+            if (idx == nChars)
+                break;
+            // A CRLF pair is one authored line break. Empty and final rows are
+            // valid; advance by the separator rather than the row's length.
+            if (text[idx] == L'\r')
+            {
+                ++idx;
+                if (idx < nChars && text[idx] == L'\n')
+                    ++idx;
+            }
+            else if (text[idx] == L'\n')
+                ++idx;
+            ++cnt;
+#endif
+		} while (
+#if defined(_WIN32)
+            next > 0
+#else
+            true
+#endif
+        );
 
 		nLines = lines.size();
 		lines[nLines-1]->bLast = true;
@@ -560,9 +588,19 @@ struct TeletypeObj
 		int lastSpace = -1;		// index of last space character found
 		int index = 0;
 		
+#if !defined(_WIN32)
+        if (lastchar <= 0)
+            return 0;
+#endif
 		wchar_t letter = string[index];
 
-		while (letter && width <= maxWidth && index <= lastchar)  
+		while (letter && width <= maxWidth &&
+#if defined(_WIN32)
+            index <= lastchar
+#else
+            index < lastchar
+#endif
+        )
 		{
 			if (letter == 13 || letter==10)		// newline character?
 			{
@@ -577,7 +615,12 @@ struct TeletypeObj
 			let[1] = 0;
 
 			width += testAgent->GetStringWidth(let);
+#if defined(_WIN32)
 			letter = string[++index];
+#else
+            ++index;
+            letter = index < lastchar ? string[index] : 0;
+#endif
 		}
 
 		// back up until
@@ -977,6 +1020,52 @@ bool CheckNativeSourceTeletype()
     valid = valid && !owner->IsPlaying(normal) && owner->IsPlaying(persistent);
     owner->Flush();
     valid = valid && !owner->IsPlaying(persistent) && NativeFontLiveCount() == savedFonts;
+    const auto checkRows = [&](const wchar_t *characters,
+                               std::initializer_list<const wchar_t *> expected) {
+        const auto count = std::wcslen(characters);
+        std::vector<wchar_t> counted(count + 2);
+        counted[0] = static_cast<wchar_t>(count);
+        std::wmemcpy(counted.data() + 1, characters, count);
+        const U32 id = owner->CreateTeletypeDisplay(counted.data(), bounds,
+            IDS_TELETYPE_FONT, RGB(255,255,0), 0, 100, true, false);
+        auto *object = owner->teletypes.back();
+        bool matched = object->nChars == count && object->lines.size() == expected.size();
+        std::size_t row = 0;
+        for (const auto *line : expected)
+        {
+            if (row >= object->lines.size()) { matched = false; break; }
+            const auto *actual = object->lines[row];
+            matched = matched && std::wcscmp(actual->string, line) == 0 &&
+                actual->rcFull.top == object->rect.top + row*object->lineHeight &&
+                actual->bLast == (row + 1 == expected.size());
+            ++row;
+        }
+        owner->onUpdate(1000);
+        owner->onUpdate(0);
+        matched = matched && owner->IsPlaying(id); // Zero lifetime survives completed text.
+        owner->Flush();
+        return matched && !owner->IsPlaying(id) && NativeFontLiveCount() == savedFonts;
+    };
+    // TM5's actual objective resource ends in LF. Also protect later content
+    // after empty rows; the former next>0 loop silently dropped that content.
+    valid = checkRows(L"A\n", {L"A", L""}) && valid;
+    valid = checkRows(L"\nA\n\nB\nC", {L"", L"A", L"", L"B", L"C"}) && valid;
+    valid = checkRows(L"A\r\n\r\nB\rC\nD\r\n", {L"A", L"", L"B", L"C", L"D", L""}) && valid;
+    valid = checkRows(L"\r\n", {L"", L""}) && valid;
+    // getNextLineLength consumes a counted span, including an empty final
+    // span; it must not inspect a presumed terminator beyond that span.
+    // Exact heap allocations make an accidental sentinel read visible to ASan.
+    {
+        auto *object = new TeletypeObj(text, IDS_TELETYPE_FONT, RGB(255,255,0),
+            bounds, 0, 20, true, false, false);
+        const wchar_t *empty = nullptr;
+        valid = object->getNextLineLength(empty, 0) == 0 && valid;
+        auto *exact = new wchar_t[2]{L'A', L'B'};
+        valid = object->getNextLineLength(exact, 2) == 2 && valid;
+        delete [] exact;
+        delete object;
+        valid = NativeFontLiveCount() == savedFonts && valid;
+    }
     owner->SetLastTeletypeID(savedID);
     CQFLAGS.bGamePaused = savedPause;
     interface->Release();

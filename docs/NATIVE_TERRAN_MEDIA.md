@@ -1,5 +1,248 @@
 # First Terran mission: presentation and media
 
+TM3 presentation is accepted by the user on 2026-10-16 with explicit complete
+mission confirmation after the final Weaver repair. Earlier pending visual
+statements below are retained history; technical execution limits remain.
+
+## TM4 required terrain and next briefing (2026-10-16)
+
+TM4 adds the original BlackHole terrain owner and its authored ring texture.
+The required RGB888-plus-Alpha8 path now passes production CPU and visible
+GCC/Clang GPU checks, including full-image comparison against independent RGBA8
+reference pixels and exact restoration after an opacity change. A genuine TM4
+checkpoint loads without the earlier ring/model resource failures. Active warp,
+late effects, both maps and portraits across late gameplay remain user checks;
+resource admission is not complete visual acceptance. Details and the mission
+matrix are in [the P2 ledger](NATIVE_TERRAN_P2.md#tm4-production-integration-2026-10-16).
+
+The original next briefing requires the actual uppercase `SCRIPT05.dll` binding.
+A genuine standalone TM5 briefing then exposed a native Teletype boundary error:
+its authored objectives end in LF. Native line splitting now preserves empty,
+CRLF and trailing rows without discarding following content, while retaining
+strict length/progress bounds. Windows retains its original path. Existing
+font-enabled owner checks exercise exact content, row positions, final-row
+flags and persistent-display cleanup. The real briefing reaches all three
+objective lines and closes normally, with speech and portraits enabled. This
+is bounded next-briefing evidence, not a TM4 victory/Continue or TM5 gameplay
+pass. No authored text or mission predicate is changed.
+
+## Weaver screenshot follow-up (2026-10-16)
+
+The user's new screenshot and genuine active-build checkpoint reproduce the
+wrong Weaver tilt after the earlier heading and END-restoration fixes. The
+previous negative-Z sample did not prove correct facing. A full-media Clang
+run loads that checkpoint through normal F8 and reproduces the supplied view.
+Read-only observation confirms the direct Engine hull branch, no MeshInstance,
+the expected heading, and an unchanged ship position.
+
+**Source contract and repair:** the original exporter writes root motion in
+model coordinates. `FullStream` applies an Object delta in its owning Engine
+frame, while `SpaceShip::renderSpaceShip` adds the model-axis correction `C`
+afterward. The old rendered root is `heading * authoredMotion * C`; the
+required composition is `heading * C * authoredMotion`. The native Animation
+owner now accepts an explicit basis on the selected script's root FullStream
+channels. It converts relative translation by `C` and orientation by
+`C * rotation * inverse(C)` before existing offset, blend and start handling.
+Joint channels, shared archive bytes, unconfigured instances and Windows keep
+their original behavior. Validation completes before any channel is changed;
+release destroys the basis with its script instance. No public vtable, saved
+field, gameplay rule, RNG call or simulation ordering changes.
+
+`TFabricator::initFab` configures only Weaver `Sc_build`, using the authored
+mission class from the initialization record. An initial integration run
+exposed that the runtime class is not set yet at this point. That run retained
+the wrong pose and is not fix evidence. The corrected metadata gate activates
+the real channel before its first start. The earlier explicit base-frame
+restoration at END remains necessary for active-build reloads.
+
+**Automated execution:** Linux x86_64 GCC16.2.1 and Clang22.1.8 full-media Debug
+build `frontierx_native_shell` and `frontierx_game_material_manager_probe`.
+The existing `portability.game_material_manager` check now loads an independent
+root/child fixture through real Animation, FullStream and Engine owners. It
+compares the complete rendered matrix with `heading * C * authoredMotion`,
+an asymmetric front anchor toward the planet, and the unchanged child joint.
+Four headings and repeated reloads cover END, reverse, stop, release and fresh
+orders. An unconfigured sibling keeps the old default after release. A second
+motion covers converted translation, root offsets and position/orientation
+changes. This replaces the insufficient Z-sign assertion. Focused layout,
+app/script01/script02/script03/Sol_T schema, material and supplied-font shell
+CTests pass under both compilers. Fatal Clang ASan/UBSan with leak detection
+also passes the existing parser, data-root and net-buffer checks.
+
+**Retail-input runtime:** the corrected full-media Clang shell loads the exact
+same immutable checkpoint and camera through normal F8. The actual channel
+reports its basis enabled and the render-time root matrix changes as expected.
+The inspected after-capture shows the Weaver leaning right toward the planet,
+where the before-capture shows the reported upright, outward pose. Position is
+unchanged; the run continues and closes normally with zero mission audio
+streams and idle hint ownership. The checkpoint copy remains byte-identical.
+Short real Clang regressions also execute normal F7, F8, continuation and
+regular close in accepted bounded training and full-media TM1. Both reload
+through the original mission owner and close with idle hints and zero mission
+audio streams. These are bounded visual/load observations, not a complete
+mission acceptance or proof of every interrupted build order. The original Hawkes movie repair
+and its separate runtime limits below remain unchanged.
+
+The candidate is ready for a narrow user recheck of the saved construction,
+normal completion/reverse and a new order. User media acceptance, native
+Windows Debug/Final/module ABI, hosted CI, known whole-process leak limits and
+full campaign acceptance remain open. Retail saves, captures and raw logs stay
+external.
+
+## Weaver build pitch and Hawkes rescue film (2026-10-16)
+
+This earlier repair record is retained for its load and film evidence. Its
+Z-sign interpretation is superseded by the complete model-basis follow-up above.
+
+The user confirms the other delivered repairs work and reports two remaining
+TM3 presentation defects: the Weaver leans toward space during construction,
+and Admiral Hawkes' rescue film does not appear. This is gameplay feedback,
+not complete media acceptance. The earlier saved-yaw repair remains valid but
+did not resolve the construction-animation pitch.
+
+**Weaver source and synthetic execution:** `TFabricator::resolveFab` restored
+`Sc_build` at END on a yaw-only loaded root without supplying its base frame.
+`FullStream::start_without_error_check` then subtracts the END rotation to
+preserve the current pose. Reversing that animation consequently pitches the
+Weaver toward space. The native `M_WEAVER` load branch now supplies the existing
+`script_start` API with the loaded base transform explicitly. Other races,
+Windows, ordinary animation directions, build rules and saved bytes are
+unchanged. No model rotation or substitute animation is introduced.
+
+The existing material probe now loads an independently generated 65-degree
+Object-root channel through real `IAnimation`, `FullStream` and Engine owners.
+It reproduces the old neutral-END/upward-reverse failure and requires the fixed
+downward END, level reverse, stopped/released order, fresh forward build and
+unchanged position across four headings and repeated yaw-only reloads. Joint
+door animations were not covered by the previous heading-only regression;
+this test protects the specific integrated root-animation lifecycle.
+
+**Film source binding:** the original TM3 capture sequence correctly calls
+`EndMissionVictory(2)`. `MenuEndGame::checkForMovie`, mission ID 2 on victory,
+had its `cq_1.mpg` call commented out while still setting movie 1 seen. The
+native full-video build now calls the real `MovieScreen` before marking it
+seen, and does neither when movies are explicitly excluded. Decoder/playback
+errors cannot fall through to the seen setter. The original unlocked movie-1
+button in `Menu_mission` also calls `MovieScreen`, without changing progress.
+This lets the user replay the earned rescue film without another complete TM3
+run. Existing seen bits are not reset; other film bindings and Windows remain
+unchanged. The existing shell suite protects these source bindings explicitly
+as source evidence, not as a synthetic victory or successful video stub.
+
+**Local validation:** Linux x86_64 GCC16.2.1 and Clang22.1.8 full-media Debug
+rebuild `frontierx_native_shell` and `frontierx_game_material_manager_probe`.
+Focused layout, app/script01/script02/script03/Sol_T schema, material and
+font-enabled shell CTests pass. Fatal Clang ASan/UBSan with leak detection also
+passes these owners plus the existing parser/data-root/network-buffer checks.
+An actual Clang full-media `--movie-source cq_1.mpg` diagnostic displays the
+lawfully external rescue film, including separated frame captures, and returns
+normally after natural EOF in about 86 seconds. This exercises original
+MovieScreen, decoder, GPU and audio lifecycle; it does not execute a victory.
+An automated selector attempt instead entered unintegrated TM4 and aborted at
+the existing missing-Script04 prerequisite guard. That attempt is a failure,
+not movie-replay evidence; TM4 remains the next P2 integration boundary.
+
+**Bounded retail-input execution:** an immutable genuine TM3 checkpoint with an
+actively building Weaver is loaded by normal F8 in the full-media Clang shell.
+A read-only parent debugger observes the real `TFabricator::resolveFab` call
+and the authored FullStream output: the model-front vertical component is
+about -0.9063 at the restored build endpoint. A subsequent natural closing
+sample is -0.7375, progressing toward level rather than tilting upward.
+Position remains unchanged across the samples. Observation stops after three
+outputs; the run continues and closes normally with exit 0, audio streams zero
+and idle hints. The input copy is byte-identical afterward. An initial observer
+watched the unused direct-interpolation overload and saw only the actual
+resolve call; it is not pose evidence. The corrected observer reads the real
+stored-output path without writing gameplay state.
+
+The checkpoint available during that earlier run contained an idle Weaver,
+not an active build. The subsequent screenshot checkpoint above contains an
+active build. Source
+review finds no animation start in idle initialization/load; its next regular
+order begins at BEGIN from the loaded level pose. New/rapidly interrupted
+orders still need user visual confirmation; no speculative pose reset is added.
+Renewed user visual/film-trigger confirmation remains separate. No mission objective, progress bit,
+checkpoint or retail asset is fabricated. Native Windows Debug/Final/module
+ABI, hosted CI, whole-process leak limits and full campaign acceptance remain
+open. Raw media, saves, captures and detailed runtime logs stay external.
+
+## Weaver construction facing after load (2026-10-16)
+
+The reported reversed Weaver pose exposes a concrete native saved-heading
+reconstruction defect. The original Mantis model front and construction-facing
+rule already agree; no model-specific flip is added. Native load now restores
+the stored minus-J heading correctly. Production-math roundtrips, compilation,
+sanitizers and pending visible confirmation are recorded in
+[the heading ledger](GAME_MATERIAL_PATH.md#saved-ship-heading-and-weaver-construction-facing-2026-10-16).
+Existing incorrect saved headings are retained rather than guessed from targets.
+
+## Collector upgrade effect ownership (2026-10-15)
+
+The user's later crash exposes an original Mantis Collector upgrade effect
+receiving no mesh tree. Native extension ownership now transfers the initialized
+add/remove subtrees, retaining their renderers for the original growth/morph
+effect. Completion, cancellation and active upgrade reload use that same tree;
+no required effect or submodel is hidden. The independently traced F8 callback
+crash is repaired at AI record serialization, with no portrait/media teardown
+workaround. Exact source, CPU/sanitizer checks and runtime limits are in
+[the crash repair evidence](NATIVE_TERRAN_CAMPAIGN.md#collector-upgrade-and-repeated-f8-crash-repairs-2026-10-15).
+
+## TM2 user completion and damage-smoke follow-up (2026-10-15)
+
+The user reports that Mission 2 ran perfectly, with one small presentation
+defect: smoke floats above damaged Corvettes. The native original damage
+post-render owner now corrects its raw mesh anchor into the direct hull's model
+frame while preserving plume orientation, simulation, RNG, stored state and
+Windows behavior. Failing-before/passing-after material regression and rebuilt
+GCC/Clang/fatal-sanitizer evidence are in
+[the focused renderer record](GAME_MATERIAL_PATH.md#corvette-damage-smoke-anchor-2026-10-15).
+Record user acceptance of the reported mission run; corrected visible contact
+remains a narrow retest. No full replay is requested and unreported individual
+scenario, Windows/ABI/hosted-CI and whole-process leak evidence remains pending.
+
+## P2 TM2 required presentation inventory (2026-10-15)
+
+P2 begins with `T_Mission2.dmission` and the original `Script02T` owner. The
+existing P1c acceptance remains recorded above the historical evidence below.
+The user's earlier TM2 completion and accepted P1c do not establish each newly
+requested P2 media/save/defeat check. The [campaign matrix](NATIVE_TERRAN_P2.md) records the current
+mission status; no whole-campaign presentation pass is inferred here.
+
+**Source review:** `Script02t.cpp` and its real speech/briefing consumers in
+`Scripts/Helper/helper.cpp` identify these required intervals:
+
+| Interval | Required content and original owner | Remaining evidence |
+|---|---|---|
+| Briefing and opening | Original animated briefing slots, Halsey speech, Blackwell speech/head, authored cameras and start view | Existing bounded entry/reload evidence remains valid; renewed candidate assessment includes fonts and speaker switch/clear |
+| Alkaid exploration and attacks | Later-created Mantis Frigates, Scout Carriers/fighters and Zorap supply ship, their hulls, animations, weapons, impacts and spatial audio | Catalogue admission alone does not prove late spawned instances or all effects; assess these during genuine combat and reload |
+| Construction and capture | Ballistics Lab, Missile Cruisers, Troopship upgrade and capture, build/research UI and corresponding models/effects/audio | Exercise actual production/research/capture checkpoints; retain the existing VLaunch, animation and command-owner regressions |
+| System discovery and travel | Original system enable/visibility changes, jumpgates, hard fog and both maps, including system connections | Compare hidden and discovered systems, ordinary map navigation, jumps and restored state after F7/F8 |
+| Victory and defeat | Original camera transfer, Blackwell/Halsey communication, Marine/Intel audio, uplink sound, result teletype and normal result/next entry | User completion does not separately confirm every late speaker/media state or defeat/retry; use genuine outcomes |
+
+**Read-only external metadata inspection:** the supplied lawful speech,
+MSpeech, Music and interface UTF archives contain every one of the 37 active
+literal WAV requests in TM2, after excluding source comments. This includes
+the late victory/failure requests and uplink. Both source-selected music files,
+`determination.wav` and `danger.wav`, are present. Of the 36 distinct speech
+requests, 34 have matching TXT companions. The two without companions are the
+original `CHAR_NOCHAR` briefing lines `PROLOG02.wav` and `M02HA01b.wav`.
+This establishes availability by archive entry name, not decoding, playback,
+lip synchronization, appearance or correct source-state restoration.
+
+The original Helper tables intentionally map `CHAR_MARINE` and `CHAR_INTEL`
+to empty portrait archetype names. Their victory speech is audio-only through
+the original fallback. A fabricated Marine/Intel portrait would change authored
+behavior. Blackwell and Halsey use the original animated message archetypes;
+their switch, clear and reload behavior remains required.
+
+This inventory changes no production code, persistent schema or module ABI and
+adds no build/runtime pass. It does not close missing Harvester depletion media,
+whole-process leak findings, unverified unit coverage, hosted CI or native
+Windows Debug/Final/ABI checks. Missing models in the broader catalogue remain
+tracked in [unit coverage](NATIVE_UNIT_COVERAGE.md); they become mission blockers
+when an actual required TM2 owner requests them. Required presentation remains
+enabled in final candidates, including later generated content.
+
 ## P1c accepted by the user (2026-10-15)
 
 The user explicitly closes P1c in the delivered native Linux scope. P1b was

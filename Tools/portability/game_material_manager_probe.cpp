@@ -1,4 +1,5 @@
 #include "CQTrace.h"
+#include "MaterialTextureFixture.h"
 #include "NativeAppImage.h"
 #include "FrontierX/GameMaterialManager.h"
 #include "FrontierX/GameTextureManager.h"
@@ -23,6 +24,7 @@
 #include "Include/NativeShipWarpInTransform.h"
 #include "Include/NativeWeaponOrientation.h"
 #include "Include/NativeObjectControlFrame.h"
+#include "Include/NativeObjectSavedYaw.h"
 #include "Include/NativeAsteroidDistanceOrder.h"
 #include "BRadix.h"
 #include <DEffectOpts.h>
@@ -110,6 +112,7 @@ struct AppStateCapture
     unsigned samplerCalls = 0U;
     unsigned rectangleDraws = 0U;
     std::size_t rectangleVertices = 0U;
+    std::vector<FrontierX::RenderVertexP3DiffuseT2> rectangleGeometry;
     unsigned lineDraws = 0U;
     std::array<FrontierX::RenderVertexP3DiffuseT2, 2> lineVertices{};
     Matrix4 projection{true};
@@ -131,6 +134,8 @@ GENRESULT DACOM_CDECL CaptureApp2DDraw(
     {
         ++capture.rectangleDraws;
         capture.rectangleVertices = view.vertexCount;
+        capture.rectangleGeometry.insert(capture.rectangleGeometry.end(),
+            view.vertices, view.vertices + view.vertexCount);
     }
     return GR_OK;
 }
@@ -665,6 +670,47 @@ void Word(std::vector<unsigned char> &bytes, U32 value)
 // MaterialManager consumes the same generated input from unpacked source data.
 // Required Cloud/Stasis/Mine/Harvest graphics use this production ANM owner.
 // Existing timing/RNG checks cannot detect unresolved frames or malformed UV IO.
+bool WriteWeaverRootFixture(const std::filesystem::path &path)
+{
+    const auto channel = path / "Animation/Script/Sc_build/Object map 0/Channel";
+    std::filesystem::create_directories(channel);
+    std::ofstream parent(channel.parent_path() / "Parent name", std::ios::binary);
+    parent.write("Root", 5);
+    const U32 header[3] = {2U, 0x3F800000U, 6U}; // two vector/quaternion frames, one second
+    std::ofstream head(channel / "Header", std::ios::binary);
+    head.write(reinterpret_cast<const char *>(header), sizeof(header));
+    // Independently generated root pitch reproduces the Weaver's authored
+    // 65-degree build motion without copying retail frame data into the test.
+    const float halfAngle = 32.5F * MUL_DEG_TO_RAD;
+    const float frames[14] = {0,0,0, 1,0,0,0,
+                             0,0,0, std::cos(halfAngle),std::sin(halfAngle),0,0};
+    std::ofstream frame(channel / "Frames", std::ios::binary);
+    frame.write(reinterpret_cast<const char *>(frames), sizeof(frames));
+    const auto jointChannel = path / "Animation/Script/Sc_build/Joint map 0/Channel";
+    std::filesystem::create_directories(jointChannel);
+    std::ofstream jointParent(jointChannel.parent_path() / "Parent name", std::ios::binary);
+    jointParent.write("Root", 5);
+    std::ofstream jointChild(jointChannel.parent_path() / "Child name", std::ios::binary);
+    jointChild.write("Child", 6);
+    std::ofstream jointHead(jointChannel / "Header", std::ios::binary);
+    jointHead.write(reinterpret_cast<const char *>(header), sizeof(header));
+    std::ofstream jointFrame(jointChannel / "Frames", std::ios::binary);
+    jointFrame.write(reinterpret_cast<const char *>(frames), sizeof(frames));
+    const auto moveChannel = path / "Animation/Script/Sc_move/Object map 0/Channel";
+    std::filesystem::create_directories(moveChannel);
+    std::ofstream moveParent(moveChannel.parent_path() / "Parent name", std::ios::binary);
+    moveParent.write("Root", 5);
+    std::ofstream moveHead(moveChannel / "Header", std::ios::binary);
+    moveHead.write(reinterpret_cast<const char *>(header), sizeof(header));
+    float motion[14];
+    std::copy(frames, frames + 14, motion);
+    motion[7] = 2; motion[8] = 3; motion[9] = 4;
+    std::ofstream moveFrame(moveChannel / "Frames", std::ios::binary);
+    moveFrame.write(reinterpret_cast<const char *>(motion), sizeof(motion));
+    return parent && head && frame && jointParent && jointChild && jointHead &&
+        jointFrame && moveParent && moveHead && moveFrame;
+}
+
 bool WriteAnim2DFixture(const std::filesystem::path &path, unsigned mode)
 {
     constexpr U32 recordSize = 44U, headerSize = 56U;
@@ -1134,6 +1180,27 @@ int main(int argc, char **argv)
                 std::fabs(cargoLongAxis.x + 1) < 1e-5F &&
                 std::fabs(cargoLongAxis.y) < 1e-5F && std::fabs(cargoLongAxis.z) < 1e-5F,
                 "original ship visual axes align attachment and cargo without mutating simulation or nondirect hull")) return 1;
+    // ObjectDamage::damagePostRender places smoke at a raw mesh-extent point.
+    // The hull correction must move that point without rotating the plume a
+    // second time. Existing glow/muzzle checks do not cover that distinction.
+    Transform smokeLocal = NativeShipModelAxisCorrection();
+    smokeLocal.translation = Vector(1,2,3);
+    const Transform originalSmokeLocal = smokeLocal;
+    const Transform smokeWorld = NativeShipDamageSmokeTransform(shipWorld, smokeLocal, true);
+    const Transform smokeLegacy = shipWorld * smokeLocal;
+    const Transform smokeUncorrected = NativeShipDamageSmokeTransform(shipWorld, smokeLocal, false);
+    bool smokeOrientationValid = true;
+    for (unsigned row = 0; row < 3; ++row)
+        for (unsigned column = 0; column < 3; ++column)
+            smokeOrientationValid &= smokeWorld.d[row][column] == smokeLegacy.d[row][column];
+    if (!Expect(std::fabs(smokeWorld.translation.x - 7) < 1e-5F &&
+                std::fabs(smokeWorld.translation.y - 19) < 1e-5F &&
+                std::fabs(smokeWorld.translation.z - 32) < 1e-5F &&
+                smokeOrientationValid && smokeLegacy.translation.z == 33 &&
+                std::memcmp(&smokeUncorrected, &smokeLegacy, sizeof(Transform)) == 0 &&
+                std::memcmp(&shipWorld, &originalWorld, sizeof(Transform)) == 0 &&
+                std::memcmp(&smokeLocal, &originalSmokeLocal, sizeof(Transform)) == 0,
+                "damage smoke anchors to corrected hull extents without rotating plume or changing simulation/nondirect frames")) return 1;
     // TM2's Mantis Frigate fixed turrets feed this frame to PlasmaBolt. The
     // previous world-node*hardpoint origin missed the visible corrected hull.
     // A scaled/rotated child must retain its local frame with no second root
@@ -2156,6 +2223,76 @@ int main(int argc, char **argv)
     appRender->Init(engineArchetype);
     IMeshInfoTree *appTree = CreateMeshInfoTree(engineInstance);
     appRender->SetupMeshInfo(appTree->GetMeshInfo());
+    // The M_COLLECTOR upgrade owner detaches an initialized add/remove tree
+    // before MantisBuild reads its renderer vertices. Protect that ownership
+    // contract here; actual ObjectExtension transitions require mission runtime.
+    {
+        std::array<INSTANCE_INDEX, 5> extensionInstances{};
+        for (auto &instance : extensionInstances)
+            instance = engine->create_instance2(engineArchetype, nullptr);
+        JointInfo extensionJoint{};
+        extensionJoint.type = JT_FIXED;
+        extensionJoint.rel_orientation.set_identity();
+        const INSTANCE_INDEX root = extensionInstances[0], add = extensionInstances[1];
+        const INSTANCE_INDEX remove = extensionInstances[2], sibling = extensionInstances[3];
+        const INSTANCE_INDEX grandchild = extensionInstances[4];
+        if (!Expect(engine->create_joint(root, add, &extensionJoint) &&
+                    engine->create_joint(root, remove, &extensionJoint) &&
+                    engine->create_joint(root, sibling, &extensionJoint) &&
+                    engine->create_joint(add, grandchild, &extensionJoint),
+                    "extension fixture creates three siblings and an attached grandchild")) return 1;
+        IMeshInfoTree *extensionTree = CreateMeshInfoTree(root);
+        std::array<MeshInfo *, 5> children{};
+        if (!Expect(extensionTree->ListChildren(children.data()) == children.size(),
+                    "extension fixture enumerates the complete original mesh tree")) return 1;
+        for (MeshInfo *child : children) appRender->SetupMeshInfo(child, false);
+        IMeshInfoTree *addTree = nullptr, *removeTree = nullptr;
+        extensionTree->GetChildInfo(add, &addTree);
+        extensionTree->GetChildInfo(remove, &removeTree);
+        MeshInfo *const addInfo = addTree->GetMeshInfo();
+        MeshInfo *const removeInfo = removeTree->GetMeshInfo();
+        auto contains = [&](IMeshInfoTree *tree, INSTANCE_INDEX expected, unsigned count) {
+            const unsigned actualCount = tree->ListChildren(children.data());
+            if (actualCount != count) return false;
+            for (unsigned i = 0; i < actualCount; ++i)
+                if (children[i]->instanceIndex == expected) return true;
+            return false;
+        };
+        for (unsigned cycle = 0; cycle < 2; ++cycle)
+        {
+            if (!Expect(engine->destroy_joint(root, add), "extension add joint detaches")) return 1;
+            extensionTree->DetachChild(add, &addTree);
+            if (!Expect(contains(addTree, grandchild, 2) &&
+                        contains(extensionTree, sibling, 3) &&
+                        addTree->GetMeshInfo() == addInfo && addInfo->mr == appRender &&
+                        addInfo->mr->pos_cnt > 0 && addInfo->mr->pos_list &&
+                        !addInfo->bOwnsInstance,
+                        "detached extension keeps only its subtree and initialized borrowed renderer vertices")) return 1;
+            if (!Expect(engine->create_joint(root, add, &extensionJoint), "extension add joint reattaches")) return 1;
+            extensionTree->AttachChild(root, addTree);
+            if (!Expect(engine->destroy_joint(root, remove), "extension remove joint detaches")) return 1;
+            extensionTree->DetachChild(remove, &removeTree);
+            if (!Expect(contains(extensionTree, grandchild, 4) &&
+                        contains(removeTree, remove, 1) &&
+                        removeTree->GetMeshInfo() == removeInfo && removeInfo->mr == appRender,
+                        "completed extension transfers the add subtree and isolates the replaced mesh")) return 1;
+            if (!Expect(engine->create_joint(root, remove, &extensionJoint), "cancelled extension restores removed joint")) return 1;
+            extensionTree->AttachChild(root, removeTree);
+            if (!Expect(contains(extensionTree, sibling, 5),
+                        "repeated extension transfer restores every sibling exactly once")) return 1;
+        }
+        if (!Expect(engine->destroy_joint(root, add), "extension teardown detaches its owned add instance")) return 1;
+        extensionTree->DetachChild(add, &addTree);
+        DestroyMeshInfoTree(addTree);
+        DestroyMeshInfoTree(extensionTree);
+        bool borrowedInstancesSurvive = true;
+        for (const auto instance : extensionInstances)
+            borrowedInstancesSurvive &= instanceHasArchetype(instance, engineArchetype);
+        if (!Expect(borrowedInstancesSurvive,
+                    "extension mesh trees release renderer references without destroying borrowed Engine instances")) return 1;
+        engine->destroy_instance(root);
+        engine->destroy_instance(add);
+    }
     const unsigned appDrawsBefore = gameStandardDrawCalls;
     BATCH = primitive;
     MAINCAM = &camera;
@@ -3212,6 +3349,43 @@ int main(int argc, char **argv)
                     "missile constructor, curved-goal pitch and heading reset preserve actual -K elevation")) return 1;
     }
 
+    // ObjectTransform's original save field stores get_yaw(), a -J heading.
+    // Weaver remains stationary at its construction heading after load, so
+    // it cannot rely on a later movement command to conceal a reversed root.
+    for (const SINGLE savedYaw : {-2.7F, -0.8F, 0.6F, 2.3F,
+                                 0.0F, -PI/2, PI/2, -PI, PI})
+    {
+        const Vector heading(std::sin(savedYaw), std::cos(savedYaw), 0);
+        TRANSFORM source;
+        source.rotate_about_k(savedYaw - PI);
+        source.translation = Vector(17, -31, 23);
+        SINGLE saved = source.get_yaw();
+        TRANSFORM oldLoad;
+        oldLoad.rotate_about_k(saved);
+        TRANSFORM restored;
+        restored.translation = source.translation;
+        // A prior animated pose must not accumulate into the saved yaw.
+        restored.rotate_about_i(0.4F);
+        restored.rotate_about_j(-0.3F);
+        for (unsigned reload = 0; reload < 3; ++reload)
+        {
+            NativeRestoreObjectSavedYaw(restored, saved);
+            const Vector front = -restored.get_j();
+            const Vector mouth = NativeShipVisualTransform(restored, true).rotate(Vector(0,0,-1));
+            if (!Expect(dot_product(front, heading) > 0.99999F &&
+                        dot_product(mouth, heading) > 0.99999F &&
+                        dot_product(-oldLoad.get_j(), heading) < -0.99999F &&
+                        std::fabs(std::remainder(restored.get_yaw() - saved, 2*PI)) < 1e-5F &&
+                        std::fabs(restored.get_pitch()) < 1e-5F &&
+                        std::fabs(restored.get_roll()) < 1e-5F &&
+                        restored.translation.x == 17 && restored.translation.y == -31 &&
+                        restored.translation.z == 23,
+                        "saved -J yaw restores original ship/Weaver front and position without accumulating animated pitch/roll")) return 1;
+            saved = restored.get_yaw();
+        }
+    }
+    std::cout << "Original saved -J heading roundtrip and Weaver model-front quadrants checked\n";
+
     bool app2dSubmitted = false;
     {
         FrontierX::NativeRenderPipeline app2dPipeline(appPrimitive);
@@ -3227,6 +3401,63 @@ int main(int argc, char **argv)
             appState.projection.d[0][0] == 2.0F / 64.0F &&
             appState.projection.d[1][1] == -2.0F / 64.0F &&
             appState.texture == 0U;
+        // DrawHighlighted draws two 100-pixel segmented bars per unit. Keep
+        // its actual DA caller as the reference for geometry and draw count.
+        for (const unsigned units : {1U, 40U})
+        {
+            const unsigned before = appState.rectangleDraws;
+            appState.rectangleGeometry.clear();
+            for (unsigned unit = 0; unit < units; ++unit)
+            for (unsigned bar = 0; bar < 2U; ++bar)
+            for (int i = 0; i < 100; i += 5)
+                DA::RectangleFill(nullptr, 3+i, 4+bar*5, 6+i, 6+bar*5,
+                                  RGB(16, 32, 48));
+            if (!Expect(appState.rectangleDraws-before == units*40U &&
+                        appState.rectangleGeometry.size() == units*240U,
+                        "selection bars retain all original segmented rectangles")) return 1;
+            std::cout << "Selection bar baseline units=" << units
+                      << " draws=" << appState.rectangleDraws-before
+                      << " vertices=" << appState.rectangleGeometry.size() << '\n';
+            const auto reference = appState.rectangleGeometry;
+            appState.rectangleGeometry.clear();
+            const unsigned optimizedBefore = appState.rectangleDraws;
+            for (unsigned unit = 0; unit < units; ++unit)
+            for (unsigned bar = 0; bar < 2U; ++bar)
+                DA::RectangleFillSegments(nullptr, 3, 4+bar*5, 100,
+                                          RGB(16, 32, 48));
+            const auto sameVertex = [](const auto &a, const auto &b)
+            {
+                return a.x == b.x && a.y == b.y && a.z == b.z &&
+                    a.diffuseBgra == b.diffuseBgra && a.u == b.u && a.v == b.v;
+            };
+            if (!Expect(appState.rectangleDraws-optimizedBefore == units*2U &&
+                        appState.rectangleGeometry.size() == reference.size() &&
+                        std::equal(reference.begin(), reference.end(),
+                            appState.rectangleGeometry.begin(), sameVertex),
+                        "batched selection bars preserve exact vertices/colors/order with 20 times fewer draws")) return 1;
+            std::cout << "Selection bar grouped units=" << units
+                      << " draws=" << appState.rectangleDraws-optimizedBefore
+                      << " vertices=" << appState.rectangleGeometry.size() << '\n';
+        }
+        // Partial bars keep the original complete final segment and empty
+        // bars issue no geometry, including the one-health-point case.
+        for (const S32 length : {0, 1, 5, 6, 99})
+        {
+            appState.rectangleGeometry.clear();
+            for (S32 i = 0; i < length; i += 5)
+                DA::RectangleFill(nullptr, -3+i, 4, i, 6, RGB(180, 180, 240));
+            const auto reference = appState.rectangleGeometry;
+            appState.rectangleGeometry.clear();
+            const unsigned before = appState.rectangleDraws;
+            DA::RectangleFillSegments(nullptr, -3, 4, length, RGB(180, 180, 240));
+            if (!Expect(appState.rectangleDraws-before == (length > 0 ? 1U : 0U) &&
+                        appState.rectangleGeometry.size() == reference.size() &&
+                        std::equal(reference.begin(), reference.end(),
+                            appState.rectangleGeometry.begin(), [](const auto &a, const auto &b) {
+                                return a.x == b.x && a.y == b.y && a.z == b.z &&
+                                    a.diffuseBgra == b.diffuseBgra && a.u == b.u && a.v == b.v;
+                            }), "partial/empty selection bars preserve source segment extent")) return 1;
+        }
         // Sector::DrawLinks requests a diagonal smooth line after gate discovery.
         DA::LineDraw(nullptr, 3, 4, 20, 30, RGB(16, 32, 48), true);
         const auto & start = appState.lineVertices[0];
@@ -3292,6 +3523,140 @@ int main(int argc, char **argv)
                     meshManagerInner->QueryInterface(IID_ISystemComponent, reinterpret_cast<void **>(&meshSystem)) == GR_OK &&
                     engine->QueryInterface(IID_IHardpoint, reinterpret_cast<void **>(&meshHardpoints)) == GR_OK,
                     "original MeshManager and Animation owners initialize with real Engine and source directory")) return 1;
+        // Weaver root motion is authored with model +Y up. The native hull
+        // maps that to runtime +Z, while child Joint motion remains model-local.
+        // Exercise the real IAnimation/FullStream/Engine owner, including the
+        // saved yaw-only heading, reverse, a fresh order and instance release.
+        {
+            IFileSystem *rootArchive = nullptr, *modelArchive = nullptr;
+            const auto rootPath = std::filesystem::path(std::string(argv[1]) + ".weaver-root");
+            const auto modelPath = std::filesystem::path(std::string(argv[1]) + ".weaver-model");
+            if (!Expect(WriteWeaverRootFixture(rootPath) &&
+                        FrontierX::OpenNativeDirectoryFileSystem(rootPath, &rootArchive, error) &&
+                        FrontierXTest::WriteCompoundGameMeshFixture(modelPath, 0) &&
+                        FrontierX::OpenNativeUtfFileSystem(modelPath, &modelArchive, error),
+                        "generated Weaver root and child animation fixtures open")) return 1;
+            const SCRIPT_SET_ARCH rootArch = animation->create_script_set_arch(rootArchive);
+            const auto modelArch = engine->create_archetype("weaver_root_regression.cmp", modelArchive);
+            const INSTANCE_INDEX root = engine->create_instance2(modelArch, nullptr);
+            const INSTANCE_INDEX child = engine->get_instance_child_next(root, EN_DONT_RECURSE, INVALID_INSTANCE_INDEX);
+            JointInfo joint(JT_LOOSE);
+            joint.parent_point.zero(); joint.child_point.zero(); joint.rel_position.zero();
+            joint.rel_orientation.set_identity();
+            if (!Expect(rootArch != INVALID_SCRIPT_SET_ARCH && root != INVALID_INSTANCE_INDEX &&
+                        child != INVALID_INSTANCE_INDEX && engine->destroy_joint(root, child) &&
+                        engine->create_joint(root, child, &joint),
+                        "real Engine retains named root and original animated child")) return 1;
+            const Transform basis = NativeShipModelAxisCorrection();
+            const Transform motion{Matrix(Quaternion(Vector(1,0,0), 65*MUL_DEG_TO_RAD))};
+            const Vector frontAnchor(0,-1,-4); // independent asymmetric model nose
+            const auto samePose = [](const Transform &a, const Transform &b) {
+                for (unsigned row = 0; row < 3; ++row)
+                for (unsigned column = 0; column < 3; ++column)
+                    if (std::fabs(a.d[row][column]-b.d[row][column]) > 1e-5F) return false;
+                return (a.translation-b.translation).magnitude() < 1e-4F;
+            };
+            const auto childUnchanged = [&]() {
+                float pose[7];
+                if (!engine->get_joint_state(child, IE_JST_BASIC, pose)) return false;
+                const Quaternion q(pose[3],pose[4],pose[5],pose[6]);
+                return samePose(Transform(Matrix(q), Vector(pose[0],pose[1],pose[2])), motion);
+            };
+            for (const float yaw : {0.0F, 0.7F, -1.2F, 2.4F})
+            {
+                Transform heading;
+                heading.rotate_about_k(yaw);
+                heading.translation = Vector(13, 29, 20);
+                const Vector towardPlanet = heading.rotate(Vector(0,-1,0));
+                engine->set_transform(root, heading);
+                SCRIPT_INST script = animation->create_script_inst(rootArch, root, "Sc_build");
+                if (!Expect(script != INVALID_SCRIPT_INST &&
+                            animation->script_start(script, Animation::FORWARD, Animation::END) == 0,
+                            "original unanchored END restore starts")) return 1;
+                animation->update_instance(root, 0.01F);
+                if (!Expect(samePose(engine->get_transform(root), heading),
+                            "old END restore incorrectly subtracts the required root build motion")) return 1;
+                animation->script_start(script, Animation::BACKWARDS, Animation::END);
+                animation->update_instance(root, 1.1F);
+                if (!Expect(samePose(engine->get_transform(root), heading*motion.get_inverse()),
+                            "old reverse after yaw-only load reproduces incorrect root pose")) return 1;
+                animation->release_script_inst(script);
+                for (unsigned reload = 0; reload < 2; ++reload)
+                {
+                    engine->set_transform(root, heading);
+                    script = animation->create_script_inst(rootArch, root, "Sc_build");
+                    if (!Expect(script != INVALID_SCRIPT_INST &&
+                                FrontierX::ConfigureNativeAnimationRootBasis(animation, script, root,
+                                    basis.get_orientation()) &&
+                                !FrontierX::ConfigureNativeAnimationRootBasis(animation, script, child,
+                                    basis.get_orientation()) &&
+                                animation->script_start(script, Animation::FORWARD, Animation::END,
+                                    1, 0, 1, 1, &heading) == 0,
+                                "explicit loaded heading and model basis restore root motion only")) return 1;
+                    animation->update_instance(root, 0.01F);
+                    const Transform expected = heading*basis*motion;
+                    const Transform actual = NativeShipVisualTransform(engine->get_transform(root), true);
+                    Vector expectedFront = expected.rotate(frontAnchor), actualFront = actual.rotate(frontAnchor);
+                    expectedFront.normalize(); actualFront.normalize();
+                    if (!Expect(samePose(actual, expected) && childUnchanged() &&
+                                dot_product(actualFront, towardPlanet) > 0.6F &&
+                                dot_product(actualFront, expectedFront) > 0.99999F,
+                                "actual Weaver model front faces planet with authored 65-degree root motion and unchanged child pose")) return 1;
+                    animation->script_start(script, Animation::BACKWARDS, Animation::END);
+                    animation->update_instance(root, 1.1F);
+                    if (!Expect(samePose(engine->get_transform(root), heading),
+                                "original reverse returns Weaver to level travelling pose")) return 1;
+                    animation->script_stop(script);
+                    animation->release_script_inst(script);
+                    script = animation->create_script_inst(rootArch, root, "Sc_build");
+                    if (!Expect(script != INVALID_SCRIPT_INST &&
+                                FrontierX::ConfigureNativeAnimationRootBasis(animation, script, root,
+                                    basis.get_orientation()),
+                                "new Weaver order owns fresh per-instance root basis")) return 1;
+                    animation->script_start(script, Animation::FORWARD, Animation::BEGIN);
+                    animation->update_instance(root, 1.1F);
+                    if (!Expect(samePose(NativeShipVisualTransform(engine->get_transform(root), true), expected) &&
+                                childUnchanged(), "fresh build retains original heading, position and child animation")) return 1;
+                    animation->release_script_inst(script);
+                }
+                // A sibling script from the same archive must retain authored
+                // behavior after configured instances have been released.
+                engine->set_transform(root, heading);
+                script = animation->create_script_inst(rootArch, root, "Sc_build");
+                animation->script_start(script, Animation::FORWARD, Animation::BEGIN);
+                animation->update_instance(root, 1.1F);
+                if (!Expect(samePose(engine->get_transform(root), heading*motion) && childUnchanged(),
+                            "unconfigured sibling retains original root and child motion after instance release")) return 1;
+                animation->release_script_inst(script);
+
+                engine->set_transform(root, heading);
+                script = animation->create_script_inst(rootArch, root, "Sc_move");
+                if (!Expect(FrontierX::ConfigureNativeAnimationRootBasis(animation, script, root,
+                                basis.get_orientation()), "root translation uses the same explicit model basis")) return 1;
+                animation->script_start(script, Animation::FORWARD, Animation::BEGIN);
+                animation->update_instance(root, 1.1F);
+                Vector expectedPosition = heading * basis.rotate(Vector(2,3,4));
+                Vector absolute, offset;
+                if (!Expect((engine->get_position(root)-expectedPosition).magnitude() < 1e-4F &&
+                            animation->get_root_data(script, absolute, offset) &&
+                            (offset-basis.rotate(Vector(2,3,4))).magnitude() < 1e-4F,
+                            "full-stream translated root and relative offset share model-to-runtime basis")) return 1;
+                const Vector movedPosition(71,43,20);
+                animation->change_script_position(script, movedPosition);
+                animation->change_script_orientation(script, heading.get_orientation());
+                animation->get_root_data(script, absolute, offset);
+                if (!Expect((absolute-movedPosition).magnitude() < 1e-4F,
+                            "root position/orientation changes retain converted relative offsets")) return 1;
+                animation->release_script_inst(script);
+            }
+            if (!Expect(!FrontierX::ConfigureNativeAnimationRootBasis(animation, INVALID_SCRIPT_INST,
+                            root, basis.get_orientation()), "invalid script has no root basis owner")) return 1;
+            engine->destroy_instance(root);
+            engine->release_archetype(modelArch);
+            animation->release_script_set_arch(rootArch);
+            rootArchive->Release(); modelArchive->Release();
+            std::cout << "Original FullStream Weaver model-basis root/child/front/reverse/reload ownership checked\n";
+        }
         IMeshManager::InitInfo meshInit{};
         meshInit.ENGINE = engine;
         meshInit.ANIM = animation;
@@ -3433,6 +3798,57 @@ int main(int argc, char **argv)
     }
     rawTgaDirectory->Release();
     rawTgaArchive->Release();
+    // The real TM4 BlackHole ring is RGB888 with an independent alpha plane;
+    // both the library admission and native upload used to reject this format.
+    const auto rgb888Path = std::filesystem::path(meshPath.string() + ".rgb888");
+    for (const bool alpha : {true, false, true})
+    {
+        IFileSystem *archive = nullptr;
+        ITL_TEXTURE_ID id = ITL_INVALID_ID;
+        ITL_TEXTUREFRAME_IRP frame{};
+        PixelFormat format;
+        const unsigned uploadsBefore = textureCapture.uploads;
+        const unsigned destroysBefore = textureCapture.destroys;
+        std::array<std::uint8_t, 16> expected{{17,34,51,0, 68,85,102,96,
+                                            119,136,153,255, 170,187,204,0}};
+        if (!alpha)
+            for (std::size_t i = 3; i < expected.size(); i += 4) expected[i] = 255;
+        if (!Expect(FrontierXTest::WriteMipTextureFixture(rgb888Path, alpha, 0, true) &&
+            FrontierX::OpenNativeUtfFileSystem(rgb888Path, &archive, error) &&
+            textures->load_library(archive, nullptr) == GR_OK &&
+            textures->get_texture_id("Rgb888Tile", &id) == GR_OK &&
+            textures->get_texture_frame(id, 0, &frame) == GR_OK &&
+            pipeline->get_texture_format(frame.rp_texture_id, &format) == GR_OK &&
+            format.has_alpha_channel() == alpha &&
+            textureCapture.uploads == uploadsBefore + 1 &&
+            std::equal(expected.begin(), expected.end(), textureCapture.pixels.begin()),
+            "original RGB888 UTF texture preserves two-row RGB order and authored alpha")) return 1;
+        const auto retainedPixels = textureCapture.pixels;
+        PixelFormat rgbFormat(PF_RGB);
+        const unsigned char tooShort[12]{};
+        if (!Expect(pipeline->set_texture_level_data(frame.rp_texture_id, 0, 2, 2, 5,
+                rgbFormat, tooShort, nullptr, nullptr) != GR_OK &&
+            textureCapture.uploads == uploadsBefore + 1 && textureCapture.pixels == retainedPixels,
+            "RGB888 rejects a short source stride without changing retained output")) return 1;
+        if (!Expect(textures->release_texture_id(id) == GR_OK &&
+            textureCapture.destroys == destroysBefore + 1 &&
+            textures->has_texture_id("Rgb888Tile") != GR_OK &&
+            pipeline->get_texture_format(frame.rp_texture_id, &format) != GR_OK,
+            "RGB888 texture owner releases and permits repeated alpha/opaque reload")) return 1;
+        archive->Release();
+    }
+    for (const int delta : {-4, -1, 1})
+    {
+        IFileSystem *archive = nullptr;
+        const unsigned uploadsBefore = textureCapture.uploads;
+        if (!Expect(FrontierXTest::WriteMipTextureFixture(rgb888Path, true, delta, true) &&
+            FrontierX::OpenNativeUtfFileSystem(rgb888Path, &archive, error) &&
+            textures->load_library(archive, nullptr) == GR_OK &&
+            textures->has_texture_id("Rgb888Tile") != GR_OK &&
+            textureCapture.uploads == uploadsBefore,
+            "RGB888 rejects empty/truncated/oversized authored alpha without publishing a texture")) return 1;
+        archive->Release();
+    }
     textures->Release();
     textureAggregate->Release();
     textureInner->Release();

@@ -84,7 +84,7 @@ public:
 		playerID = TOTALLYVOLATILEPTR;
 	}
 
-	OBJPTR (const OBJPTR<Type> & new_ptr)
+	OBJPTR (const OBJPTR<Type> & new_ptr) : OBJPTR()
 	{
 		InitObjectPointer(*this, new_ptr.playerID,new_ptr.ptr,new_ptr.offset);		// move to the correct list
 	}
@@ -225,7 +225,7 @@ public:
 		playerID = TOTALLYVOLATILEPTR;
 	}
 
-	OBJPTR (const OBJPTR<IBaseObject> & new_ptr)
+	OBJPTR (const OBJPTR<IBaseObject> & new_ptr) : OBJPTR()
 	{
 		InitObjectPointer(*this, new_ptr.playerID,new_ptr.ptr,0);		// move to the correct list
 	}

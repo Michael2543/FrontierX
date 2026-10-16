@@ -35,6 +35,33 @@ TERRAN_CHECKLIST = [
     'Normal close; privately report genuine checkpoint, last objective, cycle count, expected/observed result, visible/audible gaps and reproduction steps.']
 
 
+P2_CHECKLIST = [
+    'Choose the target mission through original campaign selection; inspect briefing, Start and initial units/objectives. No unlock or objective manipulation.',
+    'Play every phase through regular victory and exercise the mission-specific mechanics, reinforcements, enemy waves, abilities and cutscenes.',
+    'F7/F8 early and late, during production/research/abilities/combat; confirm objectives, orders, units and source scripts resume correctly.',
+    'Inspect all required models/parts/animations, materials/textures/lighting, background, effects, HUD, both minimaps including system links, portraits, speech/music/spatial SFX and movies, including later spawned content and after loading.',
+    'Check regular defeat/retry, result/statistics, Continue to the next original briefing and mission, or the original campaign ending after the last mission.',
+    'Restart the process with the same external save/configuration roots; verify genuine progress and repeated load/retry/switch cleanup.',
+    'Report the full mission result and genuine checkpoints privately. Missing presentation or pending feedback blocks acceptance.']
+P2_TM2_CHECKLIST = [
+    'TM2: verify platform production, missile direction, repair/sell and the original six-Corvette/three-Cruiser build gate; exercise Troopship research, pods and capture with save/load.',
+    'TM2: check Scout Carrier/fighters, Zorap and enemy production queues, both Mantis Eyestocks and Blackwell defeat; regular victory may follow capture of a Thripid, Cocoon, BlastFurnace or Eyestock.',
+    'TM2: preserve the previously reported complete mission run and save/load evidence. Use genuine late/early checkpoints for missing scenarios and normal TM3 transition; request another full run only for an identified regression.']
+
+P2_TM4_CHECKLIST = [
+    'TM4: locate the Mantis rebels, stop red-Mantis attacks and build the Perilon base/defenses; check rebel harvesters, their Jump Gate and Bekka/Luxor waves, including later carriers/fighters and Scarabs.',
+    'TM4: save/load while protecting the rebels, during their return home and before investigating Alto; verify the original speech/objective sequence, system access and enemy reinforcements continue.',
+    'TM4: retreat with both Blackwell and Hawkes to Capella for regular victory; exercise original admiral/rebel/Jump-Gate defeat conditions and normal result/progress/Continue to TM5.']
+
+
+def campaign_checklist(mission, campaign_mission):
+    if campaign_mission is not None:
+        if mission != 'terran1' or campaign_mission not in range(1, 17):
+            raise ValueError('campaign target requires Terran selector and mission 1..16')
+        return P2_CHECKLIST + {2: P2_TM2_CHECKLIST, 4: P2_TM4_CHECKLIST}.get(campaign_mission, [])
+    return TERRAN_CHECKLIST if mission == 'terran1' else CHECKLIST
+
+
 def mission_command(root, build, install, font, save, mission="training", bounded_presentation=False, font_mapping=None, single_font_interim=False, no_frame_limit=False):
     if single_font_interim and (mission != 'terran1' or bounded_presentation):
         raise ValueError('single-font interim scope requires Terran1 without bounded media exclusions')
@@ -88,7 +115,8 @@ def font_map_fingerprints(path):
     return {'map': digest(path), 'faces': files}
 
 
-def write_handoff(root, build, destination, env, mission="training", bounded_presentation=False, single_font_interim=False, no_frame_limit=False):
+def write_handoff(root, build, destination, env, mission="training", bounded_presentation=False, single_font_interim=False, no_frame_limit=False, campaign_mission=None):
+    checklist = campaign_checklist(mission, campaign_mission)
     if single_font_interim and (mission != 'terran1' or bounded_presentation):
         raise ValueError('single-font interim scope requires Terran1 without bounded media exclusions')
     cache = {}
@@ -102,7 +130,7 @@ def write_handoff(root, build, destination, env, mission="training", bounded_pre
         'FRONTIERX_BUILD_NATIVE_FONTS', 'FRONTIERX_BUILD_FFMPEG_AUDIO',
         'FRONTIERX_BUILD_FFMPEG_VIDEO')}
     reduced = mission == 'training' or bounded_presentation
-    record = {'mission': mission, 'bounded_presentation': reduced, 'single_font_interim': single_font_interim, 'no_frame_limit': no_frame_limit, 'revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root,
+    record = {'mission': mission, 'campaign_mission': campaign_mission, 'bounded_presentation': reduced, 'single_font_interim': single_font_interim, 'no_frame_limit': no_frame_limit, 'revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root,
                                                   text=True).strip(),
               'working_tree_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=root)),
               'workflow_run': env.get('GITHUB_RUN_ID', 'local'),
@@ -127,15 +155,16 @@ def write_handoff(root, build, destination, env, mission="training", bounded_pre
                                             str(destination.resolve()), '--play'] +
                                            (['--bounded-presentation'] if bounded_presentation else []) +
                                            (['--single-font-interim'] if single_font_interim else []) +
-                                           (['--no-frame-limit'] if no_frame_limit else [])),
+                                           (['--no-frame-limit'] if no_frame_limit else []) +
+                                           (['--campaign-mission', str(campaign_mission)] if campaign_mission is not None else [])),
               'launch_environment': ['FRONTIERX_RETAIL_ROOT', 'FRONTIERX_TEST_FONT_FILE',
                                      'FRONTIERX_PLAYTEST_FONT_MAP (required for full Terran)',
                                      'FRONTIERX_PLAYTEST_SAVE_ROOT', 'XDG_CONFIG_HOME (external writable directory)'],
               'known_limits': (EXCLUSIONS if reduced else []) + [
-                                           'P1c victory/defeat, progress/restart, second-mission entry and repeated lifecycle acceptance require actual user confirmation; unsupported owners fail explicitly',
+                                           'P1c is user-accepted in its documented scope. Each P2 mission requires separate full gameplay/media acceptance; unsupported owners fail explicitly',
                                            'Wayland resize and whole-process GPU/library leak checks remain open'],
-              'checklist': TERRAN_CHECKLIST if mission == 'terran1' else CHECKLIST,
-              'acceptance': 'Provenance only; report technical/host execution separately. P1b user acceptance of the delivered first-Terran scope does not accept P1c transitions or resolve recorded presentation/media follow-ups.'}
+              'checklist': checklist,
+              'acceptance': 'Provenance only; report technical/host execution separately. P1b/P1c user acceptance remains valid in its documented scope; this record accepts no additional P2 mission and resolves no pending technical check.'}
     mapping = env.get('FRONTIERX_PLAYTEST_FONT_MAP')
     record['font_mapping_fingerprints'] = font_map_fingerprints(mapping) if mapping and not single_font_interim else None
     font = env.get('FRONTIERX_TEST_FONT_FILE', cache.get('FRONTIERX_TEST_FONT_FILE'))
@@ -160,6 +189,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--build', type=Path, required=True)
     parser.add_argument('--mission', choices=MISSIONS, default='training')
+    parser.add_argument('--campaign-mission', type=int, choices=range(1, 17),
+                        help='P2 playtest target only; choose it through the original selector, no unlock or direct entry')
     parser.add_argument('--candidate', type=Path,
                         help='Private provenance record to validate before player launch')
     parser.add_argument('--no-frame-limit', action='store_true',
@@ -173,12 +204,14 @@ def main():
     action.add_argument('--handoff', type=Path)
     action.add_argument('--play', action='store_true')
     args = parser.parse_args()
+    if args.campaign_mission is not None and args.mission != 'terran1':
+        parser.error('--campaign-mission requires --mission terran1')
     if args.single_font_interim and args.mission != 'terran1':
         parser.error('--single-font-interim requires --mission terran1')
     root = Path(__file__).resolve().parents[2]
     build = args.build.resolve()
     if args.handoff:
-        write_handoff(root, build, args.handoff, os.environ, args.mission, args.bounded_presentation, args.single_font_interim, args.no_frame_limit)
+        write_handoff(root, build, args.handoff, os.environ, args.mission, args.bounded_presentation, args.single_font_interim, args.no_frame_limit, args.campaign_mission)
         return
     candidate = args.candidate or build.parent / ('candidate-terran1.json' if args.mission == 'terran1'
                                 else 'candidate.json')
@@ -186,6 +219,8 @@ def main():
         raise ValueError('explicit candidate provenance record missing')
     if candidate.is_file():
         record = json.loads(candidate.read_text())
+        if record.get('campaign_mission') != args.campaign_mission:
+            raise ValueError('candidate campaign target differs from launch')
         if record.get('mission', 'training') != args.mission:
             raise ValueError('candidate mission differs from launch')
         if ('bounded_presentation' in record and record['bounded_presentation'] !=

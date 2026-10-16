@@ -899,6 +899,10 @@ void Menu_mission::onButtonPressed (U32 buttonID)
 		// play the movie file between missions 3 and 4
 		SetVisible(false);
 //		MovieScreen(this, "cq_1.mpg", 640, 272);
+#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)
+		if (!CQFLAGS.bSkipMovies)
+			MovieScreen(this, "cq_1.mpg");
+#endif
 		SetVisible(true);
 		break;
 

@@ -187,7 +187,9 @@ static bool NativeLoadMissionSystemMap(IFileSystem *file)
 			if (value >= 'A' && value <= 'Z') value = static_cast<char>(value + ('a' - 'A'));
 		const bool regularTerran = foldedScript == "script01t.dll" || foldedScript == "script01.dll" ||
             foldedScript == "script02t.dll" || foldedScript == "script02.dll" ||
-            foldedScript == "script03t.dll" || foldedScript == "script03.dll";
+            foldedScript == "script03t.dll" || foldedScript == "script03.dll" ||
+            foldedScript == "script04t.dll" || foldedScript == "script04.dll" ||
+            foldedScript == "script05t.dll" || foldedScript == "script05.dll";
 		const char *extension = std::strrchr(filename, '.');
 		std::string foldedExtension = extension ? extension : "";
 		for (char &value : foldedExtension)

@@ -19,6 +19,9 @@
 #include <DataDef.h>
 #include <DMBaseData.h>
 #include <DMovieCamera.h>
+#include <DJumpGate.h>
+#include <DBlackHole.h>
+#include <DQuickSave.h>
 #include <DVLaunch.h>
 #include <DCloakLauncher.h>
 #include <DFlagship.h>
@@ -98,12 +101,78 @@ static_assert(sizeof(Script03Layout::TM3_VisibilityHandlerData) == 24);
 static_assert(sizeof(Script03Layout::TM3_BlackwellIsDeadData) == 8);
 static_assert(sizeof(Script03Layout::TM3_CheckForCapturedPrisonData) == 12);
 static_assert(sizeof(Script03Layout::TM3_DisplayObjectiveHandlerData) == 8);
+// TM4 saves and its required Continue-to-TM5 briefing use distinct DLL-local records.
+#undef DATADEF_H
+namespace Script04Layout
+{
+#include "Scripts/Script04T/DataDef.h"
+}
+static_assert(sizeof(Script04Layout::MissionData) == 436);
+static_assert(offsetof(Script04Layout::MissionData, Blackwell) == 32);
+static_assert(offsetof(Script04Layout::MissionData, Hawkes) == 48);
+static_assert(offsetof(Script04Layout::MissionData, exitID) == 176);
+static_assert(offsetof(Script04Layout::MissionData, failureID) + sizeof(U32) == 436);
+static_assert(sizeof(Script04Layout::TM4_Briefing_Data) == 24);
+static_assert(sizeof(Script04Layout::TM4_InvestigateAlto_Data) == 8);
+static_assert(std::is_same_v<decltype(Script04Layout::TM4_InvestigateAlto_Data::timer), SINGLE>);
+#undef DATADEF_H
+namespace Script05Layout
+{
+#include "Scripts/Script05T/DataDef.h"
+}
+#undef PLAYER_ID
+#undef MANTIS_ID
+#undef PERILON_SYSTEM
+#undef LUXOR_SYSTEM
+#undef BEKKA_SYSTEM
+#undef PERILON2_SYSTEM
+#undef GHELEN3_SYSTEM
+#undef ALKAID_SYSTEM
+#undef MANTIS_WAVE_INTERVAL
+static_assert(sizeof(Script05Layout::MissionData) == 604);
+static_assert(offsetof(Script05Layout::MissionData, Blackwell) == 248);
+static_assert(offsetof(Script05Layout::MissionData, Hawkes) == 264);
+static_assert(offsetof(Script05Layout::MissionData, KerTak) == 456);
+static_assert(offsetof(Script05Layout::MissionData, failureID) + sizeof(U32) == 604);
+static_assert(sizeof(Script05Layout::TM5_Briefing_Save) == 4);
+static_assert(sizeof(Script05Layout::TM5_MissionStart_Save) == 4);
+static_assert(sizeof(Script05Layout::TM5_PerilonCleared_Save) == 68);
+static_assert(sizeof(Script05Layout::TM5_SendMantisWave1_Save) == 36);
+static_assert(sizeof(Script05Layout::TM5_IntroduceKerTak_Save) == 36);
 // TM2_MissionStart changes to the authored MissionCamStart object; its normal
 // Mission save/load uses these original fixed-width camera records.
 static_assert(sizeof(BASE_MOVIE_CAMERA_SAVELOAD) == 136);
 static_assert(sizeof(MOVIE_CAMERA_SAVELOAD) == 176);
 static_assert(sizeof(BT_MOVIE_CAMERA_DATA) == 112);
 static_assert(sizeof(MOVIE_CAMERA_VIEW) == 64);
+// The original NETGRIDVECTOR-bearing records are not standard-layout C++
+// types. Use the supported compiler offsetof extension to check their ABI.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+// TM4 terrain loads original BlackHole objects, then full saves retain their
+// operation IDs and pending jumps. Keep full/quick records Win32-shaped.
+static_assert(sizeof(BASE_BLACKHOLE_SAVELOAD) == 36);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, targetSys) == 0);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, numTargetSys) == 16);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, currentTarget) == 17);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, timer) == 20);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, workingID) == 24);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, waitingID) == 28);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, waitingJumpPos) == 32);
+static_assert(offsetof(BASE_BLACKHOLE_SAVELOAD, waitingJumpPos) + sizeof(NETGRIDVECTOR) == 35);
+static_assert(sizeof(BLACKHOLE_SAVELOAD) == 180);
+static_assert(offsetof(BLACKHOLE_SAVELOAD, mission) == 36);
+static_assert(offsetof(BLACKHOLE_SAVELOAD, trans_SL) == 140);
+static_assert(offsetof(BLACKHOLE_SAVELOAD, trans_SL) + sizeof(TRANS_SAVELOAD) == 180);
+static_assert(sizeof(MT_BLACKHOLE_QLOAD) == 20);
+static_assert(offsetof(MT_BLACKHOLE_QLOAD, pos) == 0);
+static_assert(offsetof(MT_BLACKHOLE_QLOAD, targetSys) == 3);
+static_assert(offsetof(MT_BLACKHOLE_QLOAD, numTargetSys) + sizeof(U8) == 20);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 // BuildPlat creates the Terran Missile Cruiser through Gunboat's real vertical
 // and cloak launcher factories. Their data remains the original Win32 schema.
 static_assert(sizeof(BT_VERTICAL_LAUNCH) == 796);

@@ -8,10 +8,78 @@ mission acceptance. This section supersedes the older milestone ordering and
 all historical “next M3” instructions below. It does not turn failed comparisons
 into passes or retract confirmed defects.
 
+**Latest user decision (2026-10-16):** TM3 is explicitly accepted as completely
+finished after the final Weaver repair. TM4, **Friend or Foe?**, is the active
+P2 integration mission. The [mission matrix](NATIVE_TERRAN_P2.md) records this
+acceptance independently of retained Windows/ABI, hosted CI and M3 limits.
+Earlier pending TM3 statements below are dated implementation history.
+
 **Current status:** P1a, P1b and P1c are accepted by the user in the delivered
-native Linux scope. P1b and P1c were explicitly accepted on 2026-10-15. The next
-planned gameplay milestone is **P2: broaden the campaign** through original
-mission owners, required units/abilities and normal persistent state.
+native Linux scope. P1b and P1c were explicitly accepted on 2026-10-15. The active
+gameplay milestone is **P2: broaden the campaign**. The user reports a perfect
+TM2 run with one small Corvette smoke-position defect. Its native render-only
+anchor correction passes focused checks; a short visual retest remains. TM3 is
+next in original order. See [smoke evidence](GAME_MATERIAL_PATH.md#corvette-damage-smoke-anchor-2026-10-15).
+Subsequent genuine Collector-upgrade and repeated-F8 crashes have native owner
+repairs and focused GCC/Clang/fatal-sanitizer evidence; track their bounded
+checkpoint continuation separately in
+[the crash ledger](NATIVE_TERRAN_CAMPAIGN.md#collector-upgrade-and-repeated-f8-crash-repairs-2026-10-15).
+A further AI build-site crash is fixed by initializing copied object watchers
+before registration. Large-selection bar submissions and native texture-filter
+churn have focused owner optimizations; validation and measured limits are in
+[the AI crash record](NATIVE_TERRAN_CAMPAIGN.md#ai-build-site-watcher-crash-2026-10-16)
+and [the performance record](GAME_MATERIAL_PATH.md#large-selection-and-sampler-churn-2026-10-16).
+The subsequent Rally Point tooltip abort is repaired in the native font owner
+with font-enabled GCC/Clang/fatal-sanitizer checks; see
+[the CR/LF regression](NATIVE_TERRAN_CAMPAIGN.md#rally-tooltip-crlf-crash-2026-10-16).
+The renewed selection report is reproduced with a genuine 18-unit group and
+repaired at upload-pool retirement; its final bounded checkpoint run includes
+selection changes and two real F7/F8 rounds with normal close. Native
+saved-heading reconstruction also repairs a concrete 180-degree load error
+relevant to the Weaver. At that intermediate stage, renewed user performance/Weaver confirmation and
+full TM3 acceptance were pending; earlier bar/sampler improvements alone were
+insufficient. See the focused rendering/heading records.
+The user subsequently confirms the other repairs but still reports Weaver
+construction tilt and the absent Hawkes rescue film. The active-build animation
+restart and original victory/replay film bindings have focused repairs and
+bounded runtime evidence. The next screenshot reproduces a remaining
+root/model-axis mismatch. The native Animation basis is now configured from
+authored Weaver metadata before the first start; the same genuine checkpoint
+has inspected before/after captures showing the corrected planet-facing tilt.
+The subsequent user decision accepts the complete TM3 run and final repair.
+See [the media follow-up](NATIVE_TERRAN_MEDIA.md#weaver-screenshot-follow-up-2026-10-16).
+TM4 now integrates the original script, required BlackHole terrain and RGB888
+ring texture, with the next original briefing prepared separately. See the
+[focused TM4 evidence](NATIVE_TERRAN_P2.md#tm4-production-integration-2026-10-16);
+no whole-P2 acceptance is inferred.
+The [16-mission matrix and delivery contract](NATIVE_TERRAN_P2.md) separate
+untested, in implementation, ready for playtest and accepted missions. Earlier
+TM2 user acceptance is retained; unreported individual scenarios are not invented.
+
+### P2 campaign delivery (2026-10-15)
+
+Proceed in original Terran campaign order, starting with mission 2. Finish a
+usable candidate for one mission before advancing integration; technical
+preparation of the next mission may continue while user feedback is pending.
+The main agent owns order, integration, matrix and handoff; gameplay, media and
+independent validation agents own separate component files and coordinate shared
+contracts before editing. The user confirms complete gameplay and presentation.
+
+Each mission requires original selection/briefing/start, all intended mechanics
+and later-created content, early and active-mechanic save/load, victory/defeat,
+result/retry/progress and next-mission transition. Complete models, materials,
+effects, lighting, HUD, both minimaps, animated portraits, audio and movies remain
+mandatory after load and transitions. Required content cannot be deferred to P3
+or accepted with reduced rendering/media flags. Use genuine external checkpoints
+and the existing technical CI/test drivers, with targeted training and accepted
+mission regressions for shared changes. Pending user feedback, unavailable
+Windows/ABI/hosted CI and separate M3 remain explicitly pending.
+
+P2 ends only when all 16 regular Terran missions meet those criteria, the user
+has accepted each complete run, and the original campaign ending works. Skirmish,
+multiplayer and additional campaigns are not automatically included. Current
+mission blockers and candidate evidence belong in the linked matrix and focused
+campaign/media/CI ledgers; retail/save/private runtime inputs remain external.
 
 ### P1c completed by user acceptance (2026-10-15)
 
@@ -319,7 +387,7 @@ open.
 | P1a — Original campaign entry | Follow `Menu_campaign` → original mission selector, briefing, script/resource loading and GameProgress. Identify the first Terran mission and add only its missing production dependencies. | CI compiles/checks the integration; a bounded load/close smoke executes where lawful external data is available; user can enter the real mission through original controls. |
 | P1b — Complete that mission **(completed: user acceptance 2026-10-15)** | Integrate required gameplay/save owners and the complete mission presentation/media scope specified below, including both minimaps and all required asset/material/shader paths. | User reaches original victory and verifies defeat, early/active-state save/load and continued play; complete visuals, audio and the system-connections minimap work before and after reload. No debug completion, fabricated saves or presentation exclusions qualify for full P1b acceptance. |
 | P1c — Continue and repeat **(completed: user acceptance 2026-10-15)** | Connect original result/return/progress and next-mission loading; check defeat/retry, restart and teardown. | User reaches the next mission after victory, exercises defeat/retry and closes/re-enters normally. Targeted automation protects any reproduced lifecycle/save regression. This completes P1, not the entire campaign. |
-| P2 — Broaden the campaign **(next planned step)** | Advance mission by mission; group checks around newly required factions, AI, abilities and persistent state. | Maintain a compact mission matrix of untested/blocked/passed with tested revision, configuration, limitations and user result. No campaign-wide claim from one mission. |
+| P2 — Broaden the campaign **(active, TM3 user-accepted; TM4 ready for playtest)** | Advance through all 16 original Terran missions in order, integrating newly required original gameplay and complete media owners. Prepare the next mission while user feedback is pending. | Maintain the [mission matrix](NATIVE_TERRAN_P2.md) with untested/in implementation/ready for playtest/accepted status, blockers, checked build and user decision. Require normal early/active-state save/load, defeat/retry, victory/progress/next entry and the final campaign ending. No required media exclusion or campaign-wide claim from one mission. |
 | P3 — Complete the single-player experience | Restore remaining gameplay-relevant providers and audiovisual features outside already accepted mission scopes; improve launch/settings usability. Add skirmish only as a separately scoped follow-up requiring the real player AI. | Representative campaign playthroughs, usable launch flow and documented feature coverage. Packaging/release still requires legal, dependency and data-separation review. |
 | Later M3 — Compatibility and determinism | Reuse existing observers for a concrete discrepancy; plan controlled external events before demanding identical traces. Expand full-state/Windows/retail comparisons separately. | Explicit comparison evidence under a defined protocol. Multiplayer remains later and requires its own determinism/network acceptance. |
 

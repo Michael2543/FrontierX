@@ -551,6 +551,10 @@ bool CheckNativeSourceStatus()
         !owner->szName[0] && owner->mode == STM_DEFAULT;
     owner->reloadFonts(true);
     valid = valid && NativeFontLiveCount() == fonts + 4;
+    owner->SetText(IDS_HINT_BUTTON_RALLY, STM_TOOLTIP);
+    valid = valid && owner->GetText() == IDS_HINT_BUTTON_RALLY && owner->mode == STM_TOOLTIP &&
+        CheckNativeFontTextLayout(owner->font, owner->GetText());
+    if (valid) std::puts("Native source status Rally Point CR/LF metrics and draw geometry checked");
     owner->Notify(CQE_END3DMODE);
     owner->Release();
     return valid && NativeFontLiveCount() == fonts;

@@ -88,6 +88,10 @@ std::string Trim(std::string text)
 }
 struct Span { int x0, x1, y; };
 struct Glyph { int advance; std::vector<Span> spans; };
+bool IsFontTextCharacter(wchar_t c)
+{
+    return (c >= 32 && c <= 126) || c == L'\r' || c == L'\n';
+}
 struct NativeFont : IFontDrawAgent
 {
     BEGIN_DACOM_MAP_INBOUND(NativeFont)
@@ -158,7 +162,14 @@ struct NativeFont : IFontDrawAgent
     }
     Glyph &GetGlyph(wchar_t c)
     {
-        if (c < 32 || c > 126) FontFailure("selected font path supports printable ASCII only");
+        if (!IsFontTextCharacter(c)) FontFailure("selected font path supports printable ASCII and CR/LF only");
+        // Single-line agents keep one baseline. Only the multiline owner below
+        // interprets CR/LF as line separators; neither path rasterizes them.
+        if (c == L'\r' || c == L'\n')
+        {
+            static Glyph separator{0, {}};
+            return separator;
+        }
         const auto found = glyphs.find(c);
         if (found != glyphs.end()) return found->second;
         if (!FT_Get_Char_Index(face, c) || FT_Load_Char(face, c, FT_LOAD_RENDER | FT_LOAD_TARGET_MONO))
@@ -191,7 +202,6 @@ struct NativeFont : IFontDrawAgent
         U32 width = 0;
         for (; *text; ++text)
         {
-            if (multiline && (*text == L'\r' || *text == L'\n')) continue;
             width += GetGlyph(*text).advance;
         }
         return width;
@@ -246,15 +256,8 @@ struct NativeFont : IFontDrawAgent
     }
     void COMAPI StringDraw(PANE *pane, S32 x, S32 y, U32 id) override
     { StringDraw(pane, x, y, _localLoadStringW(id)); }
-    void COMAPI StringDraw(PANE *pane, S32 x, S32 y, const wchar_t *text) override
+    std::vector<Span> VisibleSpans(PANE *pane, S32 x, S32 y, const wchar_t *text)
     {
-        GetStringWidth(text);
-        if (!PIPE || !BATCH || CQFLAGS.bFrameLockEnabled || !SCREENRESX || !SCREENRESY ||
-            SCREENRESX > 32768 || SCREENRESY > 32768 || x < -32768 || x > 32768 ||
-            y < -32768 || y > 32768) FontFailure("render owner or coordinate bounds");
-        if (pane && (pane->x0 < 0 || pane->y0 < 0 || pane->x1 < pane->x0 || pane->y1 < pane->y0 ||
-            pane->x1 > 32768 || pane->y1 > 32768))
-            FontFailure("pane bounds");
         const int left = pane ? pane->x0 : 0, top = pane ? pane->y0 : 0;
         const int right = pane ? pane->x1 : static_cast<int>(SCREENRESX)-1;
         const int bottom = pane ? pane->y1 : static_cast<int>(SCREENRESY)-1;
@@ -277,6 +280,18 @@ struct NativeFont : IFontDrawAgent
           }
           rowY += height;
         }
+        return visible;
+    }
+    void COMAPI StringDraw(PANE *pane, S32 x, S32 y, const wchar_t *text) override
+    {
+        GetStringWidth(text);
+        if (!PIPE || !BATCH || CQFLAGS.bFrameLockEnabled || !SCREENRESX || !SCREENRESY ||
+            SCREENRESX > 32768 || SCREENRESY > 32768 || x < -32768 || x > 32768 ||
+            y < -32768 || y > 32768) FontFailure("render owner or coordinate bounds");
+        if (pane && (pane->x0 < 0 || pane->y0 < 0 || pane->x1 < pane->x0 || pane->y1 < pane->y0 ||
+            pane->x1 > 32768 || pane->y1 > 32768))
+            FontFailure("pane bounds");
+        const auto visible = VisibleSpans(pane, x, y, text);
         if (visible.empty()) return;
         OrthoView(nullptr); // Explicit pixel clipping preserves the source reveal pane.
         DisableTextures();
@@ -401,4 +416,65 @@ IFontDrawAgent *CreateNativeArchetypeFont(PGENTYPE archetype, U32 resource, COLO
 }
 std::uint64_t NativeFontDrawCount() { return drawCount; }
 unsigned NativeFontLiveCount() { return liveFonts; }
+bool CheckNativeFontTextLayout(IFontDrawAgent *agent, U32 textResource)
+{
+#if defined(FRONTIERX_NATIVE_FREETYPE)
+    auto *font = dynamic_cast<NativeFont *>(agent);
+    if (!font) return false;
+    const bool previousMultiline = font->multiline;
+    struct RestoreMode
+    {
+        NativeFont *font;
+        bool multiline;
+        ~RestoreMode() { font->multiline = multiline; }
+    } restore{font, previousMultiline};
+    PANE pane{};
+    pane.x1 = 1023;
+    pane.y1 = 511;
+    const auto sameSpans = [](const auto &a, const auto &b)
+    {
+        if (a.size() != b.size()) return false;
+        for (std::size_t i = 0; i < a.size(); ++i)
+            if (a[i].x0 != b[i].x0 || a[i].x1 != b[i].x1 || a[i].y != b[i].y) return false;
+        return true;
+    };
+    font->multiline = false;
+    bool valid = font->GetCharWidth(L'\r') == 0 && font->GetCharWidth(L'\n') == 0 &&
+        !IsFontTextCharacter(L'\t') && !IsFontTextCharacter(1) && !IsFontTextCharacter(127) &&
+        !IsFontTextCharacter(0x100);
+    struct TextCase { const wchar_t *text; const wchar_t *visible; };
+    const TextCase cases[] = {{L"AB\n", L"AB"}, {L"A\r\nB", L"AB"},
+        {L"A\rB", L"AB"}, {L"A\nB", L"AB"}, {L"\r\nAB\r\n", L"AB"}, {L"\r\n", L""}};
+    for (const auto &item : cases)
+        valid = valid && font->GetStringWidth(item.text) == font->GetStringWidth(item.visible) &&
+            font->GetNumRows(item.text, nullptr) == 1 &&
+            sameSpans(font->VisibleSpans(&pane, 0, 0, item.text),
+                font->VisibleSpans(&pane, 0, 0, item.visible));
+    // The original StatusBar passes the authored ID straight to the agent.
+    // Its Rally Point hint has a trailing LF. Use that resource, not a patched
+    // replacement string or a production special case for its numeric ID.
+    const wchar_t *authored = _localLoadStringW(textResource);
+    const auto length = std::wcslen(authored);
+    if (!length || authored[length - 1] != L'\n') return false;
+    const std::wstring withoutTerminator(authored, length - 1);
+    valid = valid && font->GetStringWidth(textResource) == font->GetStringWidth(withoutTerminator.c_str()) &&
+        sameSpans(font->VisibleSpans(&pane, 0, 0, authored),
+            font->VisibleSpans(&pane, 0, 0, withoutTerminator.c_str()));
+    font->multiline = true;
+    auto rows = font->VisibleSpans(&pane, 0, 0, L"A");
+    const auto second = font->VisibleSpans(&pane, 0, font->GetFontHeight(), L"B");
+    rows.insert(rows.end(), second.begin(), second.end());
+    valid = valid && font->GetStringWidth(L"A\r\nB") == font->GetStringWidth(L"AB") &&
+        font->GetNumRows(L"A\r\nB", &pane) == 2 &&
+        font->GetNumRows(L"A\r\n\r\nB", &pane) == 2 &&
+        font->GetNumRows(L"AB\r\n", &pane) == 1 &&
+        sameSpans(font->VisibleSpans(&pane, 0, 0, L"A\r\nB"), rows) &&
+        sameSpans(font->VisibleSpans(&pane, 0, 0, L"A\r\n\r\nB"), rows) &&
+        sameSpans(font->VisibleSpans(&pane, 0, 0, L"AB\r\n"), font->VisibleSpans(&pane, 0, 0, L"AB"));
+    return valid;
+#else
+    (void)agent; (void)textResource;
+    return false;
+#endif
+}
 }

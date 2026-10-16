@@ -342,6 +342,8 @@ struct NativeMissionModalExit final : IEventCallback
                               << "; draw=" << (current.drawing - lastTimings.drawing) / count
                               << "; queue=" << (current.queueSubmit - lastTimings.queueSubmit) / count
                               << "; reused=" << (current.reusedUploads - lastTimings.reusedUploads) / count
+                              << "; texture-upload=" << (current.textureUploads - lastTimings.textureUploads) / count
+                              << "; texture-updates=" << (current.textureUploadCount - lastTimings.textureUploadCount) / count
                               << '\n' << std::flush;
                     lastTimings = current;
                 }
@@ -2170,6 +2172,9 @@ int Run(int argc, char ** argv)
                     throw std::runtime_error("Native source stateless Ping restart check failed");
                 std::cout << "Native source stateless Ping restart validated against real launcher owner\n";
                 std::cout << "Native source Gunboat failed launcher load propagated\n";
+                if (!FrontierX::CheckNativeTrailTerminalFade())
+                    throw std::runtime_error("Native source warp trail terminal fade check failed");
+                std::cout << "Native source warp trail terminal fade validated\n";
             }
             if (!options.missionStart && saveDirectory.Get())
             {
@@ -2550,7 +2555,9 @@ int Run(int argc, char ** argv)
             constexpr U32 kMoveForgerObjective = 47U;
             if (options.missionSourceName == "T_Mission1.dmission" ||
                 options.missionSourceName == "T_Mission2.dmission" ||
-                options.missionSourceName == "T_Mission3.dmission")
+                options.missionSourceName == "T_Mission3.dmission" ||
+                options.missionSourceName == "T_Mission4.dmission" ||
+                options.missionSourceName == "T_Mission5.dmission")
             {
                 InitializeNativeEffectsOptions();
                 if (options.skipSpaceBackground)
@@ -2564,7 +2571,9 @@ int Run(int argc, char ** argv)
             NATIVE_USE_ORIGINAL_LEGACY_MATERIALS =
                 (options.missionSourceName == "T_Mission1.dmission" ||
                  options.missionSourceName == "T_Mission2.dmission" ||
-                options.missionSourceName == "T_Mission3.dmission") && !options.skipLegacyLighting;
+                options.missionSourceName == "T_Mission3.dmission" ||
+                options.missionSourceName == "T_Mission4.dmission" ||
+                options.missionSourceName == "T_Mission5.dmission") && !options.skipLegacyLighting;
             if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
                 std::cout << "Native Terran legacy materials use original scalar lighting, "
                              "diffuse/emission colors and authored texture UV pairs\n";
@@ -2794,7 +2803,15 @@ int Run(int argc, char ** argv)
             const bool thirdTerranMission = std::strcmp(selectedScript, "Script03T.dll") == 0 ||
                 std::strcmp(selectedScript, "script03.dll") == 0 ||
                 std::strcmp(selectedScript, "Script03.dll") == 0;
-            if (!trainingMission && !firstTerranMission && !secondTerranMission && !thirdTerranMission) return 6;
+            const bool fourthTerranMission = std::strcmp(selectedScript, "Script04T.dll") == 0 ||
+                std::strcmp(selectedScript, "script04.dll") == 0 ||
+                std::strcmp(selectedScript, "Script04.dll") == 0;
+            const bool fifthTerranMission = std::strcmp(selectedScript, "Script05T.dll") == 0 ||
+                std::strcmp(selectedScript, "script05.dll") == 0 ||
+                std::strcmp(selectedScript, "Script05.dll") == 0 ||
+                std::strcmp(selectedScript, "SCRIPT05.dll") == 0;
+            if (!trainingMission && !firstTerranMission && !secondTerranMission &&
+                !thirdTerranMission && !fourthTerranMission && !fifthTerranMission) return 6;
             std::cout << "Native App selected source script: " << selectedScript << '\n';
             unsigned int forgers = 0;
             Vector initialPlayerForgerPosition{};

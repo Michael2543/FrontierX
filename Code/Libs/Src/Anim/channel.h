@@ -299,6 +299,11 @@ namespace Channel
 	class FullStream : public Object
 	{
 		protected:
+#if !defined(_WIN32)
+            bool nativeRootBasisEnabled = false;
+            Matrix nativeRootBasis;
+            void apply_native_root_basis(Vector &position, Quaternion &orientation) const;
+#endif
 			
 			virtual void interpolate (const void* base, 
 
@@ -320,6 +325,13 @@ namespace Channel
 			Vector blend_velocity;
 
 		public:
+#if !defined(_WIN32)
+            void set_native_root_basis(const Matrix &basis)
+            {
+                nativeRootBasis = basis;
+                nativeRootBasisEnabled = true;
+            }
+#endif
 
 			Vector last_result_v;
 			Quaternion last_result_q;

@@ -17,6 +17,7 @@ IFontDrawAgent *CreateNativeFontDrawAgent(U32 resource, std::uint32_t color, boo
 IFontDrawAgent *CreateNativeArchetypeFont(GENNODE *archetype, U32 resource, std::uint32_t color, bool multiline, bool notScaling);
 std::uint64_t NativeFontDrawCount();
 unsigned NativeFontLiveCount();
+bool CheckNativeFontTextLayout(IFontDrawAgent *font, U32 textResource);
 ITeletype *CreateNativeSourceTeletype();
 bool CheckNativeSourceTeletype();
 ISubtitle *CreateNativeSourceSubtitle();

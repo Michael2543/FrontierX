@@ -51,6 +51,10 @@ using namespace FrontierX::NativeAppUi;
 
 #define MAX_TICKS  8000
 
+#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)
+U32 __stdcall MovieScreen (Frame * parent, const char * filename);
+#endif
+
 //--------------------------------------------------------------------------//
 //
 //--------------------------------------------------------------------------//
@@ -221,7 +225,15 @@ void MenuEndGame::checkForMovie (void)
 		{
 		case 2:
 //			MovieScreen(this, "cq_1.mpg", movieWidth, movieHeight);
+#if defined(_WIN32)
 			GAMEPROGRESS->SetMovieSeen(1);
+#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)
+			if (!CQFLAGS.bSkipMovies)
+			{
+				MovieScreen(this, "cq_1.mpg");
+				GAMEPROGRESS->SetMovieSeen(1);
+			}
+#endif
 			break;
 
 		case 8:

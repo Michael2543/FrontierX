@@ -382,6 +382,97 @@ target_compile_features(frontierx_script03_owner PRIVATE cxx_std_17)
 target_compile_definitions(frontierx_script03_owner PRIVATE FRONTIERX_NATIVE_SCRIPT_NAME="Script03T.dll")
 target_link_libraries(frontierx_app_script_owner PUBLIC frontierx_script03_resources)
 
+# Fourth Terran mission: original Script04T owner/schema/RT_STRING.
+set(frontierx_script04_dir ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Script04T)
+set(frontierx_script04_schema ${CMAKE_CURRENT_BINARY_DIR}/Script04T_DataDef.i)
+add_custom_command(OUTPUT ${frontierx_script04_schema}
+    COMMAND ${CMAKE_CXX_COMPILER} -E -P -D_ADB -MD -MF ${frontierx_script04_schema}.d
+        -I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/DInclude
+        -I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Include
+        -I${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
+        ${frontierx_script04_dir}/DataDef.cpp -o ${frontierx_script04_schema}
+    DEPENDS ${frontierx_script04_dir}/DataDef.cpp ${frontierx_script04_dir}/DataDef.h
+    DEPFILE ${frontierx_script04_schema}.d VERBATIM)
+set(frontierx_script04_resdir ${CMAKE_CURRENT_BINARY_DIR}/generated/script04)
+set(frontierx_script04_res ${frontierx_script04_resdir}/Script04T.res)
+add_custom_command(OUTPUT ${frontierx_script04_res}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${frontierx_script04_resdir}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${frontierx_script04_schema} ${frontierx_script04_resdir}/DataDef.i
+    COMMAND ${FRONTIERX_LLVM_RC} /C 1252 /FO ${frontierx_script04_res}
+        /I ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/sol_t_rc_include
+        /I ${frontierx_script04_resdir} /I ${frontierx_script04_dir}
+        ${frontierx_script04_dir}/Script04T.rc
+    DEPENDS ${frontierx_script04_schema} ${frontierx_script04_dir}/Script04T.rc
+        ${frontierx_script04_dir}/resource.h Tools/portability/sol_t_rc_include/winres.h VERBATIM)
+set(frontierx_script04_schema_inc ${CMAKE_CURRENT_BINARY_DIR}/generated/NativeScript04Schema.inc)
+set(frontierx_script04_strings_inc ${CMAKE_CURRENT_BINARY_DIR}/generated/NativeScript04Strings.inc)
+add_custom_command(OUTPUT ${frontierx_script04_schema_inc}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_schema.py
+        ${frontierx_script04_schema} ${frontierx_script04_schema_inc} script04SchemaBytes
+    DEPENDS ${frontierx_script04_schema} Tools/portability/embed_app_schema.py VERBATIM)
+add_custom_command(OUTPUT ${frontierx_script04_strings_inc}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_sol_t_strings.py
+        ${frontierx_script04_res} ${frontierx_script04_strings_inc}
+    DEPENDS ${frontierx_script04_res} Tools/portability/embed_sol_t_strings.py VERBATIM)
+add_library(frontierx_script04_resources STATIC
+    ${frontierx_script04_dir}/NativeScript04Resources.cpp
+    ${frontierx_script04_schema_inc} ${frontierx_script04_strings_inc})
+target_include_directories(frontierx_script04_resources PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_compile_features(frontierx_script04_resources PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_script04_resources)
+add_library(frontierx_script04_owner OBJECT ${frontierx_script04_dir}/Script04T.cpp)
+target_include_directories(frontierx_script04_owner PRIVATE Code/App/DInclude Code/App/Src
+    Code/App/Src/Include Code/App/Src/Scripts/Include Code/Libs/Include)
+target_compile_features(frontierx_script04_owner PRIVATE cxx_std_17)
+target_compile_definitions(frontierx_script04_owner PRIVATE FRONTIERX_NATIVE_SCRIPT_NAME="Script04T.dll")
+target_link_libraries(frontierx_app_script_owner PUBLIC frontierx_script04_resources)
+
+# Fifth Terran module: original TM4 next-briefing contract, not TM5 acceptance.
+# original Script05T owner/schema/RT_STRING.
+set(frontierx_script05_dir ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Scripts/Script05T)
+set(frontierx_script05_schema ${CMAKE_CURRENT_BINARY_DIR}/Script05T_DataDef.i)
+add_custom_command(OUTPUT ${frontierx_script05_schema}
+    COMMAND ${CMAKE_CXX_COMPILER} -E -P -D_ADB -MD -MF ${frontierx_script05_schema}.d
+        -I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/DInclude
+        -I${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/Include
+        -I${CMAKE_CURRENT_SOURCE_DIR}/Code/Libs/Include
+        ${frontierx_script05_dir}/DataDef.cpp -o ${frontierx_script05_schema}
+    DEPENDS ${frontierx_script05_dir}/DataDef.cpp ${frontierx_script05_dir}/DataDef.h
+    DEPFILE ${frontierx_script05_schema}.d VERBATIM)
+set(frontierx_script05_resdir ${CMAKE_CURRENT_BINARY_DIR}/generated/script05)
+set(frontierx_script05_res ${frontierx_script05_resdir}/Script05T.res)
+add_custom_command(OUTPUT ${frontierx_script05_res}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${frontierx_script05_resdir}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${frontierx_script05_schema} ${frontierx_script05_resdir}/DataDef.i
+    COMMAND ${FRONTIERX_LLVM_RC} /C 1252 /FO ${frontierx_script05_res}
+        /I ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/sol_t_rc_include
+        /I ${frontierx_script05_resdir} /I ${frontierx_script05_dir}
+        ${frontierx_script05_dir}/Script05T.rc
+    DEPENDS ${frontierx_script05_schema} ${frontierx_script05_dir}/Script05T.rc
+        ${frontierx_script05_dir}/resource.h Tools/portability/sol_t_rc_include/winres.h VERBATIM)
+set(frontierx_script05_schema_inc ${CMAKE_CURRENT_BINARY_DIR}/generated/NativeScript05Schema.inc)
+set(frontierx_script05_strings_inc ${CMAKE_CURRENT_BINARY_DIR}/generated/NativeScript05Strings.inc)
+add_custom_command(OUTPUT ${frontierx_script05_schema_inc}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_app_schema.py
+        ${frontierx_script05_schema} ${frontierx_script05_schema_inc} script05SchemaBytes
+    DEPENDS ${frontierx_script05_schema} Tools/portability/embed_app_schema.py VERBATIM)
+add_custom_command(OUTPUT ${frontierx_script05_strings_inc}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Tools/portability/embed_sol_t_strings.py
+        ${frontierx_script05_res} ${frontierx_script05_strings_inc}
+    DEPENDS ${frontierx_script05_res} Tools/portability/embed_sol_t_strings.py VERBATIM)
+add_library(frontierx_script05_resources STATIC
+    ${frontierx_script05_dir}/NativeScript05Resources.cpp
+    ${frontierx_script05_schema_inc} ${frontierx_script05_strings_inc})
+target_include_directories(frontierx_script05_resources PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_compile_features(frontierx_script05_resources PRIVATE cxx_std_17)
+frontierx_enable_strict_warnings(frontierx_script05_resources)
+add_library(frontierx_script05_owner OBJECT ${frontierx_script05_dir}/Script05T.cpp)
+target_include_directories(frontierx_script05_owner PRIVATE Code/App/DInclude Code/App/Src
+    Code/App/Src/Include Code/App/Src/Scripts/Include Code/Libs/Include)
+target_compile_features(frontierx_script05_owner PRIVATE cxx_std_17)
+target_compile_definitions(frontierx_script05_owner PRIVATE FRONTIERX_NATIVE_SCRIPT_NAME="Script05T.dll")
+target_link_libraries(frontierx_app_script_owner PUBLIC frontierx_script05_resources)
+
 add_library(frontierx_tinyxml STATIC
 	Code/Libs/Src/XML/tinystr.cpp
 	Code/Libs/Src/XML/tinystr.h
@@ -808,7 +899,7 @@ target_link_libraries(frontierx_view_parser_probe PRIVATE
 	frontierx_native_global_data_format frontierx_native_music_data_format
 	frontierx_native_app_schema
 	frontierx_sol_t_schema_resource frontierx_sol_t_string_resource
-	frontierx_script01_resources frontierx_script02_resources frontierx_script03_resources)
+	frontierx_script01_resources frontierx_script02_resources frontierx_script03_resources frontierx_script04_resources frontierx_script05_resources)
 target_include_directories(frontierx_view_parser_probe PRIVATE
 	Code/App/DInclude Code/App/Src Code/App/Src/Scripts/Sol_T)
 target_compile_features(frontierx_view_parser_probe PRIVATE cxx_std_17)
@@ -1489,6 +1580,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 		-fdelayed-template-parsing -fms-extensions)
 endif()
 
+add_library(frontierx_app_blackhole_owner OBJECT
+	Code/App/Src/blackhole.cpp)
+target_include_directories(frontierx_app_blackhole_owner PRIVATE
+	Code/App/Src Code/App/Src/Include Code/App/DInclude
+	Code/Libs/Include Code/Libs/Src/Include)
+target_compile_features(frontierx_app_blackhole_owner PRIVATE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	target_compile_options(frontierx_app_blackhole_owner PRIVATE
+		-fdelayed-template-parsing -fms-extensions)
+endif()
+
 add_library(frontierx_app_waypoint_owner OBJECT
 	Code/App/Src/Waypoint.cpp)
 target_include_directories(frontierx_app_waypoint_owner PRIVATE
@@ -2066,6 +2168,7 @@ add_executable(frontierx_game_material_manager_probe
 	$<TARGET_OBJECTS:frontierx_light_manager_owner>
 	$<TARGET_OBJECTS:frontierx_texture_library_owner>
 	Tools/portability/PolyMeshFixture.cpp
+	Tools/portability/MaterialTextureFixture.cpp
 	Tools/portability/game_material_manager_probe.cpp)
 target_include_directories(frontierx_game_material_manager_probe PRIVATE
 	Code/App/Src Code/App/Src/Include Code/App/DInclude
@@ -2277,7 +2380,7 @@ int main() { return std::strcmp(swscale_license(), "LGPL version 2.1 or later");
 		$<TARGET_OBJECTS:frontierx_native_app_profile_parser>
 		$<TARGET_OBJECTS:frontierx_app_objwatch_owner>
 		$<TARGET_OBJECTS:frontierx_native_system_map_owner>)
-	target_link_libraries(frontierx_native_shell PRIVATE frontierx_script01_resources frontierx_script02_resources frontierx_script03_resources)
+	target_link_libraries(frontierx_native_shell PRIVATE frontierx_script01_resources frontierx_script02_resources frontierx_script03_resources frontierx_script04_resources frontierx_script05_resources)
 	target_compile_features(frontierx_native_shell PRIVATE cxx_std_17)
 	frontierx_enable_strict_warnings(frontierx_native_shell)
 	set_property(TARGET frontierx_native_shell PROPERTY ENABLE_EXPORTS ON)
@@ -2311,6 +2414,7 @@ int main() { return std::strcmp(swscale_license(), "LGPL version 2.1 or later");
 			$<TARGET_OBJECTS:frontierx_app_spaceship_owner>
 			$<TARGET_OBJECTS:frontierx_app_banker_owner>
 			$<TARGET_OBJECTS:frontierx_app_jumpgate_owner>
+			$<TARGET_OBJECTS:frontierx_app_blackhole_owner>
 			$<TARGET_OBJECTS:frontierx_app_waypoint_owner>
 			$<TARGET_OBJECTS:frontierx_app_trigger_owner>
 			$<TARGET_OBJECTS:frontierx_app_gunboat_owner>
@@ -2340,6 +2444,8 @@ int main() { return std::strcmp(swscale_license(), "LGPL version 2.1 or later");
 			$<TARGET_OBJECTS:frontierx_script01_owner>
 			$<TARGET_OBJECTS:frontierx_script02_owner>
 			$<TARGET_OBJECTS:frontierx_script03_owner>
+			$<TARGET_OBJECTS:frontierx_script04_owner>
+			$<TARGET_OBJECTS:frontierx_script05_owner>
 			$<TARGET_OBJECTS:frontierx_native_app_2d_owner>
 			$<TARGET_OBJECTS:frontierx_app_primitive_builder_owner>
 			$<TARGET_OBJECTS:frontierx_app_gen_data_owner>
@@ -2587,6 +2693,10 @@ if(BUILD_TESTING)
 	add_test(NAME portability.view_parser COMMAND frontierx_view_parser_probe)
 	add_test(NAME portability.app_schema COMMAND frontierx_view_parser_probe
 		--app-schema ${CMAKE_CURRENT_SOURCE_DIR}/Code/App/Src/data.i)
+	add_test(NAME portability.script05_schema COMMAND frontierx_view_parser_probe
+		--fifth-terran-script-schema ${frontierx_script05_schema})
+	add_test(NAME portability.script04_schema COMMAND frontierx_view_parser_probe
+		--fourth-terran-script-schema ${frontierx_script04_schema})
 	add_test(NAME portability.script03_schema COMMAND frontierx_view_parser_probe
 		--third-terran-script-schema ${frontierx_script03_schema})
 	add_test(NAME portability.script02_schema COMMAND frontierx_view_parser_probe

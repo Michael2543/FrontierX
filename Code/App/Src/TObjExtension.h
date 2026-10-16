@@ -90,6 +90,18 @@ struct _NO_VTABLE ObjectExtension : public Base, IUpgrade, EXTENSION_SAVELOAD
 	ExtensionInfo extension[MAX_EXTENSIONS];
 
 #if !defined(_WIN32)
+	bool nativeExtensionHasChild(INSTANCE_INDEX childIndex) const
+	{
+		MeshInfo *children[MAX_CHILDS];
+		const U32 count = this->mesh_info->ListChildren(children);
+		for(U32 i = 0; i < count; ++i)
+			if(children[i]->instanceIndex == childIndex)
+				return true;
+		return false;
+	}
+#endif
+
+#if !defined(_WIN32)
     using EXTENDSAVEINFO = typename Base::SAVEINFO;
     using EXTENDINITINFO = typename Base::INITINFO;
     using typename Base::SaveNode;
@@ -183,6 +195,9 @@ ObjectExtension< Base >::~ObjectExtension (void)
 {
 	if(workingExtLevel != -1)
 	{
+#if !defined(_WIN32)
+		const bool ownsRemovedMesh = !!extension[workingExtLevel].removeEffect;
+#endif
 		if(extension[workingExtLevel].addEffect)
 		{
 			delete extension[workingExtLevel].addEffect.Ptr();
@@ -191,9 +206,18 @@ ObjectExtension< Base >::~ObjectExtension (void)
 		{
 			delete extension[workingExtLevel].removeEffect.Ptr();
 		}
-		if(extension[workingExtLevel].removeIndex != -1)
+		if(extension[workingExtLevel].removeIndex != -1
+#if !defined(_WIN32)
+			&& ownsRemovedMesh
+#endif
+		)
 		{
+#if defined(_WIN32)
 			CQASSERT(!extension[workingExtLevel].bDuplicateRemove);// I know this can happen but currently it does not in our game and it is late.
+#else
+			CQASSERT(extension[workingExtLevel].remove_mesh_info &&
+				!nativeExtensionHasChild(extension[workingExtLevel].removeIndex));
+#endif
 			ENGINE->destroy_instance(extension[workingExtLevel].removeIndex);
 			DestroyMeshInfoTree(extension[workingExtLevel].remove_mesh_info);
 		}
@@ -334,6 +358,10 @@ void ObjectExtension< Base >::initExtension (const EXTENDINITINFO & data)
 						memcpy (&(extension[exCount].addJointInfo),temp,sizeof(JointInfo));
 						ENGINE->destroy_joint(instanceIndex,extension[exCount].addIndex);
 //						mesh_info->DetachChild(extension[exCount].addIndex,&extension[exCount].add_mesh_info);
+#if !defined(_WIN32)
+						this->mesh_info->DetachChild(extension[exCount].addIndex,
+							&extension[exCount].add_mesh_info);
+#endif
 					}
 				}
 			}
@@ -395,6 +423,9 @@ void ObjectExtension< Base >::initExtension (const EXTENDINITINFO & data)
 	levelsAdded = data.pData->extensionBits;
 
 //	mc.numChildren = mesh_info->ListChildren(mc.mi);
+#if !defined(_WIN32)
+	this->mc.numChildren = this->mesh_info->ListChildren(this->mc.mi);
+#endif
 	for(U32 i = 0 ; i < MAX_EXTENSIONS; ++i)
 	{
 		if(levelsAdded & (0x01 << i))
@@ -417,6 +448,7 @@ void ObjectExtension< Base >::loadTransform (EXTENDSAVEINFO & load)
 {
 	U8 oldLevel = levelsAdded;
 	*static_cast<EXTENSION_SAVELOAD *>(this) = load.extend_SL;
+#if defined(_WIN32)
 	// use "load" variable here to prevent optimizer error (jy)
 	if(load.extend_SL.workingExtLevel != -1)
 	{
@@ -431,6 +463,25 @@ void ObjectExtension< Base >::loadTransform (EXTENDSAVEINFO & load)
 			SetUpgrade(i);
 		}
 	}
+#else
+	// Restore completed geometry before starting the saved active extension.
+	// StartUpgrade resets percentExt; retain the checkpoint's presentation state.
+	const S32 savedWorkingLevel = workingExtLevel;
+	const SINGLE savedPercent = percentExt;
+	workingExtLevel = -1;
+	for(U32 i = 0 ; i < MAX_EXTENSIONS; ++i)
+	{
+		if((levelsAdded & (0x01 << i)) && (!(oldLevel & (0x01 << i))))
+			SetUpgrade(i);
+	}
+	if(savedWorkingLevel != -1)
+	{
+		StartUpgrade(savedWorkingLevel,30);
+		SetUpgradePercent(savedPercent);
+	}
+	else
+		percentExt = savedPercent;
+#endif
 }
 //---------------------------------------------------------------------------
 //
@@ -488,9 +539,21 @@ void ObjectExtension< Base >::SetUpgrade(U32 level)
 		{	
 			if(extension[extensionLevel].addEffect)
 				delete extension[extensionLevel].addEffect.Ptr();
-			ENGINE->create_joint(instanceIndex,extension[extensionLevel].addIndex,&(extension[extensionLevel].addJointInfo));
-			ENGINE->update_instance(instanceIndex,0,0);
-//			mesh_info->AttachChild(instanceIndex,extension[extensionLevel].add_mesh_info);
+#if !defined(_WIN32)
+			if(nativeExtensionHasChild(extension[extensionLevel].addIndex))
+			{
+				CQASSERT(extension[extensionLevel].bDuplicateAdd);
+			}
+			else
+#endif
+			{
+				ENGINE->create_joint(instanceIndex,extension[extensionLevel].addIndex,&(extension[extensionLevel].addJointInfo));
+				ENGINE->update_instance(instanceIndex,0,0);
+	//			mesh_info->AttachChild(instanceIndex,extension[extensionLevel].add_mesh_info);
+#if !defined(_WIN32)
+				this->mesh_info->AttachChild(instanceIndex,extension[extensionLevel].add_mesh_info);
+#endif
+			}
 
 		}
 		if(extension[extensionLevel].removeIndex != INVALID_INSTANCE_INDEX)
@@ -499,13 +562,30 @@ void ObjectExtension< Base >::SetUpgrade(U32 level)
 				delete extension[extensionLevel].removeEffect.Ptr();
 			else //must still be connected
 			{
-				ENGINE->destroy_joint(instanceIndex,extension[extensionLevel].removeIndex);
-//				mesh_info->DetachChild(extension[extensionLevel].removeIndex,&extension[extensionLevel].remove_mesh_info);
+#if !defined(_WIN32)
+			if(!nativeExtensionHasChild(extension[extensionLevel].removeIndex))
+			{
+				CQASSERT(extension[extensionLevel].bDuplicateRemove);
+			}
+			else
+#endif
+			{
+					ENGINE->destroy_joint(instanceIndex,extension[extensionLevel].removeIndex);
+	//				mesh_info->DetachChild(extension[extensionLevel].removeIndex,&extension[extensionLevel].remove_mesh_info);
+#if !defined(_WIN32)
+					this->mesh_info->DetachChild(extension[extensionLevel].removeIndex,
+						&extension[extensionLevel].remove_mesh_info);
+#endif
+			}
+
 			}
 		}
 
 		//TobjExtent::SetColors
 //		mc.numChildren = mesh_info->ListChildren(mc.mi);
+#if !defined(_WIN32)
+		this->mc.numChildren = this->mesh_info->ListChildren(this->mc.mi);
+#endif
 		if(extension[extensionLevel].isArch)
 		{
 			if(pArchetype)
@@ -576,64 +656,91 @@ void ObjectExtension< Base >::StartUpgrade(U32 level,U32 time)
 	{
 		if(extension[workingExtLevel].addIndex != INVALID_INSTANCE_INDEX)
 		{
-			if (extension[workingExtLevel].addJointInfo.type == JT_FIXED)
+#if !defined(_WIN32)
+			if(nativeExtensionHasChild(extension[workingExtLevel].addIndex))
 			{
-				TRANSFORM trans(extension[workingExtLevel].addJointInfo.rel_orientation,extension[workingExtLevel].addJointInfo.rel_position);
-				trans = transform*trans;
-				ENGINE->set_transform(extension[workingExtLevel].addIndex,trans);
-				ENGINE->update_instance(extension[workingExtLevel].addIndex,0,0);
+				CQASSERT(extension[workingExtLevel].bDuplicateAdd);
 			}
 			else
+#endif
 			{
-				if (extension[workingExtLevel].addJointInfo.type != JT_REVOLUTE)
-					CQTRACE10("upgrading unsupported joint");
+				if (extension[workingExtLevel].addJointInfo.type == JT_FIXED)
+				{
+					TRANSFORM trans(extension[workingExtLevel].addJointInfo.rel_orientation,extension[workingExtLevel].addJointInfo.rel_position);
+					trans = transform*trans;
+					ENGINE->set_transform(extension[workingExtLevel].addIndex,trans);
+					ENGINE->update_instance(extension[workingExtLevel].addIndex,0,0);
+				}
+				else
+				{
+					if (extension[workingExtLevel].addJointInfo.type != JT_REVOLUTE)
+						CQTRACE10("upgrading unsupported joint");
 				
-				JointInfo *j = &extension[workingExtLevel].addJointInfo;
+					JointInfo *j = &extension[workingExtLevel].addJointInfo;
 
-				TRANSFORM trans = transform;
-				const Matrix & pR = transform;
+					TRANSFORM trans = transform;
+					const Matrix & pR = transform;
 
-				Matrix & cR = trans;
-				Vector & cT = trans.translation;
-				const Matrix Rrot ( Quaternion( j->axis, 0.0f) );
-				cR *= Rrot * j->rel_orientation;
-				cT += pR * j->parent_point - cR * j->child_point;
+					Matrix & cR = trans;
+					Vector & cT = trans.translation;
+					const Matrix Rrot ( Quaternion( j->axis, 0.0f) );
+					cR *= Rrot * j->rel_orientation;
+					cT += pR * j->parent_point - cR * j->child_point;
 				
-				ENGINE->set_transform(extension[workingExtLevel].addIndex,trans);
-				ENGINE->update_instance(extension[workingExtLevel].addIndex,0,0);
+					ENGINE->set_transform(extension[workingExtLevel].addIndex,trans);
+					ENGINE->update_instance(extension[workingExtLevel].addIndex,0,0);
+				}
+
+				IBaseObject * obj = ARCHLIST->CreateInstance(buildEffectArch);
+				CQASSERT(obj);
+				obj->QueryInterface(IBuildEffectID,extension[workingExtLevel].addEffect,NONSYSVOLATILEPTR);
+				CQASSERT(extension[workingExtLevel].addEffect);
+
+				extension[workingExtLevel].addEffect->SetupMesh(this,extension[workingExtLevel].add_mesh_info,time);
+				extension[workingExtLevel].addEffect->SetBuildPercent(0);
+				extension[workingExtLevel].addEffect->SetBuildRate(1.0/time);
 			}
 
-			IBaseObject * obj = ARCHLIST->CreateInstance(buildEffectArch);
-			CQASSERT(obj);
-			obj->QueryInterface(IBuildEffectID,extension[workingExtLevel].addEffect,NONSYSVOLATILEPTR);
-			CQASSERT(extension[workingExtLevel].addEffect);
-
-			extension[workingExtLevel].addEffect->SetupMesh(this,extension[workingExtLevel].add_mesh_info,time);
-			extension[workingExtLevel].addEffect->SetBuildPercent(0);
-			extension[workingExtLevel].addEffect->SetBuildRate(1.0/time);
 		}
 		if(extension[workingExtLevel].removeIndex != INVALID_INSTANCE_INDEX)
 		{
-			ENGINE->destroy_joint(instanceIndex,extension[workingExtLevel].removeIndex);
-//			mesh_info->DetachChild(extension[workingExtLevel].removeIndex,&extension[workingExtLevel].remove_mesh_info);
+#if !defined(_WIN32)
+			if(!nativeExtensionHasChild(extension[workingExtLevel].removeIndex))
+			{
+				CQASSERT(extension[workingExtLevel].bDuplicateRemove);
+			}
+			else
+#endif
+			{
+				ENGINE->destroy_joint(instanceIndex,extension[workingExtLevel].removeIndex);
+	//			mesh_info->DetachChild(extension[workingExtLevel].removeIndex,&extension[workingExtLevel].remove_mesh_info);
+#if !defined(_WIN32)
+				this->mesh_info->DetachChild(extension[workingExtLevel].removeIndex,
+					&extension[workingExtLevel].remove_mesh_info);
+#endif
 
-		//	mesh_info->GetChildInfo(extension[workingExtLevel].removeIndex,&extension[workingExtLevel].remove_mesh_info);
+			//	mesh_info->GetChildInfo(extension[workingExtLevel].removeIndex,&extension[workingExtLevel].remove_mesh_info);
 
-		/*	TRANSFORM trans(extension[workingExtLevel].removeJointInfo.rel_orientation,extension[workingExtLevel].removeJointInfo.rel_position);
-			trans = transform*trans;
-			ENGINE->set_transform(extension[workingExtLevel].removeIndex,trans);*/
+			/*	TRANSFORM trans(extension[workingExtLevel].removeJointInfo.rel_orientation,extension[workingExtLevel].removeJointInfo.rel_position);
+				trans = transform*trans;
+				ENGINE->set_transform(extension[workingExtLevel].removeIndex,trans);*/
 
-			IBaseObject * obj = ARCHLIST->CreateInstance(buildEffectArch);
-			CQASSERT(obj);
-			obj->QueryInterface(IBuildEffectID,extension[workingExtLevel].removeEffect,NONSYSVOLATILEPTR);
-			CQASSERT(extension[workingExtLevel].removeEffect);
+				IBaseObject * obj = ARCHLIST->CreateInstance(buildEffectArch);
+				CQASSERT(obj);
+				obj->QueryInterface(IBuildEffectID,extension[workingExtLevel].removeEffect,NONSYSVOLATILEPTR);
+				CQASSERT(extension[workingExtLevel].removeEffect);
 
 
-			extension[workingExtLevel].removeEffect->SetupMesh(this,extension[workingExtLevel].remove_mesh_info,time);
-			extension[workingExtLevel].removeEffect->SetBuildPercent(1.0);
-			extension[workingExtLevel].removeEffect->SetBuildRate(-1.0/time);
+				extension[workingExtLevel].removeEffect->SetupMesh(this,extension[workingExtLevel].remove_mesh_info,time);
+				extension[workingExtLevel].removeEffect->SetBuildPercent(1.0);
+				extension[workingExtLevel].removeEffect->SetBuildRate(-1.0/time);
+			}
+
 		}
 //		mc.numChildren = mesh_info->ListChildren(mc.mi);
+#if !defined(_WIN32)
+		this->mc.numChildren = this->mesh_info->ListChildren(this->mc.mi);
+#endif
 	}	
 }
 //---------------------------------------------------------------------------
@@ -665,18 +772,33 @@ void ObjectExtension< Base >::CancelUpgrade()
 		}
 		if(extension[workingExtLevel].removeIndex != INVALID_INSTANCE_INDEX)
 		{
-			if(extension[workingExtLevel].removeEffect)
+#if !defined(_WIN32)
+			if(!extension[workingExtLevel].removeEffect)
 			{
-				extension[workingExtLevel].removeEffect->Done();
-				delete extension[workingExtLevel].removeEffect.Ptr();
+				CQASSERT(extension[workingExtLevel].bDuplicateRemove && !nativeExtensionHasChild(extension[workingExtLevel].removeIndex));
 			}
-			ENGINE->create_joint(instanceIndex,extension[workingExtLevel].removeIndex,&(extension[workingExtLevel].removeJointInfo));
-			ENGINE->update_instance(instanceIndex,0,0);
-//			mesh_info->AttachChild(instanceIndex,extension[workingExtLevel].remove_mesh_info);
+			else
+#endif
+			{
+				if(extension[workingExtLevel].removeEffect)
+				{
+					extension[workingExtLevel].removeEffect->Done();
+					delete extension[workingExtLevel].removeEffect.Ptr();
+				}
+				ENGINE->create_joint(instanceIndex,extension[workingExtLevel].removeIndex,&(extension[workingExtLevel].removeJointInfo));
+				ENGINE->update_instance(instanceIndex,0,0);
+	//			mesh_info->AttachChild(instanceIndex,extension[workingExtLevel].remove_mesh_info);
+#if !defined(_WIN32)
+				this->mesh_info->AttachChild(instanceIndex,extension[workingExtLevel].remove_mesh_info);
+#endif
+			}
+
 		}
 	}	
 	workingExtLevel = -1;
-
+#if !defined(_WIN32)
+	this->mc.numChildren = this->mesh_info->ListChildren(this->mc.mi);
+#endif
 }
 //---------------------------------------------------------------------------
 //------------------------End TObjExtansion.h----------------------------------

@@ -654,6 +654,17 @@ void QuatStream::blend(void * dst, const void * base, const void * next, double 
 
 //
 
+#if !defined(_WIN32)
+void FullStream::apply_native_root_basis(Vector &position, Quaternion &orientation) const
+{
+    if (nativeRootBasisEnabled && target.type == OBJECT)
+    {
+        position = nativeRootBasis * position;
+        orientation = Quaternion(nativeRootBasis * Matrix(orientation) * nativeRootBasis.get_transpose());
+    }
+}
+#endif
+
 void FullStream::interpolate (const void* baseval, const void* nextval, double ratio) const
 {
 	ASSERT(baseval);
@@ -673,6 +684,9 @@ void FullStream::interpolate (const void* baseval, const void* nextval, double r
 		o = slerp(I, o, weight);
 	}
 
+#if !defined(_WIN32)
+	apply_native_root_basis(p, o);
+#endif
 	if (target.type == OBJECT)
 	{
 		Engine->set_position (target.object, (start_ornt * p) + start_pos);
@@ -707,6 +721,9 @@ void FullStream::interpolate(void * dst, const void* baseval, const void* nextva
 		o = slerp(I, o, weight);
 	}
 
+#if !defined(_WIN32)
+	apply_native_root_basis(p, o);
+#endif
 	if (target.type == OBJECT)
 	{
 		Vector * v = (Vector *) dst;
@@ -746,6 +763,9 @@ void FullStream::interpolate_rel(void * dst, const void* baseval, const void* ne
 		o = slerp(I, o, weight);
 	}
 
+#if !defined(_WIN32)
+	apply_native_root_basis(p, o);
+#endif
 	float * result = (float *) dst;
 	Vector * vr = (Vector *) &result[0];
 	Quaternion * qr = (Quaternion *) &result[3];
@@ -775,6 +795,9 @@ void FullStream::interpolate_and_store(const void* baseval, const void* nextval,
 		o = slerp(I, o, weight);
 	}
 
+#if !defined(_WIN32)
+	apply_native_root_basis(p, o);
+#endif
 	if (target.type == OBJECT)
 	{
 		last_result_v = start_pos + start_ornt * p;
@@ -882,6 +905,9 @@ Vector FullStream::get_translation(float dt) const
 		}
 	}
 
+#if !defined(_WIN32)
+	if (nativeRootBasisEnabled && target.type == OBJECT) total_xlat = nativeRootBasis * total_xlat;
+#endif
 	Vector result = start_ornt * total_xlat;
 	return result;
 }
@@ -907,6 +933,9 @@ void FullStream::start_blend(float duration)
 	{
 		Vector p (*(Vector*)baseval + ((*(Vector*)nextval - *(Vector*)baseval) * ratio));
 		p *= weight * translation_scale;
+#if !defined(_WIN32)
+		if (nativeRootBasisEnabled && target.type == OBJECT) p = nativeRootBasis * p;
+#endif
 		p0 = start_pos + start_ornt * p;
 	}
 
@@ -916,6 +945,9 @@ void FullStream::start_blend(float duration)
 	{
 		Vector p (*(Vector*)baseval + ((*(Vector*)nextval - *(Vector*)baseval) * ratio));
 		p *= weight * translation_scale;
+#if !defined(_WIN32)
+		if (nativeRootBasisEnabled && target.type == OBJECT) p = nativeRootBasis * p;
+#endif
 		p1 = start_pos + start_ornt * p;
 	}
 
@@ -1089,6 +1121,9 @@ void FullStream::change_position(const Vector & new_pos)
 
 		Vector p (*(Vector*)baseval + ((*(Vector*)nextval - *(Vector*)baseval) * ratio));
 		offset = p * weight * translation_scale;
+#if !defined(_WIN32)
+		if (nativeRootBasisEnabled) offset = nativeRootBasis * offset;
+#endif
 		//pos = start_pos + start_ornt * p;
 
 		//Vector pos = Engine->get_position(target.object);

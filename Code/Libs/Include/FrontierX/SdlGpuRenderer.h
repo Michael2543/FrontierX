@@ -134,6 +134,8 @@ public:
         std::uint64_t submissionCount = 0, samplerChanges = 0;
         double acquisition = 0, drawing = 0, queueSubmit = 0;
         std::uint64_t reusedUploads = 0;
+        double textureUploads = 0;
+        std::uint64_t textureUploadCount = 0;
     };
     void EnableTimings(bool enabled);
     Timings GetTimings() const;
@@ -144,6 +146,7 @@ public:
     std::uint32_t DepthHeight() const;
     std::uint32_t DepthRecreations() const;
     std::uint32_t PipelineRebuilds() const;
+    std::uint32_t SamplerCreations() const;
     std::uint32_t VertexCount() const;
     std::uint32_t IndexCount() const;
     RenderStateSnapshot CurrentRenderState() const;
