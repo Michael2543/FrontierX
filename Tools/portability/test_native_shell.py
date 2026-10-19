@@ -49,6 +49,24 @@ def describe_external_face(filename):
 
 
 class NativeShellTests(unittest.TestCase):
+    def test_jointed_turret_model_frame_source_contract(self):
+        # TM5 Battleship barrels pointed down world Z. The numerical material
+        # check covers the joint/muzzle basis; pin its three real consumers.
+        source = Path(__file__).resolve().parents[2] / 'Code/App/Src/Turret.cpp'
+        text = re.sub(r'//[^\n]*|/\*.*?\*/', '', source.read_text(), flags=re.DOTALL)
+        node = text.split('TRANSFORM Turret::getModelNodeTransform(', 1)[1].split(
+            'void Turret::getSighting', 1)[0]
+        self.assertIn('NativeShipHardpointTransform', node)
+        self.assertIn('IsNativePersistentGunboat(owner.Ptr())', node)
+        self.assertNotIn('turretIndex == -1', node)
+        sight = text.split('void Turret::getSighting', 1)[1].split('void Turret::swivelToTarget', 1)[0]
+        swivel = text.split('void Turret::swivelToTarget (', 1)[1].split('void Turret::swivelToTargetRT', 1)[0]
+        leading = text.split('void Turret::recalculateOffsetVectorForDistance', 1)[1].split(
+            'void Turret::recalculateOffsetVectorForAngle', 1)[0]
+        self.assertIn('getModelNodeTransform(barrelIndex)', sight)
+        self.assertIn('getModelNodeTransform(turretIndex)', swivel)
+        self.assertIn('getModelNodeTransform(barrelIndex)', leading)
+
     def test_blackhole_required_resources_fail_closed_source_contract(self):
         # Regression: TM4's real ring import returned INVALID_ARCHETYPE_INDEX,
         # yet the factory published a BlackHole and instance init asserted later.
@@ -105,6 +123,48 @@ class NativeShellTests(unittest.TestCase):
         self.assertNotIn('SetMissionCompleted', replay)
         self.assertNotIn('SetMovieSeen', replay)
 
+    def test_solarian_effects_reach_live_mesh_and_original_build_owners(self):
+        # Runtime evidence is separate: these guard the original caller wires
+        # behind the real MassDisruptor core and missing construction beams.
+        source = Path(__file__).resolve().parents[2] / 'Code/App/Src'
+        mass = (source / 'MassDisruptor.cpp').read_text().split(
+            'void MassDisruptor::Render (void)', 1)[1].split('void MassDisruptor::InitWeapon', 1)[0]
+        self.assertIn('VOLPTR(IExtent) extent = target.Ptr()', mass)
+        self.assertIn('MeshChain &chain = extent->GetMeshChain()', mass)
+        self.assertIn('TreeRenderNativePuffy(chain.mi, chain.numChildren, scale, 0.4,', mass)
+        build = (source / 'TObjBuild.h').read_text()
+        setup = build.split('void setupNativeConstructionBuild', 1)[1].split('SINGLE emitterPause', 1)[0]
+        self.assertIn('this->race != M_TERRAN && this->race != M_SOLARIAN', setup)
+        self.assertIn('buildEffectObj->SetupMesh(', setup)
+        solar = (source / 'SolarianBuild.cpp').read_text()
+        self.assertIn('ResetNativeLegacyBuildCorners(fgr, fg_dork->nativeSource)', solar)
+        self.assertIn('UpdateNativeLegacyBuildFace(fgr, fg_dork->nativeSource, face, f)', solar)
+        probe = (source / 'DumbReconProbe.cpp').read_text().split('void DumbReconProbe::Render', 1)[1].split('void DumbReconProbe::InitRecon', 1)[0]
+        self.assertIn('NativeProbeVisualTransform(transform, targetPos)', probe)
+        self.assertIn('TreeRender(mc.mi, mc.numChildren, transform.get_inverse() * visual)', probe)
+
+    def test_later_campaign_movies_use_original_result_and_replay_owners(self):
+        # Missing original TM9/TM11 movie calls silently marked unseen media as
+        # seen. Protect the caller; actual decoder/EOF is checked separately.
+        source = Path(__file__).resolve().parents[2] / 'Code/App/Src'
+        def uncomment(filename):
+            return re.sub(r'//[^\n]*|/\*.*?\*/', '',
+                          (source / filename).read_text(), flags=re.DOTALL)
+        outcome = uncomment('Menu_EndGame.cpp').split(
+            'void MenuEndGame::checkForMovie (void)', 1)[1].split(
+            'void MenuEndGame::setStateInfo (void)', 1)[0]
+        for mission_id, movie, next_case in ((8, 2, 10), (10, 3, 15)):
+            branch = outcome.split(f'case {mission_id}:', 1)[1].split(f'case {next_case}:', 1)[0]
+            native = branch.split('#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)', 1)[1].split('#endif', 1)[0]
+            self.assertRegex(native, r'if\s*\(!CQFLAGS\.bSkipMovies\)\s*\{')
+            self.assertIn(f'MovieScreen(this, "cq_{movie}.mpg");', native)
+            self.assertLess(native.index('MovieScreen('), native.index(f'SetMovieSeen({movie})'))
+            replay = uncomment('Menu_mission.cpp').split(f'case MOVIE_BUTTON_{movie}:', 1)[1].split('break;', 1)[0]
+            self.assertIn('#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)', replay)
+            self.assertIn(f'MovieScreen(this, "cq_{movie}.mpg");', replay)
+            self.assertNotIn('SetMovieSeen', replay)
+            self.assertNotIn('SetMissionCompleted', replay)
+
     def test_tm4_script_startup_briefing_resources_and_map_source_binding(self):
         # Source regression: TM4's compiled owner initially passed schema tests
         # but its original briefing was rejected by a separate manual allowlist.
@@ -118,7 +178,7 @@ class NativeShellTests(unittest.TestCase):
         load = script.split('void MScript::Load (IFileSystem * inFile)', 1)[1].split(
             'void MScript::LoadScript (void)', 1)[0]
         briefing = script.split('void MScript::LoadScript (void)', 1)[1].split('#else', 1)[0]
-        for number in (3, 4, 5):
+        for number in (3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
             token = f'{number:02}'
             self.assertIn(f'head = &nativeTerran{token}Programs', script)
             self.assertIn(f'FrontierXCheckScript{token}Reset()', script)
@@ -131,11 +191,11 @@ class NativeShellTests(unittest.TestCase):
                              rf'counted = FrontierX::GetNativeScript{token}CountedString\(stringID\)')
         # The actual TM5 retail header uses this uppercase module spelling.
         self.assertIn('strcmp(scriptName, "SCRIPT05.dll") == 0', load)
-        self.assertIn('terran04 ? nativeTerran04Programs : terran05 ? nativeTerran05Programs : nullptr', load)
+        self.assertIn('terran04 ? nativeTerran04Programs : terran05 ? nativeTerran05Programs : terran07 ? nativeTerran07Programs : terran08 ? nativeTerran08Programs : terran09 ? nativeTerran09Programs : terran10 ? nativeTerran10Programs : terran11 ? nativeTerran11Programs : terran12 ? nativeTerran12Programs : terran06 ? nativeTerran06Programs : nullptr', load)
         self.assertIn('"TM4_MissionStart"', load)
         self.assertIn('runStartProgram(true)', briefing)
         shell = read('Code/Launcher/NativeShell.cpp')
-        for ordinal, number in (('fourth', 4), ('fifth', 5)):
+        for ordinal, number in (('fourth', 4), ('fifth', 5), ('sixth', 6), ('seventh', 7), ('eighth', 8), ('ninth', 9)):
             selected = shell.split(f'const bool {ordinal}TerranMission', 1)[1].split(
                 'Native App selected source script:', 1)[0]
             for alias in (f'Script{number:02}T.dll', f'script{number:02}.dll', f'Script{number:02}.dll'):
@@ -145,7 +205,7 @@ class NativeShellTests(unittest.TestCase):
                 self.assertIn('std::strcmp(selectedScript, "SCRIPT05.dll") == 0', selected)
         mission = read('Code/App/Src/Mission.cpp').split(
             'static bool NativeLoadMissionSystemMap', 1)[1].split('#endif', 1)[0]
-        for alias in ('script03t.dll', 'script03.dll', 'script04t.dll', 'script04.dll', 'script05t.dll', 'script05.dll'):
+        for alias in ('script03t.dll', 'script03.dll', 'script04t.dll', 'script04.dll', 'script05t.dll', 'script05.dll', 'script06t.dll', 'script06.dll', 'script07t.dll', 'script07.dll', 'script08t.dll', 'script08.dll', 'script09t.dll', 'script09.dll', 'script10t.dll', 'script10.dll', 'script11t.dll', 'script11.dll', 'script12t.dll', 'script12.dll'):
             self.assertIn(f'foldedScript == "{alias}"', mission)
         self.assertIn('regularTerran && foldedExtension == ".mission"', mission)
 
@@ -157,7 +217,7 @@ class NativeShellTests(unittest.TestCase):
         effects = source.split('if (options.missionStart)', 1)[1].split(
             'InitializeNativeEffectsOptions();', 1)[0]
         materials = source.split('NATIVE_USE_ORIGINAL_LEGACY_MATERIALS =', 1)[1].split(';', 1)[0]
-        for number in range(1, 6):
+        for number in range(1, 13):
             name = f'"T_Mission{number}.dmission"'
             self.assertIn(name, effects)
             self.assertIn(name, materials)
@@ -206,6 +266,7 @@ class NativeShellTests(unittest.TestCase):
             sound.setsampwidth(2)
             sound.setframerate(22050)
             sound.writeframes(b'\0\0' * 220)
+        shutil.copyfile(self.data / 'SFX/interface1.wav', self.data / 'SFX/specialdenied.wav')
         # Original LFParser framing: header, numeric value, previous-frame marker.
         (self.data / 'SFX/interface1.txt').write_bytes(
             b'Frame, phoneme\r\n0, 3\r\n1, <\r\n2, 12\r\n')
@@ -405,6 +466,9 @@ class NativeShellTests(unittest.TestCase):
                           result.stdout)
             self.assertIn('Native unit communication unavailable: frontierx-missing-communication.wav; failed opens 1; playback ID 0 (failure)',
                           result.stderr)
+            self.assertIn('Native mission audio unavailable: frontierx-missing-mission-audio.wav; failed opens 1; playback ID 0 (failure)',
+                          result.stderr)
+            self.assertIn('Native mission beacon resolved from SFX: specialDenied.wav', result.stderr)
             if GPU_ENABLED:
                 self.assertIn('Native operation storage alignment/copy/load checked', result.stdout)
                 self.assertIn('Native objective storage compaction/state checked', result.stdout)
@@ -412,6 +476,7 @@ class NativeShellTests(unittest.TestCase):
             self.assertIn('mission not started', result.stdout)
             (self.data / 'SFX/interface1.wav').unlink()
             (self.data / 'SFX/interface1.txt').unlink()
+            (self.data / 'SFX/specialdenied.wav').unlink()
             (self.data / 'SFX').rmdir()
             result = self.run_shell('--data-root', self.data,
                                     '--system-profile', profile,

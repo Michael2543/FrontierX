@@ -16,6 +16,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeShipVisualTransform.h"
 #include "Include/CQTrace.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
@@ -139,8 +140,14 @@ struct FaceGroupDork
 		delete [] vs;
 	}
 
-	void Init(IRenderMaterial *src_fgr)
+	#if !defined(_WIN32)
+    const IRenderMaterial *nativeSource = nullptr;
+#endif
+    void Init(IRenderMaterial *src_fgr)
 	{
+#if !defined(_WIN32)
+        nativeSource = src_fgr;
+#endif
 		//store off handy pointers to the original mesh
 		src_fgr->GetBuffers(&src_verts_rl,&index_list_rl,&src_norms_rl,&faces_rl,&vert_cnt_rl,&face_cnt_rl);
 		vert_type = src_fgr->GetVertexType();
@@ -240,6 +247,12 @@ struct MeshDork
 					fg_dork = last_fg = new_fg;
 			}
 
+#if !defined(_WIN32)
+            // Transparent groups have no private construction buffers. Keep
+            // them absent during reveal; the intact owner restores them at End.
+            if (src_mc->fgi[src_fgr->fg_idx].texture_flags & TF_F_HAS_ALPHA)
+                fgr->vert_cnt = fgr->new_face_cnt = 0;
+#endif
 			fgr->face_offset *= 3;  //change me so I don't overlap
 
 			fgr = imr->GetNextFaceGroup(fgr);
@@ -330,6 +343,10 @@ struct _NO_VTABLE SolarianBuild : public IBuildEffect, IHPEnumerator
 	Vector beam_source_pos[3];
 	Vector beam_pts[2];
 	int num_beams;
+#if !defined(_WIN32)
+    bool nativeShipHull = false;
+    bool nativeFabHull = false;
+#endif
 	SINGLE min_x,max_x;
 	SINGLE max_z,min_z;
 	SINGLE sweep_x[3];
@@ -431,6 +448,10 @@ SolarianBuild::~SolarianBuild (void)
 void SolarianBuild::SetupMesh (IBaseObject *fab,IBaseObject *obj,struct IMeshInfoTree *mesh_info,INSTANCE_INDEX _instanceIndex,SINGLE _totalTime)
 {
 	instanceIndex = _instanceIndex;
+#if !defined(_WIN32)
+    nativeShipHull = obj && obj->objClass == OC_SPACESHIP;
+    nativeFabHull = fab && fab->objClass == OC_SPACESHIP;
+#endif
 	CQASSERT(instanceIndex != -1);
 
 	if (obj)
@@ -449,6 +470,9 @@ void SolarianBuild::SetupMesh (IBaseObject *fab,IBaseObject *obj,struct IMeshInf
 	{
 		fab->QueryInterface(IFabricatorID,fabObj, NONSYSVOLATILEPTR);
 		fabTrans = fab->GetTransform();
+#if !defined(_WIN32)
+        fabTrans = TRANSFORM(NativeShipVisualTransform(fabTrans, nativeFabHull));
+#endif
 		EnumerateHardpoints(fab->GetObjectIndex(),"hp_beam*",this);
 	}
 	else
@@ -473,6 +497,9 @@ void SolarianBuild::SetupMesh (IBaseObject *fab,IBaseObject *obj,struct IMeshInf
 
 	
 	TRANSFORM bo_trans = ENGINE->get_transform(instanceIndex);
+#if !defined(_WIN32)
+    bo_trans = TRANSFORM(NativeShipVisualTransform(bo_trans, nativeShipHull));
+#endif
 	TRANSFORM inv = bo_trans.get_inverse();
 
 	max_z = -999999;
@@ -503,6 +530,11 @@ void SolarianBuild::SetupMesh (IBaseObject *fab,IBaseObject *obj,struct IMeshInf
 		if (src_mc[k]->bHasMesh)
 		{
 			TRANSFORM trans = inv*ENGINE->get_transform(src_mc[k]->instanceIndex);
+#if !defined(_WIN32)
+            trans = TRANSFORM(inv * NativeShipHardpointTransform(
+                ENGINE->get_transform(instanceIndex), ENGINE->get_transform(src_mc[k]->instanceIndex),
+                Transform(), nativeShipHull));
+#endif
 			if (bBuildFromBack)
 			{
 				//sweep the other way
@@ -706,6 +738,9 @@ void SolarianBuild::renderBeams()
 	int id_cnt=0;
 	
 	Transform oTrans = ENGINE->get_transform(instanceIndex);//buildObj->GetTransform();
+#if !defined(_WIN32)
+    oTrans = NativeShipVisualTransform(oTrans, nativeShipHull);
+#endif
 	TRANSFORM fabTrans;
 	if (fabObj)
 	{
@@ -713,6 +748,9 @@ void SolarianBuild::renderBeams()
 			return;
 
 		fabTrans = fabObj.Ptr()->GetTransform();
+#if !defined(_WIN32)
+        fabTrans = TRANSFORM(NativeShipVisualTransform(fabTrans, nativeFabHull));
+#endif
 	}
 	else
 		fabTrans = oTrans;
@@ -999,6 +1037,12 @@ void SolarianBuild::splitEdge(FaceGroupDork *fg_dork,U16 ref1,U16 ref2,EdgeSplit
 			new_vert->pos = vert1->pos + (vert2->pos-vert1->pos)*ratio;
 			new_vert->u = vert1->u + (vert2->u-vert1->u)*ratio;
 			new_vert->v = vert1->v + (vert2->v-vert1->v)*ratio;
+#if !defined(_WIN32)
+            fg_dork->fgr->src_norms[new_es->out_ref] =
+                (1.0F-ratio)*fg_dork->fgr->src_norms[ref1] + ratio*fg_dork->fgr->src_norms[ref2];
+            if (fg_dork->fgr->src_norms[new_es->out_ref].magnitude_squared() > 0)
+                fg_dork->fgr->src_norms[new_es->out_ref].normalize();
+#endif
 
 
 		}
@@ -1080,6 +1124,12 @@ void SolarianBuild::splitEdge2(FaceGroupDork *fg_dork,U16 ref1,U16 ref2,EdgeSpli
 			new_vert->pos = vert1->pos + (vert2->pos-vert1->pos)*ratio;
 			new_vert->u = vert1->u + (vert2->u-vert1->u)*ratio;
 			new_vert->v = vert1->v + (vert2->v-vert1->v)*ratio;
+#if !defined(_WIN32)
+            fg_dork->fgr->src_norms[new_es->out_ref] =
+                (1.0F-ratio)*fg_dork->fgr->src_norms[ref1] + ratio*fg_dork->fgr->src_norms[ref2];
+            if (fg_dork->fgr->src_norms[new_es->out_ref].magnitude_squared() > 0)
+                fg_dork->fgr->src_norms[new_es->out_ref].normalize();
+#endif
 			new_vert->u2 = vert1->u2 + (vert2->u2-vert1->u2)*ratio;
 			new_vert->v2 = vert1->v2 + (vert2->v2-vert1->v2)*ratio;
 		}
@@ -1141,6 +1191,9 @@ void SolarianBuild::renderRevealed()
 				BATCH->set_render_state(D3DRS_CULLMODE,D3DCULL_NONE);
 				
 				trans = ENGINE->get_transform(mc[0].instanceIndex);
+#if !defined(_WIN32)
+                trans = NativeShipVisualTransform(trans, nativeShipHull);
+#endif
 				if (bBuildFromBack)
 				{
 					//sweep the other way
@@ -1212,6 +1265,9 @@ void SolarianBuild::renderRevealed()
 					
 					fgr->vert_cnt = fg_dork->vert_cnt_rl;
 					fgr->new_face_cnt = fg_dork->face_cnt_rl;
+#if !defined(_WIN32)
+                    ResetNativeLegacyBuildCorners(fgr, fg_dork->nativeSource);
+#endif
 					
 					verts = fgr->src_verts_buffer;
 					
@@ -1421,6 +1477,12 @@ void SolarianBuild::renderRevealed()
 								
 							}
 							
+#if !defined(_WIN32)
+                            if (final_pts)
+                                for (int face = fgr->new_face_cnt - (final_pts == 4 ? 2 : 1);
+                                     face < fgr->new_face_cnt; ++face)
+                                    UpdateNativeLegacyBuildFace(fgr, fg_dork->nativeSource, face, f);
+#endif
 #define TEX 0.002
 							//outside polys
 							for (i=old_vert_cnt2;i<vert_cnt2;i++)
@@ -1532,7 +1594,14 @@ void SolarianBuild::renderRevealed()
 			
 			BATCH->set_state(RPR_STATE_ID,0);
 
-			TreeRender(&mc[c],Transform());
+			#if defined(_WIN32)
+            TreeRender(&mc[c],Transform());
+#else
+            const Transform &node = ENGINE->get_transform(mc[c].instanceIndex);
+            const Transform visual = NativeShipHardpointTransform(
+                ENGINE->get_transform(instanceIndex), node, Transform(), nativeShipHull);
+            TreeRender(&mc[c], node.get_inverse() * visual);
+#endif
 
 			/*fg_dork = md[c].fg_dork;
 			while (fg_dork)

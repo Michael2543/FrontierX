@@ -10,9 +10,23 @@
 */
 //--------------------------------------------------------------------------//
 
- 
+
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppTextResources.h"
+#include "resource.h"
+#include "NetPacket.h"
+#include <cstdint>
+#include <cwchar>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <stdexcept>
+#include <string>
+#endif
 
 #include "Startup.h"
 #include "BaseHotRect.h"
@@ -25,6 +39,7 @@
 #include "IHotButton.h"
 #include "IStatic.h"
 #include "IAttack.h"
+#include <DSupplyShipSave.h>
 #include "ISupplier.h"
 #include "IHotStatic.h"
 #include "IAdmiral.h"
@@ -32,7 +47,7 @@
 #include "ITabControl.h"
 #include "IMissionActor.h"
 #include "IQueueControl.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "GenData.h"
 #include "CommPacket.h"
 
@@ -105,6 +120,9 @@ struct DACOM_NO_VTABLE CMenu_Fleet : public IEventCallback, IHotControlEvent, IF
 	U32 nSpecialAssigned[NUM_SPECIAL_ORDERS];//map the order buttons to the special attacks.
 	COMPTR<IMultiHotButton> specialOrders[NUM_SPECIAL_ORDERS];
 	COMPTR<IHotButton> specialOrdersHB[NUM_SPECIAL_ORDERS];
+#if !defined(_WIN32)
+	COMPTR<IHotButton> retailSpecialButtons[NUM_SPECIAL_ATTACKS];
+#endif
 
 	// sil tab
 	COMPTR<IShipSilButton> shipStatus[MAX_NUM_SEL_SHIPS];
@@ -212,7 +230,12 @@ GENRESULT CMenu_Fleet::Notify (U32 message, void *param)
 		break;
 
 	case CQE_UPDATE:
+
+#if defined(_WIN32)
 		onUpdate(U32(param) >> 10);
+#else
+		onUpdate(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 		break;
 	case CQE_BUILDQUEUE_REMOVE:
 		{
@@ -224,7 +247,12 @@ GENRESULT CMenu_Fleet::Notify (U32 message, void *param)
 				{
 					USR_PACKET<USRBUILD> packet;
 					packet.cmd = USRBUILD::REMOVE;
-					packet.dwArchetypeID = ((U32)param);
+
+#if defined(_WIN32)
+		packet.dwArchetypeID = ((U32)param);
+#else
+		packet.dwArchetypeID = static_cast<U32>(reinterpret_cast<std::uintptr_t>(param));
+#endif
 					packet.objectID[0] = obj->GetPartID();
 					packet.init(1, false);
 					NETPACKET->Send(HOSTID,0,&packet);
@@ -398,6 +426,16 @@ void CMenu_Fleet::findSpecialsEnabled (void)
 	// do we have dockable units *defined* in our fleet
 	hotTransfer->EnableButton(numDockableUnits > 0);
 
+#if !defined(_WIN32)
+	// Retail's authored faction tabs have fixed hotbuttons, unlike the later
+	// CQ2 dynamic command slots. Their own original hotkeys route the orders.
+	for (U32 special = TERRAN_BEGIN; special < NUM_SPECIAL_ATTACKS; ++special)
+		retailSpecialButtons[special]->EnableButton(nSpecialEnabled[special] > 0);
+	U32 assigned = 0;
+	for (U32 special = 0; special < NUM_SPECIAL_ATTACKS && assigned < NUM_SPECIAL_ORDERS; ++special)
+		if (nSpecialEnabled[special]) nSpecialAssigned[assigned++] = special;
+	while (assigned < NUM_SPECIAL_ORDERS) nSpecialAssigned[assigned++] = U32(-1);
+#else
 	U32 lastOrderIndex = 0;
 	for(U32 count = 0; count < NUM_SPECIAL_ATTACKS && lastOrderIndex<NUM_SPECIAL_ORDERS; ++count)
 	{
@@ -420,6 +458,7 @@ void CMenu_Fleet::findSpecialsEnabled (void)
 		nSpecialAssigned[lastOrderIndex] = -1;
 		specialOrdersHB[lastOrderIndex]->SetVisible(false);
 	}
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -541,7 +580,11 @@ void CMenu_Fleet::onUpdate (U32 dt)
 			}
 			else
 				ptr = name;
+			#if defined(_WIN32)
 			swprintf(buffer, _localLoadStringW(IDS_IND_SHIPCLASS), ptr);
+#else
+			if (!FrontierX::FormatNativeUnitSubtitle(IDS_IND_SHIPCLASS, ptr, buffer, sizeof(buffer)/sizeof(buffer[0]))) std::abort();
+#endif
 			shipclass->SetText(buffer);
 			
 			IBaseObject * obj = OBJLIST->GetSelectedList();
@@ -589,18 +632,30 @@ void CMenu_Fleet::onUpdate (U32 dt)
 			namearea->SetText(namePtr);
 			o_namearea->SetText(namePtr);
 
+			#if defined(_WIN32)
 			swprintf(buffer, _localLoadStringW(IDS_IND_HULL), (actor) ? actor->GetDisplayHullPoints() : admiralPart->hullPoints, admiralPart->hullPointsMax);
+#else
+			std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_HULL), (actor) ? actor->GetDisplayHullPoints() : admiralPart->hullPoints, admiralPart->hullPointsMax);
+#endif
 			hull->SetText(buffer);
 			IBaseObject * dockShip = admiralPtr->GetDockship();
 			if(dockShip)
 			{
 				MPart dockPart(dockShip);
 				VOLPTR(IMissionActor) actor = dockShip;
-				swprintf(buffer, _localLoadStringW(IDS_IND_HULL), (actor) ? actor->GetDisplayHullPoints() : dockPart->hullPoints, dockPart->hullPointsMax);
+				#if defined(_WIN32)
+			swprintf(buffer, _localLoadStringW(IDS_IND_HULL), (actor) ? actor->GetDisplayHullPoints() : dockPart->hullPoints, dockPart->hullPointsMax);
+#else
+			std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_HULL), (actor) ? actor->GetDisplayHullPoints() : dockPart->hullPoints, dockPart->hullPointsMax);
+#endif
 			}
 			o_hull->SetText(buffer);
 
+			#if defined(_WIN32)
 			swprintf(buffer, _localLoadStringW(IDS_IND_KILLS),(U32)(admiralPart->numKills));
+#else
+			std::swprintf(buffer, sizeof(buffer)/sizeof(buffer[0]), _localLoadStringW(IDS_IND_KILLS),(U32)(admiralPart->numKills));
+#endif
 			o_kills->SetText(buffer);
 			kills->SetText(buffer);
 
@@ -844,6 +899,22 @@ void CMenu_Fleet::setPanelOwnership (bool bOwn)
 				}
 
 				U32 index;
+#if !defined(_WIN32)
+				const char *factions[] = {"terran", "mantis", "solarian"};
+				const U32 starts[] = {TERRAN_BEGIN, MANTIS_BEGIN, SOLARIAN_BEGIN};
+				const U32 ends[] = {TERRAN_END, MANTIS_END, SOLARIAN_END};
+				for (U32 faction = 0; faction < 3; ++faction)
+					for (U32 special = starts[faction]; special < ends[faction]; ++special)
+					{
+						char name[32];
+						std::snprintf(name, sizeof(name), "%s%u", factions[faction], special - starts[faction]);
+						pComp.free();
+						if (menu->GetControl(name, pComp) != GR_OK || !pComp ||
+							pComp->QueryInterface("IHotButton", retailSpecialButtons[special]) != GR_OK ||
+							!retailSpecialButtons[special])
+							throw std::runtime_error(std::string("Required retail fleet control unavailable: ") + name);
+					}
+#else
 				for(index = 0; index < NUM_SPECIAL_ORDERS; ++index)
 				{
 					char buffer[256];
@@ -854,6 +925,7 @@ void CMenu_Fleet::setPanelOwnership (bool bOwn)
 						pComp->QueryInterface("IHotButton", specialOrdersHB[index]);					
 					}
 				}
+#endif
 
 				//sil tab
 				for(index = 0; index < MAX_NUM_SEL_SHIPS; ++index)
@@ -945,6 +1017,9 @@ void CMenu_Fleet::setPanelOwnership (bool bOwn)
 			specialOrders[index].free();
 			specialOrdersHB[index].free();
 		}
+#if !defined(_WIN32)
+		for (auto &button : retailSpecialButtons) button.free();
+#endif
 
 		//sil tab
 		for (index = 0; index < MAX_NUM_SEL_SHIPS; ++index)
@@ -976,7 +1051,11 @@ struct _cmenu_fleet : GlobalComponent
 	virtual void Startup (void)
 	{
 		FLEET_MENU = menu = new DAComponent<CMenu_Fleet>;
-		AddToGlobalCleanupList(&menu);
+		#if defined(_WIN32)
+        AddToGlobalCleanupList(&menu);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&menu));
+#endif
 	}
 
 	virtual void Initialize (void)

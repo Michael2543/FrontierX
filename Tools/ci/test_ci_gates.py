@@ -134,7 +134,7 @@ class GateTests(unittest.TestCase):
                 if scope == 'sanitizers':
                     self.assertIn('-R', calls[2])
                     pattern = ctest[ctest.index('-R') + 1]
-                    for owner in ('script02_schema', 'script03_schema', 'script04_schema', 'script05_schema', 'net_buffer'):
+                    for owner in ('script02_schema', 'script03_schema', 'script04_schema', 'script05_schema', 'script06_schema', 'script07_schema', 'script08_schema', 'script09_schema', 'script10_schema', 'script11_schema', 'script12_schema', 'net_buffer'):
                         self.assertIsNotNone(re.fullmatch(pattern, 'portability.' + owner))
                 if scope.startswith('mission'):
                     self.assertIn('--technical-smoke', calls[-1])
@@ -249,6 +249,41 @@ class GateTests(unittest.TestCase):
         self.assertEqual(playtest.MISSIONS['terran1'], 'T_Mission1.dmission')
         with self.assertRaisesRegex(ValueError, 'Terran selector'):
             playtest.campaign_checklist('training', 4)
+
+    def test_tm5_handoff_pins_target_without_claiming_transition_is_acceptance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            build = root / 'build'
+            build.mkdir()
+            (build / 'frontierx_native_shell').write_bytes(b'synthetic binary')
+            (build / 'CMakeCache.txt').write_text('synthetic configuration')
+            candidate = root / 'candidate.json'
+            with patch('playtest.subprocess.check_output', side_effect=['a' * 40, b'']):
+                playtest.write_handoff(root, build, candidate, {}, mission='terran1', campaign_mission=5)
+            record = json.loads(candidate.read_text())
+            self.assertEqual(record['campaign_mission'], 5)
+            self.assertEqual(record['checklist'], playtest.P2_CHECKLIST + playtest.P2_TM5_CHECKLIST)
+            self.assertIn('--campaign-mission 5', record['launch_command'])
+            self.assertEqual(playtest.MISSIONS['terran1'], 'T_Mission1.dmission')
+            self.assertNotIn(playtest.P2_TM4_CHECKLIST[0], record['checklist'])
+
+    def test_tm7_tm8_handoffs_keep_original_entry_and_mission_specific_checks(self):
+        for number, expected in ((7, playtest.P2_TM7_CHECKLIST), (8, playtest.P2_TM8_CHECKLIST)):
+            with self.subTest(mission=number), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                build = root / 'build'
+                build.mkdir()
+                (build / 'frontierx_native_shell').write_bytes(b'synthetic binary')
+                (build / 'CMakeCache.txt').write_text('synthetic configuration')
+                candidate = root / 'candidate.json'
+                with patch('playtest.subprocess.check_output', side_effect=['a' * 40, b'']):
+                    playtest.write_handoff(root, build, candidate, {}, mission='terran1', campaign_mission=number)
+                record = json.loads(candidate.read_text())
+                self.assertEqual(record['campaign_mission'], number)
+                self.assertEqual(record['checklist'], playtest.P2_CHECKLIST + expected)
+                self.assertIn(f'--campaign-mission {number}', record['launch_command'])
+                self.assertNotIn('--mission-briefing', record['launch_command'])
+                self.assertEqual(playtest.MISSIONS['terran1'], 'T_Mission1.dmission')
 
     def test_playtest_launch_preserves_player_input_and_four_shader_order(self):
         with tempfile.TemporaryDirectory() as tmp:

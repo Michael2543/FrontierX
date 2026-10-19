@@ -17,10 +17,27 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
 
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript07Resources.h"
+namespace FrontierXScript07
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 264, "Script07 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, Benson) == 36, "Script07 saved admiral offset");
+static_assert(offsetof(MissionData, failureID) + sizeof(MissionData::failureID) == 264,
+              "Script07 final field extent");
+#endif
+
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -122,6 +139,35 @@ void SetTechLevel(U32 stage)
 //--------------------------------------------------------------------------//
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript07Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 123;
+    data.mhandle = 456;
+    data.bHQInLemo = true;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle && !data.bHQInLemo;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript07(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript07Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript07ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 
 //--------------------------------------------------------------------------
 //	MISSION BRIEFING
@@ -498,7 +544,8 @@ void TM7_MissionStart::Initialize (U32 eventFlags, const MPartRef & part)
 	M_ EnablePartnameDisplay(data.Benson, true);
 	M_ EnablePartnameDisplay(data.KerTak, true);
 
-	for (U32 x=1; x<=3; x++)
+	U32 x;
+	for (x=1; x<=3; x++)
 		data.bPlatInSys[x] = true;
 	for (x=4; x<=8; x++)
 		data.bPlatInSys[x] = false;
@@ -951,3 +998,7 @@ bool TM7_MissionSuccess::Update (void)
 //--------------------------------------------------------------------------//
 //--------------------------------End Script07T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript07
+#endif

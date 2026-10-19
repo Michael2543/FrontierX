@@ -53,12 +53,44 @@ P2_TM4_CHECKLIST = [
     'TM4: save/load while protecting the rebels, during their return home and before investigating Alto; verify the original speech/objective sequence, system access and enemy reinforcements continue.',
     'TM4: retreat with both Blackwell and Hawkes to Capella for regular victory; exercise original admiral/rebel/Jump-Gate defeat conditions and normal result/progress/Continue to TM5.']
 
+P2_TM5_CHECKLIST = [
+    'TM5: inspect Battleship turret slew and projectile travel toward ship/building targets across several directions and after reload; the jointed muzzle must stay on the visible hull.',
+    'TM5: reclaim Perilon, restore Light/Heavy Shipyards and inspect generated Scout/Hive Carrier and Frigate/Scarab waves; save/load during construction and active generator countdowns.',
+    'TM5: follow the original BlackHole/distress sequence, Blackwell/Hawkes events, Ker Tak encounter and authored flagship abilities; check generated units, fighters, effects and media after loading.',
+    'TM5: complete the Luxor/Bekka objectives and regular victory; verify original admiral/Ker Tak/HQ defeat conditions, result/progress/retry and the original next briefing. Use genuine checkpoints for targeted repeats.',
+    'Menu: select TM5 through genuine campaign progress, cancel its briefing and select it again; check return from the game, normal save/load and process restart. Cancel/defeat must not invent a victory unlock.']
+
+
+P2_TM7_CHECKLIST = [
+    'TM7: inspect original Supply Lines briefing, Benson/Ker Tak, ten-system map and initial rebel alliances; cancel/re-enter briefing and use normal Start.',
+    'TM7: build Propulsion and Advanced Weapons labs, extend the base/supply route through the systems toward Lemo, and save/load during research, construction and Mantis counterattacks.',
+    'TM7: build the original HQ in Lemo and remove Mantis platforms for victory; check Benson/Ker Tak defeat, retry, results/progress and original Continue to TM8.']
+
+P2_TM8_CHECKLIST = [
+    'TM8: inspect original Lost Sheep briefing, fourteen-system map, Ker Tak portraits/speech and initial objectives; save/load before and after entering Aeon/Kalidon.',
+    'TM8: locate Benson, check the original rescue/death timer and Mantis wave sequence, including Kracus/Sendlor/Varn/Talos and later repeat waves; save/load during active attacks.',
+    'TM8: inspect later Benson Battleship, Blackwell chrome ship and Solarian Monolith/Taos/Trireme reinforcements with full weapons/materials/effects/audio; clear the original systems/Cocoons and preserve required admirals.',
+    'TM8: verify normal victory/defeat/retry/progress and Continue to the original TM9 briefing. TM9 is linked as the next-entry dependency; its full gameplay is not accepted.']
+
+
+P2_TM10_CHECKLIST = [
+    'Replay the unlocked Celereon film (cq_2.mpg) from the original selector; check video, sound, EOF/return and Esc.',
+    'TM10: original summit briefing and entry; locate Vivac in Procyon, continue to Natus and keep the required admirals alive.',
+    'TM10: inspect Aurora cloak/advanced units and F7/F8 during combat; genuine victory must unlock TM11.']
+P2_TM11_CHECKLIST = [
+    'TM11: original opening scene, disabled platforms, capture/repair, Blackwell events and later attacks; F7/F8 during these states.',
+    'After genuine TM11 victory, inspect cq_3.mpg through audio/video EOF and return, then Continue to TM12; replay remains available.']
+P2_TM12_CHECKLIST = [
+    'TM12: original briefing, regeneration/capture, Xin/Rendar and Quasili attacks, Smirnoff fleet and required objectives/admirals.',
+    'F7/F8 during regeneration, active attack waves and fleet orders; check genuine victory/defeat and result/return.',
+    'TM13 is not linked by this candidate; stop after the TM12 result rather than treating the next mission as integrated.']
+
 
 def campaign_checklist(mission, campaign_mission):
     if campaign_mission is not None:
         if mission != 'terran1' or campaign_mission not in range(1, 17):
             raise ValueError('campaign target requires Terran selector and mission 1..16')
-        return P2_CHECKLIST + {2: P2_TM2_CHECKLIST, 4: P2_TM4_CHECKLIST}.get(campaign_mission, [])
+        return P2_CHECKLIST + {2: P2_TM2_CHECKLIST, 4: P2_TM4_CHECKLIST, 5: P2_TM5_CHECKLIST, 7: P2_TM7_CHECKLIST, 8: P2_TM8_CHECKLIST, 10: P2_TM10_CHECKLIST, 11: P2_TM11_CHECKLIST, 12: P2_TM12_CHECKLIST}.get(campaign_mission, [])
     return TERRAN_CHECKLIST if mission == 'terran1' else CHECKLIST
 
 

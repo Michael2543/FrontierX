@@ -335,6 +335,11 @@ struct alignas(16) VertexTransformUniform
     std::array<float, 4> color;
 };
 
+// RPVERTEX2 and App StandardVertex share a shader, but only the App effect
+// consumes c30/c31. Fixed-function draws retain raw UVs and prelit colors.
+constexpr std::array<float, 4> FixedFunctionUv{{0.0F, 0.0F, 1.0F, 1.0F}};
+constexpr std::array<float, 4> FixedFunctionColor{{1.0F, 1.0F, 1.0F, 1.0F}};
+
 TextureStageUniform MakeTextureStageUniform(const TextureStageSnapshot & state,
                                            const RenderStateSnapshot & renderState)
 {
@@ -536,6 +541,31 @@ bool PixelsDiffer(const std::uint8_t * left,
     return false;
 }
 
+template<class Vertex, class Submission>
+GENRESULT ExpandTriangleStrip(const Submission &submission, std::vector<Vertex> &vertices)
+{
+    const std::size_t count = submission.indexCount ? submission.indexCount : submission.vertexCount;
+    const std::size_t triangles = count - 2U;
+    if (triangles > std::numeric_limits<Uint32>::max() / (3U * sizeof(Vertex)))
+        return GR_INVALID_PARMS;
+    try
+    {
+        vertices.reserve(triangles * 3U);
+        const auto vertex = [&](std::size_t i) -> const Vertex & {
+            return submission.vertices[submission.indices ? submission.indices[i] : i];
+        };
+        for (std::size_t i = 0U; i < triangles; ++i)
+        {
+            // D3D strips reverse the first two vertices of every odd triangle.
+            vertices.push_back(vertex(i + (i & 1U)));
+            vertices.push_back(vertex(i + 1U - (i & 1U)));
+            vertices.push_back(vertex(i + 2U));
+        }
+    }
+    catch (const std::bad_alloc &) { return GR_OUT_OF_MEMORY; }
+    return GR_OK;
+}
+
 SDL_GPUSampler * CreateSampler(SDL_GPUDevice * device,
                                const SamplerStateSnapshot & state)
 {
@@ -711,26 +741,9 @@ GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView & submission)
     if (!submission.IsValid()) return GR_INVALID_PARMS;
     if (submission.topology == PrimitiveTopology::TriangleStrip)
     {
-        const std::size_t count = submission.indexCount ? submission.indexCount : submission.vertexCount;
-        const std::size_t triangles = count - 2U;
-        if (triangles > std::numeric_limits<Uint32>::max() /
-                (3U * sizeof(RenderVertexP3DiffuseT2))) return GR_INVALID_PARMS;
         std::vector<RenderVertexP3DiffuseT2> vertices;
-        try
-        {
-            vertices.reserve(triangles * 3U);
-            const auto vertex = [&](std::size_t i) -> const RenderVertexP3DiffuseT2 & {
-                return submission.vertices[submission.indices ? submission.indices[i] : i];
-            };
-            for (std::size_t i = 0U; i < triangles; ++i)
-            {
-                // D3D strips reverse the first two vertices of every odd triangle.
-                vertices.push_back(vertex(i + (i & 1U)));
-                vertices.push_back(vertex(i + 1U - (i & 1U)));
-                vertices.push_back(vertex(i + 2U));
-            }
-        }
-        catch (const std::bad_alloc &) { return GR_OUT_OF_MEMORY; }
+        const GENRESULT result = ExpandTriangleStrip(submission, vertices);
+        if (result != GR_OK) return result;
         return SubmitBytes(vertices.data(), vertices.size(), sizeof(RenderVertexP3DiffuseT2),
                            nullptr, 0U, 0U, PrimitiveTopology::TriangleList);
     }
@@ -741,9 +754,18 @@ GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView & submission)
 
 GENRESULT SdlGpuRenderer::Submit(const RenderSubmissionView2 & submission)
 {
-    if (submission.topology != PrimitiveTopology::TriangleList)
+    if (submission.topology != PrimitiveTopology::TriangleList &&
+        submission.topology != PrimitiveTopology::TriangleStrip)
         return GR_NOT_IMPLEMENTED;
     if (!submission.IsValid()) return GR_INVALID_PARMS;
+    if (submission.topology == PrimitiveTopology::TriangleStrip)
+    {
+        std::vector<RenderVertexP3DiffuseT4> vertices;
+        const GENRESULT result = ExpandTriangleStrip(submission, vertices);
+        if (result != GR_OK) return result;
+        return SubmitBytes(vertices.data(), vertices.size(), sizeof(RenderVertexP3DiffuseT4),
+                           nullptr, 0U, 1U, PrimitiveTopology::TriangleList);
+    }
     return SubmitBytes(submission.vertices, submission.vertexCount,
                        sizeof(RenderVertexP3DiffuseT4), submission.indices,
                        submission.indexCount, 1U);
@@ -946,8 +968,10 @@ GENRESULT SdlGpuRenderer::SubmitBytes(const void * vertices, std::size_t vertexC
                 boundTexture, secondTexture, impl_->secondSampler, impl_->sampler, selectedPipeline,
                 static_cast<Uint32>(vertexCount), static_cast<Uint32>(indexCount),
                 impl_->viewport, impl_->renderState, impl_->textureStage,
-                impl_->modelview, impl_->projection, impl_->vertexUv,
-                impl_->vertexColor, candidate.vertexBytes, candidate.indexBytes, candidate.transferBytes});
+                impl_->modelview, impl_->projection,
+                vertexFormat == 3U ? impl_->vertexUv : FixedFunctionUv,
+                vertexFormat == 3U ? impl_->vertexColor : FixedFunctionColor,
+                candidate.vertexBytes, candidate.indexBytes, candidate.transferBytes});
         }
         catch (const std::bad_alloc &)
         {
@@ -1829,7 +1853,8 @@ bool SdlGpuRenderer::Present(bool & presented, std::string & error)
                                    sizeof(textureStageUniform));
     const VertexTransformUniform vertexUniform{
         MakeClipMatrix(impl_->projection, impl_->modelview),
-        impl_->vertexUv, impl_->vertexColor};
+        impl_->activeVertexFormat == 3U ? impl_->vertexUv : FixedFunctionUv,
+        impl_->activeVertexFormat == 3U ? impl_->vertexColor : FixedFunctionColor};
     SDL_PushGPUVertexUniformData(commandBuffer, 0U, &vertexUniform,
                                  sizeof(vertexUniform));
     SDL_GPURenderPass * renderPass =
@@ -1947,7 +1972,8 @@ bool SdlGpuRenderer::Readback64(SdlGpuReadback & result, std::string & error)
                                    sizeof(textureStageUniform));
     const VertexTransformUniform vertexUniform{
         MakeClipMatrix(impl_->projection, impl_->modelview),
-        impl_->vertexUv, impl_->vertexColor};
+        impl_->activeVertexFormat == 3U ? impl_->vertexUv : FixedFunctionUv,
+        impl_->activeVertexFormat == 3U ? impl_->vertexColor : FixedFunctionColor};
     SDL_PushGPUVertexUniformData(commandBuffer, 0U, &vertexUniform,
                                  sizeof(vertexUniform));
     SDL_GPURenderPass * renderPass =

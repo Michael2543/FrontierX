@@ -908,13 +908,19 @@ void Menu_mission::onButtonPressed (U32 buttonID)
 
 	case MOVIE_BUTTON_2:
 		SetVisible(false);
-//		MovieScreen(this, "cq_2.mpg", 640, 272);
+#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)
+		if (!CQFLAGS.bSkipMovies)
+			MovieScreen(this, "cq_2.mpg");
+#endif
 		SetVisible(true);
 		break;
 
 	case MOVIE_BUTTON_3:
 		SetVisible(false);
-//		MovieScreen(this, "cq_3.mpg", 640, 272);
+#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)
+		if (!CQFLAGS.bSkipMovies)
+			MovieScreen(this, "cq_3.mpg");
+#endif
 		SetVisible(true);
 		break;
 

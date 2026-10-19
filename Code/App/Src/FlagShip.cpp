@@ -75,6 +75,9 @@ struct IDrawAgent;
 #include <Filesys.h>
 #include <WindowManager.h>
 #include <IAnim.h>
+#if !defined(_WIN32)
+#include <SysConsumerDesc.h>
+#endif
 #include <IHardPoint.h>
 
 #include <stdlib.h>
@@ -151,6 +154,10 @@ struct _NO_VTABLE Flagship : public TBuildQueue<SpaceShip<FLAGSHIP_SAVELOAD, FLA
 	U32 supplyShipArray[MAX_SELECTED_UNITS];	// supply ships only
 
 	ObjSet fleetSet;
+#if !defined(_WIN32)
+    // Immutable retail-only fields belong to the owning factory archetype.
+    const FrontierX::NativeRetailFlagshipData *retailData = nullptr;
+#endif
 	OBJPTR<IBaseObject> targets[NUM_TARGETS];	
 
 	ADMIRAL_TACTIC netAdmiralTactic;
@@ -3320,6 +3327,16 @@ SINGLE getFeatureDamageBonus(AdmiralBonuses & data,M_OBJCLASS sourceMObjClass,AR
 //
 SINGLE Flagship::GetDamageBonus(M_OBJCLASS sourceMObjClass,ARMOR_TYPE sourceArmor,OBJCLASS targetObjClass,M_RACE targetRace, ARMOR_TYPE targetArmor)
 {
+#if !defined(_WIN32)
+    if (retailData) {
+        SINGLE bonus = FrontierX::NativeRetailFlagshipBonusesForShip(*retailData, sourceMObjClass).damage;
+        if ((targetRace == M_TERRAN && retailData->antiTerran) ||
+            (targetRace == M_MANTIS && retailData->antiMantis) ||
+            (targetRace == M_SOLARIAN && retailData->antiSolarian)) bonus += 0.15;
+        if (targetObjClass == OC_PLATFORM && retailData->platformKiller) bonus += 0.5;
+        return bonus;
+    }
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 	SINGLE bonus = 0;
 	
@@ -3345,6 +3362,68 @@ SINGLE Flagship::GetDamageBonus(M_OBJCLASS sourceMObjClass,ARMOR_TYPE sourceArmo
 }
 //---------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+bool QueryNativeRetailAdmiralShields(IBaseObject *admiral, U32 shipClass, SINGLE &value)
+{
+    const auto *owner = dynamic_cast<const Flagship *>(admiral);
+    if (!owner || !owner->retailData) return false;
+    value = FrontierX::NativeRetailFlagshipBonusesForShip(*owner->retailData, shipClass).shields;
+    return true;
+}
+#endif
+#if !defined(_WIN32)
+bool CheckNativeRetailAdmiralBonuses()
+{
+    // The existing catalogue diagnostic supplies the complete real world
+    // services required by the ship's destructor, including actor removal.
+    if (!ENGINE || !ANIM || !OBJLIST) return false;
+    // The real IAdmiral queries must retain retail replacement bonuses and
+    // passive traits. Decoder-only coverage cannot prove these consumers.
+    FrontierX::NativeRetailFlagshipData data{};
+    data.general = {0.1F, 0.1F, -0.125F, 0.1F, 0.1F, 0.1F};
+    data.favored = {0.2F, 0.2F, -0.25F, 0.2F, 0.2F, 0.2F};
+    data.favoredShips[0] = M_SCOUTCARRIER;
+    data.antiMantis = data.superFighters = 1;
+    data.toolbarImage = 2488;
+    data.toolbarText = 826;
+    data.toolbarStatus = 3160;
+    data.toolbarHint = 3257;
+    auto *owner = new ObjectImpl<Flagship>;
+    owner->retailData = &data;
+    IAdmiral *admiral = owner;
+    const auto equal = [](SINGLE a, SINGLE b) { return std::fabs(a-b) < 0.000001F; };
+    SINGLE shields = -1;
+    bool valid = equal(admiral->GetDamageBonus(M_SCOUTCARRIER, NO_ARMOR, OC_SPACESHIP,
+                                              M_MANTIS, NO_ARMOR), 0.35F) &&
+        equal(admiral->GetDamageBonus(M_FRIGATE, NO_ARMOR, OC_SPACESHIP,
+                                      M_TERRAN, NO_ARMOR), 0.1F) &&
+        equal(admiral->GetDefenceBonus(M_SCOUTCARRIER, NO_ARMOR), 0) &&
+        QueryNativeRetailAdmiralShields(owner, M_SCOUTCARRIER, shields) && equal(shields, 0.2F) &&
+        equal(admiral->GetRangeBonus(M_SCOUTCARRIER, NO_ARMOR), 0.2F) &&
+        equal(admiral->GetSensorBonus(M_FRIGATE, NO_ARMOR), 0.1F) &&
+        equal(admiral->GetSpeedBonus(M_SCOUTCARRIER, NO_ARMOR), 0.2F) &&
+        equal(admiral->GetFighterDamageBonus(), 0.5F) &&
+        equal(admiral->GetFighterTargetingBonus(), 0.2F) &&
+        equal(admiral->GetFighterDodgeBonus(), 0.2F) &&
+        admiral->ConvertSupplyBonus(M_FRIGATE, NO_ARMOR, 8) == 7 &&
+        admiral->ConvertSupplyBonus(M_SCOUTCARRIER, NO_ARMOR, 8) == 6 &&
+        admiral->GetToolbarImage() == 2488 && admiral->GetToolbarText() == 826 &&
+        admiral->GetToolbarStatusText() == 3160 && admiral->GetToolbarHintbox() == 3257 &&
+        !admiral->CanResearchKits() && !admiral->GetAvailibleCommandKit(0) &&
+        !admiral->GetAvailibleCommandKitID(0);
+    data.evasiveManuvers = data.platformKiller = 1;
+    valid = valid && equal(admiral->GetDefenceBonus(M_FRIGATE, NO_ARMOR), 0.25F) &&
+        equal(admiral->GetDamageBonus(M_FRIGATE, NO_ARMOR, OC_PLATFORM,
+                                      M_MANTIS, NO_ARMOR), 0.75F);
+    // The isolated catalogue diagnostic never starts mission simulation.
+    // Verify the low-supply case consumes exactly one C-RNG draw.
+    srand(123); (void)rand(); const int second = rand();
+    srand(123);
+    valid = valid && admiral->ConvertSupplyBonus(M_FRIGATE, NO_ARMOR, 1) == 1 && rand() == second;
+    delete owner;
+    return valid;
+}
+#endif
 SINGLE getLocalDefenceBonus(AdmiralBonuses::BonusValues & data)
 {
 	SINGLE bonus = 0;
@@ -3379,6 +3458,9 @@ SINGLE getFeatureDefenceBonus(AdmiralBonuses & data,M_OBJCLASS targetMObjClass, 
 //
 SINGLE Flagship::GetDefenceBonus(M_OBJCLASS targetMObjClass, ARMOR_TYPE targetArmor)
 {
+#if !defined(_WIN32)
+    if (retailData) return retailData->evasiveManuvers ? 0.25F : 0.0F;
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 
 	SINGLE bonus = 0;
@@ -3407,6 +3489,9 @@ SINGLE Flagship::GetDefenceBonus(M_OBJCLASS targetMObjClass, ARMOR_TYPE targetAr
 //
 SINGLE Flagship::GetFighterDamageBonus()
 {
+#if !defined(_WIN32)
+    if (retailData) return retailData->superFighters ? 0.5F : 0.0F;
+#endif
 	return 0.0;
 }
 //---------------------------------------------------------------------------
@@ -3445,6 +3530,9 @@ SINGLE getFeatureSpeedBonus(AdmiralBonuses & data,M_OBJCLASS shipMObjClass, ARMO
 //
 SINGLE Flagship::GetSpeedBonus(M_OBJCLASS shipMObjClass, ARMOR_TYPE shipArmor)
 {
+#if !defined(_WIN32)
+    if (retailData) return FrontierX::NativeRetailFlagshipBonusesForShip(*retailData, shipMObjClass).speed;
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 
 	SINGLE bonus = 0;
@@ -3505,6 +3593,17 @@ SINGLE getFeatureSupplyBonus(AdmiralBonuses & data,M_OBJCLASS shipMObjClass, ARM
 //
 U32 Flagship::ConvertSupplyBonus(M_OBJCLASS shipMObjClass, ARMOR_TYPE shipArmor, U32 suppliesUsed)
 {
+#if !defined(_WIN32)
+    if (retailData) {
+        const auto &bonus = FrontierX::NativeRetailFlagshipBonusesForShip(*retailData, shipMObjClass);
+        suppliesUsed = suppliesUsed * (1.0 + bonus.supplyUsage);
+        // Retail uses the favored threshold even for non-favored ships.
+        // Preserve the single draw only after conversion truncates to zero.
+        if (!suppliesUsed && ((rand() % 1000) / 1000.0) > retailData->favored.supplyUsage)
+            suppliesUsed = 1;
+        return suppliesUsed;
+    }
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 
 	SINGLE bonus = 0;
@@ -3570,6 +3669,9 @@ SINGLE getFeatureSensorBonus(AdmiralBonuses & data,M_OBJCLASS shipMObjClass, ARM
 //
 SINGLE Flagship::GetSensorBonus(M_OBJCLASS shipMObjClass, ARMOR_TYPE shipArmor)
 {
+#if !defined(_WIN32)
+    if (retailData) return FrontierX::NativeRetailFlagshipBonusesForShip(*retailData, shipMObjClass).sensors;
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 
 	SINGLE bonus = 0;
@@ -3598,12 +3700,18 @@ SINGLE Flagship::GetSensorBonus(M_OBJCLASS shipMObjClass, ARMOR_TYPE shipArmor)
 //
 SINGLE Flagship::GetFighterTargetingBonus()
 {
+#if !defined(_WIN32)
+    if (retailData) return retailData->superFighters ? 0.2F : 0.0F;
+#endif
 	return 0.0;
 }
 //---------------------------------------------------------------------------
 //
 SINGLE Flagship::GetFighterDodgeBonus()
 {
+#if !defined(_WIN32)
+    if (retailData) return retailData->superFighters ? 0.2F : 0.0F;
+#endif
 	return 0.0;
 }
 //---------------------------------------------------------------------------
@@ -3642,6 +3750,9 @@ SINGLE getFeatureRangeBonus(AdmiralBonuses & data,M_OBJCLASS shipMObjClass, ARMO
 //
 SINGLE Flagship::GetRangeBonus(M_OBJCLASS shipMObjClass, ARMOR_TYPE shipArmor)
 {
+#if !defined(_WIN32)
+    if (retailData) return FrontierX::NativeRetailFlagshipBonusesForShip(*retailData, shipMObjClass).rangeModifier;
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 
 	SINGLE bonus = 0;
@@ -3680,6 +3791,9 @@ bool Flagship::IsInFleetRepairMode()
 //
 U32 Flagship::GetToolbarImage()
 {
+#if !defined(_WIN32)
+    if (retailData) return retailData->toolbarImage;
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 	return flagData->toolbarInfo.baseImage;
 }
@@ -3687,6 +3801,9 @@ U32 Flagship::GetToolbarImage()
 //
 HBTNTXT::BUTTON_TEXT Flagship::GetToolbarText()
 {
+#if !defined(_WIN32)
+    if (retailData) return static_cast<HBTNTXT::BUTTON_TEXT>(retailData->toolbarText);
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 	return flagData->toolbarInfo.buttonText;
 }
@@ -3694,6 +3811,9 @@ HBTNTXT::BUTTON_TEXT Flagship::GetToolbarText()
 //
 HBTNTXT::HOTBUTTONINFO Flagship::GetToolbarStatusText()
 {
+#if !defined(_WIN32)
+    if (retailData) return static_cast<HBTNTXT::HOTBUTTONINFO>(retailData->toolbarStatus);
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 	return flagData->toolbarInfo.buttonStatus;
 }
@@ -3701,6 +3821,9 @@ HBTNTXT::HOTBUTTONINFO Flagship::GetToolbarStatusText()
 //
 HBTNTXT::MULTIBUTTONINFO Flagship::GetToolbarHintbox ()
 {
+#if !defined(_WIN32)
+    if (retailData) return static_cast<HBTNTXT::MULTIBUTTONINFO>(retailData->toolbarHint);
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 	return flagData->toolbarInfo.buttonHintbox;
 }
@@ -3898,6 +4021,9 @@ void Flagship::MoveDoneHint(IBaseObject * ship)
 //
 struct BT_COMMAND_KIT * Flagship::GetAvailibleCommandKit(U32 index)
 {
+#if !defined(_WIN32)
+    if (retailData) return nullptr;
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 	if(flagData->commandKits[index][0])
 	{
@@ -3909,6 +4035,9 @@ struct BT_COMMAND_KIT * Flagship::GetAvailibleCommandKit(U32 index)
 //
 U32 Flagship::GetAvailibleCommandKitID(U32 index)
 {
+#if !defined(_WIN32)
+    if (retailData) return 0;
+#endif
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
 	if(flagData->commandKits[index][0])
 	{
@@ -3937,6 +4066,9 @@ struct BT_COMMAND_KIT * Flagship::GetKnownCommandKit(U32 index)
 //
 bool Flagship::CanResearchKits()
 {
+#if !defined(_WIN32)
+    if (retailData) return false;
+#endif
 	U32 numberTaken = 0;
 	for(U32 count = 0; count < MAX_KNOWN_KITS; ++count)
 	{
@@ -5364,9 +5496,18 @@ void Flagship::resolve (void)
 //
 void Flagship::initFlagship (const FLAGSHIP_INIT & data)
 {
+#if !defined(_WIN32)
+    const BT_FLAGSHIP_DATA *flagData = retailData ? data.pData :
+        static_cast<const BT_FLAGSHIP_DATA *>(ARCHLIST->GetArchetypeData(pArchetype));
+#else
 	BT_FLAGSHIP_DATA * flagData = (BT_FLAGSHIP_DATA *) (ARCHLIST->GetArchetypeData(pArchetype));
+#endif
 	attackRadius = data.pData->attackRadius;
 	admiralHotkey = BASE_FLAGSHIP_SAVELOAD::NO_HOTKEY;
+#if !defined(_WIN32)
+    if (retailData)
+        admiralHotkey = static_cast<BASE_FLAGSHIP_SAVELOAD::AdmiralHotkey>(retailData->admiralHotkey);
+#endif
 	admiralTactic = netAdmiralTactic = AT_DEFEND;
 	memset(knownFormations,0,sizeof(U32)*6);
 	
@@ -6076,10 +6217,16 @@ void Flagship::putSyncKit (void * buffer, U32 bufferSize, bool bLateDelivery)
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 //
-inline struct IBaseObject * createFlagship (const FLAGSHIP_INIT & data)
+inline struct IBaseObject * createFlagship (const FLAGSHIP_INIT & data
+#if !defined(_WIN32)
+    , const FrontierX::NativeRetailFlagshipData *retailData
+#endif
+)
 {
 	Flagship * obj = new ObjectImpl<Flagship>;
-
+#if !defined(_WIN32)
+    obj->retailData = retailData;
+#endif
 	obj->FRAME_init(data);
 	return obj;
 }
@@ -6091,6 +6238,11 @@ struct DACOM_NO_VTABLE FlagshipFactory : public IObjectFactory
 {
 	struct OBJTYPE : FLAGSHIP_INIT
 	{
+#if !defined(_WIN32)
+        bool isRetail = false;
+        FrontierX::NativeRetailFlagshipData retail{};
+        BT_FLAGSHIP_DATA compatible{};
+#endif
 		~OBJTYPE (void)
 		{
 		}
@@ -6187,15 +6339,23 @@ HANDLE FlagshipFactory::CreateArchetype (const char *szArchname, OBJCLASS objCla
 		if (data->type == SSC_FLAGSHIP)	   
 		{
 #if !defined(_WIN32)
-			if (extent.size == sizeof(FrontierX::NativeRetailFlagshipData))
-			{
-				FrontierX::NativeRetailFlagshipData retail;
-				const bool decoded = FrontierX::DecodeNativeRetailFlagshipData(_data, extent.size, retail);
-				std::fprintf(stderr, "Native flagship rejected: %s; %s\n", szArchname,
-					decoded ? "retail shields/abilities and authored hotkeys need their original behavior; CQ2 formations/kits are absent" :
-					"invalid 744-byte retail record");
-				return 0;
-			}
+            if (extent.size == sizeof(FrontierX::NativeRetailFlagshipData))
+            {
+                FrontierX::NativeRetailFlagshipData retail;
+                if (!FrontierX::DecodeNativeRetailFlagshipData(_data, extent.size, retail))
+                    return 0;
+                result = new OBJTYPE();
+                result->isRetail = true;
+                result->retail = retail;
+                static_assert(sizeof(BASE_SPACESHIP_DATA) == sizeof(retail.shipData));
+                std::memcpy(static_cast<BASE_SPACESHIP_DATA *>(&result->compatible),
+                            retail.shipData, sizeof(retail.shipData));
+                result->compatible.attackRadius = retail.attackRadius;
+                if (!result->loadSpaceshipArchetype(&result->compatible,
+                                                   ARCHLIST->GetArchetype(szArchname)))
+                    goto Error;
+                goto Done;
+            }
 			if (extent.size != sizeof(BT_FLAGSHIP_DATA))
 			{
 				std::fprintf(stderr, "Native flagship record extent rejected: %s (%u bytes)\n", szArchname, extent.size);
@@ -6233,7 +6393,11 @@ BOOL32 FlagshipFactory::DestroyArchetype (HANDLE hArchetype)
 IBaseObject * FlagshipFactory::CreateInstance (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
-	return createFlagship(*objtype);
+	return createFlagship(*objtype
+#if !defined(_WIN32)
+        , objtype->isRetail ? &objtype->retail : nullptr
+#endif
+    );
 }
 //-------------------------------------------------------------------
 //

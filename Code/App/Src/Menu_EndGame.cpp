@@ -237,13 +237,27 @@ void MenuEndGame::checkForMovie (void)
 			break;
 
 		case 8:
-//			MovieScreen(this, "cq_2.mpg", movieWidth, movieHeight);
+#if defined(_WIN32)
 			GAMEPROGRESS->SetMovieSeen(2);
+#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)
+			if (!CQFLAGS.bSkipMovies)
+			{
+				MovieScreen(this, "cq_2.mpg");
+				GAMEPROGRESS->SetMovieSeen(2);
+			}
+#endif
 			break;
 
 		case 10:
-//			MovieScreen(this, "cq_3.mpg", movieWidth, movieHeight);
+#if defined(_WIN32)
 			GAMEPROGRESS->SetMovieSeen(3);
+#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)
+			if (!CQFLAGS.bSkipMovies)
+			{
+				MovieScreen(this, "cq_3.mpg");
+				GAMEPROGRESS->SetMovieSeen(3);
+			}
+#endif
 			break;
 
 		case 15:

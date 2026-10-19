@@ -10,15 +10,27 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include <algorithm>
+#include <cstdio>
+#include <cwchar>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+#endif
 #include <MGlobals.h>
 
 #include "Frame.h"
 #include "IButton2.h"
 #include "IStatic.h"
 #include "IEdit2.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include <DLoadSave.h>
 #include "Mission.h"
 
@@ -378,11 +390,19 @@ void MenuLoadSave::indexToFileName (int index, char * szFile)
 	
 	if (bSinglePlayerMaps)
 	{
+#if defined(_WIN32)
 		wsprintf(szFile, "f%07d.mission", number);
+#else
+        std::snprintf(szFile, MAX_PATH, "f%07u.mission", number);
+#endif
 	}
 	else
 	{
+#if defined(_WIN32)
 		wsprintf(szFile, "m%07d.mission", number);
+#else
+        std::snprintf(szFile, MAX_PATH, "m%07u.mission", number);
+#endif
 	}
 }
 //----------------------------------------------------------------------------------------//
@@ -462,6 +482,7 @@ void MenuLoadSave::onSelection (const wchar_t *buffer)
 			endDialog(1);
 		else
 		{
+#if defined(_WIN32)
 			if (bWasEnabled)
 				MISSION->New();
 			else
@@ -469,6 +490,13 @@ void MenuLoadSave::onSelection (const wchar_t *buffer)
 				ChangeInterfaceRes(IR_FRONT_END_RESOLUTION);
 				SetVisible(true);
 			}
+#else
+            // Load closes the previous mission before replacing its state.
+            // Never resume an empty New() world after a rejected checkpoint.
+            CQMessageBox(IDS_HELP_LOADFAILED, IDS_ERROR, MB_OK, this);
+            endDialog(0);
+            EVENTSYS->Post(CQE_PLAYER_QUIT, nullptr);
+#endif
 		}
 	}
 	else
@@ -492,6 +520,7 @@ void MenuLoadSave::onSelection (const wchar_t *buffer)
 		MISSION->SetFileSystem(NULL);
  
 		// are we re-writing over a file?
+		BOOL32 written = FALSE;
 		if (bRewrite)
 		{
 			CQASSERT(index != -1);
@@ -499,14 +528,21 @@ void MenuLoadSave::onSelection (const wchar_t *buffer)
 			// find the file the matches the description selected...
 			indexToFileName(index, abuffer);
 
-			MISSION->SaveByDescription(buffer, saveLoadDir, abuffer);
+			written = MISSION->SaveByDescription(buffer, saveLoadDir, abuffer);
 
 		}
 		else
 		{
-			MISSION->SaveByDescription(buffer, saveLoadDir, NULL, dwSaveKey);
+			written = MISSION->SaveByDescription(buffer, saveLoadDir, NULL, dwSaveKey);
 		}
-
+#if !defined(_WIN32)
+        if (!written)
+        {
+            wchar_t message[] = L"The game could not be saved.";
+            CQMessageBox(message, IDS_ERROR, MB_OK, this);
+            return;
+        }
+#endif
 		endDialog(1);
 	}
 }

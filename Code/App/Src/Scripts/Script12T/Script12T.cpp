@@ -12,10 +12,26 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
 
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript12Resources.h"
+namespace FrontierXScript12
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 220, "Script12 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, Steele) == 24, "Script12 saved admiral offset");
+static_assert(offsetof(MissionData, failureID) + sizeof(MissionData::failureID) == 220,
+              "Script12 final field extent");
+#endif
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -66,7 +82,36 @@ static void TweakMantis
 //  MISSION PROGRAM 														//
 //--------------------------------------------------------------------------//
 
-CQSCRIPTDATA( MissionData, data );
+CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript12Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 123;
+    data.mhandle = 456;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript12(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript12Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript12ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
+
 
 //--------------------------------------------------------------------------
 //	MISSION BRIEFING
@@ -655,7 +700,7 @@ bool TM12_InitialMantisAttacks::Update (void)
 		{
 			MScript::CreatePart("GBOAT!!M_Tiamat", XinSpawn, MANTIS_ID);
 		}
-		for (x=0; x<2; x++)
+		for (int x=0; x<2; x++)
 		{
 			MScript::CreatePart("GBOAT!!M_Scout Carrier", XinSpawn, MANTIS_ID);
 		}
@@ -663,11 +708,11 @@ bool TM12_InitialMantisAttacks::Update (void)
 		MScript::SetEnemyAITarget(MANTIS_ID, GPrime, 3, GHELEN);
 		MScript::LaunchOffensive(MANTIS_ID, US_ATTACK);
 
-		for (x=0; x<2; x++)
+		for (int x=0; x<2; x++)
 		{
 			MScript::CreatePart("GBOAT!!M_Tiamat", RenSpawn, MANTIS_ID);
 		}
-		for (x=0; x<2; x++)
+		for (int x=0; x<2; x++)
 		{
 			MScript::CreatePart("GBOAT!!M_Scout Carrier", RenSpawn, MANTIS_ID);
 		}
@@ -715,7 +760,7 @@ bool TM12_QuasiliAttack::Update (void)
 		{
 			MScript::CreatePart("GBOAT!!M_Scarab", data.SpawnPoint, MANTIS_ID);
 		}
-		for (x=0; x<2; x++)
+		for (int x=0; x<2; x++)
 		{
 			MScript::CreatePart("GBOAT!!M_Hive Carrier", data.SpawnPoint, MANTIS_ID);
 		}
@@ -723,11 +768,11 @@ bool TM12_QuasiliAttack::Update (void)
 		MScript::SetEnemyAITarget(MANTIS_ID, data.Epsilon, 50, EPSILON);
 		MScript::LaunchOffensive(MANTIS_ID, US_ATTACK);
 
-		for (x=0; x<2; x++)
+		for (int x=0; x<2; x++)
 		{
 			MScript::CreatePart("GBOAT!!M_Tiamat", data.SpawnPoint, MANTIS_ID);
 		}
-		for (x=0; x<2; x++)
+		for (int x=0; x<2; x++)
 		{
 			MScript::CreatePart("GBOAT!!M_Scout Carrier", data.SpawnPoint, MANTIS_ID);
 		}
@@ -957,7 +1002,7 @@ void TM12_SmirnoffAttack::Initialize (U32 eventFlags, const MPartRef & part)
         tempShip++;
 	}
 
-	for (x=0; x<4; x++)
+	for (int x=0; x<4; x++)
 	{
 		Attacker = MScript::CreatePart("GBOAT!!M_Scarab", data.SpawnPoint, MANTIS_ID);
 		MScript::OrderMoveTo(Attacker, RallyPoint);
@@ -967,7 +1012,7 @@ void TM12_SmirnoffAttack::Initialize (U32 eventFlags, const MPartRef & part)
         tempShip++;
 	}
 
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		Attacker = MScript::CreatePart("GBOAT!!M_Hive Carrier", data.SpawnPoint, MANTIS_ID);
 		MScript::OrderMoveTo(Attacker, RallyPoint);
@@ -977,7 +1022,7 @@ void TM12_SmirnoffAttack::Initialize (U32 eventFlags, const MPartRef & part)
         tempShip++;
 	}
 
-	for (x=0; x<1; x++)
+	for (int x=0; x<1; x++)
 	{
 		Attacker = MScript::CreatePart("GBOAT!!M_Tiamat", data.SpawnPoint, MANTIS_ID);
 		MScript::OrderMoveTo(Attacker, RallyPoint);
@@ -1658,3 +1703,7 @@ static void ToggleBuildUnits
 	MScript::SetEnemyAIRules(MANTIS_ID, airules);
 }
 
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript12
+#endif

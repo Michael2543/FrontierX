@@ -2,24 +2,68 @@
 
 ## Active plan: playable single-player first (2026-10-13)
 
+Follow-up TM10 diagnostics isolate a valid-quicksave rejection in the original
+Talorian Matrix empty launcher loader and an actual delayed construction pool
+assertion. Native repairs preserve save bytes and strict error propagation;
+focused launcher and delay-stage regressions pass. Full recovery of the user's
+scene still needs F8/menu verification. See the [save/draw record](NATIVE_TERRAN_P2.md#tm10-quicksave-rejection-and-delayed-construction-draw-2026-10-19).
+
+A real TM10 playtest now identifies a Mass Disruptor mesh-chain crash and
+missing Solarian construction/debris/probe presentation. The live extent/Puffy
+owner, original Solarian construction binding, instance markings and probe
+visual frame are repaired with focused GCC/Clang/sanitizer and generated GPU
+evidence. The exact user scene remains pending retest; genuine TM10 saves are
+preserved. See the [effect repair record](GAME_MATERIAL_PATH.md#tm10-construction-debris-probe-and-mass-disruptor-feedback-2026-10-19).
+
+TM10–TM12 original native scripts, schemas/resources and Celereon/TM11 movie
+outcome/replay callers are technically prepared on 2026-10-19. Focused
+GCC/Clang/fatal-sanitizer CPU checks and real external map correlation pass;
+actual mission entry, movie EOF and full gameplay acceptance remain pending.
+TM13 is not linked. See the [focused preparation record](NATIVE_TERRAN_P2.md#tm10tm12-and-celereon-movie-preparation-2026-10-19).
+
+A subsequent real Script09 entry stops at the explicitly unsupported chrome
+material. The native source-derived Chrome/Solarian path and fixed-function/App
+shader-state separation now pass focused GCC/Clang CPU/GPU checks and fatal
+sanitizer CPU checks. Genuine saves/progress are preserved; complete TM9
+acceptance remains pending. See the [material owner record](GAME_MATERIAL_PATH.md#tm9-chromesolarian-production-material-path-2026-10-18).
+
+A later user-run closure is traced to the TM8 Kalidon beacon audio open
+(the user calls it mission 9; the log and save identify SCRIPT08). The native
+sound owner now retains original playback failure ID zero instead of aborting,
+with explicit diagnostics and passing GCC/Clang/sanitizer lifecycle checks. The
+latest genuine save is preserved for continuation. At the user's request, the
+exact beacon cue is now resolved from SFX and completes real IStreamer/PipeWire
+playback; in-mission audible/gameplay confirmation remains open. See the
+[audio diagnosis](NATIVE_AUDIO_STREAMER.md#kalidon-beacon-audio-open-abort-2026-10-18).
+
 User-approved priority reset: deliver a playable native Linux Conquest campaign,
 prepare as much as practical in CI, and use user-operated playtests for real
 mission acceptance. This section supersedes the older milestone ordering and
 all historical “next M3” instructions below. It does not turn failed comparisons
 into passes or retract confirmed defects.
 
-**Latest user decision (2026-10-16):** TM3 is explicitly accepted as completely
-finished after the final Weaver repair. TM4, **Friend or Foe?**, is the active
-P2 integration mission. The [mission matrix](NATIVE_TERRAN_P2.md) records this
-acceptance independently of retained Windows/ABI, hosted CI and M3 limits.
-Earlier pending TM3 statements below are dated implementation history.
+**Latest user decision (2026-10-17):** TM5 and TM6 are explicitly accepted as
+working flawlessly. The subsequent user test confirms Mantis player colors
+and laser-satellite direction. The remaining fighter texture appearance is
+traced on 2026-10-18 to engine-trail blending after material-pool eviction.
+The user confirms the trail repair. A subsequent Battlecruiser special-weapon
+abort has a native two-UV strip repair with passing GPU checks; its narrow
+gameplay retest remains pending. The damage
+audit leaves original Terran fighter balance intact.
+TM7/TM8 are integrated for playtest in original order, with original TM9 entry
+linked for TM8 Continue. Early real save/load, schema/layout and fatal sanitizer
+checks pass; complete mission and late-content acceptance remain pending. The
+[feedback record](NATIVE_TERRAN_P2.md#tm5tm6-acceptance-and-shared-rendering-feedback-2026-10-17)
+separates source findings, synthetic checks and bounded runtime from complete
+user gameplay evidence. The [mission matrix](NATIVE_TERRAN_P2.md) retains
+individual acceptance and carried Windows/ABI, hosted CI, whole-process leak
+and M3 gates. Earlier pending TM4 statements are implementation history.
 
 **Current status:** P1a, P1b and P1c are accepted by the user in the delivered
 native Linux scope. P1b and P1c were explicitly accepted on 2026-10-15. The active
 gameplay milestone is **P2: broaden the campaign**. The user reports a perfect
 TM2 run with one small Corvette smoke-position defect. Its native render-only
-anchor correction passes focused checks; a short visual retest remains. TM3 is
-next in original order. See [smoke evidence](GAME_MATERIAL_PATH.md#corvette-damage-smoke-anchor-2026-10-15).
+anchor correction passes focused checks; a short visual retest remains. TM3–TM6 are now accepted; shared rendering feedback is active. See [smoke evidence](GAME_MATERIAL_PATH.md#corvette-damage-smoke-anchor-2026-10-15).
 Subsequent genuine Collector-upgrade and repeated-F8 crashes have native owner
 repairs and focused GCC/Clang/fatal-sanitizer evidence; track their bounded
 checkpoint continuation separately in
@@ -387,7 +431,7 @@ open.
 | P1a — Original campaign entry | Follow `Menu_campaign` → original mission selector, briefing, script/resource loading and GameProgress. Identify the first Terran mission and add only its missing production dependencies. | CI compiles/checks the integration; a bounded load/close smoke executes where lawful external data is available; user can enter the real mission through original controls. |
 | P1b — Complete that mission **(completed: user acceptance 2026-10-15)** | Integrate required gameplay/save owners and the complete mission presentation/media scope specified below, including both minimaps and all required asset/material/shader paths. | User reaches original victory and verifies defeat, early/active-state save/load and continued play; complete visuals, audio and the system-connections minimap work before and after reload. No debug completion, fabricated saves or presentation exclusions qualify for full P1b acceptance. |
 | P1c — Continue and repeat **(completed: user acceptance 2026-10-15)** | Connect original result/return/progress and next-mission loading; check defeat/retry, restart and teardown. | User reaches the next mission after victory, exercises defeat/retry and closes/re-enters normally. Targeted automation protects any reproduced lifecycle/save regression. This completes P1, not the entire campaign. |
-| P2 — Broaden the campaign **(active, TM3 user-accepted; TM4 ready for playtest)** | Advance through all 16 original Terran missions in order, integrating newly required original gameplay and complete media owners. Prepare the next mission while user feedback is pending. | Maintain the [mission matrix](NATIVE_TERRAN_P2.md) with untested/in implementation/ready for playtest/accepted status, blockers, checked build and user decision. Require normal early/active-state save/load, defeat/retry, victory/progress/next entry and the final campaign ending. No required media exclusion or campaign-wide claim from one mission. |
+| P2 — Broaden the campaign **(active, TM1–TM6 user-accepted; TM7/TM8 ready for playtest)** | Advance through all 16 original Terran missions in order, integrating newly required original gameplay and complete media owners. Prepare the next mission while user feedback is pending. | Maintain the [mission matrix](NATIVE_TERRAN_P2.md) with untested/in implementation/ready for playtest/accepted status, blockers, checked build and user decision. Require normal early/active-state save/load, defeat/retry, victory/progress/next entry and the final campaign ending. No required media exclusion or campaign-wide claim from one mission. |
 | P3 — Complete the single-player experience | Restore remaining gameplay-relevant providers and audiovisual features outside already accepted mission scopes; improve launch/settings usability. Add skirmish only as a separately scoped follow-up requiring the real player AI. | Representative campaign playthroughs, usable launch flow and documented feature coverage. Packaging/release still requires legal, dependency and data-separation review. |
 | Later M3 — Compatibility and determinism | Reuse existing observers for a concrete discrepancy; plan controlled external events before demanding identical traces. Expand full-state/Windows/retail comparisons separately. | Explicit comparison evidence under a defined protocol. Multiplayer remains later and requires its own determinism/network acceptance. |
 

@@ -1003,7 +1003,7 @@ U32 Listbox::GetString (S32 index, wchar_t * buffer, U32 bufferSize)
 	bufferSize /= sizeof(wchar_t);
 	bufferSize = __min(bufferSize, U32(len+1));
 
-	memcpy(buffer, pNode->szString, bufferSize*2);
+	memcpy(buffer, pNode->szString, bufferSize*sizeof(wchar_t));
 
 	return len;
 }

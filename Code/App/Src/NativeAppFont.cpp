@@ -2,6 +2,7 @@
 #include "Include/NativeAppFont.h"
 #include "DrawAgent.h"
 #include "GenData.h"
+#include "resource.h"
 #include "MyVertex.h"
 #include <VFX.H>
 #include <TComponent.h>
@@ -90,7 +91,7 @@ struct Span { int x0, x1, y; };
 struct Glyph { int advance; std::vector<Span> spans; };
 bool IsFontTextCharacter(wchar_t c)
 {
-    return (c >= 32 && c <= 126) || c == L'\r' || c == L'\n';
+    return (c >= 32 && c <= 126) || c == 0x2122 || c == L'\r' || c == L'\n';
 }
 struct NativeFont : IFontDrawAgent
 {
@@ -162,7 +163,7 @@ struct NativeFont : IFontDrawAgent
     }
     Glyph &GetGlyph(wchar_t c)
     {
-        if (!IsFontTextCharacter(c)) FontFailure("selected font path supports printable ASCII and CR/LF only");
+        if (!IsFontTextCharacter(c)) FontFailure("selected font path supports printable ASCII, trademark and CR/LF only");
         // Single-line agents keep one baseline. Only the multiline owner below
         // interprets CR/LF as line separators; neither path rasterizes them.
         if (c == L'\r' || c == L'\n')
@@ -450,6 +451,12 @@ bool CheckNativeFontTextLayout(IFontDrawAgent *agent, U32 textResource)
             font->GetNumRows(item.text, nullptr) == 1 &&
             sameSpans(font->VisibleSpans(&pane, 0, 0, item.text),
                 font->VisibleSpans(&pane, 0, 0, item.visible));
+    // Original in-game options uses APP_NAMETM for its title. Its source
+    // resource must retain the trademark, not UTF-8 replacement bytes.
+    const wchar_t *title = _localLoadStringW(IDS_APP_NAMETM);
+    valid = valid && std::wcscmp(title, L"Conquest: Frontier Wars\u2122") == 0 &&
+        font->GetStringWidth(title) > font->GetStringWidth(L"Conquest: Frontier Wars") &&
+        !font->VisibleSpans(&pane, 0, 0, L"\u2122").empty();
     // The original StatusBar passes the authored ID straight to the agent.
     // Its Rally Point hint has a trailing LF. Use that resource, not a patched
     // replacement string or a production special case for its numeric ID.

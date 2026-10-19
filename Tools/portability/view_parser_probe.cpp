@@ -65,6 +65,14 @@
 #include "Scripts/Script03T/NativeScript03Resources.h"
 #include "Scripts/Script04T/NativeScript04Resources.h"
 #include "Scripts/Script05T/NativeScript05Resources.h"
+#include "Scripts/Script06T/NativeScript06Resources.h"
+#include "Scripts/Script07T/NativeScript07Resources.h"
+#include "Scripts/Script08T/NativeScript08Resources.h"
+#include "Scripts/Script09T/NativeScript09Resources.h"
+#include "Scripts/Script10T/NativeScript10Resources.h"
+#include "Scripts/Script11T/NativeScript11Resources.h"
+#include "Scripts/Script12T/NativeScript12Resources.h"
+
 #include "NativeSolTrainStrings.h"
 #include "Scripts/Sol_T/resource.h"
 
@@ -1330,6 +1338,110 @@ bool ParseFourthTerranSchema(IViewConstructor2 *constructor, const std::filesyst
     return valid;
 }
 
+// TM7/TM8 use DLL-local layouts and handles even though native code links
+// them together. Extend the real parser check: malformed offsets or a shared
+// resource identity must block campaign admission, not silently load a save.
+bool ParseLaterTerranSchema(IViewConstructor2 *constructor,
+                           const std::filesystem::path &path, unsigned mission)
+{
+    std::ifstream source(path, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(source)), {});
+    std::size_t length = 0;
+    const void *embedded = mission == 7 ? FrontierX::GetNativeScript07Schema(length) :
+                                         mission == 8 ? FrontierX::GetNativeScript08Schema(length) :
+                                                        mission == 9 ? FrontierX::GetNativeScript09Schema(length) :
+                                         mission == 10 ? FrontierX::GetNativeScript10Schema(length) :
+                                         mission == 11 ? FrontierX::GetNativeScript11Schema(length) : FrontierX::GetNativeScript12Schema(length);
+    if (bytes.empty() || !embedded || length != bytes.size() ||
+        std::memcmp(embedded, bytes.data(), length)) return false;
+    std::string text = bytes;
+    const HANDLE symbols = constructor->ParseNewMemory(text.data());
+    if (!symbols) return false;
+    const auto global = ResolveViewSymbolType(constructor->GetSymbol(symbols, "MissionData"));
+    const int size = mission == 7 ? 264 : mission == 8 ? 380 : mission == 9 ? 896 : mission == 10 ? 356 : mission == 11 ? 496 : 220;
+    const int first = mission == 7 ? 36 : mission == 8 ? 24 : mission == 9 ? 216 : mission == 10 ? 40 : mission == 11 ? 140 : 24;
+    const char *admiralName = mission == 7 ? "Benson" : mission == 8 ? "KerTak" : mission == 9 ? "Halsey" : "Steele";
+    bool admiral = false, end = false, state = false;
+    for (auto field = global ? global->datatype : nullptr; field; field = field->link)
+    {
+        if (!field->name) continue;
+        if (!std::strcmp(field->name, admiralName)) admiral = field->offset == first && field->size == 16;
+        if (!std::strcmp(field->name, mission == 10 ? "textFailureID" : "failureID")) end = field->offset + field->size == size;
+        if (!std::strcmp(field->name, "mission_state")) state = field->offset == 0 && field->size == 4;
+    }
+    const auto name = mission == 7 ? FrontierX::GetNativeScript07CountedString(1) :
+                                     mission == 8 ? FrontierX::GetNativeScript08CountedString(5042) :
+                                                    mission == 9 ? FrontierX::GetNativeScript09CountedString(1) :
+                                     mission == 10 ? FrontierX::GetNativeScript10CountedString(1) :
+                                     mission == 11 ? FrontierX::GetNativeScript11CountedString(1) : FrontierX::GetNativeScript12CountedString(1);
+    const std::wstring title = L"Mission " + std::to_wstring(mission);
+    bool valid = global && global->size == size && admiral && end && state &&
+        name && name[0] == static_cast<wchar_t>(title.size()) &&
+        std::wmemcmp(name+1, title.data(), title.size()) == 0;
+    const HINSTANCE__ *handles[] = {
+        FrontierX::GetNativeScript06ResourceHandle(), FrontierX::GetNativeScript07ResourceHandle(),
+        FrontierX::GetNativeScript08ResourceHandle(), FrontierX::GetNativeScript09ResourceHandle(),
+        FrontierX::GetNativeScript10ResourceHandle(), FrontierX::GetNativeScript11ResourceHandle(),
+        FrontierX::GetNativeScript12ResourceHandle()};
+    for (std::size_t i = 0; i < std::size(handles); ++i)
+        for (std::size_t j = 0; j < i; ++j) valid = valid && handles[i] != handles[j];
+    if (valid)
+    {
+        std::vector<unsigned char> saved(size, 0), restored(size, 0);
+        const U32 id = 0x12345671U, failure = 42;
+        std::memcpy(saved.data()+first+4, &id, sizeof(id));
+        std::memcpy(saved.data()+size-4, &failure, sizeof(failure));
+        valid = CorrelateNativeViewSymbols(constructor, global, saved.data(), global, restored.data()) &&
+            saved == restored;
+    }
+    constructor->DestroySymbols(symbols);
+    if (valid) std::cout << "Script" << mission << " source schema/resource and saved admiral roundtrip checked\n";
+    return valid;
+}
+
+// TM5 Continue requires the next original module; this does not accept TM6 gameplay.
+bool ParseSixthTerranSchema(IViewConstructor2 *constructor, const std::filesystem::path &path)
+{
+    std::ifstream source(path, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(source)), {});
+    std::size_t length = 0;
+    const void *embedded = FrontierX::GetNativeScript06Schema(length);
+    if (bytes.empty() || !embedded || length != bytes.size() ||
+        std::memcmp(embedded, bytes.data(), length)) return false;
+    std::string text = bytes;
+    const HANDLE symbols = constructor->ParseNewMemory(text.data());
+    if (!symbols) return false;
+    const auto global = ResolveViewSymbolType(constructor->GetSymbol(symbols, "MissionData"));
+    bool kertak = false, hawkes = false, execution = false, end = false;
+    for (auto field = global ? global->datatype : nullptr; field; field = field->link)
+    {
+        if (!field->name) continue;
+        if (!std::strcmp(field->name, "KerTak")) kertak = field->offset == 36;
+        if (!std::strcmp(field->name, "Hawkes")) hawkes = field->offset == 52;
+        if (!std::strcmp(field->name, "ExecutionTimer")) execution = field->offset == 16;
+        if (!std::strcmp(field->name, "failureID")) end = field->offset + field->size == 440;
+    }
+    const auto name = FrontierX::GetNativeScript06CountedString(5063);
+    constexpr wchar_t title[] = L"Mission 6";
+    bool valid = global && global->size == 440 && kertak && hawkes && execution && end &&
+        name && name[0] == std::size(title)-1 &&
+        std::wmemcmp(name+1, title, std::size(title)-1) == 0;
+    if (valid)
+    {
+        std::vector<unsigned char> saved(440, 0), restored(440, 0);
+        const U32 ids[] = {0x12345671U, 0x23456781U, 42};
+        const float timer = 17.75F;
+        std::memcpy(saved.data()+16, &timer, sizeof(timer));
+        std::memcpy(saved.data()+36, &ids[0], sizeof(U32));
+        std::memcpy(saved.data()+52, &ids[1], sizeof(U32));
+        std::memcpy(saved.data()+436, &ids[2], sizeof(U32));
+        valid = CorrelateNativeViewSymbols(constructor, global, saved.data(), global, restored.data()) &&
+            saved == restored;
+    }
+    constructor->DestroySymbols(symbols);
+    return valid;
+}
+
 // TM4 Continue must bind the next original briefing's independent schema.
 // This is technical transition preparation, not TM5 gameplay readiness.
 bool ParseFifthTerranSchema(IViewConstructor2 *constructor, const std::filesystem::path &path)
@@ -1442,7 +1554,8 @@ bool ParseScriptSchema(IViewConstructor2 * constructor,
 }
 
 bool ParseMissionSchema(IViewConstructor2 * constructor,
-                        const std::filesystem::path & root, const char * missionName)
+                        const std::filesystem::path & root, const char * missionName,
+                        const char *expectedScript)
 {
     using FileOwner = std::unique_ptr<IFileSystem, void (*)(IFileSystem *)>;
     const auto release = [](IFileSystem *file) { if (file) file->Release(); };
@@ -1617,8 +1730,10 @@ bool ParseMissionSchema(IViewConstructor2 * constructor,
                 missionBuildVersion = runtime.gameSettings.version;
                 valid = FrontierX::EncodeGlobalData(runtime, roundTrip) &&
                     correlated == roundTrip;
+                std::cout << "External mission script: " << runtime.scriptLibrary.string
+                          << "; update count: " << runtime.updateCount << '\n';
                 valid = valid &&
-                    std::strncmp(runtime.scriptLibrary.string, "Sol_T.dll",
+                    std::strncmp(runtime.scriptLibrary.string, expectedScript,
                                  sizeof(runtime.scriptLibrary.string)) == 0 &&
                     runtime.updateCount == 0;
                 if (valid)
@@ -1776,10 +1891,17 @@ int main(int argc, char ** argv)
     const bool thirdTerranSchema = argc == 3 && std::strcmp(argv[1], "--third-terran-script-schema") == 0;
     const bool fourthTerranSchema = argc == 3 && std::strcmp(argv[1], "--fourth-terran-script-schema") == 0;
     const bool fifthTerranSchema = argc == 3 && std::strcmp(argv[1], "--fifth-terran-script-schema") == 0;
-    const bool missionSchema = argc == 4 &&
+    const bool sixthTerranSchema = argc == 3 && std::strcmp(argv[1], "--sixth-terran-script-schema") == 0;
+    const bool seventhTerranSchema = argc == 3 && std::strcmp(argv[1], "--seventh-terran-script-schema") == 0;
+    const bool eighthTerranSchema = argc == 3 && std::strcmp(argv[1], "--eighth-terran-script-schema") == 0;
+    const bool ninthTerranSchema = argc == 3 && std::strcmp(argv[1], "--ninth-terran-script-schema") == 0;
+    const bool tenthTerranSchema = argc == 3 && std::strcmp(argv[1], "--tenth-terran-script-schema") == 0;
+    const bool eleventhTerranSchema = argc == 3 && std::strcmp(argv[1], "--eleventh-terran-script-schema") == 0;
+    const bool twelfthTerranSchema = argc == 3 && std::strcmp(argv[1], "--twelfth-terran-script-schema") == 0;
+    const bool missionSchema = (argc == 4 || argc == 5) &&
         std::strcmp(argv[1], "--mission-schema") == 0 &&
         !std::strchr(argv[3], '/') && !std::strchr(argv[3], '\\');
-    if (argc != 1 && !appSchema && !scriptSchema && !terranSchema && !secondTerranSchema && !thirdTerranSchema && !fourthTerranSchema && !fifthTerranSchema && !missionSchema)
+    if (argc != 1 && !appSchema && !scriptSchema && !terranSchema && !secondTerranSchema && !thirdTerranSchema && !fourthTerranSchema && !fifthTerranSchema && !sixthTerranSchema && !seventhTerranSchema && !eighthTerranSchema && !ninthTerranSchema && !tenthTerranSchema && !eleventhTerranSchema && !twelfthTerranSchema && !missionSchema)
     {
         std::cerr << "Usage: frontierx_view_parser_probe [--app-schema data.i | "
                      "--script-schema DataDef.i | "
@@ -1788,7 +1910,14 @@ int main(int argc, char ** argv)
                      "--third-terran-script-schema DataDef.i | "
                      "--fourth-terran-script-schema DataDef.i | "
                      "--fifth-terran-script-schema DataDef.i | "
-                     "--mission-schema data-root mission-name]\n";
+                     "--sixth-terran-script-schema DataDef.i | "
+                     "--seventh-terran-script-schema DataDef.i | "
+                     "--eighth-terran-script-schema DataDef.i | "
+                     "--ninth-terran-script-schema DataDef.i | "
+                     "--tenth-terran-script-schema DataDef.i | "
+                     "--eleventh-terran-script-schema DataDef.i | "
+                     "--twelfth-terran-script-schema DataDef.i | "
+                     "--mission-schema data-root mission-name [expected-script]]\n";
         return 1;
     }
     char buildVersionText[32] = {};
@@ -1901,11 +2030,25 @@ int main(int argc, char ** argv)
                                 "selected Script03T schema/resource")) return 1;
     if (fourthTerranSchema && !Expect(ParseFourthTerranSchema(view2, argv[2]),
                                 "selected Script04T schema/resource")) return 1;
+    if (tenthTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 10),
+        "TM10 source schema/resource")) return 1;
+    if (eleventhTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 11),
+        "TM11 source schema/resource")) return 1;
+    if (twelfthTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 12),
+        "TM12 source schema/resource")) return 1;
+    if (ninthTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 9),
+        "TM8 next-entry source schema/resource")) return 1;
+    if (seventhTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 7),
+        "seventh Terran source schema/resource")) return 1;
+    if (eighthTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 8),
+        "eighth Terran source schema/resource")) return 1;
+    if (sixthTerranSchema && !Expect(ParseSixthTerranSchema(view2, argv[2]),
+        "sixth Terran source transition schema")) return 1;
     if (fifthTerranSchema && !Expect(ParseFifthTerranSchema(view2, argv[2]),
                                 "selected Script05T transition schema/resource")) return 1;
     if (scriptSchema && !Expect(ParseScriptSchema(view2, argv[2]),
                                 "selected Sol_T script schema")) return 1;
-    if (missionSchema && !Expect(ParseMissionSchema(view2, argv[2], argv[3]),
+    if (missionSchema && !Expect(ParseMissionSchema(view2, argv[2], argv[3], argc == 5 ? argv[4] : "Sol_T.dll"),
                             "external mission ParseData schema")) return 1;
     HANDLE oldSymbols = view2->ParseNewMemory(
         "struct MigrationRecord { int alpha; int beta; };");
@@ -2089,6 +2232,37 @@ int main(int argc, char ** argv)
                 "native real provider rejects missing fields and unknown provider/symbol")) return 1;
     view2->DestroySymbols(incompleteSymbols);
     view2->DestroySymbols(sameSymbols);
+    // TM8 Continue loads TM9's expression-bearing mission schema. Check
+    // dimensions, precedence and following-field placement with the real
+    // parser; the dedicated TM9 schema check pins its complete native extent.
+    HANDLE expressionSymbols = view2->ParseNewMemory(
+        "struct ArrayExpressions { int product[3*12]; bool sum[12+1];"
+        " int precedence[2+3*4]; int grouped[(2+3)*4]; int tail; };");
+    SYMBOL expressionRecord = expressionSymbols ? ResolveViewSymbolType(
+        view2->GetSymbol(expressionSymbols, "ArrayExpressions")) : nullptr;
+    if (!Expect(expressionRecord && expressionRecord->size == 300,
+                "script array expressions preserve precedence, alignment and final extent")) return 1;
+    const int counts[]{36, 13, 14, 20};
+    auto expressionField = expressionRecord->datatype;
+    for (unsigned index = 0; index < std::size(counts); ++index)
+    {
+        const auto array = ResolveViewSymbolType(expressionField);
+        if (!Expect(array && array->kind == ARRAYSYM && array->arrayval == counts[index],
+                    "script array expression resolves exact original element count")) return 1;
+        expressionField = expressionField->link;
+    }
+    if (!Expect(expressionField && expressionField->offset == 296,
+                "script array expression preserves following saved-field offset")) return 1;
+    view2->DestroySymbols(expressionSymbols);
+    for (const char *invalid : {
+            "struct ProductOverflow { int values[2147483647*2]; };",
+            "struct ExtentOverflow { int values[2147483647]; };",
+            "struct FractionalCount { int values[3.5]; };"})
+    {
+        const HANDLE rejected = view2->ParseNewMemory(invalid);
+        if (rejected) view2->DestroySymbols(rejected);
+        if (!Expect(!rejected, "invalid or overflowing array dimensions reject the schema")) return 1;
+    }
     HANDLE oldNestedSymbols = view2->ParseNewMemory(
         "struct Inner { int left; int right; };"
         "struct ArrayRecord { int marker; Inner inner[2]; int tail; };");

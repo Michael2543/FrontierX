@@ -25,6 +25,13 @@
 #include "Scripts/Script03T/NativeScript03Resources.h"
 #include "Scripts/Script04T/NativeScript04Resources.h"
 #include "Scripts/Script05T/NativeScript05Resources.h"
+#include "Scripts/Script06T/NativeScript06Resources.h"
+#include "Scripts/Script08T/NativeScript08Resources.h"
+#include "Scripts/Script09T/NativeScript09Resources.h"
+#include "Scripts/Script10T/NativeScript10Resources.h"
+#include "Scripts/Script11T/NativeScript11Resources.h"
+#include "Scripts/Script12T/NativeScript12Resources.h"
+#include "Scripts/Script07T/NativeScript07Resources.h"
 #include "MyVertex.h"
 #include <ICamera.h>
 #include <ENGINE.H>
@@ -293,6 +300,13 @@ static const CQSCRIPTENTRY *nativeTerran02Programs;
 static const CQSCRIPTENTRY *nativeTerran03Programs;
 static const CQSCRIPTENTRY *nativeTerran04Programs;
 static const CQSCRIPTENTRY *nativeTerran05Programs;
+static const CQSCRIPTENTRY *nativeTerran06Programs;
+static const CQSCRIPTENTRY *nativeTerran08Programs;
+static const CQSCRIPTENTRY *nativeTerran09Programs;
+static const CQSCRIPTENTRY *nativeTerran10Programs;
+static const CQSCRIPTENTRY *nativeTerran11Programs;
+static const CQSCRIPTENTRY *nativeTerran12Programs;
+static const CQSCRIPTENTRY *nativeTerran07Programs;
 void FrontierXRegisterNativeScriptProgram(const char *module, CQSCRIPTENTRY *entry)
 {
     const CQSCRIPTENTRY **head = nullptr;
@@ -302,6 +316,13 @@ void FrontierXRegisterNativeScriptProgram(const char *module, CQSCRIPTENTRY *ent
     else if (!strcmp(module, "Script03T.dll")) head = &nativeTerran03Programs;
     else if (!strcmp(module, "Script04T.dll")) head = &nativeTerran04Programs;
     else if (!strcmp(module, "Script05T.dll")) head = &nativeTerran05Programs;
+    else if (!strcmp(module, "Script06T.dll")) head = &nativeTerran06Programs;
+    else if (!strcmp(module, "Script07T.dll")) head = &nativeTerran07Programs;
+    else if (!strcmp(module, "Script08T.dll")) head = &nativeTerran08Programs;
+    else if (!strcmp(module, "Script09T.dll")) head = &nativeTerran09Programs;
+    else if (!strcmp(module, "Script10T.dll")) head = &nativeTerran10Programs;
+    else if (!strcmp(module, "Script11T.dll")) head = &nativeTerran11Programs;
+    else if (!strcmp(module, "Script12T.dll")) head = &nativeTerran12Programs;
     else std::abort();
     entry->pNext = *head;
     *head = entry;
@@ -312,11 +333,18 @@ extern "C" bool FrontierXCheckScript02Reset(void);
 extern "C" bool FrontierXCheckScript03Reset(void);
 extern "C" bool FrontierXCheckScript04Reset(void);
 extern "C" bool FrontierXCheckScript05Reset(void);
+extern "C" bool FrontierXCheckScript06Reset(void);
+extern "C" bool FrontierXCheckScript08Reset(void);
+extern "C" bool FrontierXCheckScript09Reset(void);
+extern "C" bool FrontierXCheckScript10Reset(void);
+extern "C" bool FrontierXCheckScript11Reset(void);
+extern "C" bool FrontierXCheckScript12Reset(void);
+extern "C" bool FrontierXCheckScript07Reset(void);
 bool CheckNativeCampaignScriptPrograms()
 {
     if (!FrontierXCheckSolTrainScriptReset() || !FrontierXCheckScript01Reset() ||
         !FrontierXCheckScript02Reset() || !FrontierXCheckScript03Reset() ||
-        !FrontierXCheckScript04Reset() || !FrontierXCheckScript05Reset()) return false;
+        !FrontierXCheckScript04Reset() || !FrontierXCheckScript05Reset() || !FrontierXCheckScript07Reset() || !FrontierXCheckScript09Reset() || !FrontierXCheckScript10Reset() || !FrontierXCheckScript11Reset() || !FrontierXCheckScript12Reset() || !FrontierXCheckScript08Reset() || !FrontierXCheckScript06Reset()) return false;
     const auto check = [](const CQSCRIPTENTRY *head, const char *briefing, const char *start) {
         unsigned int briefings = 0, starts = 0;
         for (auto entry = head; entry; entry = entry->pNext)
@@ -339,7 +367,14 @@ bool CheckNativeCampaignScriptPrograms()
         !check(nativeTerran02Programs, "TM2_Briefing", "TM2_InGameScene") ||
         !check(nativeTerran03Programs, "TM3_Briefing", "TM3_MissionIntro") ||
         !check(nativeTerran04Programs, "TM4_Briefing", "TM4_MissionStart") ||
-        !check(nativeTerran05Programs, "TM5_Briefing", "TM5_MissionStart") || !GS)
+        !check(nativeTerran05Programs, "TM5_Briefing", "TM5_MissionStart") ||
+        !check(nativeTerran06Programs, "TM6_Briefing", "TM6_MissionStart") ||
+        !check(nativeTerran07Programs, "TM7_Briefing", "TM7_MissionStart") ||
+        !check(nativeTerran08Programs, "TM8_Briefing", "TM8_MissionStart") ||
+        !check(nativeTerran09Programs, "TM9_Briefing", "TM9_MissionStart") ||
+        !check(nativeTerran10Programs, "TM10_Briefing", "TM10_MissionStart") ||
+        !check(nativeTerran11Programs, "TM11_Briefing", "TM11_InGameScene") ||
+        !check(nativeTerran12Programs, "TM12_Briefing", "TM12_MissionStart") || !GS)
         return false;
     COMPTR<IViewConstructor> constructor;
     COMPTR<IViewConstructor2> provider;
@@ -375,19 +410,33 @@ bool CheckNativeCampaignScriptPrograms()
         provider->DestroySymbols(symbols);
         return valid && empties != 0;
     };
-    std::size_t solLength = 0, terranLength = 0, terran02Length = 0, terran03Length = 0, terran04Length = 0, terran05Length = 0;
+    std::size_t solLength = 0, terranLength = 0, terran02Length = 0, terran03Length = 0, terran04Length = 0, terran05Length = 0, terran07Length = 0, terran08Length = 0, terran09Length = 0, terran10Length = 0, terran11Length = 0, terran12Length = 0, terran06Length = 0;
     const void *solSchema = FrontierX::GetNativeSolTrainSchema(solLength);
     const void *terranSchema = FrontierX::GetNativeScript01Schema(terranLength);
     const void *terran02Schema = FrontierX::GetNativeScript02Schema(terran02Length);
     const void *terran03Schema = FrontierX::GetNativeScript03Schema(terran03Length);
     const void *terran04Schema = FrontierX::GetNativeScript04Schema(terran04Length);
     const void *terran05Schema = FrontierX::GetNativeScript05Schema(terran05Length);
+    const void *terran06Schema = FrontierX::GetNativeScript06Schema(terran06Length);
+    const void *terran07Schema = FrontierX::GetNativeScript07Schema(terran07Length);
+    const void *terran08Schema = FrontierX::GetNativeScript08Schema(terran08Length);
+    const void *terran09Schema = FrontierX::GetNativeScript09Schema(terran09Length);
+    const void *terran10Schema = FrontierX::GetNativeScript10Schema(terran10Length);
+    const void *terran11Schema = FrontierX::GetNativeScript11Schema(terran11Length);
+    const void *terran12Schema = FrontierX::GetNativeScript12Schema(terran12Length);
     return checkEmpty(nativeSolPrograms, solSchema, solLength) &&
         checkEmpty(nativeTerranPrograms, terranSchema, terranLength) &&
         checkEmpty(nativeTerran02Programs, terran02Schema, terran02Length) &&
         checkEmpty(nativeTerran03Programs, terran03Schema, terran03Length) &&
         checkEmpty(nativeTerran04Programs, terran04Schema, terran04Length) &&
-        checkEmpty(nativeTerran05Programs, terran05Schema, terran05Length);
+        checkEmpty(nativeTerran05Programs, terran05Schema, terran05Length) &&
+        checkEmpty(nativeTerran07Programs, terran07Schema, terran07Length) &&
+        checkEmpty(nativeTerran08Programs, terran08Schema, terran08Length) &&
+        checkEmpty(nativeTerran09Programs, terran09Schema, terran09Length) &&
+        checkEmpty(nativeTerran10Programs, terran10Schema, terran10Length) &&
+        checkEmpty(nativeTerran11Programs, terran11Schema, terran11Length) &&
+        checkEmpty(nativeTerran12Programs, terran12Schema, terran12Length) &&
+        checkEmpty(nativeTerran06Programs, terran06Schema, terran06Length);
 }
 
 #endif
@@ -1087,10 +1136,31 @@ void MScript::Load (IFileSystem * inFile)
     const bool terran05 = strcmp(scriptName, "Script05T.dll") == 0 ||
         strcmp(scriptName, "script05.dll") == 0 || strcmp(scriptName, "Script05.dll") == 0 ||
         strcmp(scriptName, "SCRIPT05.dll") == 0;
+    const bool terran06 = strcmp(scriptName, "Script06T.dll") == 0 ||
+        strcmp(scriptName, "script06.dll") == 0 || strcmp(scriptName, "Script06.dll") == 0 ||
+        strcmp(scriptName, "SCRIPT06.dll") == 0;
+    const bool terran07 = strcmp(scriptName, "Script07T.dll") == 0 ||
+        strcmp(scriptName, "script07.dll") == 0 || strcmp(scriptName, "Script07.dll") == 0 ||
+        strcmp(scriptName, "SCRIPT07.dll") == 0;
+    const bool terran08 = strcmp(scriptName, "Script08T.dll") == 0 ||
+        strcmp(scriptName, "script08.dll") == 0 || strcmp(scriptName, "Script08.dll") == 0 ||
+        strcmp(scriptName, "SCRIPT08.dll") == 0;
+    const bool terran09 = strcmp(scriptName, "Script09T.dll") == 0 ||
+        strcmp(scriptName, "script09.dll") == 0 || strcmp(scriptName, "Script09.dll") == 0 ||
+        strcmp(scriptName, "SCRIPT09.dll") == 0;
+    const bool terran10 = strcmp(scriptName, "Script10T.dll") == 0 ||
+        strcmp(scriptName, "script10.dll") == 0 || strcmp(scriptName, "Script10.dll") == 0 ||
+        strcmp(scriptName, "SCRIPT10.dll") == 0;
+    const bool terran11 = strcmp(scriptName, "Script11T.dll") == 0 ||
+        strcmp(scriptName, "script11.dll") == 0 || strcmp(scriptName, "Script11.dll") == 0 ||
+        strcmp(scriptName, "SCRIPT11.dll") == 0;
+    const bool terran12 = strcmp(scriptName, "Script12T.dll") == 0 ||
+        strcmp(scriptName, "script12.dll") == 0 || strcmp(scriptName, "Script12.dll") == 0 ||
+        strcmp(scriptName, "SCRIPT12.dll") == 0;
     g_pScripts = training ? nativeSolPrograms : terran ? nativeTerranPrograms :
-        terran02 ? nativeTerran02Programs : terran03 ? nativeTerran03Programs : terran04 ? nativeTerran04Programs : terran05 ? nativeTerran05Programs : nullptr;
+        terran02 ? nativeTerran02Programs : terran03 ? nativeTerran03Programs : terran04 ? nativeTerran04Programs : terran05 ? nativeTerran05Programs : terran07 ? nativeTerran07Programs : terran08 ? nativeTerran08Programs : terran09 ? nativeTerran09Programs : terran10 ? nativeTerran10Programs : terran11 ? nativeTerran11Programs : terran12 ? nativeTerran12Programs : terran06 ? nativeTerran06Programs : nullptr;
     if (!g_pScripts || !findScript(training ? "SolTrain_Start" :
-            terran ? "TM1_MissionStart" : terran02 ? "TM2_InGameScene" : terran03 ? "TM3_MissionIntro" : terran04 ? "TM4_MissionStart" : "TM5_MissionStart") ||
+            terran ? "TM1_MissionStart" : terran02 ? "TM2_InGameScene" : terran03 ? "TM3_MissionIntro" : terran04 ? "TM4_MissionStart" : terran05 ? "TM5_MissionStart" : terran07 ? "TM7_MissionStart" : terran08 ? "TM8_MissionStart" : terran09 ? "TM9_MissionStart" : terran10 ? "TM10_MissionStart" : terran11 ? "TM11_InGameScene" : terran12 ? "TM12_MissionStart" : "TM6_MissionStart") ||
         !PARSER || !SOUNDMANAGER || !TELETYPE || (inFile && (!STRINGTABLE || !SCRIPTING)))
     {
         std::fprintf(stderr, "Native script prerequisites missing: %s\n", scriptName);
@@ -1102,7 +1172,14 @@ void MScript::Load (IFileSystem * inFile)
     else if (terran02) FrontierXInitializeScript02();
     else if (terran03) FrontierXInitializeScript03();
     else if (terran04) FrontierXInitializeScript04();
-    else FrontierXInitializeScript05();
+    else if (terran05) FrontierXInitializeScript05();
+    else if (terran07) FrontierXInitializeScript07();
+    else if (terran08) FrontierXInitializeScript08();
+    else if (terran09) FrontierXInitializeScript09();
+    else if (terran10) FrontierXInitializeScript10();
+    else if (terran11) FrontierXInitializeScript11();
+    else if (terran12) FrontierXInitializeScript12();
+    else FrontierXInitializeScript06();
 	SOUNDMANAGER->SetLastStreamID(MGlobals::GetLastStreamID());
 	TELETYPE->SetLastTeletypeID(MGlobals::GetLastTeletypeID());
 	if (inFile)
@@ -1227,7 +1304,7 @@ void MScript::LoadScript (void)
 	Load(static_cast<IFileSystem *>(nullptr));
 	if ((!findScript("SolTrain_Briefing") && !findScript("TM1_Briefing") &&
             !findScript("TM2_Briefing") && !findScript("TM3_Briefing") &&
-            !findScript("TM4_Briefing") && !findScript("TM5_Briefing")) || !BRIEFING)
+            !findScript("TM4_Briefing") && !findScript("TM5_Briefing") && !findScript("TM7_Briefing") && !findScript("TM8_Briefing") && !findScript("TM9_Briefing") && !findScript("TM10_Briefing") && !findScript("TM11_Briefing") && !findScript("TM12_Briefing") && !findScript("TM6_Briefing")) || !BRIEFING)
 	{
 		std::fputs("Native campaign briefing prerequisites missing\n", stderr);
 		std::abort();
@@ -2531,6 +2608,20 @@ wchar_t * MScript::GetCountedString (U32 stringID)
         counted = FrontierX::GetNativeScript04CountedString(stringID);
     else if (g_hLocalDLL == FrontierX::GetNativeScript05ResourceHandle())
         counted = FrontierX::GetNativeScript05CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript07ResourceHandle())
+        counted = FrontierX::GetNativeScript07CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript08ResourceHandle())
+        counted = FrontierX::GetNativeScript08CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript09ResourceHandle())
+        counted = FrontierX::GetNativeScript09CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript10ResourceHandle())
+        counted = FrontierX::GetNativeScript10CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript11ResourceHandle())
+        counted = FrontierX::GetNativeScript11CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript12ResourceHandle())
+        counted = FrontierX::GetNativeScript12CountedString(stringID);
+    else if (g_hLocalDLL == FrontierX::GetNativeScript06ResourceHandle())
+        counted = FrontierX::GetNativeScript06CountedString(stringID);
     else std::abort();
 	if (!counted)
 	{

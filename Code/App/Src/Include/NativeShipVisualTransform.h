@@ -36,6 +36,27 @@ inline Transform NativeShipHardpointTransform(const Transform &shipWorld,
     return NativeShipVisualTransform(shipWorld, true) * nodeLocal * hardpoint;
 }
 
+// DumbReconProbe travels toward targetPos independently of its launch pose.
+// Render its authored -K nose along that path and keep +J as close to world up
+// as possible. This also works after reload/jump without changing saved state.
+inline Transform NativeProbeVisualTransform(const Transform &world, const Vector &goal)
+{
+    Vector forward = goal - world.translation;
+    if (forward.magnitude_squared() == 0) forward = -world.get_k();
+    forward.normalize();
+    Vector right = cross_product(forward, Vector(0, 0, 1));
+    if (right.magnitude_squared() < 1e-10F)
+        right = Vector(1, 0, 0);
+    right.normalize();
+    const Vector back = -forward;
+    Vector up = cross_product(back, right);
+    up.normalize();
+    Transform visual;
+    visual.set_i(right); visual.set_j(up); visual.set_k(back);
+    visual.translation = world.translation;
+    return visual;
+}
+
 inline Transform NativeShipSpeakerMarkerTransform(const Transform &world,
                                                   const Vector &center,
                                                   float angle)

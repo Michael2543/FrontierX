@@ -534,6 +534,48 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
     extendedChecksumB = extendedB.checksum;
     const bool secondUvObserved = extendedBValid &&
         extendedChecksumA != extendedChecksumB;
+    // Match AreaEffectBolt's 20-segment shared RPVERTEX2 buffer and real PIPE
+    // lock/update/unlock/draw_primitive_vb caller, not just a backend submission.
+    std::array<FrontierX::RenderVertexP3DiffuseT4, 42> ring{};
+    std::array<U16, 120> ringTriangles{};
+    for (std::size_t i = 0; i < ring.size(); ++i)
+    {
+        const float angle = float(i / 2) * 6.283185307F / 20.0F;
+        const float radius = i % 2 ? 0.35F : 0.7F;
+        ring[i] = {radius * std::cos(angle), radius * std::sin(angle), 0.25F,
+            0x80ffffffU, float(i / 2), float(i % 2), float(i / 2) * 0.05F, float(i % 2)};
+    }
+    for (U16 i = 0; i < 40; ++i)
+    {
+        ringTriangles[i * 3] = i + (i & 1U);
+        ringTriangles[i * 3 + 1] = i + 1U - (i & 1U);
+        ringTriangles[i * 3 + 2] = i + 2;
+    }
+    IRP_VERTEXBUFFERHANDLE ringBuffer = 0;
+    void *ringData = nullptr;
+    U32 ringCount = 0;
+    FrontierX::SdlGpuReadback ringExpected, ringActual;
+    if (pipeline.draw_indexed_primitive(D3DPT_TRIANGLELIST, FrontierX::LegacyD3d9::kRpVertex2Fvf,
+            ring.data(), int(ring.size()), ringTriangles.data(), int(ringTriangles.size()), 0) != GR_OK ||
+        !renderer.Readback64(ringExpected, error) || ringExpected.changedPixels == 0 ||
+        pipeline.create_vertex_buffer(FrontierX::LegacyD3d9::kRpVertex2Fvf,
+            int(ring.size()), 0, &ringBuffer) != GR_OK ||
+        pipeline.lock_vertex_buffer(ringBuffer, 0, &ringData, &ringCount) != GR_OK ||
+        ringCount != ring.size())
+    {
+        error = "area-effect shared two-UV ring buffer setup failed";
+        return false;
+    }
+    std::memcpy(ringData, ring.data(), sizeof(ring));
+    if (pipeline.unlock_vertex_buffer(ringBuffer) != GR_OK ||
+        pipeline.draw_primitive_vb(D3DPT_TRIANGLESTRIP, ringBuffer, 0, int(ring.size()), 0) != GR_OK ||
+        !renderer.Readback64(ringActual, error) || ringActual.checksum != ringExpected.checksum ||
+        pipeline.destroy_vertex_buffer(ringBuffer) != GR_OK)
+    {
+        error = "area-effect PIPE two-UV ring strip differs from explicit triangles";
+        return false;
+    }
+    std::cout << "AreaEffectBolt 42-vertex PIPE buffer strip matches 40 explicit triangles\n";
     if (pipeline.set_texture_stage_state(0U, D3DTSS_TEXCOORDINDEX, 0U) != GR_OK)
     {
         error = "texture coordinate stage reset failed";
@@ -1579,6 +1621,36 @@ int main(int argc, char ** argv)
         std::cerr << "beam strip differs from explicit triangles: " << error << '\n';
         return 1;
     }
+    // The Battlecruiser AreaEffectBolt caller draws RPVERTEX2 triangle strips.
+    // Beam's one-UV fixture above cannot detect rejection or UV loss here.
+    std::array<FrontierX::RenderVertexP3DiffuseT4, 4> stripVertices2{};
+    for (std::size_t index = 0; index < stripVertices.size(); ++index)
+    {
+        const auto &v = stripVertices[index];
+        stripVertices2[index] = {v.x, v.y, v.z, v.diffuseBgra,
+            v.u, v.v, v.v, 1.0F - v.u};
+    }
+    FrontierX::SdlGpuReadback strip2Expected, strip2Direct, strip2Indexed;
+    const auto stagesBeforeStrip2 = renderer.CurrentTextureStageState();
+    auto strip2Stages = stagesBeforeStrip2;
+    strip2Stages.textureCoordinateIndex = 1;
+    if (renderer.SetTextureStageState(strip2Stages) != GR_OK ||
+        renderer.Submit(FrontierX::RenderSubmissionView2{FrontierX::PrimitiveTopology::TriangleList,
+            stripVertices2.data(), stripVertices2.size(), stripTriangles.data(), stripTriangles.size()}) != GR_OK ||
+        !renderer.Readback64(strip2Expected, error) ||
+        renderer.Submit(FrontierX::RenderSubmissionView2{FrontierX::PrimitiveTopology::TriangleStrip,
+            stripVertices2.data(), stripVertices2.size(), nullptr, 0U}) != GR_OK ||
+        renderer.VertexCount() != 6U || !renderer.Readback64(strip2Direct, error) ||
+        renderer.Submit(FrontierX::RenderSubmissionView2{FrontierX::PrimitiveTopology::TriangleStrip,
+            stripVertices2.data(), stripVertices2.size(), stripIndices.data(), stripIndices.size()}) != GR_OK ||
+        !renderer.Readback64(strip2Indexed, error) || strip2Expected.changedPixels == 0U ||
+        strip2Direct.checksum != strip2Expected.checksum || strip2Indexed.checksum != strip2Expected.checksum ||
+        renderer.SetTextureStageState(stagesBeforeStrip2) != GR_OK)
+    {
+        std::cerr << "area-effect two-UV strip differs from explicit triangles: " << error << '\n';
+        return 1;
+    }
+    std::cout << "AreaEffectBolt two-UV direct/indexed strips match explicit triangle winding and UV1 readback\n";
     if (!SubmitProductionFixture(renderer, windowRuntime.window, utfFixturePath,
                                  extendedChecksumA, extendedChecksumB,
                                  materialChecksum, alternateChecksum,

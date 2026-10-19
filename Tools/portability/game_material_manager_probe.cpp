@@ -78,6 +78,9 @@
 #include <stdexcept>
 #include <vector>
 
+void UpdateRenderEffects(SINGLE dt);
+extern SINGLE puffPercent;
+
 void COMAPI CreateTGAReader(IImageReader **reader);
 void COMAPI CreateBMPReader(IImageReader **reader);
 
@@ -1239,6 +1242,31 @@ int main(int argc, char **argv)
                 std::memcmp(&barrelWorld, &originalBarrel, sizeof(Transform)) == 0 &&
                 std::memcmp(&muzzle, &originalMuzzleFrame, sizeof(Transform)) == 0,
                 "fixed ship muzzle shares hull correction exactly once and preserves scaled child/nondirect frames")) return 1;
+    // TM5 Midas has model-Y revolute turret joints and model -K muzzles.
+    // Omitting the hull correction makes that muzzle point down world Z and
+    // measures its joint yaw in the wrong plane. Exercise the shared frame
+    // used by Turret's sight, swivel and target-leading consumers.
+    for (const float heading : {-2.4F, -0.7F, 0.0F, 0.7F, 2.4F})
+    for (const float angle : {-2.0F, -0.4F, 0.0F, 0.4F, 2.0F})
+    {
+        TRANSFORM ship;
+        ship.rotate_about_k(heading);
+        ship.translation = Vector(100, 200, 300);
+        const Matrix jointRotation(Quaternion(Vector(0,1,0), angle));
+        Transform joint(jointRotation);
+        joint.translation = Vector(5, 20, -30);
+        const Transform nodeWorld = ship * joint;
+        const TRANSFORM node(NativeShipHardpointTransform(ship, nodeWorld, Transform(), true));
+        const Vector ray = -node.get_k();
+        const Vector expected = ship.rotate(Vector(std::sin(angle), -std::cos(angle), 0));
+        const Vector target = node.translation + expected * 5000;
+        const SINGLE error = std::remainder(TRANSFORM::get_yaw(target-node.translation) -
+                                            node.get_yaw_zbased(), 2*PI);
+        const Vector origin = ship.rotate_translate(Vector(-5, -30, 20));
+        if (!Expect((ray-expected).magnitude() < 1e-4F && std::fabs(error) < 1e-4F &&
+                    (node.translation-origin).magnitude() < 1e-4F,
+                    "jointed ship muzzle, target yaw and model-Y pivot share the visible hull frame")) return 1;
+    }
     // Harvester hp_tractor is a model-space muzzle. A model-Z displacement
     // must follow the corrected hull axis instead of lowering the beam in world Z.
     // Keep the original endpoint/transform available to simulation and fast hulls.
@@ -1875,6 +1903,35 @@ int main(int argc, char **argv)
                     reinterpret_cast<void **>(&renderer)) == GR_OK && renderer &&
                 renderer->get_instance_mesh(engineInstance, nullptr) != nullptr,
                 "production RenderMgr exposes the PolyMesh instance")) return 1;
+    // Direct SpaceShip/Platform draws bypass CQ2 team modifiers. Exercise
+    // their actual unique-mesh owner, including isolation from other players.
+    Mesh *teamArchetype = renderer->get_archetype_mesh(engineArchetype);
+    const std::string originalMaterialName = teamArchetype->material_list[0].name;
+    const auto originalDiffuse = teamArchetype->material_list[0].diffuse;
+    teamArchetype->material_list[0].set_name("fixture_markings");
+    const INSTANCE_INDEX redTeam = engine->create_instance2(engineArchetype, nullptr);
+    const INSTANCE_INDEX blueTeam = engine->create_instance2(engineArchetype, nullptr);
+    SetNativeLegacyTeamColor(engine, renderer, redTeam, RGB(191, 37, 11));
+    SetNativeLegacyTeamColor(engine, renderer, blueTeam, RGB(13, 41, 223));
+    const Mesh *redMesh = renderer->get_instance_mesh(redTeam);
+    const Mesh *blueMesh = renderer->get_instance_mesh(blueTeam);
+    if (!Expect(redMesh != blueMesh && redMesh != teamArchetype && blueMesh != teamArchetype &&
+                redMesh->material_list[0].diffuse.r == 191 &&
+                redMesh->material_list[0].diffuse.g == 37 &&
+                blueMesh->material_list[0].diffuse.b == 223 &&
+                teamArchetype->material_list[0].diffuse.r == originalDiffuse.r &&
+                teamArchetype->material_list[0].diffuse.g == originalDiffuse.g &&
+                redMesh->material_list[0].texture_id == teamArchetype->material_list[0].texture_id,
+                "legacy team markings are per-instance, preserve textures and leave archetype unchanged")) return 1;
+    SetNativeLegacyTeamColor(engine, renderer, redTeam, RGB(29, 179, 47));
+    if (!Expect(redMesh->material_list[0].diffuse.g == 179 &&
+                blueMesh->material_list[0].diffuse.r == 13 &&
+                blueMesh->material_list[0].diffuse.b == 223,
+                "team-color changes cannot recolor another player's instance")) return 1;
+    engine->destroy_instance(redTeam);
+    engine->destroy_instance(blueTeam);
+    teamArchetype->material_list[0].set_name(originalMaterialName.c_str());
+    std::cout << "Production legacy player-color mesh isolation checked\n";
     ENGINE = engine;
     REND = renderer;
     IHardpoint *hardpoints = nullptr;
@@ -2532,6 +2589,81 @@ int main(int argc, char **argv)
                 appRender->face_cnt == cookedFaces,
                 "original legacy material preserves cooked geometry/RNG and source ambient/diffuse/emission/alpha/UV2"))
         return 1;
+    // MassDisruptor reaches the original Puffy virtual on a live target.
+    // The old native owner rejected it after the missing-chain crash was fixed.
+    {
+        const auto source = nativeLegacyVertices;
+        std::size_t selected = 0;
+        while (selected < 3 && source[selected].x == 0 && source[selected].y == 0 && source[selected].z == 0) ++selected;
+        if (!Expect(selected < 3, "Puffy fixture first triangle has a radial vertex")) return 1;
+        Vector position(source[selected].x, source[selected].y, source[selected].z);
+        if (!Expect(position.magnitude_squared() > 0, "Puffy fixture has a radial vertex")) return 1;
+        puffViewPt[0] = position; puffViewPt[0].normalize();
+        puffTexture = 0;
+        puffPercent = 0.4F;
+        const Transform object = engine->get_transform(appTree->GetMeshInfo()->instanceIndex);
+        if (!Expect(PIPE->set_modelview(camera.inverse * object) == GR_OK,
+                    "Puffy uses the target root model/view")) return 1;
+        const unsigned before = nativeLegacyDrawCalls;
+        appRender->RenderPuffy(appTree->GetMeshInfo(), camera.inverse, object, Vector(4,4,4));
+        Vector radial = position; radial.normalize(); radial *= 4;
+        const Vector expected = 0.4F * radial + 0.6F * position;
+        const auto &vertex = nativeLegacyVertices[selected];
+        U32 puffyDepthWrite = 99, puffyBlend = 99;
+        if (!Expect(PIPE->get_render_state(D3DRS_ZWRITEENABLE, &puffyDepthWrite) == GR_OK &&
+                    PIPE->get_render_state(D3DRS_ALPHABLENDENABLE, &puffyBlend) == GR_OK,
+                    "Puffy blend/depth state is readable at the live receiver")) return 1;
+        if (!Expect(nativeLegacyDrawCalls == before + 2 &&
+                    std::fabs(vertex.x - expected.x) < 1e-5F &&
+                    std::fabs(vertex.y - expected.y) < 1e-5F &&
+                    std::fabs(vertex.z - expected.z) < 1e-5F &&
+                    (vertex.diffuseBgra & 0x00ffffffU) == 0x00ffffffU &&
+                    (vertex.diffuseBgra >> 24) >= 254 &&
+                    vertex.u2 == source[selected].u2 && vertex.v2 == source[selected].v2 &&
+                    puffyDepthWrite == 0 && puffyBlend == 1,
+                    "MassDisruptor source radial deformation and alpha overlay reach native submission")) return 1;
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+    }
+    // TM9 reaches an authored chrome group through MeshRender::Render. The
+    // normal legacy fixture cannot detect the former explicit rejection.
+    {
+        const auto plainVertices = nativeLegacyVertices;
+        auto *group = appRender->GetNextFaceGroup(nullptr);
+        const auto savedFlags = group->flags;
+        const bool suppressed = appTree->GetMeshInfo()->bSuppressEmissive;
+        group->flags |= MM_CHROME;
+        appTree->GetMeshInfo()->bSuppressEmissive = true;
+        bool accepted = false;
+        try { appRender->Render(appTree->GetMeshInfo(), camera.inverse); accepted = true; }
+        catch (const std::runtime_error &error) { std::cerr << "chrome caller: " << error.what() << '\n'; }
+        bool mapped = accepted && nativeLegacyVertices.size() == plainVertices.size() &&
+            !appTree->GetMeshInfo()->bSuppressEmissive;
+        for (std::size_t i = 0; mapped && i < nativeLegacyVertices.size(); ++i)
+        {
+            const auto &v = nativeLegacyVertices[i];
+            const auto &plain = plainVertices[i];
+            mapped &= v.x == plain.x && v.y == plain.y && v.z == plain.z &&
+                v.diffuseBgra == plain.diffuseBgra && v.u2 == plain.u2 && v.v2 == plain.v2 &&
+                std::fabs(v.u - 0.5F) < 1e-5F && std::fabs(v.v - 0.5F) < 1e-5F;
+        }
+        if (!Expect(mapped, "production chrome caller preserves lighting/geometry/UV1 and maps normals to UV0")) return 1;
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+        if (!Expect(nativeLegacyVertices[0].u == 0.5F,
+                    "chrome phase does not advance on repeated render")) return 1;
+        UpdateRenderEffects(0.5F * PI);
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+        // The original TRANSFORM J rotation maps this fixture's +Z to -X.
+        for (const auto &v : nativeLegacyVertices)
+            if (!Expect(std::fabs(v.u) < 1e-5F && std::fabs(v.v - 0.5F) < 1e-5F,
+                        "original render-effect update rotates chrome normals by a quarter turn")) return 1;
+        UpdateRenderEffects(1.5F * PI);
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+        if (!Expect(std::fabs(nativeLegacyVertices[0].u - 0.5F) < 1e-5F,
+                    "chrome full rotation restores original UV phase")) return 1;
+        group->flags = savedFlags;
+        appTree->GetMeshInfo()->bSuppressEmissive = suppressed;
+        appRender->Render(appTree->GetMeshInfo(), camera.inverse);
+    }
 #if defined(FRONTIERX_GAME_GPU)
     if (gpuMode)
     {
@@ -2698,8 +2830,83 @@ int main(int argc, char **argv)
                   << " suppressed=" << suppressedImage.checksum << '\n';
         seamMaterial.emissive_texture_id = 0U;
         CQEFFECTS.bEmissiveTextures = previousEmissiveEffect;
+        auto *chromeGroup = seamRender->GetNextFaceGroup(nullptr);
+        const auto savedChromeFlags = chromeGroup->flags;
+        // The seam fixture's own diffuse tile is uniform. Use the existing
+        // nonuniform GPU fixture to make normal-driven sampling observable.
+        const auto chromeTexture = seamMaterial.texture_id;
+        seamMaterial.texture_id = transformCapture.gpu->FixtureTextureHandle();
+        chromeGroup->flags |= MM_CHROME;
+        seamRender->Render(seamTree->GetMeshInfo(), camera.inverse);
+        const auto chromeStart = transformCapture.nativeLegacyImage;
+        const float pollutedConstants[8] = {0.25F, 0.75F, 0.0F, 0.0F, 0.1F, 0.2F, 0.3F, 0.4F};
+        if (!Expect(transformCapture.gpu->SetVertexConstants(30, pollutedConstants, 2) == GR_OK,
+                    "chrome fixture interleaves actual App effect constants")) return 1;
+        seamRender->Render(seamTree->GetMeshInfo(), camera.inverse);
+        const auto chromeAfterEffect = transformCapture.nativeLegacyImage;
+        // With a wrapping 2x2 tile, U=0 and U=0.5 both average both columns.
+        // An eighth turn makes the normal-derived sampling distinguishable.
+        UpdateRenderEffects(0.25F * PI);
+        seamRender->Render(seamTree->GetMeshInfo(), camera.inverse);
+        const auto chromeQuarter = transformCapture.nativeLegacyImage;
+        UpdateRenderEffects(1.75F * PI);
+        seamRender->Render(seamTree->GetMeshInfo(), camera.inverse);
+        const auto chromeRestored = transformCapture.nativeLegacyImage;
+        chromeGroup->flags = savedChromeFlags;
+        seamMaterial.texture_id = chromeTexture;
+        std::cout << "native_legacy_chrome_gpu start=" << chromeStart.checksum
+                  << " quarter=" << chromeQuarter.checksum << " restored=" << chromeRestored.checksum << '\n';
+        const float defaultConstants[8] = {0, 0, 1, 1, 1, 1, 1, 1};
+        if (!Expect(transformCapture.gpu->SetVertexConstants(30, defaultConstants, 2) == GR_OK &&
+                    chromeStart.rgbValid && chromeStart.changedPixels > 0 &&
+                    chromeAfterEffect.rgbValid && chromeAfterEffect.checksum == chromeStart.checksum &&
+                    chromeQuarter.rgbValid && chromeQuarter.checksum != chromeStart.checksum &&
+                    chromeRestored.rgbValid && chromeRestored.checksum == chromeStart.checksum,
+                    "chrome ignores App constants, rotates textured pixels and restores a complete cycle")) return 1;
     }
 #endif
+    // SolarianBuild mutates a private clone. Its clipped corners must carry
+    // the original face-local UV2 seam and interpolated normals into rendering.
+    {
+        const auto original = nativeLegacyVertices;
+        IMeshRender *buildRender = CreateMeshRender();
+        buildRender->AddRef();
+        CopyMesh(seamRender, buildRender, true);
+        MeshInfo info;
+        CopyMeshInfo(info, *seamTree->GetMeshInfo(), true);
+        info.mr = buildRender;
+        IRenderMaterial *out = buildRender->GetNextFaceGroup(nullptr);
+        const IRenderMaterial *in = seamRender->GetNextFaceGroup(nullptr);
+        auto *vertices = static_cast<RPVertex *>(out->src_verts_buffer);
+        const U16 first = out->index_list[0], second = out->index_list[1];
+        const Vector position = vertices[first].pos;
+        vertices[first].pos = 0.5F * (position + vertices[second].pos);
+        ResetNativeLegacyBuildCorners(out, in);
+        UpdateNativeLegacyBuildFace(out, in, 0, 0);
+        buildRender->Render(&info, camera.inverse);
+        if (!Expect(std::fabs(nativeLegacyVertices[0].u2 - 0.5F*(original[0].u2+original[1].u2)) < 1e-5F &&
+                    std::fabs(nativeLegacyVertices[0].v2 - 0.5F*(original[0].v2+original[1].v2)) < 1e-5F,
+                    "Solarian construction interpolates secondary UVs at the actual clipped corner")) return 1;
+        vertices[first].pos = position;
+        ResetNativeLegacyBuildCorners(out, in);
+        buildRender->Render(&info, camera.inverse);
+        if (!Expect(nativeLegacyVertices[0].u2 == original[0].u2 &&
+                    nativeLegacyVertices[0].v2 == original[0].v2,
+                    "Solarian construction resets private corner metadata between reveal frames")) return 1;
+    }
+    // The living Engine mesh and destruction extent must share team markings.
+    MeshChain coloredChain;
+    coloredChain.numChildren = 1;
+    coloredChain.mi[0] = seamTree->GetMeshInfo();
+    IRenderMaterial *coloredGroup = seamRender->GetNextFaceGroup(nullptr);
+    const U32 originalFlags = coloredGroup->flags;
+    coloredGroup->flags |= MM_MARKINGS;
+    SetNativeLegacyTeamColor(engine, renderer, seamInstance, RGB(29,179,47), &coloredChain);
+    coloredGroup->flags = originalFlags;
+    if (!Expect(seamTree->GetMeshInfo()->fgi[0].diffuse.r == 29 &&
+                seamTree->GetMeshInfo()->fgi[0].diffuse.g == 179 &&
+                seamTree->GetMeshInfo()->fgi[0].emissive.g == static_cast<U8>(0.3F * 179),
+                "original destruction extent receives the living instance's team color")) return 1;
     // MeshExplode uses this exact owner for debris. Check the authored UV seam
     // at a cut edge and after another cut, without changing source split ratios.
     {
@@ -2709,6 +2916,9 @@ int main(int argc, char **argv)
         SplitMeshInfo(*seamTree->GetMeshInfo(), firstHalf, secondHalf,
                       0.5F, Vector(1.0F, 0.0F, 0.0F));
         firstHalf.instanceIndex = secondHalf.instanceIndex = seamInstance;
+        if (!Expect(firstHalf.fgi[0].diffuse.g == 179 && secondHalf.fgi[0].diffuse.r == 29 &&
+                    firstHalf.fgi[0].emissive.g == seamTree->GetMeshInfo()->fgi[0].emissive.g,
+                    "both original debris halves preserve player markings and emission")) return 1;
         std::vector<FrontierX::RenderVertexP3DiffuseT4> splitVertices;
         auto renderSplit = [&](MeshInfo &part) {
             const unsigned callsBefore = nativeLegacyDrawCalls;
@@ -2762,7 +2972,7 @@ int main(int argc, char **argv)
     }
     DestroyMeshInfoTree(seamTree);
     seamRender->Release();
-    if (!Expect(seamBuffers.adds == 7U && seamBuffers.deletes == 7U &&
+    if (!Expect(seamBuffers.adds == 8U && seamBuffers.deletes == 8U &&
                 seamBuffers.owner == nullptr,
                 "independent legacy seam mesh releases its cooked vertex owner"))
     {
@@ -3196,9 +3406,15 @@ int main(int argc, char **argv)
                     reinterpret_cast<void **>(&appPrimitive)) == GR_OK && appPrimitive,
                 "production App diffuse-state primitive creation")) return 1;
     BATCH = appPrimitive;
+    // Deformed/multitexture draws may leave UV1 active. Fighters submit
+    // RPVertex with UV0 only; their common setup must restore that channel.
+    if (!Expect(BATCH->set_texture_stage_state(0U, D3DTSS_TEXCOORDINDEX, 1U) == GR_OK,
+                "prior draw leaves secondary UV channel")) return 1;
+    const unsigned diffuseStageCalls = appState.stageCalls;
     SetupDiffuseBlend(64U, true);
     const bool clampedDiffuseState = appState.texture == 64U &&
-        appState.stageCalls == 10U && appState.samplerCalls == 5U &&
+        appState.stageCalls - diffuseStageCalls == 11U &&
+        appState.stage.textureCoordinateIndex == 0U && appState.samplerCalls == 5U &&
         appState.stage.second.colorOperation == D3DTOP_DISABLE &&
         appState.stage.second.alphaOperation == D3DTOP_DISABLE &&
         appState.stage.colorOperation == D3DTOP_MODULATE &&
@@ -3349,6 +3565,28 @@ int main(int argc, char **argv)
                     "missile constructor, curved-goal pitch and heading reset preserve actual -K elevation")) return 1;
     }
 
+    // The real TM10 core contains DumbReconProbe, whose translation follows
+    // targetPos directly. Its visual nose must follow that same flight ray.
+    for (const SINGLE heading : {-2.4F, -0.7F, 0.0F, 0.7F, 2.4F})
+    for (const SINGLE elevation : {-0.25F, 0.0F, 0.25F})
+    {
+        Transform launch;
+        launch.rotate_about_i(0.7F); launch.rotate_about_j(-0.4F);
+        launch.translation = Vector(17, -31, 23);
+        const Vector direction(std::sin(heading)*std::cos(elevation),
+                               std::cos(heading)*std::cos(elevation), std::sin(elevation));
+        const Transform visual = NativeProbeVisualTransform(launch, launch.translation + 1000*direction);
+        const Transform offset = launch.get_inverse() * visual;
+        const Transform rendered = launch * offset;
+        if (!Expect(dot_product(-rendered.get_k(), direction) > 0.99999F &&
+                    rendered.get_j().z > 0.96F &&
+                    (rendered.translation-launch.translation).magnitude_squared() < 1e-8F &&
+                    std::fabs(dot_product(rendered.get_i(), rendered.get_j())) < 1e-5F,
+                    "carrier probe visual is upright, follows actual travel and preserves its saved launch position")) return 1;
+        const Transform stopped = NativeProbeVisualTransform(visual, visual.translation);
+        if (!Expect(dot_product(-stopped.get_k(), direction) > 0.99999F,
+                    "probe arrival retains its heading with no zero-vector normalization")) return 1;
+    }
     // ObjectTransform's original save field stores get_yaw(), a -J heading.
     // Weaver remains stationary at its construction heading after load, so
     // it cannot rely on a later movement command to conceal a reversed root.
@@ -3385,6 +3623,24 @@ int main(int argc, char **argv)
         }
     }
     std::cout << "Original saved -J heading roundtrip and Weaver model-front quadrants checked\n";
+    // Platform::initPlatform installs Rx90 before ObjectTransform::Load.
+    // Stripping it turns horizontal model -K weapons into vertical rays.
+    for (const SINGLE savedYaw : {-2.7F, -0.8F, 0.0F, 0.6F, 2.3F})
+    {
+        TRANSFORM platform;
+        platform.rotate_about_i(90 * MUL_DEG_TO_RAD);
+        platform.translation = Vector(17, -31, 23);
+        NativeRestoreObjectSavedYaw(platform, savedYaw, true);
+        TRANSFORM sourcePlatform;
+        sourcePlatform.rotate_about_i(90 * MUL_DEG_TO_RAD);
+        sourcePlatform.rotate_about_k(savedYaw);
+        const Vector ray = -platform.get_k();
+        if (!Expect((ray + sourcePlatform.get_k()).magnitude() < 1e-5F &&
+                    std::fabs(ray.z) < 1e-5F && platform.translation.z == 23,
+                    "platform load preserves initialized rest frame and horizontal weapon ray")) return 1;
+    }
+    std::cout << "Platform saved heading preserves model weapon rest frame checked\n";
+
 
     bool app2dSubmitted = false;
     {

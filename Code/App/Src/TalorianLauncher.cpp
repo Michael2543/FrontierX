@@ -232,7 +232,24 @@ struct _NO_VTABLE TalorianLauncher : IBaseObject, ILauncher, ISaveLoad, TALORIAN
 
 	virtual BOOL32 Load (struct IFileSystem * file)
 	{
+#if !defined(_WIN32)
+		// Save emits an empty marker. Update rebuilds the planet cache, shield
+		// and target membership after all mission objects have been restored.
+		if (!file || !pData || pData->objClass != OC_LAUNCHER ||
+			pData->type != LC_TALORIAN_LAUNCH || !owner || shield || planetCach || numTargets)
+			return FALSE;
+		WIN32_FIND_DATA found = {};
+		HANDLE search = file->FindFirstFile("*", &found);
+		if (search != INVALID_HANDLE_VALUE)
+		{
+			file->FindClose(search);
+			return FALSE;
+		}
+		const DWORD error = file->GetLastError();
+		return error == ERROR_FILE_NOT_FOUND || error == ERROR_NO_MORE_FILES;
+#else
 		return FALSE;
+#endif
 	}
 	
 	virtual void ResolveAssociations()
@@ -493,6 +510,34 @@ inline IBaseObject * createTalorianLauncher (PARCHETYPE pArchetype)
 
 	return talorianLauncher;
 }
+#if !defined(_WIN32)
+bool CheckNativeTalorianRestart(IFileSystem *file, IBaseObject *owner)
+{
+	// Gunplat restores a freshly initialized launcher from this exact empty
+	// Save marker. The existing Ping fixture supplies the real launcher owner.
+	if (!file || !owner) return false;
+	BT_TALORIAN_LAUNCHER data = {};
+	data.objClass = OC_LAUNCHER;
+	data.type = LC_TALORIAN_LAUNCH;
+	auto *launcher = new ObjectImpl<TalorianLauncher>;
+	launcher->pData = &data;
+	launcher->InitLauncher(owner, -1, -1, 0);
+	bool valid = launcher->Save(file) && launcher->Load(file);
+	launcher->numTargets = 1;
+	valid = valid && !launcher->Load(file);
+	launcher->numTargets = 0;
+	DAFILEDESC descriptor = "UnexpectedTalorianPayload";
+	descriptor.lpImplementation = "DOS";
+	descriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	descriptor.dwCreationDistribution = CREATE_ALWAYS;
+	COMPTR<IFileSystem> payload;
+	valid = valid && file->CreateInstance(&descriptor, payload) == GR_OK && !launcher->Load(file);
+	payload.free();
+	valid = valid && file->DeleteFile("UnexpectedTalorianPayload") && launcher->Load(file);
+	delete launcher;
+	return valid;
+}
+#endif
 //------------------------------------------------------------------------------------------
 //---------------------------TalorianLauncher Factory------------------------------------------
 //------------------------------------------------------------------------------------------

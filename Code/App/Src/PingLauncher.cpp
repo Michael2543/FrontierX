@@ -487,6 +487,7 @@ bool CheckNativeStatelessPingRestart(IFileSystem *directory)
   valid=valid && archive->DeleteFile("UnexpectedPayload") &&
       ValidateNativeStatelessPingRestart(object.get(),&records.node,owner.get(),archive,"Turret-0");
  }
+ valid=valid && CheckNativeTalorianRestart(archive,owner.get());
  object.reset();
  valid=factory->DestroyArchetype(archetype) && valid && records.node.usage==0;
  return valid;

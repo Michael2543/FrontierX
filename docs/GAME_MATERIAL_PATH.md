@@ -1,5 +1,315 @@
 # Game Mesh and Material Ownership for Milestone 5
 
+## TM10 locked construction reservation eviction (2026-10-19)
+
+**Actual user runtime/core diagnosis:** the replacement candidate aborts in
+`BATCHEDCALLPRIMITIVE::render` during `SolarianBuild::renderRevealed`'s second
+`GetPrimBuffer`. GDB confirms slot zero is locked, with zero committed vertices
+and indices, while the three-entry alpha-depth pool is full. Allocation always
+evicted slot zero, submitting its unfinished reservation. Native draw correctly
+returns `GR_INVALID_PARMS`; the existing assertion then terminates the process.
+The other two materials are unlocked. This is separate from the earlier
+post-flush delay-stage completion defect.
+
+Native material allocation now selects the first unlocked eviction candidate.
+It retains pending material/modelview restoration and never relocates live
+material/descriptors. If every candidate is locked, allocation reports failure;
+GetPrimBuffer propagates that result without dereferencing a missing material.
+The Windows slot-zero selection remains unchanged. No persistent structure,
+public vtable, simulation, damage, timing or RNG changes.
+
+The existing batcher runtime fixture fills the real three-entry alpha pool,
+reserves two writable buffers through original ICQBatch, checks distinct live
+material/buffer pointers and exactly two completed evictions, then writes and
+releases both descriptors and checks the remaining three submissions. No
+unfinished buffer is submitted. Restoring the original slot-zero selection in
+a controlled negative run reproduces the actual draw assertion and locked
+material violation. The fixed run passes. Existing trail blend preservation and
+construction delay-stage checks remain active.
+
+Validation: Linux x86_64 Clang 22.1.8 and GCC 16.2.1 full-media Debug, plus fatal
+Clang ASan/UBSan. Build `frontierx_native_shell` and
+`frontierx_render_batcher_runtime_probe`; run CTest with
+`^portability\.(render_batcher_runtime|native_shell|layout)$`. Sanitizers use
+`ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. Final results are recorded
+with the private pinned candidate. All three selected checks pass in all three
+configurations without skips or sanitizer findings. These generated CPU checks are separate
+from the pending actual TM10 construction/reload retest, Windows Debug/Final,
+module ABI and retail comparison. The genuine saves and debug log were backed
+up privately; extracted core copies were deleted after inspection.
+
+## TM10 delayed construction pool crash (2026-10-19)
+
+An actual follow-up SIGABRT exposes an additional production batching defect:
+the alpha-depth wrapper marks its pool empty after delay zero, dropping the
+Solarian reveal geometry scheduled for delay one. Native completion now stays
+with the existing per-material stage counter; assertions remain enabled.
+The existing batcher CPU regression checks both exact submissions in order.
+See the [TM10 save/draw follow-up](NATIVE_TERRAN_P2.md#tm10-quicksave-rejection-and-delayed-construction-draw-2026-10-19)
+for the core observation, validation and pending actual-scene checks. Earlier
+material-only GPU fixtures did not exercise this original construction delay.
+
+## TM10 construction, debris, probe and Mass Disruptor feedback (2026-10-19)
+
+**Real crash diagnosis:** the user's pinned TM10–TM12 candidate receives
+SIGSEGV during `MassDisruptor::Render`, at the `mc->mi` access in the disrupt
+stage. The original `mc` initialization and reload association were commented
+out in this snapshot. The native owner now queries the live target's `IExtent`
+and borrows its current chain for the draw. It retains neither an uninitialized
+chain nor a pointer across reconstruction. Non-mesh/removed targets have no hull
+to distort; the existing blast, damage amount, three-second timer and weapon
+lifecycle are unchanged. The private core was inspected with GDB and its
+extracted temporary copy deleted. The original systemd core and genuine saves
+remain outside the repository.
+
+The repaired caller then needs the previously excluded Puffy material virtual.
+The native `FaceGroupRender` override implements the original ellipsoid/radial
+formula, `clamp(-2+3*dot(normal,look),0,1)` alpha, diffuse/emission lighting and
+separate white textured overlay. It retains face-local UV2 and uses checked
+fixed-function triangle submissions with source alpha blending and disabled
+depth writes. The original private scratch-array ceiling is avoided through
+bounded source-index validation and vectors. A zero ellipsoid axis uses the
+finite limiting coordinate. A native tree adapter inserts the same ship model
+correction as the normal hull, including child transforms; platforms retain
+their existing initialized basis. The existing virtual/layout contracts and
+Windows material branch remain intact; Windows builds remain unexecuted.
+
+**Debris color:** `ObjectTeam::SetColors` updated the unique Engine mesh, but
+its old extent-material color loop was commented out. Destruction switches to
+those separate `MeshInfo::fgi` owners, explaining the observed color loss.
+`SetNativeLegacyTeamColor` now also updates only `MM_MARKINGS` diffuse/emission
+in the instance's extent chain before destruction. Existing `CopyMeshInfo` and
+`SplitMeshInfo` already preserve these complete records. This owner is shared
+by Terran, Mantis and Solarian ships/platforms; no race palette, friendship,
+texture, archetype material, damage or destruction rule changes. Original
+legacy color code corroborates the intended retained markings; a new Windows
+retail comparison has not been performed.
+
+**Solarian construction:** `ObjectBuild` only admitted the native Terran build
+effect, leaving the original `SolarianBuild::SetupMesh`/beam owner disconnected.
+Native setup now also admits the Solarian race during build, reload/assist and
+reverse construction through the existing lifecycle. Its original reveal/grid,
+sweeping beam, authored hardpoints and mesh-plane intersection code execute.
+Model-frame correction places the fabricator hardpoints, target grid and
+revealed child meshes in the same presentation frame as their ordinary hulls.
+The original source clipper mutates a private clone: native-only metadata now
+interpolates UV2 from each original face (preserving seams), initializes clipped
+normals before use and resets corner metadata each reveal frame. Transparent
+groups, which the original construction code excludes from its private buffers,
+remain absent until the intact mesh returns at EndBuild. No retail media is
+added, and no parallel substitute beam or simulation is introduced.
+
+**Carrier probe:** GDB identifies the real session's probe objects as
+`DumbReconProbe`. Its `PhysicalUpdate` translates toward saved `targetPos`
+independently of the inherited launch orientation. A native draw-only frame
+aligns the authored -K nose with that actual travel direction and keeps +J
+upright. Arrival has a zero-vector fallback. Launch commands, movement,
+serialization, timing and RNG are untouched; the unrelated `ReconProbe` owner
+is unchanged. The same frame is derived again after load.
+
+Validation on Linux x86_64 with GCC 16.2.1, Clang 22.1.8 full-media Debug and
+fatal Clang ASan/UBSan CPU configurations:
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell frontierx_game_material_manager_probe -j 4
+ctest --test-dir "$BUILD" --output-on-failure \
+  -R '^portability\.(game_material_manager|game_material_manager_cr|game_material_manager_missing_end|render_batcher_runtime|native_shell|layout|script(09|10|11|12)_schema)$'
+```
+
+The private configurations are `p1c-clang-20261015`, `p1b-video-gcc` and
+`p1b-video-clang-san`, with the previously reviewed external FFmpeg/font setup.
+The existing material probe exercises the real Puffy virtual through native
+submission: radial displacement, both passes, white overlay, alpha, UV2 and
+live depth/blend state. Its real cloned mesh checks interpolated build corners
+and reset; its real extent/split checks confirm team diffuse/emission survive
+both debris halves without recoloring the shared archetype. Existing shader,
+chrome phase, trail-pool, schema and layout checks remain in the focused run.
+Probe frame checks cover heading/elevation quadrants, orthogonality, upright
+orientation, unchanged position and arrival. Source caller checks guard the
+live-target chain, Solarian setup and probe draw binding. These extend existing
+regressions because ordinary intact hull draws cannot expose these transitions.
+
+Both compiler GPU configurations execute `portability.game_material_gpu` and
+`portability.sdl3_gpu` without skips through the existing owned-window host
+setup. This is generated-fixture GPU evidence, not user mission evidence.
+The initial CPU test selected the fixture's origin as a radial vertex; its
+observation now selects a nonzero corner of the same triangle. An initial shell
+run overlapped relinking and was rejected by the filesystem executable mode;
+verification was repeated only after the build completed. Neither event was
+counted as a pass. `python3 Tools/ci/test_ci_gates.py` and `git diff --check`
+pass. Native Windows Debug/Final/module ABI and full hardware leak/resize checks
+remain pending.
+
+**Required user retest:** restore the preserved real TM10 checkpoint, repeat the
+Mass Disruptor encounter, construct a Solarian building with a Forger, inspect
+Terran/Mantis/Solarian destruction markings and launch a carrier probe. Repeat
+F7/F8 during active construction/combat. The exact fixed mission scene, complete
+construction animation and audible/visual user acceptance remain pending;
+source/fixture checks do not establish them.
+
+## TM9 Chrome/Solarian production material path (2026-10-18)
+
+**User retail-input runtime:** a later closure in the refreshed full-media
+candidate reaches `Script09.dll` and reports `Native legacy chrome/Solarian
+rendering is not integrated`. This is an explicitly thrown native renderer
+capability error caught by the shell, not an inferred memory fault or audio
+recurrence. The preceding beacon requests resolve successfully from SFX. No
+current systemd core exists. The genuine latest quicksave and campaign progress
+are retained separately: the save still contains late TM8 programs, while real
+progress unlocks TM9. Unsaved TM9 state is not reconstructed or fabricated.
+
+**Production owner:** native `FaceGroupRender::RenderSolarian` now enters the
+existing checked legacy submission path. It implements original
+`MMaterial::RenderSolarian`'s UV0 calculation from the source vertex normal rotated
+by the shared `chromeTrans`, preserving `u=0.5+0.5*normal.x` and
+`v=0.5+0.5*normal.y`. The existing `ObjList` / `UpdateRenderEffects` clock and
+rotation order are unchanged. Original non-flickering emissive behavior, source
+lighting, per-instance colors/alpha, hidden/building face selection, authored
+second UVs and geometry are retained. Rendering does not advance the effect or
+consume RNG. Unsupported chrome vertex formats and CQ2 materials still reject;
+the original explicit guard is narrowed only for this implemented RPVertex owner.
+Windows code, persistent layouts and public interfaces are unchanged.
+
+**Adjacent backend contract:** RPVERTEX2 fixed-function draws and App
+StandardVertex effects share the extended shader, but only the latter consume
+c30/c31 UV/color constants. The SDL backend now chooses neutral UV/color uniforms
+for fixed-function draws in immediate readback/presentation and captured frames,
+without changing the stored App constants. This protects environment coordinates
+and source-prelit colors when the two production paths interleave.
+
+**Synthetic automated execution:** the existing game-material probe flags a
+source-cooked face group as chrome and invokes the actual `MeshRender::Render`
+caller. The old owner rejects it; the repaired owner proves normal-derived UVs,
+unchanged positions/colors/UV1, non-flickering emissive state, stable repeated
+rendering, the original signed J quarter turn and complete-cycle UV restoration.
+Existing source lighting, UV seams, explosion splits, texture isolation, malformed
+material rejection and App effect tests remain enabled.
+
+**Synthetic visible SDL/Vulkan runtime:** the same production caller samples a
+nonuniform repository fixture as environment texture. An eighth turn avoids the
+wrapping 2x2 tile's identical bilinear samples at U=0 and U=0.5. The image changes
+and restores the exact initial checksum after a full cycle; deliberately collapsed
+App UV constants and tinted c31 do not alter its fixed-function image. Existing
+App c30/c31 effect checks still pass. Both GCC16.2.1 and Clang22.1.8 execute the
+material GPU probe and the full SDL GPU probe without skipping, retaining the
+Beam/Battlecruiser strips, sampler, texture and frame-lifecycle checks. The measured
+chrome checksums agree across these host builds: start/restored
+17741359002509319875 and rotated 16175359857324974307. These are generated inputs,
+not a complete retail-ship screenshot comparison.
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell frontierx_game_material_manager_probe frontierx_sdl3_gpu_probe -j 6
+ctest --test-dir "$BUILD" --output-on-failure -R '^portability\.(game_material_manager|game_material_manager_cr|game_material_manager_missing_end|native_shell|layout|script09_schema)$'
+ctest --test-dir "$BUILD" -V --output-on-failure -R '^portability\.(game_material_gpu|sdl3_gpu)$'
+```
+
+The focused CPU/shell/schema selection passes under full-media Debug GCC/Clang
+and fatal Clang ASan/UBSan with leak detection. GPU checks use the established
+explicit Hyprland/X11 owned-probe-window setup; sanitizer GPU execution is not
+claimed. No gameplay inputs are injected. A new pinned full-media TM9 candidate
+preserves genuine progress and both available saves. The last F8 save belongs
+to TM8; normal TM9 selection is available without an invented unlock. Actual
+fixed-build TM9 gameplay/visual confirmation, full late-content coverage and
+native Windows/module ABI checks remain pending. Existing host leak limitations
+are unchanged; shutdown texture diagnostics are not treated as this error's cause.
+
+
+## Battlecruiser special-weapon strip submission (2026-10-18)
+
+**User runtime evidence:** the user confirms the fighter-trail correction works,
+then reports an abort after activating the Battlecruiser's special weapon. The
+full-media candidate log ends at `AreaEffectBolt.cpp`'s assertion after
+`draw_primitive_vb(D3DPT_TRIANGLESTRIP, ...)`. No current systemd core is available;
+the diagnosis uses the actual application assertion, source and an executable
+render reproducer. No OOM or driver crash is inferred.
+
+**Source review and repair:** the weapon's shared ring owns 42 RPVERTEX2
+vertices with two distinct UV pairs. Native PIPE and primitive adapters accept
+the strip, but `SdlGpuRenderer::Submit(RenderSubmissionView2)` previously rejects
+it with GR_NOT_IMPLEMENTED. The original assertion deliberately stops execution.
+The backend now uses the existing single-UV strip expansion for the two-UV
+vertex layout as well, preserving complete vertices and reversing each odd
+triangle's first two indices. Valid direct and indexed strips become triangle
+lists before upload. Unsupported topologies, invalid inputs and allocation
+failure still return errors. No assertion, original weapon effect, damage,
+simulation, save layout, public interface or Windows rendering path is changed.
+
+**Synthetic visible SDL/Vulkan runtime:** the existing `frontierx_sdl3_gpu_probe`
+fails on the old backend at the new two-UV strip check. The fixed backend's direct
+and indexed strips have exactly the explicit triangle-list readback checksum,
+with UV1 selected and nonempty output. An additional generated 42-vertex ring
+goes through production PIPE create/lock/update/unlock/draw_primitive_vb/destroy
+and matches all 40 explicit triangles. Existing single-UV beam-strip and full
+material, texture, sampler, state and frame-lifecycle checks remain enabled.
+Generated fixtures contain no retail media. GCC16.2.1 and Clang22.1.8 full-media
+Debug builds execute the GPU CTest on the Linux x86_64 host without skipping.
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell frontierx_sdl3_gpu_probe -j 6
+ctest --test-dir "$BUILD" -V --output-on-failure -R '^portability.sdl3_gpu$'
+ctest --test-dir "$BUILD" --output-on-failure -R '^portability\.(native_shell|layout|render_batcher_header|render_batcher_runtime)$'
+```
+
+GPU execution uses the existing explicit Hyprland/X11 owned-probe-window setup;
+no gameplay input is injected. The selected CPU/shell checks also pass in the
+fatal Clang ASan/UBSan configuration with leak detection. Its GPU target is
+compiled, not executed as sanitizer evidence. A separate pinned Clang full-media
+candidate retains the genuine TM6 checkpoint for a narrow weapon/F7/F8 retest.
+Actual fixed-build weapon gameplay, native Windows and module-ABI validation
+remain pending; this synthetic readback is not complete weapon acceptance.
+
+
+## TM6 fighter-trail material eviction (2026-10-18)
+
+**Retail-input Linux runtime diagnosis:** the user leaves the visible defect
+paused in the manually controlled full-media TM6 process and saves it with F7.
+The new checkpoint is retained separately. A read-only GDB capture of one actual
+373-draw frame identifies the bright curved silhouettes as engine trails, not
+missing fighter hull textures. The Terran hull texture and all seven authored
+mips match the external asset bytes exactly; sampled hull draws use the expected
+handle, primary UVs and wrap/linear/point-mip sampler. The trail occupying the
+reported screen region instead reaches SDL with ONE/ONE blending. Its real
+submission stack passes through `BMPOOL::allocate_material` eviction.
+
+**Source review and repair:** `EngineTrail::SetupBatchRender` requests
+SRCALPHA/INVSRCALPHA. The three-entry alpha-depth material pool can fill while
+glows and trails are queued. Allocation then restores and submits an older
+material before its caller snapshots the incoming one. That submission used to
+leave the older glow's blend state in PIPE, so the new trail captured additive
+blending and lost its intended fade. `BMPOOL::allocate_material` now saves the
+pending material state and PIPE modelview before eviction and restores them
+afterwards. It retains the original pool size, eviction/draw order and material
+ownership. No simulation, damage, RNG, save record, public type or vtable changes.
+This shared production repair also compiles in the Windows source path; native
+Windows Debug/Final execution remains unperformed.
+
+**Synthetic automated execution:** the existing
+`frontierx_render_batcher_runtime_probe` now fills the real three-entry alpha
+pool with three distinct additive glows and queues a fourth alpha trail. Earlier
+fixtures did not exhaust that pool. The regression fails before the repair at
+the pending blend-state check. After repair it proves one genuine early eviction,
+four total submissions, retained caller state and each submitted texture's exact
+blend/depth contract. Existing texture-binding, two-stage, geometry and view
+barrier checks remain enabled. No new probe or parallel rendering implementation
+is added.
+
+Linux x86_64 full-media Debug GCC16.2.1 and Clang22.1.8 build
+`frontierx_native_shell` and `frontierx_render_batcher_runtime_probe`. Their
+focused execution, and the fatal Clang ASan/UBSan configuration, use:
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell frontierx_render_batcher_runtime_probe -j 6
+ctest --test-dir "$BUILD" --output-on-failure -R '^portability\.(native_shell|layout|render_batcher_header|render_batcher_runtime)$'
+```
+
+The selected checks pass without skips, including fatal sanitizers with leak
+detection for their bounded test scope. The genuine frame is diagnosis of the
+old behavior; it is not a fixed-renderer image comparison. A new private Clang
+full-media candidate retains the visible-defect checkpoint for the narrow user
+retest. The user subsequently confirms the correction works. Native Windows
+and module-ABI checks remain pending; whole-process GPU/library leak limits are unchanged.
+
 ## Corvette damage-smoke anchor (2026-10-15)
 
 **User retail-input runtime:** the player reports that TM2 ran perfectly, with
@@ -60,6 +370,64 @@ TM2 replay is requested. Native Windows Debug/Final/module ABI, hosted CI,
 ordinary-compositor resize and previous whole-process leak findings remain open;
 the focused sanitizer result does not clear them. No content is hidden or
 reduced for this correction.
+
+## TM6 feedback retest (2026-10-17)
+
+The user confirms the player-color and laser-satellite repairs but still sees
+fighter texture loss. Primary-UV restoration alone is insufficient; keep the
+visual defect open. A new genuine TM6 quicksave is secured separately and
+produces visible fighters in a read-only debugger run. Sampled dummy meshes use
+legacy face groups and nonzero texture handles, excluding assumed CQ2 promotion
+as an explanation for those samples. See the [feedback confirmation](NATIVE_TERRAN_P2.md#tm6-feedback-confirmation-and-retained-fighter-texture-defect-2026-10-17).
+
+## TM6 player markings, fighter UVs and platform weapon frame (2026-10-17)
+
+The native direct Engine owner now uses per-instance legacy markings for
+ObjectTeam player colors. The common Fighter diffuse setup restores UV0 after
+multitexture callers, and platform loading preserves its initialized Rx90
+weapon basis instead of applying ship-only heading reconstruction. Existing
+material/Engine regressions cover color and texture isolation, polluted UV
+state and loaded horizontal weapon rays. Full-media GCC/Clang and fatal
+sanitizer checks pass; the explicit Clang SDL/Vulkan material fixture passes
+readback. These are focused synthetic checks; exact TM6 combat confirmation
+remains pending. The [campaign feedback record](NATIVE_TERRAN_P2.md#tm5tm6-acceptance-and-shared-rendering-feedback-2026-10-17)
+contains owner analysis, unchanged fighter damage, commands, bounded real-save
+runtime and remaining Windows/ABI gates. The user separately accepts TM5/TM6.
+
+## TM5 jointed Battleship weapon frame (2026-10-17)
+
+The user reports that Battleship turrets fail to aim and their shots travel
+below the map rather than toward the target. Source and external-model review
+identify Midas model-Y revolute joints and model -K muzzles. The earlier fixed
+barrel repair excluded jointed turrets. Their raw Engine sight can point down
+world Z while the rendered hull receives its model-axis correction.
+
+Native `Turret::getModelNodeTransform` now applies the same existing rigid-root
+correction to both fixed and jointed Gunboat nodes. `getSighting`,
+`swivelToTarget` and distance-based target leading consume that frame, retaining
+the complete Engine joint/child pose. Authored pivots, joint state and limits,
+angular speed, firing/RNG order, projectile algorithms and saved records remain
+unchanged. This repairs native positional behavior; it is not a determinism or
+Windows parity claim. Windows code paths and module interfaces remain intact.
+
+**Synthetic automated execution:** the existing material/math check covers 25
+ship-heading/joint-angle combinations with the Engine's actual quaternion
+rotation convention, independent numerical muzzle rays, world pivots and zero
+target-yaw error. The shell source contract pins all three real Turret consumers
+to this shared frame. The first test implementation used the distinct
+`rotate_about_j` convention; GDB exposed the incorrect test expectation, which
+was replaced by Engine's quaternion-based joint construction without changing
+production math. Full-media Debug GCC16.2.1 and Clang22.1.8 build
+`frontierx_native_shell` and `frontierx_game_material_manager_probe`; the focused
+shell/material/layout/parser/script01–06/App/Sol_T selection passes under both
+compilers and fatal Clang ASan/UBSan with leak detection. Exact check selection
+and private candidate are recorded in the [TM5 ledger](NATIVE_TERRAN_P2.md#tm5-production-integration-2026-10-17).
+
+**Bounded retail runtime:** the repaired Clang build enters actual TM5 and
+restores a genuine named checkpoint through the original load menu. This is
+not a precise weapon-image comparison. The user's visible Battleship
+retargeting and projectile check remains required; native Windows rebuilds and
+module ABI execution remain pending.
 
 ## Second-Terran fixed-barrel origin feedback (2026-10-15)
 

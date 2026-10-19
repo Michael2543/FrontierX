@@ -40,6 +40,10 @@
 #include "FDump.h"
 
 #include <malloc.h>
+#if !defined(_WIN32)
+#include <climits>
+#include <cstdint>
+#endif
 
 #ifndef __max
 #	define __max(x,y) ((x > y)? x : y)
@@ -343,6 +347,66 @@ int typesym(SYMBOL sym)
 }
 //-------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+// Native preprocessing preserves constant array expressions in script schemas.
+// In particular TM9 uses [3*12] and [12+1]; consuming one number and assuming
+// the next token is ']' silently truncates the saved mission record.
+static int array_sum();
+
+static int array_factor()
+{
+    TOKEN tok = gettok();
+    if (tok->tokentype == NUMBERTOK && tok->datatype == INTEGER &&
+        tok->intval >= 0 && tok->intval <= INT_MAX)
+    {
+        const int value = static_cast<int>(tok->intval);
+        free(tok);
+        return value;
+    }
+    if (tok->tokentype == DELIMITER && tok->whichval == LPAREN-DELIMITER_BIAS)
+    {
+        free(tok);
+        const int value = array_sum();
+        tok = gettok();
+        if (tok->tokentype != DELIMITER || tok->whichval != RPAREN-DELIMITER_BIAS)
+            fatal(NUMBER_EXPECTED);
+        free(tok);
+        return value;
+    }
+    free(tok);
+    fatal(NUMBER_EXPECTED);
+    return 0;
+}
+
+static int array_product()
+{
+    int value = array_factor();
+    for (TOKEN tok = peektok(); tok->tokentype == OPERATOR &&
+         tok->whichval == TIMES-OPERATOR_BIAS; tok = peektok())
+    {
+        free(gettok());
+        const std::int64_t product = static_cast<std::int64_t>(value) * array_factor();
+        if (product > INT_MAX) { fatal(NUMBER_EXPECTED); return 0; }
+        value = static_cast<int>(product);
+    }
+    return value;
+}
+
+static int array_sum()
+{
+    int value = array_product();
+    for (TOKEN tok = peektok(); tok->tokentype == OPERATOR &&
+         tok->whichval == PLUS-OPERATOR_BIAS; tok = peektok())
+    {
+        free(gettok());
+        const std::int64_t sum = static_cast<std::int64_t>(value) + array_product();
+        if (sum > INT_MAX) { fatal(NUMBER_EXPECTED); return 0; }
+        value = static_cast<int>(sum);
+    }
+    return value;
+}
+#endif
+
 SYMBOL parse_array (SYMBOL dataType, int modifier)
 {
 	SYMBOL result=0, tmp;
@@ -352,6 +416,7 @@ SYMBOL parse_array (SYMBOL dataType, int modifier)
 	if (tok->tokentype == DELIMITER && tok->whichval == LBRACKET-DELIMITER_BIAS)
 	{
 		free(gettok());		// eat the '['
+#if defined(_WIN32)
 		tok = gettok();
 		if (tok->tokentype != NUMBERTOK)
 		{
@@ -367,6 +432,16 @@ SYMBOL parse_array (SYMBOL dataType, int modifier)
 			free(tok);
 			free(gettok());	// eat the ']'
 		}
+#else
+        tok = peektok();
+        const bool empty = tok->tokentype == DELIMITER &&
+            tok->whichval == RBRACKET-DELIMITER_BIAS;
+        arrayval = empty ? 0 : array_sum();
+        tok = gettok();
+        if (tok->tokentype != DELIMITER || tok->whichval != RBRACKET-DELIMITER_BIAS)
+            fatal(NUMBER_EXPECTED);
+        free(tok);
+#endif
 
 		if ((tmp = parse_array(dataType, modifier)) != 0)
 		{
@@ -377,6 +452,13 @@ SYMBOL parse_array (SYMBOL dataType, int modifier)
 		result = new Symbol;
 		result->kind = ARRAYSYM;
 		result->size = (dataType->size + dataType->alignment - 1) & ~(dataType->alignment - 1);
+#if !defined(_WIN32)
+        if (arrayval && result->size > INT_MAX / arrayval)
+        {
+            fatal(NUMBER_EXPECTED);
+            arrayval = 0;
+        }
+#endif
 		result->size *= arrayval;
 		result->alignment = dataType->alignment;
 		result->arrayval = arrayval;

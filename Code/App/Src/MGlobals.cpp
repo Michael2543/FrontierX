@@ -34,6 +34,8 @@
 #include <wchar.h>
 #ifndef _WIN32
 #include "Include/NativeGlobalDataFormat.h"
+#include <algorithm>
+#include <cwchar>
 #endif
 
 #include "resource.h"
@@ -1554,13 +1556,19 @@ U32 MGlobals::GetEffectiveDamage (U32 amount, struct IBaseObject * _shooter, str
 				}
 			}
 
-			if(target->fleetID)
+			#if !defined(_WIN32)
+            SINGLE nativeAdmiralShields = 0;
+#endif
+            if(target->fleetID)
 			{
 				VOLPTR(IAdmiral) flagship;
 				OBJLIST->FindObject(target->fleetID,TOTALLYVOLATILEPTR,flagship,IAdmiralID);
 				if(flagship.Ptr())
 				{
-					result *= 1 - flagship->GetDefenceBonus(target->mObjClass,target.pInit->armorData.myArmor);
+					#if !defined(_WIN32)
+                    QueryNativeRetailAdmiralShields(flagship.Ptr(), target->mObjClass, nativeAdmiralShields);
+#endif
+                    result *= 1 - flagship->GetDefenceBonus(target->mObjClass,target.pInit->armorData.myArmor);
 					CQTRACER1("*(admiral defence bonus)%f",(1 - flagship->GetDefenceBonus(target->mObjClass,target.pInit->armorData.myArmor)));
 				}
 			}
@@ -1572,6 +1580,9 @@ U32 MGlobals::GetEffectiveDamage (U32 amount, struct IBaseObject * _shooter, str
 			CQTRACER1("*(sector defence bonus)%f",1-SECTOR->GetSectorEffects(target->playerID,target->systemID)->getDefenceMod());
 
 			SINGLE targetShields = (target.pInit->baseShieldLevel + globalValues.techUpgrades[(M_RACE)target->race].shields[target->techLevel.shields]);
+#if !defined(_WIN32)
+            targetShields += nativeAdmiralShields;
+#endif
 			if (_target->fieldFlags.shieldEnhance())
 				targetShields *= 2;
 			if (_target->fieldFlags.shieldsInoperable())
@@ -1648,18 +1659,27 @@ U32 MGlobals::GetEffectiveDamage (U32 amount, struct IBaseObject * _shooter, str
 					}
 				}
 
-				if(target->fleetID)
+				#if !defined(_WIN32)
+            SINGLE nativeAdmiralShields = 0;
+#endif
+            if(target->fleetID)
 				{
 					VOLPTR(IAdmiral) flagship;
 					OBJLIST->FindObject(target->fleetID,TOTALLYVOLATILEPTR,flagship,IAdmiralID);
 					if(flagship.Ptr())
 					{
-						result *= 1 - flagship->GetDefenceBonus(target->mObjClass,target.pInit->armorData.myArmor);
+						#if !defined(_WIN32)
+                    QueryNativeRetailAdmiralShields(flagship.Ptr(), target->mObjClass, nativeAdmiralShields);
+#endif
+                    result *= 1 - flagship->GetDefenceBonus(target->mObjClass,target.pInit->armorData.myArmor);
 						CQTRACER1("*(admiral defence bonus)%f",(1 - flagship->GetDefenceBonus(target->mObjClass,target.pInit->armorData.myArmor)));
 					}
 				}
 
 				SINGLE targetShields = (target.pInit->baseShieldLevel + globalValues.techUpgrades[(M_RACE)target->race].shields[target->techLevel.shields]);
+#if !defined(_WIN32)
+            targetShields += nativeAdmiralShields;
+#endif
 				if (_target->fieldFlags.shieldEnhance())
 					targetShields *= 2;
 				if (_target->fieldFlags.shieldsInoperable())
@@ -1927,8 +1947,43 @@ Done:
 }
 //----------------------------------------------------------------------------------------------
 //
+#if !defined(_WIN32)
+static U32 NativeFileDescription(IFileSystem *directory, const char *name,
+                                 wchar_t *output, U32 capacity)
+{
+    if (!output || !capacity) return 0;
+    output[0] = 0;
+    if (!directory || !name) return 0;
+    COMPTR<IFileSystem> file;
+    DAFILEDESC descriptor = name;
+    if (directory->CreateInstance(&descriptor, file) != GR_OK || !file ||
+        !file->SetCurrentDirectory("\\MT_GlobalData")) return 0;
+    descriptor = "Globals";
+    const HANDLE handle = file->OpenChild(&descriptor);
+    if (handle == INVALID_HANDLE_VALUE) return 0;
+    FrontierX::GlobalDataDiskBytes bytes{};
+    U32 read = 0;
+    const bool valid = file->GetFileSize(handle, nullptr) == bytes.size() &&
+        file->ReadFile(handle, bytes.data(), bytes.size(), &read, nullptr) && read == bytes.size();
+    const bool closed = file->CloseHandle(handle);
+    if (!valid || !closed) return 0;
+    MT_GlobalData decoded{};
+    FrontierX::DecodeGlobalData(bytes, decoded);
+    // Metadata reads must neither load the mission nor mutate globalData.
+    U32 length = 0;
+    while (length < M_MAX_STRING && decoded.gameDescription.string[length]) ++length;
+    if (length == M_MAX_STRING) return 0;
+    const U32 copied = std::min(length, capacity - 1);
+    std::wmemcpy(output, decoded.gameDescription.string, copied);
+    output[copied] = 0;
+    return copied;
+}
+#endif
 U32 MGlobals::GetFileDescription (const C8 * fileName, wchar_t * string, U32 bufferSize)
 {
+#if !defined(_WIN32)
+    return NativeFileDescription(SAVEDIR, fileName, string, bufferSize);
+#else
 	// load the new global data, read the string
 	COMPTR<IFileSystem> tempFile;
 	DAFILEDESC fdesc = fileName;
@@ -1958,11 +2013,15 @@ U32 MGlobals::GetFileDescription (const C8 * fileName, wchar_t * string, U32 buf
 	
 	tempFile->CloseHandle(hFile);
 	return wcslen(string);
+#endif
 }
 //----------------------------------------------------------------------------------------------
 //
 U32 MGlobals::GetFileDescription (IFileSystem * fileDir, const C8 * fileName, wchar_t * string, U32 bufferSize)
 {
+#if !defined(_WIN32)
+    return NativeFileDescription(fileDir, fileName, string, bufferSize);
+#else
 	// load the new global data, read the string
 	COMPTR<IFileSystem> tempFile;
 	DAFILEDESC fdesc = fileName;
@@ -1992,6 +2051,7 @@ U32 MGlobals::GetFileDescription (IFileSystem * fileDir, const C8 * fileName, wc
 	
 	tempFile->CloseHandle(hFile);
 	return wcslen(string);
+#endif
 }
 //----------------------------------------------------------------------------------------------
 //

@@ -177,7 +177,24 @@ struct NativeMissionSound : ISoundManager, IEventCallback
     U32 PlayAudioMessage(const char *filename, IBaseObject *object,
                          SINGLE volume) override
     {
-        return Play(filename, MSPEECHDIR, volume, chat, object);
+        IFileSystem *source = MSPEECHDIR;
+        const char *resolvedFilename = filename;
+        // The authored TM8 beacon names this exact retail SFX entry as audio.
+        // Prefer any mission-speech override; do not redirect other speech.
+        if (!skipSpeech && filename && std::strcmp(filename, "specialDenied.wav") == 0 &&
+            source && source->GetFileAttributes(filename) == 0xffffffffU)
+        {
+            constexpr const char *retailEntry = "specialdenied.wav";
+            if (source->GetFileAttributes(retailEntry) != 0xffffffffU)
+                resolvedFilename = retailEntry;
+            else if (SFXDIR && SFXDIR->GetFileAttributes(retailEntry) != 0xffffffffU)
+            {
+                source = SFXDIR;
+                resolvedFilename = retailEntry;
+                std::fprintf(stderr, "Native mission beacon resolved from SFX: %s\n", filename);
+            }
+        }
+        return Play(resolvedFilename, source, volume, chat, object);
     }
 
     U32 PlayAnimatedMessage(const char *filename, const char *animType, S32 x, S32 y,
@@ -315,7 +332,7 @@ struct NativeMissionSound : ISoundManager, IEventCallback
 
     U32 Play(const char *filename, IFileSystem *source, SINGLE volume,
              const VolumeSetting &setting, IBaseObject *object = nullptr,
-             bool communicationOpenMayFail = false)
+             bool unitCommunication = false)
     {
         if (!filename || !filename[0] || !source || !STREAMER ||
             !std::isfinite(volume) || volume < 0.0F || volume > 1.0F ||
@@ -330,17 +347,21 @@ struct NativeMissionSound : ISoundManager, IEventCallback
         M3NativeSoundJournal().Write("stream-open", 0, handle != nullptr, filename);
         if (!handle)
         {
-            // SoundMan::PlayCommMessage returns zero when the supplied speech
-            // cannot open. Keep that failure visible without aborting gameplay.
-            if (communicationOpenMayFail)
+            // Original SoundMan returns zero on a failed Open, including
+            // PlayAudioMessage. Do not invent a stream or abort the mission.
+            if (unitCommunication)
             {
                 ++failedCommunicationOpens;
                 std::fprintf(stderr, "Native unit communication unavailable: %s; failed opens %llu; playback ID 0 (failure)\n",
                     filename, static_cast<unsigned long long>(failedCommunicationOpens));
-                return 0;
             }
-            std::fprintf(stderr, "Native mission speech failed to open: %s\n", filename);
-            std::abort();
+            else
+            {
+                ++failedMissionOpens;
+                std::fprintf(stderr, "Native mission audio unavailable: %s; failed opens %llu; playback ID 0 (failure)\n",
+                    filename, static_cast<unsigned long long>(failedMissionOpens));
+            }
+            return 0;
         }
         const SINGLE gain = setting.muted ? 0.0F :
             std::clamp(volume * (setting.level / 10.0F), 0.0F, 1.0F);
@@ -423,6 +444,7 @@ struct NativeMissionSound : ISoundManager, IEventCallback
     U32 eventHandle = 0;
     FrontierX::NativeMissionAudioStats stats{};
     std::uint64_t failedCommunicationOpens = 0;
+    std::uint64_t failedMissionOpens = 0;
 };
 
 void NativeMissionSound::SetMusicVolumeLevel(const S32 &level, bool muted)
@@ -558,6 +580,35 @@ bool CheckNativeMissionSoundCompletion()
     } binding{speaker};
     if (!OBJLIST->AddObject(&speaker) ||
         !OBJLIST->AddPartID(&speaker, speaker.GetPartID())) return failed("speaker registration");
+    MSPEECHDIR = SFXDIR;
+    // TM8's beacon requests an unavailable MSpeech entry. Original
+    // SoundMan::PlayAudioMessage returns zero without a stream or highlight.
+    const U32 beforeMissingAudio = owner->lastID;
+    if (owner->PlayAudioMessage("frontierx-missing-mission-audio.wav", &speaker, 1.0F) != 0 ||
+        owner->lastID != beforeMissingAudio || !owner->streams.empty() || speaker.bSpecialHighlight ||
+        owner->failedMissionOpens != 1 || owner->failedCommunicationOpens != 1)
+        return failed("missing mission audio failure");
+    const U32 audio = owner->PlayAudioMessage("interface1.wav", &speaker, 1.0F);
+    if (!audio || !owner->IsPlaying(audio) || !speaker.bSpecialHighlight ||
+        !owner->StopPlayback(audio) || speaker.bSpecialHighlight || !owner->streams.empty())
+        return failed("mission audio after missing entry");
+    // The authored TM8 beacon names an exact SFX asset, absent from MSpeech.
+    // Keep unrelated missing speech out of the effect archive.
+    if (!TEXTURESDIR || TEXTURESDIR->GetFileAttributes("specialDenied.wav") != 0xffffffffU)
+        return failed("separate beacon source fixture");
+    MSPEECHDIR = TEXTURESDIR;
+    const U32 beforeBeacon = owner->lastID;
+    owner->skipSpeech = true;
+    if (owner->PlayAudioMessage("specialDenied.wav", nullptr, 1.0F) != 0 ||
+        owner->lastID != beforeBeacon || !owner->streams.empty()) return failed("disabled beacon");
+    owner->skipSpeech = false;
+    const U32 beacon = owner->PlayAudioMessage("specialDenied.wav", &speaker, 1.0F);
+    if (!beacon || !owner->IsPlaying(beacon) || !speaker.bSpecialHighlight ||
+        !owner->StopPlayback(beacon) || speaker.bSpecialHighlight || !owner->streams.empty())
+        return failed("beacon exact effect archive playback");
+    if (owner->PlayAudioMessage("interface1.wav", nullptr, 1.0F) != 0 ||
+        owner->lastID != beacon || !owner->streams.empty())
+        return failed("unrelated speech must not fall back to effects");
     MSPEECHDIR = SFXDIR;
     COMPTR<ILFParser> lips;
     if (CreateLFParser(lips) != GR_OK || !lips->Initialize("interface1.txt"))

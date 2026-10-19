@@ -333,6 +333,12 @@ void TreeRender(MeshChain &mc,bool bLight=true, DWORD color = 0xFFFFFFFF);
 #if !defined(_WIN32)
 // Use original per-instance legacy material colors for this preview draw only.
 void TreeRenderNativeLegacyPreview(MeshChain &mc);
+// Original SolarianBuild changes only its private clone's topology.
+void TreeRenderNativePuffy(MeshInfo **mi, int count, const Vector &scale, SINGLE percent, bool directShipHull);
+void ResetNativeLegacyBuildCorners(IRenderMaterial *destination, const IRenderMaterial *source);
+void UpdateNativeLegacyBuildFace(IRenderMaterial *destination, const IRenderMaterial *source,
+                                U32 face, U32 sourceFace);
+
 #endif
 void TreeRenderPortionZAlign(MeshInfo **mc,int num_children,const Vector &split_pt);
 void TreeRenderPortion(MeshInfo **mc,int num_children,const Vector &split_pt,const Vector &split_norm);

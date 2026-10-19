@@ -21,6 +21,7 @@
 #include <DMovieCamera.h>
 #include <DJumpGate.h>
 #include <DBlackHole.h>
+#include <DObjectGenerator.h>
 #include <DQuickSave.h>
 #include <DVLaunch.h>
 #include <DCloakLauncher.h>
@@ -139,6 +140,61 @@ static_assert(sizeof(Script05Layout::TM5_MissionStart_Save) == 4);
 static_assert(sizeof(Script05Layout::TM5_PerilonCleared_Save) == 68);
 static_assert(sizeof(Script05Layout::TM5_SendMantisWave1_Save) == 36);
 static_assert(sizeof(Script05Layout::TM5_IntroduceKerTak_Save) == 36);
+// TM7 and TM8 keep their own original DLL-local mission save layouts.
+#undef DATADEF_H
+namespace Script07Layout
+{
+#include "Scripts/Script07T/DataDef.h"
+}
+static_assert(sizeof(Script07Layout::MissionData) == 264);
+static_assert(offsetof(Script07Layout::MissionData, Benson) == 36);
+static_assert(offsetof(Script07Layout::MissionData, SysCenter) == 84);
+static_assert(offsetof(Script07Layout::MissionData, failureID) + sizeof(U32) == 264);
+static_assert(sizeof(Script07Layout::TM7_Briefing_Data) == 28);
+static_assert(sizeof(Script07Layout::TM7_MissionStart_Data) == 8);
+#undef DATADEF_H
+namespace Script08Layout
+{
+#include "Scripts/Script08T/DataDef.h"
+}
+#undef PLAYER_ID
+#undef MANTIS_ID
+#undef REBEL_ID
+#undef MANTIS_WAVE_INTERVAL
+#undef MANTIS_WAVE_INTERVAL2
+static_assert(sizeof(Script08Layout::MissionData) == 380);
+static_assert(offsetof(Script08Layout::MissionData, KerTak) == 24);
+static_assert(offsetof(Script08Layout::MissionData, BensonTrigger) == 104);
+static_assert(offsetof(Script08Layout::MissionData, failureID) + sizeof(U32) == 380);
+static_assert(sizeof(Script08Layout::TM8_AIManager_Save) == 48);
+static_assert(sizeof(Script08Layout::TM8_MissionStart_Save) == 12);
+#undef DATADEF_H
+#undef PLAYER_ID
+#undef MANTIS_ID
+#undef REBEL_ID
+#undef LEMO
+#undef AEON
+#undef GRAAN
+#undef ARCTURUS
+#undef KRACUS
+#undef KALIDON
+#undef SENDLOR
+#undef VARN
+#undef TALOS
+#undef GROG
+#undef ZHAL
+#undef SERPCE
+#undef GERA
+#undef CENTAURUS
+#undef MANTIS_WAVE_INTERVAL
+#undef MANTIS_WAVE_INTERVAL2
+namespace Script09Layout
+{
+#include "Scripts/Script09T/DataDef.h"
+}
+static_assert(sizeof(Script09Layout::MissionData) == 896);
+static_assert(offsetof(Script09Layout::MissionData, Halsey) == 216);
+static_assert(offsetof(Script09Layout::MissionData, failureID) + sizeof(U32) == 896);
 // TM2_MissionStart changes to the authored MissionCamStart object; its normal
 // Mission save/load uses these original fixed-width camera records.
 static_assert(sizeof(BASE_MOVIE_CAMERA_SAVELOAD) == 136);
@@ -170,6 +226,32 @@ static_assert(sizeof(MT_BLACKHOLE_QLOAD) == 20);
 static_assert(offsetof(MT_BLACKHOLE_QLOAD, pos) == 0);
 static_assert(offsetof(MT_BLACKHOLE_QLOAD, targetSys) == 3);
 static_assert(offsetof(MT_BLACKHOLE_QLOAD, numTargetSys) + sizeof(U8) == 20);
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+// TM5's authored generators must retain countdown, generated archetype and
+// enable state in both full and quick records. These are original owner types.
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+static_assert(sizeof(BT_OBJECT_GENERATOR) == 156);
+static_assert(sizeof(BASE_OBJECT_GENERATOR_SAVELOAD) == 24);
+static_assert(offsetof(BASE_OBJECT_GENERATOR_SAVELOAD, mean) == 0);
+static_assert(offsetof(BASE_OBJECT_GENERATOR_SAVELOAD, timer) == 8);
+static_assert(offsetof(BASE_OBJECT_GENERATOR_SAVELOAD, nextTime) == 12);
+static_assert(offsetof(BASE_OBJECT_GENERATOR_SAVELOAD, archID) == 16);
+static_assert(sizeof(OBJECT_GENERATOR_SAVELOAD) == 168);
+static_assert(offsetof(OBJECT_GENERATOR_SAVELOAD, trans_SL) == 0);
+static_assert(offsetof(OBJECT_GENERATOR_SAVELOAD, mission) == 40);
+static_assert(offsetof(OBJECT_GENERATOR_SAVELOAD, baseSave) == 144);
+static_assert(offsetof(OBJECT_GENERATOR_SAVELOAD, baseSave) + sizeof(BASE_OBJECT_GENERATOR_SAVELOAD) == 168);
+static_assert(sizeof(MT_QOBJGENERATOR_LOAD) == 60);
+static_assert(offsetof(MT_QOBJGENERATOR_LOAD, position) == 0);
+static_assert(offsetof(MT_QOBJGENERATOR_LOAD, mean) == 4);
+static_assert(offsetof(MT_QOBJGENERATOR_LOAD, timer) == 12);
+static_assert(offsetof(MT_QOBJGENERATOR_LOAD, archTypeName) == 20);
+static_assert(offsetof(MT_QOBJGENERATOR_LOAD, dwMissionID) == 52);
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
@@ -443,6 +525,18 @@ static bool checkRetailFlagshipDecoder()
         if (!rejected(bytes.data(), 744)) return false;
         put(offset, previous);
     }
+    // Retail IAdmiral queries select the favored record instead of adding it
+    // to general bonuses. Protect first/last exact match and default behavior.
+    for (U32 index = 0; index != 5; ++index) decoded.favoredShips[index] = 75 + index;
+    decoded.general = {0.1F, 0.2F, -0.3F, 0.4F, 0.5F, 0.6F};
+    decoded.favored = {0.7F, 0.8F, -0.9F, 1.0F, 1.1F, 1.2F};
+    const auto *normal = &FrontierX::NativeRetailFlagshipBonusesForShip(decoded, 74);
+    const auto *first = &FrontierX::NativeRetailFlagshipBonusesForShip(decoded, decoded.favoredShips[0]);
+    const auto *last = &FrontierX::NativeRetailFlagshipBonusesForShip(decoded, decoded.favoredShips[4]);
+    if (normal != &decoded.general || first != &decoded.favored || last != &decoded.favored ||
+        normal->shields != 0.2F || first->shields != 0.8F ||
+        normal->supplyUsage != -0.3F || last->supplyUsage != -0.9F)
+        return false;
     return true;
 }
 

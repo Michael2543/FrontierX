@@ -277,7 +277,7 @@ void ObjectTransform< Base >::loadTransform (TRANSSAVEINFO & load)
 #if defined(_WIN32)
 	transform.rotate_about_k(load.trans_SL.ang_position);
 #else
-	NativeRestoreObjectSavedYaw(transform, load.trans_SL.ang_position);
+	NativeRestoreObjectSavedYaw(transform, load.trans_SL.ang_position, this->objClass == OC_PLATFORM);
 #endif
 	velocity = load.trans_SL.velocity;
 	ang_velocity = load.trans_SL.ang_velocity;

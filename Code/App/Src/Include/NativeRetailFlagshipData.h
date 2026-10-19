@@ -38,6 +38,17 @@ static_assert(offsetof(NativeRetailFlagshipData, antiSolarian) == 720);
 static_assert(offsetof(NativeRetailFlagshipData, toolbarImage) == 728);
 static_assert(offsetof(NativeRetailFlagshipData, toolbarHint) + sizeof(std::uint32_t) == 744);
 
+// Retail favored-ship bonuses replace general bonuses; they are not the
+// additive favored bonuses of the released CQ2 AdmiralBonuses record.
+inline const NativeRetailFlagshipData::Bonuses &NativeRetailFlagshipBonusesForShip(
+    const NativeRetailFlagshipData &data, std::uint32_t shipClass) noexcept
+{
+    for (const auto favored : data.favoredShips)
+        if (favored == shipClass)
+            return data.favored;
+    return data.general;
+}
+
 inline bool DecodeNativeRetailFlagshipData(const void *bytes, std::size_t size,
                                          NativeRetailFlagshipData &output)
 {

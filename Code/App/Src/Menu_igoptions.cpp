@@ -10,8 +10,20 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include <algorithm>
+#include <cstdio>
+#include <cwchar>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+#endif
 
 #include "Frame.h"
 #include "IButton2.h"
@@ -121,12 +133,14 @@ struct Menu_igoptions : public DAComponent<dummy_igoptions>
 			SetVisible(true);
 			break;
 
+#if defined(_WIN32)
 		case BUTTON_OPTIONS:
 			// open the options menu
 			SetVisible(false);
 			CreateOptionsMenu(false);
 			SetVisible(true);
 			break;
+#endif
 
 		case IDS_RESTART:
 			// restart the mission
@@ -196,6 +210,10 @@ void Menu_igoptions::setStateInfo (void)
 	buttonSave->InitButton(data.buttonSave, this);
 	buttonLoad->InitButton(data.buttonLoad, this);
 	buttonOptions->InitButton(data.buttonOptions, this);
+#if !defined(_WIN32)
+    // General settings are a separate owner; retain an honest disabled entry.
+    buttonOptions->EnableButton(false);
+#endif
 	buttonRestart->InitButton(data.buttonRestart, this);
 	buttonResign->InitButton(data.buttonResign, this);
 	buttonAbdicate->InitButton(data.buttonAbdicate, this);

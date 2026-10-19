@@ -316,6 +316,32 @@ changes.
 
 ## Working method
 
+### Agent development tools
+
+Use the configured hook-free MCP tools when their capability fits the task. Setup,
+versions, validation and recovery commands are in [docs/AGENT_TOOLS.md](docs/AGENT_TOOLS.md).
+
+- **Serena:** read `initial_instructions` once per session, then use symbol outlines,
+  definitions and references for C/C++ owner/caller investigations. Use `rg` for text
+  and configuration searches. The selected Linux compilation database does not cover
+  every Windows or excluded campaign path; missing indexed references do not prove
+  that no callers exist. Cross-check those paths in source. Keep durable facts in the
+  existing authoritative documents, not a separate tool memory.
+- **GDB MCP:** use explicit sessions for reproducible native crashes, hangs and
+  lifecycle/save-load faults. Prefer an existing reproducer; inspect the stopped
+  thread, stack, locals and relevant memory, and close owned sessions afterward.
+  Keep unsafe mode disabled. Use ordinary GDB when an operation is unsupported.
+- **REA/Ghidra:** use for a named interoperability question that available source
+  and normal debugging cannot answer. Open an explicit local target, inspect the
+  relevant function/references, and close the binary afterward. Treat decompiler
+  output as analysis, not original source or proof of retail behavior. Keep raw
+  binaries, analysis projects, dumps and output outside the repository as required
+  by `LEGAL.md`; record only permitted independently written compatibility facts.
+
+If a tool is unavailable in the current session, report that limit and use the
+documented CLI fallback. Tool installation or a successful synthetic smoke never
+substitutes for affected builds, layout/ABI checks or user gameplay acceptance.
+
 Before editing:
 
 1. Start from the failing behavior, target, symbol or nearest production owner.

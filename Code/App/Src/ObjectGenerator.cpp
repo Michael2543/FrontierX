@@ -11,8 +11,35 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <VFX.H>
+#include <3dmath.h>
+#include <renderer.h>
+#include <ENGINE.H>
+#include <TComponent.h>
+#include <TSmartPointer.h>
+#include <algorithm>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <type_traits>
+#include <memory>
+#include <stdexcept>
+using std::min;
+using std::max;
+#define __min(a, b) std::min<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define __max(a, b) std::max<std::common_type_t<decltype(a), decltype(b)>>((a), (b))
+#define GetRValue(color) static_cast<U8>((color) & 0xffU)
+#define GetGValue(color) static_cast<U8>(((color) >> 8) & 0xffU)
+#define GetBValue(color) static_cast<U8>(((color) >> 16) & 0xffU)
+#endif
 
 #include "TObject.h"
 #include "TObjSelect.h"
@@ -23,7 +50,7 @@
 #include "Camera.h"
 #include "SuperTrans.h"
 #include "UserDefaults.h"
-#include <DObjectGenerator.h >
+#include <DObjectGenerator.h>
 #include "IMissionActor.h"
 #include "Mission.h"
 #include "Startup.h"
@@ -33,7 +60,7 @@
 #include "OpAgent.h"
 #include "DSpaceship.h"
 #include "MPart.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "IPlanet.h"
 #include "DPlatform.h"
 #include "CommPacket.h"
@@ -41,13 +68,24 @@
 #include "DQuickSave.h"
 #include "IBanker.h"
 
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 #include <TComponent.h>
 #include <ITextureLibrary.h>
+
+#if !defined(_WIN32)
+static_assert(sizeof(BT_OBJECT_GENERATOR) == 156, "ObjectGenerator archetype size");
+static_assert(sizeof(BASE_OBJECT_GENERATOR_SAVELOAD) == 24, "ObjectGenerator base save size");
+static_assert(offsetof(BASE_OBJECT_GENERATOR_SAVELOAD, archID) == 16, "ObjectGenerator saved archetype offset");
+static_assert(sizeof(OBJECT_GENERATOR_SAVELOAD) == 168, "ObjectGenerator save record size");
+static_assert(offsetof(OBJECT_GENERATOR_SAVELOAD, baseSave) == 144, "ObjectGenerator base record offset");
+static_assert(sizeof(MT_QOBJGENERATOR_LOAD) == 60, "ObjectGenerator quickload record size");
+static_assert(offsetof(MT_QOBJGENERATOR_LOAD, archTypeName) == 20, "ObjectGenerator quickload type offset");
+static_assert(offsetof(MT_QOBJGENERATOR_LOAD, dwMissionID) == 52, "ObjectGenerator quickload ID offset");
+#endif
 
 #pragma pack(push,1)
 struct GenCommand
@@ -56,6 +94,10 @@ struct GenCommand
 	U32 handle;
 };
 #pragma pack(pop)
+#if !defined(_WIN32)
+static_assert(sizeof(GenCommand) == 5, "ObjectGenerator operation packet size");
+static_assert(offsetof(GenCommand, handle) == 1, "ObjectGenerator operation handle offset");
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -71,6 +113,10 @@ struct OBJECT_GENERATOR_INIT : RenderArch
 		meshArch = NULL;
 		archIndex = _archIndex;
 		pData = _pData;
+#if !defined(_WIN32)
+        numChildren = 0;
+        mesh_info = nullptr;
+#endif
 	}
 };
 
@@ -299,10 +345,18 @@ void ObjectGenerator::editorInitObject (IBaseObject * obj)
 void ObjectGenerator::addObject (U32 archID, U32 partID)
 {
 	PARCHETYPE objToPlace = ARCHLIST->LoadArchetype(archID);
+#if !defined(_WIN32)
+    if (!objToPlace)
+        throw std::runtime_error("Native ObjectGenerator generation archetype unavailable");
+#endif
 
 	if (isAdmiral(objToPlace))
 		partID |= ADMIRAL_MASK;
 	IBaseObject * rtObject = MGlobals::CreateInstance(objToPlace, partID);
+#if !defined(_WIN32)
+    if (!rtObject)
+        throw std::runtime_error("Native ObjectGenerator generation instance unavailable");
+#endif
 
 	if (rtObject)
 	{
@@ -507,6 +561,7 @@ void ObjectGenerator::Render (void)
 //
 void ObjectGenerator::View (void)
 {
+#if defined(_WIN32)
 	OBJECT_GENERATOR_VIEW view;
 	
 	view.mission = this;
@@ -543,6 +598,10 @@ void ObjectGenerator::View (void)
 			archID = 0;
 		}
 	}
+#else
+    std::fputs("Native ObjectGenerator editor view is unavailable\n", stderr);
+    std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //
@@ -567,7 +626,12 @@ BOOL32 ObjectGenerator::Save (struct IFileSystem * inFile)
 	save.baseSave = *static_cast<BASE_OBJECT_GENERATOR_SAVELOAD*>(this);
 
 	FRAME_save(save);
+#if defined(_WIN32)
 	file->WriteFile(0, &save, sizeof(save), &dwWritten, 0);
+#else
+    if (!file->WriteFile(0, &save, sizeof(save), &dwWritten, 0) || dwWritten != sizeof(save))
+        goto Done;
+#endif
 	
 	result = 1;
 
@@ -589,8 +653,13 @@ BOOL32 ObjectGenerator::Load (struct IFileSystem * inFile)
 	if (inFile->CreateInstance(&fdesc, file) != GR_OK)
 		goto Done;
 
+#if defined(_WIN32)
 	file->ReadFile(0, buffer, sizeof(buffer), &dwRead, 0);
 	MISSION->CorrelateSymbol("OBJECT_GENERATOR_SAVELOAD", buffer, &load);
+#else
+    if (!LoadNativeMissionRecord(MISSION, "OBJECT_GENERATOR_SAVELOAD", file, &load, sizeof(load)))
+        goto Done;
+#endif
 
 	*static_cast<BASE_OBJECT_GENERATOR_SAVELOAD*>(this)= load.baseSave;
 
@@ -610,7 +679,7 @@ void ObjectGenerator::ResolveAssociations()
 //
 void ObjectGenerator::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = static_cast<const char *>(partName);
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_QOBJGENERATOR_LOAD");
@@ -652,7 +721,14 @@ void ObjectGenerator::QuickSave (struct IFileSystem * file)
 void ObjectGenerator::QuickLoad (const char *szSaveLoadType, const char *szInstanceName, void * buffer, U32 bufferSize)
 {
 	MT_QOBJGENERATOR_LOAD qload;
+#if defined(_WIN32)
 	MISSION->CorrelateSymbol(szSaveLoadType, buffer, &qload);
+#else
+    if (bufferSize != sizeof(qload) ||
+        MISSION->CorrelateSymbol(szSaveLoadType, buffer, &qload) != GR_OK ||
+        !std::memchr(qload.archTypeName, 0, sizeof(qload.archTypeName)))
+        throw std::runtime_error("Native ObjectGenerator quickload record invalid");
+#endif
 
 	bGenEnabled = qload.bGenEnabled;
 	mean = qload.mean;
@@ -681,10 +757,18 @@ void ObjectGenerator::QuickResolveAssociations (void)
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 //
-inline struct IBaseObject * createObjectGenerator (PARCHETYPE pArchetype, S32 archIndex)
+inline struct IBaseObject * createObjectGenerator (PARCHETYPE pArchetype, S32 archIndex
+#if !defined(_WIN32)
+    , const OBJECT_GENERATOR_INIT &initData
+#endif
+)
 {
 	ObjectGenerator * obj = new ObjectImpl<ObjectGenerator>;
+#if defined(_WIN32)
 	obj->FRAME_init(OBJECT_GENERATOR_INIT(archIndex, (const BT_OBJECT_GENERATOR *)ARCHLIST->GetArchetypeData(pArchetype)));
+#else
+    obj->FRAME_init(initData);
+#endif
 
 	obj->pArchetype = pArchetype;
 	obj->objClass = OC_OBJECT_GENERATOR;
@@ -702,11 +786,18 @@ struct DACOM_NO_VTABLE ObjectGeneratorFactory : public IObjectFactory
 	{
 		PARCHETYPE pArchetype;
 		S32 archeIndex;
+#if !defined(_WIN32)
+        // ObjectRender caches mr in the init record: it must outlive instances.
+        std::unique_ptr<OBJECT_GENERATOR_INIT> initData;
+#endif
 		
 		void * operator new (size_t size)
 		{
 			return calloc(size,1);
 		}
+#if !defined(_WIN32)
+        void operator delete(void *pointer) { std::free(pointer); }
+#endif
 
 		OBJTYPE (void)
 		{
@@ -715,6 +806,9 @@ struct DACOM_NO_VTABLE ObjectGeneratorFactory : public IObjectFactory
 
 		~OBJTYPE (void)
 		{
+#if !defined(_WIN32)
+            initData.reset();
+#endif
 			if (archeIndex != -1)
 				ENGINE->release_archetype(archeIndex);
 		}
@@ -804,6 +898,9 @@ HANDLE ObjectGeneratorFactory::CreateArchetype (const char *szArchname, OBJCLASS
 
 		if ((result->archeIndex = ENGINE->create_archetype(fdesc.lpFileName, objFile)) == INVALID_ARCHETYPE_INDEX)
 			goto Error;
+#if !defined(_WIN32)
+        result->initData.reset(new OBJECT_GENERATOR_INIT(result->archeIndex, data));
+#endif
 	}
 	goto Done;
 
@@ -819,7 +916,9 @@ BOOL32 ObjectGeneratorFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
+#if defined(_WIN32)
 	EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -829,14 +928,25 @@ BOOL32 ObjectGeneratorFactory::DestroyArchetype (HANDLE hArchetype)
 IBaseObject * ObjectGeneratorFactory::CreateInstance (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
-	return createObjectGenerator(objtype->pArchetype, objtype->archeIndex);
+	return createObjectGenerator(objtype->pArchetype, objtype->archeIndex
+#if !defined(_WIN32)
+        , *objtype->initData
+#endif
+    );
 }
 //-------------------------------------------------------------------
 //
 void ObjectGeneratorFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
+#if defined(_WIN32)
 	EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+    (void)objtype;
+    (void)info;
+    std::fputs("Native ObjectGenerator editor insertion is unavailable\n", stderr);
+    std::abort();
+#endif
 }
 //---------------------------------------------------------------------------
 //-------------------------GLOBAL STARTUP------------------------------------

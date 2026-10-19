@@ -86,6 +86,10 @@ Frame * __stdcall CreateMenuPause (int pauseState);		// Menu_pause.cpp 0=local, 
 void __stdcall SetGamma (bool b3DEnabled);
 IFileSystem * __stdcall CreateLogOfFile (IFileSystem * pFile, const char *logName);
 U32 __stdcall CreateOptionsMenu (const bool bFocusing = true);
+#if !defined(_WIN32)
+U32 __stdcall CreateMenuLoadSave(bool bLoad, bool bSinglePlayerMaps);
+U32 __stdcall CreateMenu_igoptions();
+#endif
 
 
 //--------------------------------------------------------------------------//
@@ -672,11 +676,7 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 			if (bHasFocus && CQFLAGS.bGameActive && PLAYERID==0)
 			{
 
-#if defined(_WIN32)
 				CreateMenuLoadSave(true, MISSION->IsSinglePlayerGame());
-#else
-				NativeMenuUnavailable();
-#endif
 			}
 			break;
 
@@ -684,11 +684,7 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 			if (bHasFocus && CQFLAGS.bGameActive && (PLAYERID==0 || CQFLAGS.bLimitMapSettings==0))
 			{
 
-#if defined(_WIN32)
 				CreateMenuLoadSave(false, MISSION->IsSinglePlayerGame());
-#else
-				NativeMenuUnavailable();
-#endif
 			}
 			break;
 		
@@ -713,7 +709,6 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 			{
 				if (bHasFocus && CQFLAGS.bGameActive)
 				{
-#if defined(_WIN32)
 					U32 igResult = CreateMenu_igoptions();
 					if (igResult)
 					{
@@ -723,9 +718,6 @@ GENRESULT MenuResource::Notify (U32 message, void *param)
 						else
 							EVENTSYS->Send(CQE_PLAYER_QUIT, 0);
 					}
-#else
-					NativeMenuUnavailable();
-#endif
 				}
 				break;
 			}

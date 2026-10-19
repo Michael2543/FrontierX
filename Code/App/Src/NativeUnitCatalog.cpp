@@ -1,5 +1,6 @@
 // Explicit asset/factory diagnostic. Never run inside a playable simulation.
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeRetailFlagshipData.h"
 #include "ObjList.h"
 #include "Include/CQTrace.h"
 #include <DSpaceship.h>
@@ -118,9 +119,15 @@ struct UnitEnumerator final : IArchetypeEnum
         if (race == M_TERRAN || race == M_MANTIS || race == M_SOLARIAN)
         {
             const std::size_t expected = UnitDataSize(ship, subtype);
-            const bool validExtent = expected && size == expected;
+            bool validExtent = expected && size == expected;
+            if (ship && subtype == SSC_FLAGSHIP &&
+                size == sizeof(FrontierX::NativeRetailFlagshipData))
+            {
+                FrontierX::NativeRetailFlagshipData decoded{};
+                validExtent = FrontierX::DecodeNativeRetailFlagshipData(data, size, decoded);
+            }
             records.push_back({name, race, ship, validExtent});
-            if (!expected || size != expected)
+            if (!validExtent)
             {
                 std::cerr << "Native unit catalog invalid raw extent: " << name
                           << "; subtype " << subtype << "; bytes " << size

@@ -342,6 +342,9 @@ struct _NO_VTABLE Turret : IBaseObject, ILauncher, BASE_TURRET_SAVELOAD
 //	static S32 findJoint (const char * pathname, INSTANCE_INDEX parent);
 //	static BOOL32 findHardpoint (const char * pathname, INSTANCE_INDEX & index, HardpointInfo & hardpointinfo, INSTANCE_INDEX parent);
 	void getSighting (class TRANSFORM & result) const;
+#if !defined(_WIN32)
+	TRANSFORM getModelNodeTransform(INSTANCE_INDEX index) const;
+#endif
 	void swivelToTarget (const Vector & target);
 	void swivelToTargetRT (SINGLE dt);		// uses relYaw
 	void init (TurretArchetype * _hArchetype);
@@ -821,6 +824,14 @@ void Turret::OnAllianceChange (U32 allyMask)
 //---------------------------------------------------------------------------
 // get the sighting vector of the barrel
 //
+#if !defined(_WIN32)
+TRANSFORM Turret::getModelNodeTransform(INSTANCE_INDEX index) const
+{
+	return TRANSFORM(NativeShipHardpointTransform(owner.Ptr()->GetTransform(),
+		ENGINE->get_transform(index), Transform(), IsNativePersistentGunboat(owner.Ptr())));
+}
+#endif
+
 void Turret::getSighting (TRANSFORM & result) const
 {
 	/*
@@ -840,13 +851,8 @@ void Turret::getSighting (TRANSFORM & result) const
 #if defined(_WIN32)
 	result = ENGINE->get_transform(barrelIndex).multiply(result);
 #else
-	// Fixed ship barrels are authored in the same model frame as the hull.
-	// Keep the Engine hierarchy, adding the model correction at its root.
-	// Classification is independent of FastRender/cloak/presentation options;
-	// jointed turrets retain their existing swivel/joint frame.
-	result = TRANSFORM(NativeShipHardpointTransform(owner.Ptr()->GetTransform(),
-		ENGINE->get_transform(barrelIndex), result,
-		turretIndex == -1 && IsNativePersistentGunboat(owner.Ptr())));
+	// Both fixed and jointed barrels share the hull's authored model frame.
+	result = TRANSFORM(getModelNodeTransform(barrelIndex).multiply(result));
 #endif
 
 	if (turretIndex == -1)	// if 360 degree turret
@@ -880,7 +886,11 @@ void Turret::getSighting (TRANSFORM & result) const
 void Turret::swivelToTarget (const Vector & targetPos)
 {
 	SINGLE rot;
+#if defined(_WIN32)
 	TRANSFORM transform = ENGINE->get_transform(turretIndex);
+#else
+	TRANSFORM transform = getModelNodeTransform(turretIndex);
+#endif
 	Vector pos = transform.get_position();
 	SINGLE yaw = SightYaw(transform);
 	Vector goal = targetPos - pos;
@@ -1133,7 +1143,11 @@ void Turret::recalculateOffsetVectorForDistance (void)
 	OBJBOX tbox;
 	VFX_POINT points[4];
 	const TRANSFORM & trans = target->GetTransform();
+#if defined(_WIN32)
 	const Vector position = ENGINE->get_position(barrelIndex);
+#else
+	const Vector position = getModelNodeTransform(barrelIndex).translation;
+#endif
 	
 	offsetVector.zero();
 	if (target->GetObjectBox(tbox))

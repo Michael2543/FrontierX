@@ -18,6 +18,7 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeShipVisualTransform.h"
 #include "Include/CQTrace.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
@@ -330,7 +331,12 @@ void DumbReconProbe::Render (void)
 	{
 		LIGHT->deactivate_all_lights();
 		LIGHTS->ActivateBestLights(transform.translation,8,4000);
-		TreeRender(mc);
+#if defined(_WIN32)
+        TreeRender(mc);
+#else
+        const Transform visual = NativeProbeVisualTransform(transform, targetPos);
+        TreeRender(mc.mi, mc.numChildren, transform.get_inverse() * visual);
+#endif
 	}
 }
 //----------------------------------------------------------------------------------

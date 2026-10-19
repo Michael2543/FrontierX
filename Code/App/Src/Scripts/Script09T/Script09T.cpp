@@ -17,10 +17,26 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
 
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript09Resources.h"
+namespace FrontierXScript09
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 896, "Script09 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, Halsey) == 216, "Script09 saved admiral offset");
+static_assert(offsetof(MissionData, failureID) + sizeof(MissionData::failureID) == 896,
+              "Script09 final field extent");
+#endif
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -123,6 +139,35 @@ void SetTechLevel(U32 stage)
 //--------------------------------------------------------------------------//
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript09Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 123;
+    data.mhandle = 456;
+    data.bInEpsilon = true;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle && !data.bInEpsilon;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript09(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript09Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript09ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 
 //--------------------------------------------------------------------------
 //	MISSION BRIEFING
@@ -1169,3 +1214,7 @@ bool TM9_MissionSuccess::Update (void)
 //--------------------------------------------------------------------------//
 //--------------------------------End Script09T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript09
+#endif

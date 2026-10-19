@@ -17,7 +17,11 @@
 //--------------------------------------------------------------------------//
 
 #ifndef US_TYPEDEFS
+#if defined(_WIN32)
 #include <typedefs.h>
+#else
+#include <TYPEDEFS.H>
+#endif
 #endif
 
 #ifndef MPARTREF_H

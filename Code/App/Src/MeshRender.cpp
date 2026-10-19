@@ -18,6 +18,7 @@
 #include "CQTrace.h"
 #include "Include/NativeAppGlobals.h"
 #include "FrontierX/NativeD3dxMath.h"
+#include "Include/NativeShipVisualTransform.h"
 #include "FrontierX/NativeBatchStateIds.h"
 #endif
 
@@ -461,7 +462,9 @@ struct FaceGroupRender : MMaterial<RPVertex,D3DFVF_RPVERTEX>
     // consumption. UV1 deduplication otherwise loses independent UV2 seams.
     std::vector<TexCoord> nativeCornerUv2;
     void RenderNativeLegacy(const Transform &inv);
-    void SubmitNativeLegacy(const Transform &inv, std::vector<Vertex2> &vertices, const std::vector<Vector> &normals);
+    void SubmitNativeLegacy(const Transform &inv, std::vector<Vertex2> &vertices, const std::vector<Vector> &normals, bool puffy = false);
+    void RenderSolarian(const Transform &inv, const Transform &obj_to_view) override;
+    void RenderPuffy(const Transform &inv, const Transform &local_to_obj, const Vector &scale) override;
 #endif
 	D3DXMATRIX matFlipY;
 	
@@ -833,27 +836,46 @@ void TreeRenderPortion(MeshInfo **mi,int num_children,const Vector &split_pt,con
 	BATCH->set_state(RPR_BATCH,TRUE);
 }
 
-void TreeRenderPuffy(MeshInfo **mi,int num_children,const Vector &scale,SINGLE _puffPercent)
+static void RenderPuffyTree(MeshInfo **mi, int num_children, const Vector &scale,
+                            SINGLE percent, const Transform *modelCorrection)
 {
-	Vector pos = ENGINE->get_position(mi[0]->instanceIndex);
-	//LIGHTS->ActivateBestLights(pos,4,max(mi[0]->radius*2,500));
-	LIGHTS->ActivateAmbientLight(pos);
-	puffPercent = _puffPercent;
-	bScaleTrans = false;
-	
-	SetCommonStates();
-
-	const Transform &world_to_view = MAINCAM->get_inverse_transform() ;
-	Transform obj_trans = ENGINE->get_transform(mi[0]->instanceIndex);
-	CAMERA->SetModelView(&obj_trans);
-	for (int x=0;x<num_children;x++)
-	{
-		if (mi[x]->mr)
-			mi[x]->mr->RenderPuffy(mi[x],world_to_view,obj_trans,scale);
-	}
-
-	BATCH->set_state(RPR_BATCH,TRUE);
+    Vector pos = ENGINE->get_position(mi[0]->instanceIndex);
+    LIGHTS->ActivateAmbientLight(pos);
+    puffPercent = percent;
+    SetCommonStates();
+    const Transform &world_to_view = MAINCAM->get_inverse_transform();
+    const Transform root = ENGINE->get_transform(mi[0]->instanceIndex);
+    const Transform object = modelCorrection ? root * *modelCorrection : root;
+#if !defined(_WIN32)
+    cam_pos = CAMERA->GetPosition();
+#endif
+    CAMERA->SetModelView(&object);
+    for (int child = 0; child < num_children; ++child)
+    {
+        bScaleTrans = modelCorrection != nullptr;
+        if (modelCorrection)
+        {
+            const Transform &node = ENGINE->get_transform(mi[child]->instanceIndex);
+            scaleTrans = node.get_inverse() * object * root.get_inverse() * node;
+        }
+        if (mi[child]->mr) mi[child]->mr->RenderPuffy(mi[child], world_to_view, object, scale);
+    }
+    bScaleTrans = false;
+    BATCH->set_state(RPR_BATCH, TRUE);
 }
+
+void TreeRenderPuffy(MeshInfo **mi, int num_children, const Vector &scale, SINGLE percent)
+{
+    RenderPuffyTree(mi, num_children, scale, percent, nullptr);
+}
+#if !defined(_WIN32)
+void TreeRenderNativePuffy(MeshInfo **mi, int num_children, const Vector &scale,
+                           SINGLE percent, bool directShipHull)
+{
+    const Transform correction = NativeShipModelAxisCorrection();
+    RenderPuffyTree(mi, num_children, scale, percent, directShipHull ? &correction : nullptr);
+}
+#endif
 
 MeshRender::MeshRender()
 {
@@ -1053,8 +1075,9 @@ void MeshRender::Render(MeshInfo *mc,const Transform &world_to_view)
 		while (pos)
 		{
 #if !defined(_WIN32)
-            if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && (pos->flags & MM_CHROME))
-                throw std::runtime_error("Native legacy chrome/Solarian rendering is not integrated");
+            if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && (pos->flags & MM_CHROME) &&
+                pos->GetVertexType() != D3DFVF_RPVERTEX)
+                throw std::runtime_error("Native legacy chrome requires RPVertex face groups");
 #endif
 			if (fgi[pos->fg_idx].bCQ2Mat || (pos->flags & MM_CHROME) == 0)
 			{
@@ -1166,6 +1189,7 @@ void MeshRender::RenderPortionZAlign(MeshInfo *mc,const Transform &world_to_view
 	RenderMaterial *pos;
 	pos = fgr;
 	fgi = mc->fgi;
+	active_mi = mc;
 	bCacheValid = mc->bCacheValid;
 
 	local_split_point = inv.rotate_translate(split_pt);
@@ -1264,6 +1288,7 @@ void MeshRender::RenderPortion(MeshInfo *mc,const Transform &world_to_view,const
 	RenderMaterial *pos;
 	pos = fgr;
 	fgi = mc->fgi;
+	active_mi = mc;
 	bCacheValid = mc->bCacheValid;
 
 	local_split_point = inv.rotate_translate(split_pt);
@@ -1355,6 +1380,7 @@ void MeshRender::RenderPuffy(MeshInfo *mc,const Transform &world_to_view,const T
 	pos = fgr;
 	//lit = mc->lit;
 	fgi = mc->fgi;
+	active_mi = mc;
 	bCacheValid = mc->bCacheValid;
 
 	local_to_obj = obj_trans.get_inverse()*world_adjust_tr;
@@ -3015,14 +3041,136 @@ Done:
 
 
 #if !defined(_WIN32)
+void ResetNativeLegacyBuildCorners(IRenderMaterial *destination, const IRenderMaterial *source)
+{
+    auto *out = dynamic_cast<FaceGroupRender *>(destination);
+    const auto *in = dynamic_cast<const FaceGroupRender *>(source);
+    if (!out || !in) throw std::runtime_error("Native Solarian construction requires legacy face groups");
+    out->nativeCornerUv2 = in->nativeCornerUv2;
+}
+
+void UpdateNativeLegacyBuildFace(IRenderMaterial *destination, const IRenderMaterial *source,
+                                U32 face, U32 sourceFace)
+{
+    auto *out = dynamic_cast<FaceGroupRender *>(destination);
+    const auto *in = dynamic_cast<const FaceGroupRender *>(source);
+    if (!out || !in || sourceFace >= static_cast<U32>(in->new_face_cnt) ||
+        face >= static_cast<U32>(out->new_face_cnt))
+        throw std::runtime_error("Native Solarian build face exceeds its source");
+    const auto *original = static_cast<const RPVertex *>(in->src_verts_buffer);
+    const auto *clipped = static_cast<const RPVertex *>(out->src_verts_buffer);
+    const U16 *triangle = in->index_list + sourceFace * 3;
+    const Vector a = original[triangle[0]].pos;
+    const Vector ab = original[triangle[1]].pos - a;
+    const Vector ac = original[triangle[2]].pos - a;
+    const SINGLE aa = dot_product(ab, ab), bb = dot_product(ab, ac), cc = dot_product(ac, ac);
+    const SINGLE denominator = aa * cc - bb * bb;
+    if (denominator == 0) throw std::runtime_error("Native Solarian build source triangle is degenerate");
+    out->nativeCornerUv2.resize(out->new_face_cnt * 3);
+    for (unsigned corner = 0; corner < 3; ++corner)
+    {
+        const U16 index = out->index_list[face * 3 + corner];
+        if (index >= out->vert_cnt) throw std::runtime_error("Native Solarian build corner exceeds vertices");
+        const Vector offset = clipped[index].pos - a;
+        const SINGLE ad = dot_product(offset, ab), cd = dot_product(offset, ac);
+        const SINGLE v = (cc * ad - bb * cd) / denominator;
+        const SINGLE w = (aa * cd - bb * ad) / denominator;
+        const SINGLE u = 1.0F - v - w;
+        const auto *uv = in->nativeCornerUv2.data() + sourceFace * 3;
+        out->nativeCornerUv2[face * 3 + corner] =
+            TexCoord{u * uv[0].u + v * uv[1].u + w * uv[2].u,
+                     u * uv[0].v + v * uv[1].v + w * uv[2].v};
+        out->src_norms[index] = u * in->src_norms[triangle[0]] +
+            v * in->src_norms[triangle[1]] + w * in->src_norms[triangle[2]];
+        if (out->src_norms[index].magnitude_squared() > 0) out->src_norms[index].normalize();
+    }
+}
+
+void FaceGroupRender::RenderPuffy(const Transform &inv, const Transform &local_to_obj,
+                                  const Vector &scale)
+{
+    if (!NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+    {
+        MMaterial<RPVertex, D3DFVF_RPVERTEX>::RenderPuffy(inv, local_to_obj, scale);
+        return;
+    }
+    if (nativeCornerUv2.size() != static_cast<std::size_t>(new_face_cnt) * 3U)
+        throw std::runtime_error("Native Puffy material requires source corner UVs");
+    const auto *source = static_cast<const RPVertex *>(src_verts_buffer);
+    std::vector<Vertex2> vertices, overlay;
+    std::vector<Vector> normals;
+    for (int face = 0; face < new_face_cnt; ++face)
+    {
+        if (dot_product(cam_pos_in_object_space, faces[face].norm) < 0) continue;
+        bool shows = false;
+        for (int corner = 0; corner < 3; ++corner)
+        {
+            const int offset = face * 3 + corner;
+            const auto index = index_list[offset];
+            if (index >= vert_cnt) throw std::runtime_error("Native Puffy corner exceeds source vertices");
+            const Vector position = local_to_obj * source[index].pos;
+            Vector puff(scale.x ? position.x / scale.x : 0,
+                        scale.y ? position.y / scale.y : 0,
+                        scale.z ? position.z / scale.z : 0);
+            if (puff.magnitude_squared() > 0) puff.normalize();
+            puff.x *= scale.x; puff.y *= scale.y; puff.z *= scale.z;
+            Vector normal = puff;
+            if (normal.magnitude_squared() > 0) normal.normalize();
+            const SINGLE strength = (std::max)(0.0F, (std::min)(1.0F,
+                -2.0F + 3.0F * dot_product(normal, puffViewPt[0])));
+            shows |= strength > 0;
+            Vertex2 vertex{};
+            vertex.pos = puffPercent * strength * puff + (1.0F - puffPercent * strength) * position;
+            vertex.u = source[index].u; vertex.v = source[index].v;
+            vertex.u2 = nativeCornerUv2[offset].u; vertex.v2 = nativeCornerUv2[offset].v;
+            vertex.a = static_cast<U8>(F2LONG(255.0F * strength));
+            vertices.push_back(vertex);
+            normals.push_back(src_norms[index]);
+        }
+        if (shows)
+            overlay.insert(overlay.end(), vertices.end() - 3, vertices.end());
+    }
+    SubmitNativeLegacy(inv, vertices, normals, true);
+    if (!overlay.empty())
+    {
+        for (auto &vertex : overlay) vertex.r = vertex.g = vertex.b = 255;
+        SetupDiffuseBlend(puffTexture, false);
+        if (PIPE->draw_primitive(D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX2,
+                overlay.data(), static_cast<int>(overlay.size()), 0) != GR_OK)
+            throw std::runtime_error("Native Puffy overlay draw rejected");
+    }
+}
+
+void FaceGroupRender::RenderSolarian(const Transform &inv, const Transform &obj_to_view)
+{
+    if (!vert_cnt) return;
+    if (!NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
+    {
+        MMaterial<RPVertex, D3DFVF_RPVERTEX>::RenderSolarian(inv, obj_to_view);
+        return;
+    }
+    RenderNativeLegacy(inv);
+}
+
 void FaceGroupRender::RenderNativeLegacy(const Transform &inv)
 {
     if (!LIGHT || !PIPE || !BATCH || nativeCornerUv2.size() !=
             static_cast<std::size_t>(new_face_cnt) * 3U)
         throw std::runtime_error("Native original legacy material requires source light and corner UV owners");
     const auto &material = fgi[fg_idx];
-    if (flags & MM_CHROME)
-        throw std::runtime_error("Native legacy chrome material is not integrated");
+    const bool chrome = (flags & MM_CHROME) != 0;
+    if (chrome)
+    {
+        // Original RenderSolarian uses the shared update-driven normal rotation;
+        // hull transforms and authored second UVs remain independent of it.
+        active_mi->bSuppressEmissive = false;
+        if (bChromeDirty)
+        {
+            chromeTrans.set_identity();
+            chromeTrans.rotate_about_j(chromeRot);
+            bChromeDirty = false;
+        }
+    }
     const auto *source = static_cast<const RPVertex *>(src_verts_buffer);
     std::vector<Vertex2> vertices;
     vertices.reserve(static_cast<std::size_t>(new_face_cnt) * 3U);
@@ -3042,6 +3190,12 @@ void FaceGroupRender::RenderNativeLegacy(const Transform &inv)
             vertex.pos = source[index].pos;
             vertex.u = source[index].u; vertex.v = source[index].v;
             vertex.u2 = nativeCornerUv2[offset].u; vertex.v2 = nativeCornerUv2[offset].v;
+            if (chrome)
+            {
+                const Vector normal = chromeTrans.rotate(src_norms[index]);
+                vertex.u = 0.5F + 0.5F * normal.x;
+                vertex.v = 0.5F + 0.5F * normal.y;
+            }
             vertices.push_back(vertex);
             normals.push_back(src_norms[index]);
         }
@@ -3051,14 +3205,14 @@ void FaceGroupRender::RenderNativeLegacy(const Transform &inv)
 
 
 void FaceGroupRender::SubmitNativeLegacy(const Transform &inv, std::vector<Vertex2> &vertices,
-                                         const std::vector<Vector> &normals)
+                                         const std::vector<Vector> &normals, bool puffy)
 {
     if (vertices.empty()) return;
     if (!LIGHT || !PIPE || !BATCH || normals.size() != vertices.size())
         throw std::runtime_error("Native legacy submission requires source normals/light owners");
     const auto &material = fgi[fg_idx];
-    if ((flags & MM_CHROME) || material.iMat || material.bCQ2Mat)
-        throw std::runtime_error("Native legacy submission cannot replace chrome/CQ2 materials");
+    if (material.iMat || material.bCQ2Mat)
+        throw std::runtime_error("Native legacy submission cannot replace CQ2 materials");
     std::vector<Vector> positions;
     positions.reserve(vertices.size());
     for (const auto &vertex : vertices) positions.push_back(vertex.pos);
@@ -3074,7 +3228,7 @@ void FaceGroupRender::SubmitNativeLegacy(const Transform &inv, std::vector<Verte
             ((U32(material.diffuse.g) * colors[index].g) >> 8) + material.emissive.g));
         vertex.b = static_cast<U8>((std::min)(255U,
             ((U32(material.diffuse.b) * colors[index].b) >> 8) + material.emissive.b));
-        vertex.a = material.a;
+        if (!puffy) vertex.a = material.a;
     }
     const auto checked = [](GENRESULT result) {
         if (result != GR_OK) throw std::runtime_error("Native original legacy material state/draw rejected");
@@ -3108,11 +3262,11 @@ void FaceGroupRender::SubmitNativeLegacy(const Transform &inv, std::vector<Verte
         if (result != GR_OK) std::fprintf(stderr, "Native original legacy texture stage %u handle %u rejected: %d\n", stage, value, static_cast<int>(result));
         return result;
     };
-    const bool translucent = (material.texture_flags & TF_F_HAS_ALPHA) || material.a != 255;
+    const bool translucent = puffy || (material.texture_flags & TF_F_HAS_ALPHA) || material.a != 255;
     checked(renderState(D3DRS_LIGHTING, FALSE));
     checked(renderState(D3DRS_ZENABLE, TRUE));
     checked(renderState(D3DRS_ZFUNC, D3DCMP_LESSEQUAL));
-    checked(renderState(D3DRS_ZWRITEENABLE, !(material.texture_flags & TF_F_HAS_ALPHA)));
+    checked(renderState(D3DRS_ZWRITEENABLE, !puffy && !(material.texture_flags & TF_F_HAS_ALPHA)));
     checked(renderState(D3DRS_CULLMODE, D3DCULL_NONE));
     checked(renderState(D3DRS_ALPHATESTENABLE, FALSE));
     checked(renderState(D3DRS_ALPHABLENDENABLE, translucent));

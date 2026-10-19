@@ -18,6 +18,7 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "Include/NativeAppSchema.h"
+#include "Include/NativeGlobalDataFormat.h"
 #include "FrontierX/NativeDiskSpace.h"
 #include "FrontierX/LegacyInput.h"
 #include "FrontierX/PlatformTime.h"
@@ -93,10 +94,12 @@ static FILE *g_mis_f = NULL;
 #include "Menu.h"
 #include "CQTrace.h"
 #if !defined(_WIN32)
+#include <DGlobalData.h>
 #include <ViewSymbolOperations.h>
 #include <DScriptObject.h>
 #include <DBuildPlat.h>
 #include <DSupplyShipSave.h>
+#include <DObjectGenerator.h>
 #endif
 #include "Cursor.h"
 #include "Hotkeys.h"
@@ -189,7 +192,14 @@ static bool NativeLoadMissionSystemMap(IFileSystem *file)
             foldedScript == "script02t.dll" || foldedScript == "script02.dll" ||
             foldedScript == "script03t.dll" || foldedScript == "script03.dll" ||
             foldedScript == "script04t.dll" || foldedScript == "script04.dll" ||
-            foldedScript == "script05t.dll" || foldedScript == "script05.dll";
+            foldedScript == "script05t.dll" || foldedScript == "script05.dll" ||
+            foldedScript == "script06t.dll" || foldedScript == "script06.dll" ||
+            foldedScript == "script07t.dll" || foldedScript == "script07.dll" ||
+            foldedScript == "script08t.dll" || foldedScript == "script08.dll" ||
+            foldedScript == "script09t.dll" || foldedScript == "script09.dll" ||
+            foldedScript == "script10t.dll" || foldedScript == "script10.dll" ||
+            foldedScript == "script11t.dll" || foldedScript == "script11.dll" ||
+            foldedScript == "script12t.dll" || foldedScript == "script12.dll";
 		const char *extension = std::strrchr(filename, '.');
 		std::string foldedExtension = extension ? extension : "";
 		for (char &value : foldedExtension)
@@ -1112,12 +1122,80 @@ bool CheckNativeMissionRecordPersistence(IFileSystem *directory)
 	const bool acceptedWrongTail = readSupply(supplyOutput);
 	tail->offset = 464;
 	if (acceptedWrongTail) return fail("SupplyShip malformed empty tail rejection");
+	// TM5's original wave programs use ObjectGenerator::Load through this
+	// boundary. Check its live countdown/type/enable record, not just sizeof.
+	OBJECT_GENERATOR_SAVELOAD generator{};
+	generator.baseSave.mean = 90.5F;
+	generator.baseSave.minDiff = 12.25F;
+	generator.baseSave.timer = 37.5F;
+	generator.baseSave.nextTime = 86.75F;
+	generator.baseSave.archID = 0x12345678;
+	generator.baseSave.bGenEnabled = true;
+	const auto writeGenerator = [&](U32 size) {
+		DAFILEDESC record = "OBJECT_GENERATOR_SAVELOAD";
+		record.lpImplementation = "DOS";
+		record.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+		record.dwCreationDistribution = CREATE_ALWAYS;
+		COMPTR<IFileSystem> file;
+		std::vector<U8> bytes(size, 0);
+		std::memcpy(bytes.data(), &generator, std::min<size_t>(size, sizeof(generator)));
+		U32 written = 0;
+		return archive->CreateInstance(&record, file) == GR_OK &&
+			file->WriteFile(0, bytes.data(), size, &written, nullptr) && written == size;
+	};
+	const auto readGenerator = [&](OBJECT_GENERATOR_SAVELOAD &output) {
+		DAFILEDESC record = "OBJECT_GENERATOR_SAVELOAD";
+		record.lpImplementation = "DOS";
+		COMPTR<IFileSystem> file;
+		return archive->CreateInstance(&record, file) == GR_OK &&
+			LoadNativeMissionRecord(owner.get(), record.lpFileName, file, &output, sizeof(output));
+	};
+	OBJECT_GENERATOR_SAVELOAD generatorOutput{};
+	if (!writeGenerator(sizeof(generator)) || !readGenerator(generatorOutput) ||
+		std::memcmp(&generatorOutput, &generator, sizeof(generator)))
+		return fail("ObjectGenerator countdown/type/enable correlation");
+	for (U32 size : {167U, 169U})
+	{
+		generatorOutput.baseSave.timer = 101.25F;
+		if (!writeGenerator(size) || readGenerator(generatorOutput) ||
+			generatorOutput.baseSave.timer != 101.25F)
+			return fail("ObjectGenerator malformed extent rejection/transaction");
+	}
 	parser->DestroySymbols(owner->hPrevSymbols);
 	owner->hPrevSymbols = parser->ParseNewMemory(
 		"struct SCRIPTOBJECT_SAVELOAD { unsigned int towerID; };");
 	const U32 incomplete = 7;
 	if (!owner->hPrevSymbols || !write(&incomplete, sizeof(incomplete)) ||
 		read(archive, output) || output.towerID != 0x87654321) return fail("incomplete schema rejection/transaction");
+    // The original load menu lists descriptions without loading mission state.
+    // Its disk wchar_t fields remain UTF-16 even on the LP64 host.
+    MT_GlobalData metadata{};
+    std::wcscpy(metadata.gameDescription.string, L"Menu checkpoint");
+    FrontierX::GlobalDataDiskBytes metadataBytes{};
+    if (!FrontierX::EncodeGlobalData(metadata, metadataBytes) ||
+        !archive->CreateDirectory("\\MT_GlobalData") ||
+        !archive->SetCurrentDirectory("\\MT_GlobalData")) return fail("menu metadata setup");
+    DAFILEDESC globalsDescriptor = "Globals";
+    globalsDescriptor.lpImplementation = "DOS";
+    globalsDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+    globalsDescriptor.dwCreationDistribution = CREATE_ALWAYS;
+    COMPTR<IFileSystem> metadataFile;
+    U32 written = 0;
+    if (archive->CreateInstance(&globalsDescriptor, metadataFile) != GR_OK ||
+        !metadataFile->WriteFile(0, metadataBytes.data(), metadataBytes.size(), &written, nullptr) ||
+        written != metadataBytes.size()) return fail("menu metadata write");
+    metadataFile.free();
+    if (archive->QueryInterface("IUTFWriter", writer) != GR_OK || !writer)
+        return fail("menu metadata writer");
+    writer->Flush();
+    wchar_t description[32]{};
+    wchar_t bounded[4] = {L'?', L'?', L'?', L'!'};
+    if (MGlobals::GetFileDescription(directory, descriptor.lpFileName, description, 32) != 15 ||
+        std::wcscmp(description, L"Menu checkpoint") ||
+        MGlobals::GetFileDescription(directory, descriptor.lpFileName, bounded, 3) != 2 ||
+        bounded[0] != L'M' || bounded[1] != L'e' || bounded[2] || bounded[3] != L'!' ||
+        MGlobals::GetFileDescription(directory, descriptor.lpFileName, bounded, 0) != 0)
+        return fail("menu description UTF-16 decode/bounds");
 	return true;
 }
 #endif

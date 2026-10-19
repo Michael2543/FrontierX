@@ -1510,20 +1510,34 @@ void BMPOOL::set_name( const char *_name )
 
 			if (i==materials_max_cnt)
 			{
-				//CQBOMB0("Out of materials");
-				CQTRACE10("RB : ran out of materials - Evicting material 0");
-				CQASSERT (materials[0].prim.vpool);
+				// A caller may hold one writable buffer while reserving another.
+				// Only completed materials can be submitted and reused.
+				i = 0;
+#if !defined(_WIN32)
+				while (i < materials_max_cnt && materials[i].bLocked) ++i;
+				if (i == materials_max_cnt) return U32(-1);
+#endif
+				CQTRACE10("RB : ran out of materials - Evicting unlocked material");
+				CQASSERT (materials[i].prim.vpool);
+				// Allocation submits an older draw before the caller saves its new
+				// material. Preserve that pending state across the eviction.
+				BATCHEDMATERIAL pending;
+				pending.save(batcher, BATCHER->state[RPR_STATE_FLAGS],
+					materials[i].prim.p_type, materials[i].prim.verts_type);
+				Transform pendingModelview;
+				PIPE->get_modelview(pendingModelview);
 
-				materials[0].restore( BATCHER->state[RPR_STATE_FLAGS] );
-				PIPE->set_modelview( materials[0].prim.modelview);
+				materials[i].restore( BATCHER->state[RPR_STATE_FLAGS] );
+				PIPE->set_modelview( materials[i].prim.modelview);
 						
-				BATCHEDCALLPRIMITIVE *prim = &materials[0].prim;
+				BATCHEDCALLPRIMITIVE *prim = &materials[i].prim;
 						
 				prim->render( );
 						
-				materials[0].reset_primitives();
+				materials[i].reset_primitives();
+				pending.restore(BATCHER->state[RPR_STATE_FLAGS]);
+				PIPE->set_modelview(pendingModelview);
 
-				i = 0;
 			}
 
 			chosenMaterial = i;
@@ -1917,7 +1931,12 @@ void BMPOOL::set_name( const char *_name )
 	{
 
 		render_no_sort( );
+#if defined(_WIN32)
 		pool_flags |= BM_P_F_EMPTY;
+#else
+		// render_no_sort owns completion across every delay stage. Solarian
+		// construction queues its reveal pass at stage one in this alpha pool.
+#endif
 		return;
 #if 0
 		if( materials_used_cnt == 0 ) {
@@ -2587,6 +2606,13 @@ bool RenderBatcher::GetPrimBuffer (BATCHDESC *desc,bool bAllowFailure)
 			pool  = (alpha)?(depth)?1:2:0; 
 			material = bm_pools[pool].get_material_from_state_id(state[RPR_STATE_ID],desc->type,desc->vertex_format);
 		}
+#if !defined(_WIN32)
+		if (!material)
+		{
+			--in;
+			return false;
+		}
+#endif
 		alpha = (pool != 0);
 
 		CQASSERT(material->bLocked == 0);

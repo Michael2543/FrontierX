@@ -106,3 +106,7 @@ binkw32.dll
 
 # Privately supplied proprietary fonts; never distribute with source/build artifacts.
 /Arial Narrow/
+
+# Machine-local agent indices and selected compilation database.
+/.serena/
+/compile_commands.json

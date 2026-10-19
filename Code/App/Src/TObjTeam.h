@@ -223,6 +223,12 @@ void ObjectTeam< Base >::SetColors (void)
 {	
 	if (bExploding)
 		return;
+
+#if !defined(_WIN32)
+	if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS && instanceIndex != INVALID_INSTANCE_INDEX)
+		SetNativeLegacyTeamColor(ENGINE, REND, instanceIndex,
+			COLORTABLE[MGlobals::GetColorID(playerID)], &this->GetMeshChain());
+#endif
 	
 	if(instanceMesh)
 	{

@@ -12,10 +12,28 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
-
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript06Resources.h"
+namespace FrontierXScript06
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 440, "Script06 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, ExecutionTimer) == 16, "Script06 execution timer offset");
+static_assert(offsetof(MissionData, KerTak) == 36, "Script06 KerTak offset");
+static_assert(offsetof(MissionData, Hawkes) == 52, "Script06 Hawkes offset");
+static_assert(offsetof(MissionData, failureID) == 436, "Script06 failure offset");
+static_assert(offsetof(MissionData, failureID) + sizeof(MissionData::failureID) == 440,
+              "Script06 final field extent");
+#endif
 
 
 
@@ -98,6 +116,35 @@ bool SameObj(const MPartRef & obj1, const MPartRef & obj2)
 //--------------------------------------------------------------------------
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript06Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 123;
+    data.mhandle = 456;
+    data.HoleFound = true;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle && !data.HoleFound;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript06(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript06Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript06ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //	Mission Briefing
@@ -1872,3 +1919,7 @@ bool TM6_MissionSuccess::Update (void)
 //--------------------------------------------------------------------------//
 //--------------------------------End Script06T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript06
+#endif

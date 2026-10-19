@@ -84,6 +84,8 @@ bool rejectProjection = false;
 struct DrawTransform { Transform modelview; Matrix4 projection; std::array<int, 4> viewport; std::array<float, 3> firstPosition; };
 std::vector<DrawTransform> drawTransforms;
 std::vector<std::array<U32, 2>> submittedTextures;
+FrontierX::RenderStateSnapshot recordedRenderState{};
+std::vector<FrontierX::RenderStateSnapshot> submittedRenderStates;
 GENRESULT DACOM_CDECL RecordModelview(void *, const Transform &transform)
 {
     if (rejectModelview) return GR_GENERIC;
@@ -124,8 +126,9 @@ bool SameProjection(const Matrix4 &a, const Matrix4 &b)
 }
 
 GENRESULT DACOM_CDECL AcceptRenderState(
-    void *, const FrontierX::RenderStateSnapshot &)
+    void *, const FrontierX::RenderStateSnapshot &state)
 {
+    recordedRenderState = state;
     return GR_OK;
 }
 
@@ -170,6 +173,7 @@ GENRESULT DACOM_CDECL CaptureSubmission(
     if (!submission.IsValid())
         return GR_INVALID_PARMS;
     submittedTextures.push_back(recordedTextures);
+    submittedRenderStates.push_back(recordedRenderState);
     drawTransforms.push_back({recordedModelview, recordedProjection, recordedViewport,
         {{submission.vertices[0].x, submission.vertices[0].y, submission.vertices[0].z}}});
     const bool directSmoke =
@@ -435,6 +439,21 @@ int main()
         if (!Expect(queue(true, 13U) && batcher->flush(U32(-1)) == GR_OK && pooledTwoUvDraws.size() == 3U &&
                     matches(pooledTwoUvDraws.back(), true),
                     "original pooled state and bindings restore the exact prior two-stage contract")) return 1;
+        // SolarianBuild queues alpha geometry at delay one. The production
+        // alpha-depth pool must remain live after rendering delay zero.
+        const unsigned assertionsBeforeDelay = assertionCount;
+        if (!Expect(pipeline.set_render_state(D3DRS_ALPHABLENDENABLE, TRUE) == GR_OK &&
+                    batcher->set_state(RPR_STATE_FLAGS, BM_M_F_HAS_TEXTURE | BM_M_F_HAS_BLEND | BM_M_F_HAS_DEPTH | BM_M_F_DELAY_ON) == GR_OK &&
+                    batcher->set_render_state(D3DRS_ALPHABLENDENABLE, TRUE) == GR_OK &&
+                    batcher->set_render_state(D3DRS_ZENABLE, TRUE) == GR_OK &&
+                    batcher->set_state(RPR_DELAY, 0U) == GR_OK && queue(true, 14U) &&
+                    batcher->set_state(RPR_DELAY, 1U) == GR_OK && queue(false, 15U) &&
+                    batcher->flush(U32(-1)) == GR_OK && pooledTwoUvDraws.size() == 5U &&
+                    matches(pooledTwoUvDraws[3], true) && matches(pooledTwoUvDraws[4], false) &&
+                    assertionCount == assertionsBeforeDelay &&
+                    batcher->set_state(RPR_DELAY, 0U) == GR_OK,
+                    "Solarian alpha delay stages submit exactly once in order without incomplete pools")) return 1;
+        pooledTwoUvDraws.resize(3U);
         rejectTextureStage = true;
         if (!Expect(batcher->verify_state() == GR_GENERIC && pooledTwoUvDraws.size() == 3U,
                     "pooled verify propagates actual stage receiver failure without submitting")) return 1;
@@ -638,6 +657,108 @@ int main()
             return 1;
         }
         std::cout << "Original effect texture ownership recovers after direct PIPE hull bindings\n";
+    }
+    // TM6 fighter trails exhausted the three-entry alpha-depth material pool.
+    // Evicting an additive glow must not replace the pending trail's blend
+    // before add_primitive snapshots it. Earlier fixtures never fill this pool.
+    {
+        PIPE = &pipeline;
+        void *raw = nullptr;
+        if (!Expect(components->CreateInstance(&batchDescriptor, &raw) == GR_OK && raw,
+                    "alpha eviction creates production batcher")) return 1;
+        auto *batcher = static_cast<IRenderPrimitive *>(raw);
+        IAggregateComponent *aggregate = nullptr;
+        ICQBatch *batch = nullptr;
+        if (!Expect(batcher->QueryInterface(IID_IAggregateComponent,
+                reinterpret_cast<void **>(&aggregate)) == GR_OK && aggregate->Initialize() == GR_OK &&
+            batcher->QueryInterface(IID_ICQBatch, reinterpret_cast<void **>(&batch)) == GR_OK,
+            "alpha eviction initializes production owners")) return 1;
+        aggregate->Release();
+        batch->SetIdentityModelview();
+        if (!Expect(batcher->set_state(RPR_BATCH, TRUE) == GR_OK &&
+            batcher->set_state(RPR_STATE_FLAGS, BM_M_F_HAS_BLEND | BM_M_F_HAS_TEXTURE | BM_M_F_HAS_DEPTH) == GR_OK &&
+            batcher->set_render_state(D3DRS_ALPHABLENDENABLE, TRUE) == GR_OK &&
+            batcher->set_render_state(D3DRS_ZENABLE, TRUE) == GR_OK &&
+            batcher->set_render_state(D3DRS_ZWRITEENABLE, FALSE) == GR_OK,
+            "alpha eviction selects original trail pool and depth contract")) return 1;
+        for (U32 stage = 1; stage < BM_NUM_STAGES; ++stage)
+            if (!Expect(batcher->set_texture_stage_state(stage, D3DTSS_COLOROP, D3DTOP_DISABLE) == GR_OK,
+                        "alpha eviction terminates unused stages")) return 1;
+        std::array<U32, 4> handles{};
+        const auto before = submissionCount;
+        for (U32 index = 0; index < handles.size(); ++index)
+        {
+            const U32 source = index == 3 ? D3DBLEND_SRCALPHA : D3DBLEND_ONE;
+            const U32 destination = index == 3 ? D3DBLEND_INVSRCALPHA : D3DBLEND_ONE;
+            if (!Expect(pipeline.create_texture(2, 2, PixelFormat(PF_RGBA8), 1, 0, handles[index]) == GR_OK &&
+                batcher->set_state(RPR_STATE_ID, 400 + index) == GR_OK &&
+                batcher->set_texture_stage_texture(0, handles[index]) == GR_OK &&
+                batcher->set_texture_stage_state(0, D3DTSS_COLOROP, D3DTOP_MODULATE) == GR_OK &&
+                batcher->set_render_state(D3DRS_SRCBLEND, source) == GR_OK &&
+                batcher->set_render_state(D3DRS_DESTBLEND, destination) == GR_OK &&
+                FrontierX::SubmitRenderSmokeScene(batcher) == GR_OK,
+                "alpha eviction queues three distinct glows then alpha trail")) return 1;
+            U32 actualSource = 0, actualDestination = 0;
+            if (!Expect(pipeline.get_render_state(D3DRS_SRCBLEND, &actualSource) == GR_OK &&
+                pipeline.get_render_state(D3DRS_DESTBLEND, &actualDestination) == GR_OK &&
+                actualSource == source && actualDestination == destination,
+                "material eviction preserves pending caller blend instead of additive glow")) return 1;
+        }
+        if (!Expect(submissionCount == before + 1 && batcher->flush(U32(-1)) == GR_OK &&
+                    submissionCount == before + 4,
+                    "full three-entry alpha pool evicts once and submits all four draws")) return 1;
+        for (std::size_t index = submittedRenderStates.size() - 4;
+             index < submittedRenderStates.size(); ++index)
+        {
+            const bool trail = submittedTextures[index][0] == handles.back();
+            const auto &state = submittedRenderStates[index];
+            if (!Expect(state.alphaBlendEnabled == TRUE && state.depthWriteEnabled == FALSE &&
+                state.sourceBlend == (trail ? D3DBLEND_SRCALPHA : D3DBLEND_ONE) &&
+                state.destinationBlend == (trail ? D3DBLEND_INVSRCALPHA : D3DBLEND_ONE),
+                "evicted glow and pending trail reach receiver with their own exact blend/depth")) return 1;
+        }
+        // Solar reveal requests two writable descriptors with a full alpha
+        // pool. The second reservation must not evict the still-locked first.
+        const auto beforeReservations = submissionCount;
+        for (U32 index = 0; index != 3; ++index)
+            if (!Expect(batcher->set_state(RPR_STATE_ID, 500 + index) == GR_OK &&
+                batcher->set_texture_stage_texture(0, handles[index]) == GR_OK &&
+                FrontierX::SubmitRenderSmokeScene(batcher) == GR_OK,
+                "Solar reveal fixture fills three distinct alpha materials")) return 1;
+        BATCHDESC first{}, second{};
+        first.type = second.type = D3DPT_TRIANGLELIST;
+        first.vertex_format = second.vertex_format = D3DFVF_RPVERTEX;
+        first.num_verts = second.num_verts = FrontierX::RenderSmokeVertexCount;
+        if (!Expect(batcher->set_state(RPR_STATE_ID, 503) == GR_OK &&
+            batcher->set_texture_stage_texture(0, handles[3]) == GR_OK &&
+            batch->GetPrimBuffer(&first) &&
+            batcher->set_state(RPR_STATE_ID, 504) == GR_OK &&
+            batcher->set_texture_stage_texture(0, handles[0]) == GR_OK &&
+            batch->GetPrimBuffer(&second, true) && first.material != second.material &&
+            first.verts != second.verts && submissionCount == beforeReservations + 2,
+            "second Solar reservation evicts completed material without submitting locked buffer")) return 1;
+        for (auto *descriptor : {&first, &second})
+        {
+            auto *vertices = static_cast<RPVertex *>(descriptor->verts);
+            for (int index = 0; index != descriptor->num_verts; ++index)
+            {
+                vertices[index].pos = Vector(float(index % 3), float((index + 1) % 3), 0.5F);
+                vertices[index].color = 0xffffffffU;
+                vertices[index].u = vertices[index].v = 0;
+            }
+            batch->ReleasePrimBuffer(descriptor);
+        }
+        if (!Expect(batcher->flush(U32(-1)) == GR_OK &&
+            submissionCount == beforeReservations + 5,
+            "both Solar reservations and remaining older material submit exactly once")) return 1;
+        batch->Release();
+        batcher->Release();
+        if (!Expect(pipeline.set_texture_stage_texture(0, 0) == GR_OK,
+                    "alpha eviction unbinds final texture")) return 1;
+        for (U32 handle : handles)
+            if (!Expect(pipeline.destroy_texture(handle) == GR_OK,
+                        "alpha eviction releases texture owner")) return 1;
+        std::cout << "Original full alpha-depth pool preserves pending fighter-trail blend across eviction\n";
     }
     if (!Expect(assertionCount == 0U, "no production assertions")) return 1;
     nativePrimitive->Release();

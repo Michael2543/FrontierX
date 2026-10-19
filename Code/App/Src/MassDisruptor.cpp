@@ -328,7 +328,19 @@ void MassDisruptor::Render (void)
 			puffViewPt[0].normalize();
 			warpAnim.update(dt);
 			puffTexture = warpAnim.retrieve_current_frame()->texture;
-			TreeRenderPuffy(mc->mi,mc->numChildren,scale,0.4);
+			#if defined(_WIN32)
+            TreeRenderPuffy(mc->mi,mc->numChildren,scale,0.4);
+#else
+            // The target owns the chain, including reconstruction after load.
+            VOLPTR(IExtent) extent = target.Ptr();
+            if (extent)
+            {
+                MeshChain &chain = extent->GetMeshChain();
+                if (chain.numChildren)
+                    TreeRenderNativePuffy(chain.mi, chain.numChildren, scale, 0.4,
+                        target.Ptr()->objClass == OC_SPACESHIP);
+            }
+#endif
 		}
 		
 		if (contactBlast)

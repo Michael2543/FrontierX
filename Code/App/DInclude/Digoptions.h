@@ -21,7 +21,7 @@
 #endif
 
 #ifndef DLISTBOX_H
-#include "DListbox.h"
+#include "DListBox.h"
 #endif
 
 #ifndef DSLIDER_H

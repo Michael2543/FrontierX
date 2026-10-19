@@ -4,8 +4,16 @@
 #if !defined(_WIN32)
 #include "SuperTrans.h"
 
-inline void NativeRestoreObjectSavedYaw(TRANSFORM &frame, SINGLE savedYaw)
+inline void NativeRestoreObjectSavedYaw(TRANSFORM &frame, SINGLE savedYaw,
+                                        bool initializedPlatform = false)
 {
+    // Platform::initPlatform installs its model's quarter-turn before Load.
+    // Match the source platform path instead of flattening that rest frame.
+    if (initializedPlatform)
+    {
+        frame.rotate_about_k(savedYaw);
+        return;
+    }
     // saveTransform stores the heading of -J. A fresh identity's heading
     // is -PI, so rotating identity by that heading alone reverses the ship.
     // The original format stores yaw only, not an animated pitch/roll pose.

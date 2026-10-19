@@ -1,17 +1,60 @@
 # FrontierX Project Charter
 
-## Delivery status (2026-10-16)
+## Delivery status (2026-10-19)
 
-The user explicitly accepts TM3 as completely finished on 2026-10-16 after
-the final Weaver construction repair. TM4, **Friend or Foe?**, is now the active
-P2 mission. This supersedes the earlier pending TM3 confirmation statements
-below and preserves unperformed technical and Windows/ABI gates.
+Follow-up TM10 diagnostics isolate a valid-quicksave rejection in the original
+Talorian Matrix empty launcher loader and an actual delayed construction pool
+assertion. Native repairs preserve save bytes and strict error propagation;
+focused launcher and delay-stage regressions pass. Full recovery of the user's
+scene still needs F8/menu verification. See the [save/draw record](NATIVE_TERRAN_P2.md#tm10-quicksave-rejection-and-delayed-construction-draw-2026-10-19).
+
+A real TM10 playtest now identifies a Mass Disruptor mesh-chain crash and
+missing Solarian construction/debris/probe presentation. The live extent/Puffy
+owner, original Solarian construction binding, instance markings and probe
+visual frame are repaired with focused GCC/Clang/sanitizer and generated GPU
+evidence. The exact user scene remains pending retest; genuine TM10 saves are
+preserved. See the [effect repair record](GAME_MATERIAL_PATH.md#tm10-construction-debris-probe-and-mass-disruptor-feedback-2026-10-19).
+
+TM10–TM12 original native scripts, schemas/resources and Celereon/TM11 movie
+outcome/replay callers are technically prepared on 2026-10-19. Focused
+GCC/Clang/fatal-sanitizer CPU checks and real external map correlation pass;
+actual mission entry, movie EOF and full gameplay acceptance remain pending.
+TM13 is not linked. See the [focused preparation record](NATIVE_TERRAN_P2.md#tm10tm12-and-celereon-movie-preparation-2026-10-19).
+
+A subsequent real Script09 entry stops at the explicitly unsupported chrome
+material. The native source-derived Chrome/Solarian path and fixed-function/App
+shader-state separation now pass focused GCC/Clang CPU/GPU checks and fatal
+sanitizer CPU checks. Genuine saves/progress are preserved; complete TM9
+acceptance remains pending. See the [material owner record](GAME_MATERIAL_PATH.md#tm9-chromesolarian-production-material-path-2026-10-18).
+
+A later user-run closure is traced to the TM8 Kalidon beacon audio open
+(the user calls it mission 9; the log and save identify SCRIPT08). The native
+sound owner now retains original playback failure ID zero instead of aborting,
+with explicit diagnostics and passing GCC/Clang/sanitizer lifecycle checks. The
+latest genuine save is preserved for continuation. At the user's request, the
+exact beacon cue is now resolved from SFX and completes real IStreamer/PipeWire
+playback; in-mission audible/gameplay confirmation remains open. See the
+[audio diagnosis](NATIVE_AUDIO_STREAMER.md#kalidon-beacon-audio-open-abort-2026-10-18).
+
+The user explicitly accepts TM5 and TM6 as working flawlessly on 2026-10-17.
+TM1–TM6 are accepted in their reported Linux scope. Mantis player-color and laser-satellite repairs are confirmed by the subsequent
+user test. The remaining fighter texture appearance is traced on 2026-10-18
+to additive engine trails after material-pool eviction. A production batcher
+repair and failing-before/passing-after regression are confirmed by the user;
+the genuine visible-defect checkpoint is preserved. A subsequent Battlecruiser
+special-weapon abort has a native two-UV strip repair ready for narrow retest. The
+fighter-damage audit leaves original balance unchanged. TM7/TM8 are integrated and ready for
+separate user playtests; original TM9 entry is linked for TM8 Continue, without
+full TM9 gameplay acceptance. See the [campaign integration record](NATIVE_TERRAN_P2.md#tm7tm8-production-integration-and-tm9-next-entry-2026-10-17)
+and [shared rendering feedback](NATIVE_TERRAN_P2.md#tm5tm6-acceptance-and-shared-rendering-feedback-2026-10-17).
+Windows/ABI and carried technical gates remain separate.
 
 The user explicitly accepts P1c as completed after mission-transition, save/load,
 presentation, fighter and HUD feedback repairs. P1a/P1b/P1c are accepted in the
 delivered native Linux scope. P2 campaign expansion is active. The user accepts
 the reported TM2 run apart from a small Corvette smoke offset, now repaired
-with a narrow visual recheck pending. TM3 is next. The [16-mission matrix](NATIVE_TERRAN_P2.md)
+with a narrow visual recheck pending. TM3–TM6 are accepted; TM7/TM8 playtests
+and shared rendering feedback are active. The [16-mission matrix](NATIVE_TERRAN_P2.md)
 tracks original order, new requirements, blockers, checked builds and user decisions.
 Subsequently reported Collector-upgrade and repeated-F8 crashes are repaired at
 native mesh-tree ownership and AI serialization boundaries; focused validation
@@ -33,8 +76,8 @@ film callers now have targeted repairs. A later screenshot additionally exposed
 the authored-root/model-axis mismatch, now repaired at the native Animation
 owner with same-checkpoint before/after visual evidence. The
 [TM3 media candidate](NATIVE_TERRAN_MEDIA.md#weaver-screenshot-follow-up-2026-10-16)
-was subsequently accepted by the user. TM4 is now integrated for its next
-playtest, with technical readiness tracked in the
+was subsequently accepted by the user. TM4 is also accepted; TM5 integration
+and its focused technical evidence are tracked in the
 [P2 mission matrix](NATIVE_TERRAN_P2.md).
 This acceptance does not add scenario-specific runtime evidence or clear
 unresolved unit/hero coverage, missing media, whole-process leaks, unexecuted
@@ -312,6 +355,11 @@ the supplied eight-service profile produces visible Vulkan output through
 that caller. The CQ2 App fixture uses a separate draw branch;
 see
 [GAME_SYSTEM_STARTUP.md](GAME_SYSTEM_STARTUP.md).
+Native array-schema parsing now handles the sums/products required by TM9's
+next-entry state, preserving 896 bytes instead of the previously truncated
+292-byte parse. Focused precedence/count/overflow checks and full schema
+correlation pass. See the [TM7/TM8 integration record](NATIVE_TERRAN_P2.md#tm7tm8-production-integration-and-tm9-next-entry-2026-10-17).
+
 The production `DOCUVIEW` scanner, parser and symbol-table core now compiles
 and executes a synthetic Linux layout check. A parsed `long` and pointer
 remain four bytes, and the generated record has the expected Win32 offsets.

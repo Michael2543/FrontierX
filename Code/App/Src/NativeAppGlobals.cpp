@@ -87,6 +87,8 @@ int __stdcall _localWideToAnsi(const wchar_t *input, char *output, U32 bufferSiz
 }
 
 BaseHotRect *TOOLBAR = nullptr;
+BaseHotRect *ADMIRALBAR = nullptr;
+IFleetMenu *FLEET_MENU = nullptr;
 BaseHotRect *FULLSCREEN = nullptr;
 SINGLE LODPERCENT = 0.0F;
 SINGLE ELAPSED_TIME = DEF_ELAPSED_TIME;

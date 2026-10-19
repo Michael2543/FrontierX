@@ -9,9 +9,27 @@
    $Header: /Conquest/App/Src/Menu_AdmiralBar.cpp 124   9/19/01 9:54a Tmauer $
 */
 //--------------------------------------------------------------------------//
- 
+
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+using namespace FrontierX::NativeAppUi;
+#include "resource.h"
+#include <cstdint>
+#include <cstring>
+#include <cstdlib>
+#include <algorithm>
+#include <renderer.h>
+#include <ICamera.h>
+#include <TComponent.h>
+#include <EventSys.h>
+#include "NetPacket.h"
+using std::min;
+using std::max;
+#endif
 
 #include <wchar.h>
 
@@ -28,7 +46,7 @@
 #include "ILauncher.h"
 #include "Hotkeys.h"
 #include "DBHotkeys.h"
-#include "Sfx.h"
+#include "SFX.h"
 #include "CommPacket.h"
 #include "Camera.h"
 #include "UnitComm.h"
@@ -38,7 +56,7 @@
 #include "IShapeLoader.h"
 #include "IImageReader.h"
 #include "Sector.h"
-#include "IFabricator.h"
+#include "ifabricator.h"
 #include "SuperTrans.h"
 #include "ICloak.h"
 
@@ -499,7 +517,13 @@ bool Menu_AdmiralBar::GetVisible (void)
 //
 GENRESULT Menu_AdmiralBar::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+	#if defined(_WIN32)
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_GENERIC;
+    const auto *msg = &fields;
+#endif
 
 	switch (message)
 	{
@@ -522,7 +546,12 @@ GENRESULT Menu_AdmiralBar::Notify (U32 message, void *param)
 		{
 			if (!CQFLAGS.bGamePaused)
 			{
+
+#if defined(_WIN32)
 				update(S32(param) >> 10);
+#else
+				update(static_cast<S32>(reinterpret_cast<std::uintptr_t>(param)) >> 10);
+#endif
 				return Frame::Notify(message, param);
 			}
 		}
@@ -536,7 +565,12 @@ GENRESULT Menu_AdmiralBar::Notify (U32 message, void *param)
 	case CQE_HOTKEY:
 		if (bHasFocus) 
 		{
-			switch ((U32)param)
+
+#if defined(_WIN32)
+				switch ((U32)param)
+#else
+				switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
+#endif
 			{
 			case IDH_FLEET_SPORDER_0:
 			case IDH_FLEET_SPORDER_1:
@@ -586,7 +620,12 @@ GENRESULT Menu_AdmiralBar::Notify (U32 message, void *param)
 			case IDH_RES_KIT_11:
 			case IDH_RES_KIT_12:
 			case IDH_RES_KIT_13:
+
+#if defined(_WIN32)
 				handleHotkeyPressed((U32)param);
+#else
+				handleHotkeyPressed(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)));
+#endif
 			}
 		}
 		break;
@@ -655,7 +694,7 @@ bool Menu_AdmiralBar::onLButtonUp (S32 x, S32 y, U32 wParam)
 	bLButtonDown = false;
 
 	// do the special weapon thingy, if we can
-	bool bQueue = (wParam & MK_SHIFT) != 0;
+	bool bQueue = (wParam & 0x0004U) != 0;
 	if (targetMode == TARGET_ANYWHERE)
 	{
 		handleSpecialAttackArea(x, y, bQueue);
@@ -1226,7 +1265,7 @@ void Menu_AdmiralBar::handleCommandKitRes(U32 index)
 {
 	if(admiral)
 	{
-		VOLPTR(IAdmiral) admiralPtr = admiral;
+		VOLPTR(IAdmiral) admiralPtr = admiral.Ptr();
 		if(admiralPtr)
 		{
 			U32 archId = admiralPtr->GetAvailibleCommandKitID(index);
@@ -2096,7 +2135,7 @@ void Menu_AdmiralBar::onResupplyFleet (void)
 	caps.supplyOk = true;
 
 	IBaseObject * plat = NULL;
-	MPart part = admiral;
+	MPart part = admiral.Ptr();
 
 	if (part.isValid())
 	{
@@ -2148,7 +2187,7 @@ void Menu_AdmiralBar::onRepairFleet (void)
 	caps.repairOk = true;
 
 	IBaseObject * plat = NULL;
-	MPart part = admiral;
+	MPart part = admiral.Ptr();
 
 	if (part.isValid())
 	{
@@ -2226,7 +2265,7 @@ void Menu_AdmiralBar::onCreateFleet (void)
 	
 	U32 dockshipID = 0;
 	
-	VOLPTR(IAdmiral) flagship = admiral;
+	VOLPTR(IAdmiral) flagship = admiral.Ptr();
 	if (flagship)
 	{
 		IBaseObject * dockship = flagship->GetDockship();
@@ -2530,7 +2569,9 @@ void Menu_AdmiralBar::setStateInfo (void)
 void Menu_AdmiralBar::init (void)
 {
 	parent = FULLSCREEN;
+#if defined(_WIN32)
 	lateInitialize(FULLSCREEN->GetBase());
+#endif
 	parent->SetCallbackPriority(this, eventPriority);
 	initializeFrame(NULL);
 
@@ -2546,12 +2587,20 @@ struct _admiralBar : GlobalComponent
 
 	virtual void Startup (void)
 	{
+#if defined(_WIN32)
 		ADMIRALBAR  = menu = new DAComponent<Menu_AdmiralBar>; 
-		AddToGlobalCleanupList(&ADMIRALBAR);
+        AddToGlobalCleanupList(&ADMIRALBAR);
+#endif
 	}
 
 	virtual void Initialize (void)
 	{
+#if !defined(_WIN32)
+        // Frame construction subscribes to STATUS, CURSOR and HINTBOX.
+        // All application resources must exist before creating this frame.
+        ADMIRALBAR = menu = new DAComponent<Menu_AdmiralBar>;
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&ADMIRALBAR));
+#endif
 		menu->init();
 	}
 };

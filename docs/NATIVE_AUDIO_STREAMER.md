@@ -1,5 +1,106 @@
 # Native IStreamer contract
 
+## Exact Kalidon beacon restoration (2026-10-18)
+
+At the user's explicit request, the native audio owner now resolves only TM8's
+exact authored `specialDenied.wav` cue to the existing retail
+`SFX/specialdenied.wav` entry when MSpeech has no corresponding entry. A supplied
+mission-speech entry retains priority. The canonical lowercase retail spelling
+also works on physical directory mounts; the mixed-case script name is unchanged.
+Other speech names keep their original archive and failure result. Explicit
+speech exclusion still excludes the cue. Playback retains the existing
+PlayAudioMessage volume, playback-ID, highlight and cleanup contract; no generic
+archive fallback, replacement recording, script/timer or gameplay change is added.
+This supersedes the beacon presentation gap recorded in the earlier entry below.
+
+**Synthetic automated execution:** the existing generated-PCM shell fixture
+contains a separate lowercase SFX cue and an empty mission-speech source. It
+checks disabled playback creates no stream/ID; enabled playback obtains a real
+stream and speaker highlight and stops cleanly. A different missing speech name
+that does exist in SFX still returns zero, proving the resolution remains bounded.
+The prior owner fails the beacon playback check; the repaired owner passes. The
+Python caller checks the explicit SFX-resolution diagnostic. Existing missing-file,
+completion, portrait and ownership assertions remain enabled.
+
+Full-media Debug GCC16.2.1 and Clang22.1.8, and fatal Clang ASan/UBSan with leak
+detection, build `frontierx_native_shell` and pass:
+
+```sh
+ctest --test-dir "$BUILD" --output-on-failure -R '^portability\.(native_shell|layout|script08_schema)$'
+```
+
+**Lawfully external audio runtime:** the existing GCC default SDL-only
+`frontierx_native_window_manager_probe` opens the real SFX UTF archive and exact
+cue through IStreamer. The original mono 22050 Hz 8-bit PCM file completes
+playback through PipeWire in approximately 1010 ms; no extracted media is added
+to the repository. The probe's video driver is dummy, so no gameplay window or
+input is involved. Executed command with privately supplied paths:
+
+```sh
+cmake --build out/build/linux-gcc-debug --target frontierx_native_window_manager_probe -j 6
+SDL_VIDEODRIVER=dummy FRONTIERX_STREAMER_ARCHIVE="$RETAIL/DATA/sfx" FRONTIERX_STREAMER_ENTRY=specialDenied.wav out/build/linux-gcc-debug/frontierx_native_window_manager_probe
+```
+
+A new pinned full-media candidate retains the user's exact checkpoint and genuine
+progress. In-mission cue timing and user audible confirmation remain pending,
+as do native Windows/module ABI checks and the existing host-wide leak gates.
+This establishes exact-asset playback plus the tested owner resolution, not full
+mission/media acceptance or restoration of unrelated missing audio entries.
+
+
+## Kalidon beacon audio-open abort (2026-10-18)
+
+**User retail-input runtime:** the user reports that mission 9 ran for a long
+period before closing. The actual candidate log selects `SCRIPT08.dll` and ends
+at `Native mission speech failed to open: specialDenied.wav`; the retained last
+quicksave contains original TM8 programs. Record the user's ordinal separately
+from this observed Lost Sheep script identity. Both quicksaves and genuine
+progress are copied and fingerprinted privately before further tests. No recent
+systemd core is available; no segmentation fault, OOM or driver failure is inferred.
+
+**Source and external-data review:** `TM8_FlashBeacon` requests this audio every
+20 updates while Benson is unfound and the current system is Kalidon. The exact
+filename exists in SFX, not MSpeech, in the supplied external installation.
+`MScript::PlayAudio` calls `PlayAudioMessage`, which opens MSpeech. The original
+Windows `SoundMan::PlayAudioMessage` returns playback ID zero when Open fails.
+The native shared stream owner incorrectly aborted instead. It now preserves
+that original failure result for non-communication opens as well, emitting a
+separate failed-open counter and explicit unavailable-audio diagnostic. Failed
+opens create no stream, success ID or speaker highlight; invalid parameters and
+stream-start failures still fail explicitly. This supersedes the earlier native
+strict-open policy described in the historical entry below. No script, mission
+state, timing, audio filename, archive search order, simulation, public interface,
+serialized record or Windows owner changes.
+
+The missing beacon cue remains a presentation gap: it is not silently redirected
+to another archive, replaced, muted or counted as successfully played. This
+repair establishes original failure handling and continued gameplay, not restored
+beacon audio or complete TM8/TM9 acceptance.
+
+**Synthetic automated execution:** the existing real-stream shell lifecycle now
+requests a missing mission-audio entry, checks result zero, unchanged last ID,
+empty streams, no highlight and distinct communication/mission failure counters,
+then successfully opens/stops a generated PCM message with normal highlight
+ownership. Its Python caller checks the failure diagnostic. The old owner aborts
+and fails this regression; the repair passes while existing completion, portrait,
+volume and communication checks remain enabled. No new probe is added.
+
+Linux x86_64 GCC16.2.1 and Clang22.1.8 full-media Debug configurations build
+`frontierx_native_shell` and execute:
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell -j 6
+ctest --test-dir "$BUILD" --output-on-failure -R '^portability\.(native_shell|layout|script08_schema|script09_schema)$'
+```
+
+The same checks pass in fatal Clang ASan/UBSan with leak detection and an external
+font face. These generated-PCM checks are synthetic runtime, not a continued
+retail-data mission. A separately pinned full-media candidate retains the user's
+latest TM8 quicksave and original progress for normal F8 continuation. Fixed-build
+Kalidon gameplay confirmation, native Windows/module ABI and existing full-process
+hardware/library leak gates remain pending. No new mission acceptance is inferred.
+
+
 ## User-run communication abort diagnosis (2026-10-14)
 
 The user reported reaching the first Terran mission's victory and checking
