@@ -143,8 +143,7 @@ and the source released by Fever Pitch Studios in December 2013. That release is
 a later CQ2 development snapshot, rather than the exact 2001 retail source.
 Restoring compatibility with shipped data is therefore part of the work.
 
-This is a modified version of the Program. Revan67's restoration and Michael2543's
-FrontierX changes, with their dates and attribution, are recorded in
+This is a modified version of the Program. Revan67's restoration and FrontierX changes, with their dates and attribution, are recorded in
 [MODIFICATIONS.md](MODIFICATIONS.md).
 
 The controlling [Conquest source license](Conquest%20Source%20License.txt) permits
