@@ -1305,6 +1305,9 @@ BOOL32 Gunplat::Load (struct IFileSystem * file)
 	initLaunchers();
 #else
 	if (!Platform<GUNPLAT_SAVELOAD, GUNPLAT_INIT>::Load(file)) return 0;
+	// explodePlat has already destroyed the launchers. A dead platform can
+	// remain in the object list as a fog-of-war shadow, with only its base record.
+	if (bPlatDead) return 1;
 	try { initLaunchers(); }
 	catch (const std::exception &error)
 	{

@@ -4,6 +4,42 @@ TM3 presentation is accepted by the user on 2026-10-16 with explicit complete
 mission confirmation after the final Weaver repair. Earlier pending visual
 statements below are retained history; technical execution limits remain.
 
+## TM12 SOL-entry subtitle ellipsis (2026-10-19)
+
+**Actual user runtime/core diagnosis:** immediately after Hawkes completes its
+jump to system one, the original news subtitle reaches NativeFont::GetGlyph
+with U+2026. The earlier native text subset admitted printable ASCII and the
+trademark only; its explicit character rejection aborts from Subtitle::draw.
+The main-thread stack confirms a font admission failure, not warp simulation,
+render-batch eviction, decoder failure or memory exhaustion. Other core threads
+are waiting in audio/display services. Genuine saves and the original log are
+backed up privately; extracted core copies were deleted after inspection.
+
+NativeFont now admits the actual ellipsis to its existing FreeType Unicode
+lookup and monochrome rasterization path. It retains the authored glyph,
+advance and line layout. No replacement with three dots, omitted subtitle,
+resource mutation or generalized invalid-character fallback is introduced.
+Existing bounds and missing-glyph/bitmap validation remain unchanged. This
+native-only implementation changes no save, module ABI, simulation or Windows
+font owner.
+
+The existing CheckNativeFontTextLayout regression exercises U+2026 through the
+real agent: nonempty glyph spans and positive advance, additive string width,
+visible spans and CR/LF multiline row count. It continues to reject unsupported
+control characters. The existing font-enabled native_shell CTest executes this
+regression with an external face. All five unique faces in the private strict
+family map also resolve and monochrome-rasterize U+2026 through FreeType.
+No font or retail subtitle is copied into the repository.
+
+Validation: Linux x86_64 Clang 22.1.8 and GCC 16.2.1 full-media Debug plus fatal
+Clang ASan/UBSan. Build `frontierx_native_shell`; run
+`ctest --test-dir "$BUILD" --output-on-failure -R '^portability\.native_shell$'`.
+Fatal execution uses `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. Final logs accompany the
+private pinned candidate. All three configurations pass without skips or
+sanitizer findings. Actual replay of the SOL news event and subsequent
+mission progression, Windows builds and retail comparison remain pending.
+
 ## TM4 required terrain and next briefing (2026-10-16)
 
 TM4 adds the original BlackHole terrain owner and its authored ring texture.

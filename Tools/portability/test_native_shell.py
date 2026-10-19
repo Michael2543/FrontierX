@@ -165,6 +165,34 @@ class NativeShellTests(unittest.TestCase):
             self.assertNotIn('SetMovieSeen', replay)
             self.assertNotIn('SetMissionCompleted', replay)
 
+    def test_final_campaign_movies_and_script_bindings(self):
+        source = Path(__file__).resolve().parents[2] / 'Code/App/Src'
+        outcome = re.sub(r'//[^\n]*|/\*.*?\*/', '',
+            (source / 'Menu_EndGame.cpp').read_text(), flags=re.DOTALL).split(
+            'void MenuEndGame::checkForMovie (void)', 1)[1].split(
+            'void MenuEndGame::setStateInfo (void)', 1)[0]
+        victory = outcome.split('case 15:', 1)[1].split('#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)', 1)[1].split('#endif', 1)[0]
+        self.assertIn('if (!CQFLAGS.bSkipMovies)', victory)
+        self.assertLess(victory.index('MovieScreen(this, "cq_4b.mpg")'), victory.index('SetMovieSeen(5)'))
+        defeat = outcome.split('if (gameMissionID == 12 || gameMissionID == 15)', 1)[1].split(
+            '#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)', 1)[1].split('#endif', 1)[0]
+        self.assertIn('if (!CQFLAGS.bSkipMovies)', defeat)
+        self.assertLess(defeat.index('MovieScreen(this, "cq_4.mpg")'), defeat.index('SetMovieSeen(4)'))
+        self.assertIn('if (gameMissionID == 15) GAMEPROGRESS->SetMovieSeen(6)', defeat)
+        replay = (source / 'Menu_mission.cpp').read_text()
+        for button, movie in ((0, 'cq_intro'), (4, 'cq_4'), (5, 'cq_4b')):
+            branch = replay.split(f'case MOVIE_BUTTON_{button}:', 1)[1].split('break;', 1)[0]
+            self.assertIn('if (!CQFLAGS.bSkipMovies)', branch)
+            self.assertIn(f'MovieScreen(this, "{movie}.mpg");', branch)
+            self.assertNotIn('SetMovieSeen', branch)
+        scripts = (source / 'MScript.cpp').read_text()
+        for mission in range(13, 17):
+            self.assertIn(f'FrontierXInitializeScript{mission}();', scripts)
+            self.assertIn(f'FrontierX::GetNativeScript{mission}CountedString(stringID)', scripts)
+            briefing = 'Start' if mission == 13 else 'Briefing'
+            self.assertIn(f'!check(nativeTerran{mission}Programs, "TM{mission}_{briefing}", "TM{mission}_MissionStart")', scripts)
+            self.assertIn(f'!findScript("TM{mission}_{briefing}")', scripts)
+
     def test_tm4_script_startup_briefing_resources_and_map_source_binding(self):
         # Source regression: TM4's compiled owner initially passed schema tests
         # but its original briefing was rejected by a separate manual allowlist.
@@ -191,7 +219,7 @@ class NativeShellTests(unittest.TestCase):
                              rf'counted = FrontierX::GetNativeScript{token}CountedString\(stringID\)')
         # The actual TM5 retail header uses this uppercase module spelling.
         self.assertIn('strcmp(scriptName, "SCRIPT05.dll") == 0', load)
-        self.assertIn('terran04 ? nativeTerran04Programs : terran05 ? nativeTerran05Programs : terran07 ? nativeTerran07Programs : terran08 ? nativeTerran08Programs : terran09 ? nativeTerran09Programs : terran10 ? nativeTerran10Programs : terran11 ? nativeTerran11Programs : terran12 ? nativeTerran12Programs : terran06 ? nativeTerran06Programs : nullptr', load)
+        self.assertIn('terran04 ? nativeTerran04Programs : terran05 ? nativeTerran05Programs : terran07 ? nativeTerran07Programs : terran08 ? nativeTerran08Programs : terran09 ? nativeTerran09Programs : terran10 ? nativeTerran10Programs : terran11 ? nativeTerran11Programs : terran12 ? nativeTerran12Programs : terran13 ? nativeTerran13Programs : terran14 ? nativeTerran14Programs : terran15 ? nativeTerran15Programs : terran16 ? nativeTerran16Programs : terran06 ? nativeTerran06Programs : nullptr', load)
         self.assertIn('"TM4_MissionStart"', load)
         self.assertIn('runStartProgram(true)', briefing)
         shell = read('Code/Launcher/NativeShell.cpp')

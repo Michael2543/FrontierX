@@ -2564,7 +2564,11 @@ int Run(int argc, char ** argv)
                 options.missionSourceName == "T_Mission9.dmission" ||
                 options.missionSourceName == "T_Mission10.dmission" ||
                 options.missionSourceName == "T_Mission11.dmission" ||
-                options.missionSourceName == "T_Mission12.dmission")
+                options.missionSourceName == "T_Mission12.dmission" ||
+                options.missionSourceName == "T_Mission13.dmission" ||
+                options.missionSourceName == "T_Mission14.dmission" ||
+                options.missionSourceName == "T_Mission15.dmission" ||
+                options.missionSourceName == "T_Mission16.dmission")
             {
                 InitializeNativeEffectsOptions();
                 if (options.skipSpaceBackground)
@@ -2587,7 +2591,11 @@ int Run(int argc, char ** argv)
                 options.missionSourceName == "T_Mission9.dmission" ||
                 options.missionSourceName == "T_Mission10.dmission" ||
                 options.missionSourceName == "T_Mission11.dmission" ||
-                options.missionSourceName == "T_Mission12.dmission") && !options.skipLegacyLighting;
+                options.missionSourceName == "T_Mission12.dmission" ||
+                options.missionSourceName == "T_Mission13.dmission" ||
+                options.missionSourceName == "T_Mission14.dmission" ||
+                options.missionSourceName == "T_Mission15.dmission" ||
+                options.missionSourceName == "T_Mission16.dmission") && !options.skipLegacyLighting;
             if (NATIVE_USE_ORIGINAL_LEGACY_MATERIALS)
                 std::cout << "Native Terran legacy materials use original scalar lighting, "
                              "diffuse/emission colors and authored texture UV pairs\n";
@@ -2855,9 +2863,25 @@ int Run(int argc, char ** argv)
                 std::strcmp(selectedScript, "script12.dll") == 0 ||
                 std::strcmp(selectedScript, "Script12.dll") == 0 ||
                 std::strcmp(selectedScript, "SCRIPT12.dll") == 0;
+            const bool terran13Mission = std::strcmp(selectedScript, "Script13T.dll") == 0 ||
+                std::strcmp(selectedScript, "script13.dll") == 0 ||
+                std::strcmp(selectedScript, "Script13.dll") == 0 ||
+                std::strcmp(selectedScript, "SCRIPT13.dll") == 0;
+            const bool terran14Mission = std::strcmp(selectedScript, "Script14T.dll") == 0 ||
+                std::strcmp(selectedScript, "script14.dll") == 0 ||
+                std::strcmp(selectedScript, "Script14.dll") == 0 ||
+                std::strcmp(selectedScript, "SCRIPT14.dll") == 0;
+            const bool terran15Mission = std::strcmp(selectedScript, "Script15T.dll") == 0 ||
+                std::strcmp(selectedScript, "script15.dll") == 0 ||
+                std::strcmp(selectedScript, "Script15.dll") == 0 ||
+                std::strcmp(selectedScript, "SCRIPT15.dll") == 0;
+            const bool terran16Mission = std::strcmp(selectedScript, "Script16T.dll") == 0 ||
+                std::strcmp(selectedScript, "script16.dll") == 0 ||
+                std::strcmp(selectedScript, "Script16.dll") == 0 ||
+                std::strcmp(selectedScript, "SCRIPT16.dll") == 0;
             if (!trainingMission && !firstTerranMission && !secondTerranMission &&
                 !thirdTerranMission && !fourthTerranMission && !fifthTerranMission && !sixthTerranMission &&
-                !seventhTerranMission && !eighthTerranMission && !ninthTerranMission && !terran10Mission && !terran11Mission && !terran12Mission) return 6;
+                !seventhTerranMission && !eighthTerranMission && !ninthTerranMission && !terran10Mission && !terran11Mission && !terran12Mission && !terran13Mission && !terran14Mission && !terran15Mission && !terran16Mission) return 6;
             std::cout << "Native App selected source script: " << selectedScript << '\n';
             unsigned int forgers = 0;
             Vector initialPlayerForgerPosition{};

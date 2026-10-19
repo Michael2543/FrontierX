@@ -17,12 +17,30 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
 #include <stdio.h>
 #include <time.h>
 
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstdio>
+#include <ctime>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript13Resources.h"
+namespace FrontierXScript13
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 1864, "Script13 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, Blackwell) == 20, "Script13 saved admiral offset");
+static_assert(offsetof(MissionData, textFailureID) + sizeof(MissionData::textFailureID) == 1864,
+              "Script13 final field extent");
+#endif
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -127,6 +145,34 @@ void SetTechLevel(U32 stage)
 
 CQSCRIPTPROGRAM(TM13_Start, TM13_Start_Data,CQPROGFLAG_STARTBRIEFING);
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript13Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 133;
+    data.mhandle = 456;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript13(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript13Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript13ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 
 void TM13_Start::Initialize (U32 eventFlags, const MPartRef & part)
 {
@@ -1237,12 +1283,12 @@ void TM13_SendWave_A::Initialize (U32 eventFlags, const MPartRef & part)
 		tmpobj = M_ CreatePart("GBOAT!!M_Frigate", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<3; x++)
+	for (int x=0; x<3; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Scout Carrier", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Hive Carrier", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
@@ -1367,12 +1413,12 @@ void TM13_SendWave_C::Initialize (U32 eventFlags, const MPartRef & part)
 		tmpobj = M_ CreatePart("GBOAT!!M_Frigate", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Scarab", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Tiamat", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
@@ -1432,12 +1478,12 @@ void TM13_SendWave_D::Initialize (U32 eventFlags, const MPartRef & part)
 		tmpobj = M_ CreatePart("GBOAT!!M_Frigate", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Hive Carrier", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<3; x++)
+	for (int x=0; x<3; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Scarab", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
@@ -1679,27 +1725,27 @@ void TM13_SendWave_F::Initialize (U32 eventFlags, const MPartRef & part)
 
 	// MALKOR FLEET
 
-	for (x=0; x<3; x++)
+	for (int x=0; x<3; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Scarab", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<3; x++)
+	for (int x=0; x<3; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Hive Carrier", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Tiamat", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Khamir", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, RAM_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("SUPSHIP!!M_Zorap", data.locWaveEntry, MANTIS_ID);
 		AddEnemy(tmpobj, TROOP_SHIP);
@@ -1715,12 +1761,12 @@ void TM13_SendWave_F::Initialize (U32 eventFlags, const MPartRef & part)
 	M_ OrderDoWormhole(portal, 1);
 
 
-	for (x=0; x<6; x++)
+	for (int x=0; x<6; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Frigate", data.locWaveEntry2, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<5; x++)
+	for (int x=0; x<5; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!M_Scout Carrier", data.locWaveEntry2, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
@@ -1743,22 +1789,22 @@ void TM13_SendWave_F::Initialize (U32 eventFlags, const MPartRef & part)
 	
 	//i = (i+3) % 6;	//get opposite side
 
-	for (x=0; x<3; x++)
+	for (int x=0; x<3; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!T_Midas Battleship", data.locWaveEntry3, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!T_Fleet Carrier", data.locWaveEntry3, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<2; x++)
+	for (int x=0; x<2; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!T_Lancer Cruiser", data.locWaveEntry3, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
 	}
-	for (x=0; x<4; x++)
+	for (int x=0; x<4; x++)
 	{
 		tmpobj = M_ CreatePart("GBOAT!!T_Missile Cruiser", data.locWaveEntry3, MANTIS_ID);
 		AddEnemy(tmpobj, ATTACK_SHIP);
@@ -1914,12 +1960,12 @@ bool TM13_SendWave_F::Update (void)
 					tmpobj = M_ CreatePart("GBOAT!!T_Corvette", data.locWaveEntry4, MANTIS_ID);
 					AddEnemy(tmpobj, ATTACK_SHIP);
 				}
-				for (x=0; x<2; x++)
+				for (int x=0; x<2; x++)
 				{
 					tmpobj = M_ CreatePart("GBOAT!!T_Dreadnought", data.locWaveEntry4, MANTIS_ID);
 					AddEnemy(tmpobj, ATTACK_SHIP);
 				}
-				for (x=0; x<2; x++)
+				for (int x=0; x<2; x++)
 				{
 					tmpobj = M_ CreatePart("SUPSHIP!!T_Supply", data.locWaveEntry4, MANTIS_ID);
 					AddEnemy(tmpobj, ATTACK_SHIP);
@@ -1933,22 +1979,22 @@ bool TM13_SendWave_F::Update (void)
 
 				M_ OrderDoWormhole(portal, 1);
 
-				for (x=0; x<3; x++)
+				for (int x=0; x<3; x++)
 				{
 					tmpobj = M_ CreatePart("GBOAT!!T_Midas Battleship", data.locWaveEntry3, MANTIS_ID);
 					AddEnemy(tmpobj, ATTACK_SHIP);
 				}
-				for (x=0; x<2; x++)
+				for (int x=0; x<2; x++)
 				{
 					tmpobj = M_ CreatePart("GBOAT!!T_Fleet Carrier", data.locWaveEntry3, MANTIS_ID);
 					AddEnemy(tmpobj, ATTACK_SHIP);
 				}
-				for (x=0; x<2; x++)
+				for (int x=0; x<2; x++)
 				{
 					tmpobj = M_ CreatePart("GBOAT!!T_Lancer Cruiser", data.locWaveEntry3, MANTIS_ID);
 					AddEnemy(tmpobj, ATTACK_SHIP);
 				}
-				for (x=0; x<4; x++)
+				for (int x=0; x<4; x++)
 				{
 					tmpobj = M_ CreatePart("GBOAT!!T_Missile Cruiser", data.locWaveEntry3, MANTIS_ID);
 					AddEnemy(tmpobj, ATTACK_SHIP);
@@ -2185,3 +2231,6 @@ bool TM13_MissionSuccess::Update (void)
 //--------------------------------------------------------------------------//
 //--------------------------------End Script13T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+#if !defined(_WIN32)
+} // namespace FrontierXScript13
+#endif

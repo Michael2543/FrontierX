@@ -98,6 +98,7 @@ static FILE *g_mis_f = NULL;
 #include <ViewSymbolOperations.h>
 #include <DScriptObject.h>
 #include <DBuildPlat.h>
+#include <DGunPlat.h>
 #include <DSupplyShipSave.h>
 #include <DObjectGenerator.h>
 #endif
@@ -199,7 +200,11 @@ static bool NativeLoadMissionSystemMap(IFileSystem *file)
             foldedScript == "script09t.dll" || foldedScript == "script09.dll" ||
             foldedScript == "script10t.dll" || foldedScript == "script10.dll" ||
             foldedScript == "script11t.dll" || foldedScript == "script11.dll" ||
-            foldedScript == "script12t.dll" || foldedScript == "script12.dll";
+            foldedScript == "script12t.dll" || foldedScript == "script12.dll" ||
+            foldedScript == "script13t.dll" || foldedScript == "script13.dll" ||
+            foldedScript == "script14t.dll" || foldedScript == "script14.dll" ||
+            foldedScript == "script15t.dll" || foldedScript == "script15.dll" ||
+            foldedScript == "script16t.dll" || foldedScript == "script16.dll";
 		const char *extension = std::strrchr(filename, '.');
 		std::string foldedExtension = extension ? extension : "";
 		for (char &value : foldedExtension)
@@ -1074,6 +1079,33 @@ bool CheckNativeMissionRecordPersistence(IFileSystem *directory)
 	if (archive->CreateInstance(&platformDescriptor, platformFile) != GR_OK ||
 		LoadNativeMissionRecord(owner.get(), platformDescriptor.lpFileName, platformFile,
 			&platformOutput, sizeof(platformOutput))) return fail("Platform truncated record rejection");
+	// A destroyed gun platform remains as a fog-of-war shadow after its
+	// launchers are deleted. Its base death flags must survive correlation even
+	// when the preserved hull value is positive and there are no child records.
+	GUNPLAT_SAVELOAD destroyed = {};
+	destroyed.bPlatDead = true;
+	destroyed.mission.hullPoints = 750;
+	destroyed.shadowVisibilityFlags = 2;
+	DAFILEDESC destroyedDescriptor = "GUNPLAT_SAVELOAD";
+	destroyedDescriptor.lpImplementation = "DOS";
+	destroyedDescriptor.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
+	destroyedDescriptor.dwCreationDistribution = CREATE_ALWAYS;
+	COMPTR<IFileSystem> destroyedFile;
+	U32 destroyedWritten = 0;
+	if (archive->CreateInstance(&destroyedDescriptor, destroyedFile) != GR_OK ||
+		!destroyedFile->WriteFile(0, &destroyed, sizeof(destroyed), &destroyedWritten, 0) ||
+		destroyedWritten != sizeof(destroyed)) return fail("Destroyed gun platform write");
+	destroyedFile.free();
+	destroyedDescriptor.dwDesiredAccess = GENERIC_READ;
+	destroyedDescriptor.dwCreationDistribution = OPEN_EXISTING;
+	GUNPLAT_SAVELOAD destroyedOutput = {};
+	if (archive->CreateInstance(&destroyedDescriptor, destroyedFile) != GR_OK ||
+		!LoadNativeMissionRecord(owner.get(), destroyedDescriptor.lpFileName, destroyedFile,
+			&destroyedOutput, sizeof(destroyedOutput)) ||
+		!destroyedOutput.bPlatDead || destroyedOutput.bPlatRealyDead ||
+		destroyedOutput.mission.hullPoints != 750 || destroyedOutput.shadowVisibilityFlags != 2)
+		return fail("Destroyed gun platform retained shadow state");
+	destroyedFile.free();
 	// The real SupplyShip writer includes the empty trailing C++ member/padding;
 	// its parser record is four bytes shorter. Exercise the same file adapter.
 	SUPPLYSHIP_SAVELOAD supply = {};

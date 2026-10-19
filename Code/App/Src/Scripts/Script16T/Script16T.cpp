@@ -12,10 +12,28 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
 
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstdio>
+#include <ctime>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript16Resources.h"
+namespace FrontierXScript16
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 644, "Script16 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, Steele) == 464, "Script16 saved admiral offset");
+static_assert(offsetof(MissionData, failureID) + sizeof(MissionData::failureID) == 644,
+              "Script16 final field extent");
+#endif
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -50,6 +68,35 @@
 CQBRIEFINGITEM slotAnim;
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+    slotAnim = CQBRIEFINGITEM{};
+}
+extern "C" bool FrontierXCheckScript16Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 163;
+    data.mhandle = 456;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript16(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript16Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript16ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 //--------------------------------------------------------------------------//
 //	OTHER PROGRAMS
 //--------------------------------------------------------------------------//
@@ -2290,3 +2337,7 @@ bool TM16_MissionSuccess::Update (void)
 //--------------------------------------------------------------------------//
 //--------------------------------End Script15T.cpp-------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+} // namespace FrontierXScript16
+#endif

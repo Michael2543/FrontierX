@@ -72,6 +72,10 @@
 #include "Scripts/Script10T/NativeScript10Resources.h"
 #include "Scripts/Script11T/NativeScript11Resources.h"
 #include "Scripts/Script12T/NativeScript12Resources.h"
+#include "Scripts/Script13T/NativeScript13Resources.h"
+#include "Scripts/Script14T/NativeScript14Resources.h"
+#include "Scripts/Script15T/NativeScript15Resources.h"
+#include "Scripts/Script16T/NativeScript16Resources.h"
 
 #include "NativeSolTrainStrings.h"
 #include "Scripts/Sol_T/resource.h"
@@ -1351,29 +1355,39 @@ bool ParseLaterTerranSchema(IViewConstructor2 *constructor,
                                          mission == 8 ? FrontierX::GetNativeScript08Schema(length) :
                                                         mission == 9 ? FrontierX::GetNativeScript09Schema(length) :
                                          mission == 10 ? FrontierX::GetNativeScript10Schema(length) :
-                                         mission == 11 ? FrontierX::GetNativeScript11Schema(length) : FrontierX::GetNativeScript12Schema(length);
+                                         mission == 11 ? FrontierX::GetNativeScript11Schema(length) :
+                                         mission == 12 ? FrontierX::GetNativeScript12Schema(length) :
+                                         mission == 13 ? FrontierX::GetNativeScript13Schema(length) :
+                                         mission == 14 ? FrontierX::GetNativeScript14Schema(length) :
+                                         mission == 15 ? FrontierX::GetNativeScript15Schema(length) :
+                                         FrontierX::GetNativeScript16Schema(length);
     if (bytes.empty() || !embedded || length != bytes.size() ||
         std::memcmp(embedded, bytes.data(), length)) return false;
     std::string text = bytes;
     const HANDLE symbols = constructor->ParseNewMemory(text.data());
     if (!symbols) return false;
     const auto global = ResolveViewSymbolType(constructor->GetSymbol(symbols, "MissionData"));
-    const int size = mission == 7 ? 264 : mission == 8 ? 380 : mission == 9 ? 896 : mission == 10 ? 356 : mission == 11 ? 496 : 220;
-    const int first = mission == 7 ? 36 : mission == 8 ? 24 : mission == 9 ? 216 : mission == 10 ? 40 : mission == 11 ? 140 : 24;
-    const char *admiralName = mission == 7 ? "Benson" : mission == 8 ? "KerTak" : mission == 9 ? "Halsey" : "Steele";
+    const int size = mission == 7 ? 264 : mission == 8 ? 380 : mission == 9 ? 896 : mission == 10 ? 356 : mission == 11 ? 496 : mission == 12 ? 220 : mission == 13 ? 1864 : mission == 14 ? 252 : mission == 15 ? 632 : 644;
+    const int first = mission == 7 ? 36 : mission == 8 ? 24 : mission == 9 ? 216 : mission == 10 ? 40 : mission == 11 ? 140 : mission == 12 ? 24 : mission == 13 ? 20 : mission == 14 ? 56 : mission == 15 ? 484 : 464;
+    const char *admiralName = mission == 7 ? "Benson" : mission == 8 ? "KerTak" : mission == 9 ? "Halsey" : mission == 13 ? "Blackwell" : "Steele";
     bool admiral = false, end = false, state = false;
     for (auto field = global ? global->datatype : nullptr; field; field = field->link)
     {
         if (!field->name) continue;
         if (!std::strcmp(field->name, admiralName)) admiral = field->offset == first && field->size == 16;
-        if (!std::strcmp(field->name, mission == 10 ? "textFailureID" : "failureID")) end = field->offset + field->size == size;
-        if (!std::strcmp(field->name, "mission_state")) state = field->offset == 0 && field->size == 4;
+        if (!std::strcmp(field->name, (mission == 10 || mission == 13 || mission == 14) ? "textFailureID" : "failureID")) end = field->offset + field->size == size;
+        if (!std::strcmp(field->name, "mission_state")) state = field->offset == (mission == 16 ? 64 : 0) && field->size == 4;
     }
     const auto name = mission == 7 ? FrontierX::GetNativeScript07CountedString(1) :
                                      mission == 8 ? FrontierX::GetNativeScript08CountedString(5042) :
                                                     mission == 9 ? FrontierX::GetNativeScript09CountedString(1) :
                                      mission == 10 ? FrontierX::GetNativeScript10CountedString(1) :
-                                     mission == 11 ? FrontierX::GetNativeScript11CountedString(1) : FrontierX::GetNativeScript12CountedString(1);
+                                     mission == 11 ? FrontierX::GetNativeScript11CountedString(1) :
+                                     mission == 12 ? FrontierX::GetNativeScript12CountedString(1) :
+                                     mission == 13 ? FrontierX::GetNativeScript13CountedString(1) :
+                                     mission == 14 ? FrontierX::GetNativeScript14CountedString(1) :
+                                     mission == 15 ? FrontierX::GetNativeScript15CountedString(1) :
+                                     FrontierX::GetNativeScript16CountedString(1);
     const std::wstring title = L"Mission " + std::to_wstring(mission);
     bool valid = global && global->size == size && admiral && end && state &&
         name && name[0] == static_cast<wchar_t>(title.size()) &&
@@ -1382,7 +1396,8 @@ bool ParseLaterTerranSchema(IViewConstructor2 *constructor,
         FrontierX::GetNativeScript06ResourceHandle(), FrontierX::GetNativeScript07ResourceHandle(),
         FrontierX::GetNativeScript08ResourceHandle(), FrontierX::GetNativeScript09ResourceHandle(),
         FrontierX::GetNativeScript10ResourceHandle(), FrontierX::GetNativeScript11ResourceHandle(),
-        FrontierX::GetNativeScript12ResourceHandle()};
+        FrontierX::GetNativeScript12ResourceHandle(),
+        FrontierX::GetNativeScript13ResourceHandle(), FrontierX::GetNativeScript14ResourceHandle(), FrontierX::GetNativeScript15ResourceHandle(), FrontierX::GetNativeScript16ResourceHandle()};
     for (std::size_t i = 0; i < std::size(handles); ++i)
         for (std::size_t j = 0; j < i; ++j) valid = valid && handles[i] != handles[j];
     if (valid)
@@ -1898,10 +1913,13 @@ int main(int argc, char ** argv)
     const bool tenthTerranSchema = argc == 3 && std::strcmp(argv[1], "--tenth-terran-script-schema") == 0;
     const bool eleventhTerranSchema = argc == 3 && std::strcmp(argv[1], "--eleventh-terran-script-schema") == 0;
     const bool twelfthTerranSchema = argc == 3 && std::strcmp(argv[1], "--twelfth-terran-script-schema") == 0;
+    const bool laterTerranSchema = argc == 4 && std::strcmp(argv[1], "--later-terran-script-schema") == 0 &&
+        (!std::strcmp(argv[2], "13") || !std::strcmp(argv[2], "14") ||
+         !std::strcmp(argv[2], "15") || !std::strcmp(argv[2], "16"));
     const bool missionSchema = (argc == 4 || argc == 5) &&
         std::strcmp(argv[1], "--mission-schema") == 0 &&
         !std::strchr(argv[3], '/') && !std::strchr(argv[3], '\\');
-    if (argc != 1 && !appSchema && !scriptSchema && !terranSchema && !secondTerranSchema && !thirdTerranSchema && !fourthTerranSchema && !fifthTerranSchema && !sixthTerranSchema && !seventhTerranSchema && !eighthTerranSchema && !ninthTerranSchema && !tenthTerranSchema && !eleventhTerranSchema && !twelfthTerranSchema && !missionSchema)
+    if (argc != 1 && !appSchema && !scriptSchema && !terranSchema && !secondTerranSchema && !thirdTerranSchema && !fourthTerranSchema && !fifthTerranSchema && !sixthTerranSchema && !seventhTerranSchema && !eighthTerranSchema && !ninthTerranSchema && !tenthTerranSchema && !eleventhTerranSchema && !twelfthTerranSchema && !laterTerranSchema && !missionSchema)
     {
         std::cerr << "Usage: frontierx_view_parser_probe [--app-schema data.i | "
                      "--script-schema DataDef.i | "
@@ -1917,6 +1935,7 @@ int main(int argc, char ** argv)
                      "--tenth-terran-script-schema DataDef.i | "
                      "--eleventh-terran-script-schema DataDef.i | "
                      "--twelfth-terran-script-schema DataDef.i | "
+                     "--later-terran-script-schema mission-number DataDef.i | "
                      "--mission-schema data-root mission-name [expected-script]]\n";
         return 1;
     }
@@ -2034,6 +2053,8 @@ int main(int argc, char ** argv)
         "TM10 source schema/resource")) return 1;
     if (eleventhTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 11),
         "TM11 source schema/resource")) return 1;
+    if (laterTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[3],
+        static_cast<unsigned>(std::strtoul(argv[2], nullptr, 10))), "TM13-16 source schema/resource")) return 1;
     if (twelfthTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 12),
         "TM12 source schema/resource")) return 1;
     if (ninthTerranSchema && !Expect(ParseLaterTerranSchema(view2, argv[2], 9),

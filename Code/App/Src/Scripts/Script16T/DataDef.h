@@ -12,7 +12,11 @@
 
 
 #ifndef US_TYPEDEFS
+#if defined(_WIN32)
 #include <typedefs.h>
+#else
+#include <TYPEDEFS.H>
+#endif
 #endif
 
 #ifndef MPARTREF_H
@@ -20,7 +24,11 @@
 #endif
 
 #ifndef DMTECHNODE_H
+#if defined(_WIN32)
 #include <..\..\dinclude\DMTechNode.h>
+#else
+#include <DMTechNode.h>
+#endif
 #endif
 
 

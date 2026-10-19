@@ -17,11 +17,29 @@
 
 #include <ScriptDef.h>
 #include <DLLScriptMain.h>
+#if defined(_WIN32)
 #include "DataDef.h"
 #include "stdlib.h"
 #include <stdio.h>
 
 #include "..\helper\helper.h"
+#else
+#include <cstdlib>
+#include <cstdio>
+#include <ctime>
+#include <cstddef>
+#include <DMTechNode.h>
+#include "../Helper/helper.h"
+#include "resource.h"
+#include "NativeScript14Resources.h"
+namespace FrontierXScript14
+{
+#include "DataDef.h"
+static_assert(sizeof(MissionData) == 252, "Script14 mission record must retain Win32 size");
+static_assert(offsetof(MissionData, Steele) == 56, "Script14 saved admiral offset");
+static_assert(offsetof(MissionData, textFailureID) + sizeof(MissionData::textFailureID) == 252,
+              "Script14 final field extent");
+#endif
 
 //--------------------------------------------------------------------------
 //  DEFINES
@@ -87,6 +105,34 @@ static void AddAndDisplayObjective
 //--------------------------------------------------------------------------
 
 CQSCRIPTDATA(MissionData, data);
+#if !defined(_WIN32)
+static void ResetNativeMissionData()
+{
+    data = MissionData{};
+}
+extern "C" bool FrontierXCheckScript14Reset(void)
+{
+    const MissionData previous = data;
+    data.failureID = 143;
+    data.mhandle = 456;
+    ResetNativeMissionData();
+    const bool reset = !data.failureID && !data.mhandle;
+    data = previous;
+    return reset;
+}
+extern "C" void FrontierXInitializeScript14(void)
+{
+    ResetNativeMissionData();
+    if (!HEAP) HEAP = HEAP_Acquire();
+    std::size_t length = 0;
+    const void *schema = FrontierX::GetNativeScript14Schema(length);
+    if (!HEAP || !schema || !length || length > UINT32_MAX) std::abort();
+    g_CQScriptDataDesc.preprocessData = const_cast<void *>(schema);
+    g_CQScriptDataDesc.preprocessSize = static_cast<U32>(length);
+    g_CQScriptDataDesc.hLocal = FrontierX::GetNativeScript14ResourceHandle();
+    MScript::SetScriptData(g_CQScriptDataDesc);
+}
+#endif
 
 //--------------------------------------------------------------------------
 //	MISSION BRIEFING
@@ -114,7 +160,7 @@ void TM14_Briefing::Initialize (U32 eventFlags, const MPartRef & part)
 
     data.displayObjectiveHandlerParams_teletypeHandle = 0;
 
-	for ( x=0; x<NUM_SYSTEMS; x++ )
+	for (int x=0; x<NUM_SYSTEMS; x++ )
 	{
 		data.bAIOnInSystem[x] = false;
 	}
@@ -1328,3 +1374,6 @@ bool TM14_DisplayObjectiveHandler::Update
 
     return true;
 }
+#if !defined(_WIN32)
+} // namespace FrontierXScript14
+#endif

@@ -2,6 +2,13 @@
 
 ## Delivery status (2026-10-19)
 
+The user accepts complete TM12 after the SOL subtitle repair on 2026-10-19.
+TM13–TM16 source owners, original entry/save schemas and final-film callers are
+now prepared for a full-media test candidate. Focused CPU/schema/lifecycle and
+actual external movie EOF checks are separate from pending mission gameplay
+and audible/GPU playback. See the [final campaign preparation](NATIVE_TERRAN_P2.md#tm13tm16-and-final-movie-preparation-2026-10-19).
+
+
 Follow-up TM10 diagnostics isolate a valid-quicksave rejection in the original
 Talorian Matrix empty launcher loader and an actual delayed construction pool
 assertion. Native repairs preserve save bytes and strict error propagation;
@@ -19,7 +26,8 @@ TM10–TM12 original native scripts, schemas/resources and Celereon/TM11 movie
 outcome/replay callers are technically prepared on 2026-10-19. Focused
 GCC/Clang/fatal-sanitizer CPU checks and real external map correlation pass;
 actual mission entry, movie EOF and full gameplay acceptance remain pending.
-TM13 is not linked. See the [focused preparation record](NATIVE_TERRAN_P2.md#tm10tm12-and-celereon-movie-preparation-2026-10-19).
+At that earlier handoff TM13 was not linked; the current preparation above
+supersedes that boundary. See the [focused preparation record](NATIVE_TERRAN_P2.md#tm10tm12-and-celereon-movie-preparation-2026-10-19).
 
 A subsequent real Script09 entry stops at the explicitly unsupported chrome
 material. The native source-derived Chrome/Solarian path and fixed-function/App

@@ -134,7 +134,7 @@ class GateTests(unittest.TestCase):
                 if scope == 'sanitizers':
                     self.assertIn('-R', calls[2])
                     pattern = ctest[ctest.index('-R') + 1]
-                    for owner in ('script02_schema', 'script03_schema', 'script04_schema', 'script05_schema', 'script06_schema', 'script07_schema', 'script08_schema', 'script09_schema', 'script10_schema', 'script11_schema', 'script12_schema', 'net_buffer'):
+                    for owner in ('script02_schema', 'script03_schema', 'script04_schema', 'script05_schema', 'script06_schema', 'script07_schema', 'script08_schema', 'script09_schema', 'script10_schema', 'script11_schema', 'script12_schema', 'script13_schema', 'script14_schema', 'script15_schema', 'script16_schema', 'net_buffer'):
                         self.assertIsNotNone(re.fullmatch(pattern, 'portability.' + owner))
                 if scope.startswith('mission'):
                     self.assertIn('--technical-smoke', calls[-1])

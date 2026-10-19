@@ -83,14 +83,25 @@ P2_TM11_CHECKLIST = [
 P2_TM12_CHECKLIST = [
     'TM12: original briefing, regeneration/capture, Xin/Rendar and Quasili attacks, Smirnoff fleet and required objectives/admirals.',
     'F7/F8 during regeneration, active attack waves and fleet orders; check genuine victory/defeat and result/return.',
-    'TM13 is not linked by this candidate; stop after the TM12 result rather than treating the next mission as integrated.']
+    'After genuine TM12 victory, Continue opens the original TM13 briefing; later missions remain separate user checks.']
+
+P2_TM13_CHECKLIST = [
+    'TM13: original Start/briefing and defence of Earth, timed waves and wormholes; preserve the required admirals.',
+    'F7/F8 during waves, normal victory/defeat/retry and TM14 unlock; defeat plays cq_4.mpg with sound and returns.']
+P2_TM14_CHECKLIST = [
+    'TM14: original briefing, Malkor/cocoon rescue and base objectives; F7/F8 during capture and combat, then normal TM15 unlock.']
+P2_TM15_CHECKLIST = [
+    'TM15: original briefing, Halsey return and Alto attacks; F7/F8 during fleet orders/waves; normal result and TM16 unlock.']
+P2_TM16_CHECKLIST = [
+    'TM16: original briefing, super-ship and ion-cannon events, admiral outcomes, late waves and F7/F8.',
+    'Victory plays cq_4b.mpg; defeat plays cq_4.mpg. Check sound, video EOF/Esc, result/selector return and unlocked movie replay. No mission 17 is expected.']
 
 
 def campaign_checklist(mission, campaign_mission):
     if campaign_mission is not None:
         if mission != 'terran1' or campaign_mission not in range(1, 17):
             raise ValueError('campaign target requires Terran selector and mission 1..16')
-        return P2_CHECKLIST + {2: P2_TM2_CHECKLIST, 4: P2_TM4_CHECKLIST, 5: P2_TM5_CHECKLIST, 7: P2_TM7_CHECKLIST, 8: P2_TM8_CHECKLIST, 10: P2_TM10_CHECKLIST, 11: P2_TM11_CHECKLIST, 12: P2_TM12_CHECKLIST}.get(campaign_mission, [])
+        return P2_CHECKLIST + {2: P2_TM2_CHECKLIST, 4: P2_TM4_CHECKLIST, 5: P2_TM5_CHECKLIST, 7: P2_TM7_CHECKLIST, 8: P2_TM8_CHECKLIST, 10: P2_TM10_CHECKLIST, 11: P2_TM11_CHECKLIST, 12: P2_TM12_CHECKLIST, 13: P2_TM13_CHECKLIST, 14: P2_TM14_CHECKLIST, 15: P2_TM15_CHECKLIST, 16: P2_TM16_CHECKLIST}.get(campaign_mission, [])
     return TERRAN_CHECKLIST if mission == 'terran1' else CHECKLIST
 
 

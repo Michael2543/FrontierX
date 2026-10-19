@@ -91,7 +91,7 @@ struct Span { int x0, x1, y; };
 struct Glyph { int advance; std::vector<Span> spans; };
 bool IsFontTextCharacter(wchar_t c)
 {
-    return (c >= 32 && c <= 126) || c == 0x2122 || c == L'\r' || c == L'\n';
+    return (c >= 32 && c <= 126) || c == 0x2122 || c == 0x2026 || c == L'\r' || c == L'\n';
 }
 struct NativeFont : IFontDrawAgent
 {
@@ -163,7 +163,7 @@ struct NativeFont : IFontDrawAgent
     }
     Glyph &GetGlyph(wchar_t c)
     {
-        if (!IsFontTextCharacter(c)) FontFailure("selected font path supports printable ASCII, trademark and CR/LF only");
+        if (!IsFontTextCharacter(c)) FontFailure("selected font path supports printable ASCII, trademark, ellipsis and CR/LF only");
         // Single-line agents keep one baseline. Only the multiline owner below
         // interprets CR/LF as line separators; neither path rasterizes them.
         if (c == L'\r' || c == L'\n')
@@ -457,6 +457,14 @@ bool CheckNativeFontTextLayout(IFontDrawAgent *agent, U32 textResource)
     valid = valid && std::wcscmp(title, L"Conquest: Frontier Wars\u2122") == 0 &&
         font->GetStringWidth(title) > font->GetStringWidth(L"Conquest: Frontier Wars") &&
         !font->VisibleSpans(&pane, 0, 0, L"\u2122").empty();
+    // The original SOL-entry news subtitle contains an authored ellipsis.
+    // Rasterize the actual glyph, preserving its metrics instead of replacing
+    // it with three ASCII dots or suppressing the subtitle.
+    const auto &ellipsis = font->GetGlyph(L'\u2026');
+    valid = valid && ellipsis.advance > 0 && !ellipsis.spans.empty() &&
+        font->GetStringWidth(L"A\u2026B") ==
+            font->GetStringWidth(L"AB") + static_cast<U32>(ellipsis.advance) &&
+        !font->VisibleSpans(&pane, 0, 0, L"A\u2026B").empty();
     // The original StatusBar passes the authored ID straight to the agent.
     // Its Rally Point hint has a trailing LF. Use that resource, not a patched
     // replacement string or a production special case for its numeric ID.
@@ -468,6 +476,8 @@ bool CheckNativeFontTextLayout(IFontDrawAgent *agent, U32 textResource)
         sameSpans(font->VisibleSpans(&pane, 0, 0, authored),
             font->VisibleSpans(&pane, 0, 0, withoutTerminator.c_str()));
     font->multiline = true;
+    valid = valid && font->GetNumRows(L"A\u2026\r\nB", &pane) == 2 &&
+        font->GetStringWidth(L"A\u2026\r\nB") == font->GetStringWidth(L"A\u2026B");
     auto rows = font->VisibleSpans(&pane, 0, 0, L"A");
     const auto second = font->VisibleSpans(&pane, 0, font->GetFontHeight(), L"B");
     rows.insert(rows.end(), second.begin(), second.end());

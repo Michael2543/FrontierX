@@ -261,8 +261,15 @@ void MenuEndGame::checkForMovie (void)
 			break;
 
 		case 15:
-//			MovieScreen(this, "cq_4b.mpg", movieWidth, movieHeight);
+#if defined(_WIN32)
 			GAMEPROGRESS->SetMovieSeen(5);
+#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)
+			if (!CQFLAGS.bSkipMovies)
+			{
+				MovieScreen(this, "cq_4b.mpg");
+				GAMEPROGRESS->SetMovieSeen(5);
+			}
+#endif
 			break;
 		}
 	}
@@ -270,14 +277,17 @@ void MenuEndGame::checkForMovie (void)
 	{
 		if (gameMissionID == 12 || gameMissionID == 15)
 		{
-//			MovieScreen(this, "cq_4.mpg", movieWidth, movieHeight);
+#if defined(_WIN32)
 			GAMEPROGRESS->SetMovieSeen(4);
-
-			if (gameMissionID == 15)
+			if (gameMissionID == 15) GAMEPROGRESS->SetMovieSeen(6);
+#elif defined(FRONTIERX_HAVE_VIDEO_DECODER)
+			if (!CQFLAGS.bSkipMovies)
 			{
-				// special, let's us know if we've seen the losing movie by losing the last mission
-				GAMEPROGRESS->SetMovieSeen(6);
+				MovieScreen(this, "cq_4.mpg");
+				GAMEPROGRESS->SetMovieSeen(4);
+				if (gameMissionID == 15) GAMEPROGRESS->SetMovieSeen(6);
 			}
+#endif
 		}
 	}
 }

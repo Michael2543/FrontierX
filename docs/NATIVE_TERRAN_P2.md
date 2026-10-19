@@ -1,5 +1,140 @@
 # Terran campaign expansion
 
+## Destroyed gun-platform quicksave rejection (2026-10-19)
+
+**Actual user save/log diagnosis:** the current quicksave in the TM13–TM16
+candidate fails at `PLATGUN!!T_SpaceStation`, instance 125. The genuine UTF
+archive passes metadata/index and required-entry reads. Its complete 432-byte
+GUNPLAT_SAVELOAD has bPlatDead=true, bPlatRealyDead=false and hullPoints=750;
+its instance directory contains only that record and no launcher child folders.
+The private save, progress and logs were backed up before investigation.
+
+Original Gunplat::explodePlat deletes all launchers. Platform::SelfDestruct
+sets bPlatDead; the platform can remain in the object list until its retained
+fog-of-war shadow clears. Its positive saved hull is not proof that it is
+alive. Gunplat::Save correctly writes no launcher folders for this state.
+Gunplat::Load previously recreated them unconditionally and then rejected the
+missing folders. Native Load now returns after the successfully validated base
+record for bPlatDead platforms. It keeps the destroyed/shadow state and does
+not resurrect launchers. Live-platform launcher creation, mandatory records
+and propagated child failures remain unchanged. Windows retains its existing
+path; no disk layout, schema, simulation order or saved bytes change.
+
+The existing Mission record persistence fixture now writes and correlates the
+full source GUNPLAT_SAVELOAD with the actual death/shadow flags and positive
+hull. It requires the death and visibility fields to survive the genuine saved
+schema conversion, rather than inferring state from hull or absent children.
+This is generated record-owner execution, not a complete load of the user's
+mission graph. The existing native_shell check also retains malformed-record
+and failed-live-launcher rejection coverage.
+
+Validation uses Linux x86_64 Clang 22.1.8 and GCC 16.2.1 full-media Debug plus
+fatal Clang ASan/UBSan:
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell -j 4
+ctest --test-dir "$BUILD" --output-on-failure \
+  -R '^portability\.(native_shell|layout|app_schema)$'
+```
+
+Sanitizers use ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. Final logs accompany the private
+replacement candidate. All three focused checks pass in each configuration,
+without skips or sanitizer findings. Its original selector and current quick/named saves,
+configuration and genuine progress are preserved. The exact full-scene F8/menu
+recovery, save-after-recovery, Windows Debug/Final and module ABI remain pending.
+
+## TM13–TM16 and final movie preparation (2026-10-19)
+
+**User acceptance:** the user confirms complete TM12 after the SOL-entry font
+repair. TM12 is accepted on that evidence; earlier pending entries below are
+historical. The new request extends campaign integration through TM16. No
+completion of TM13–TM16 is inferred from automated checks or unlocked progress.
+
+Original Script13T–Script16T now link through the existing native campaign
+registry, separate module namespaces, embedded source schemas and counted
+resources. Native initialization resets mission data and TM15/TM16 briefing
+animation descriptors. TM13's actual briefing flag belongs to `TM13_Start`,
+which initializes state and launches `TM13_Briefing`; its mission entry remains
+`TM13_MissionStart`. The other three use their original Briefing/MissionStart
+programs. No objective, wave order, timer, damage, RNG call or seed is changed.
+Old MSVC for-loop scope dependencies use local loop counters; native include
+case/path repairs leave the Windows includes available.
+
+The fixed mission extents are 1864/252/632/644 bytes. Blackwell is at offset 20
+in TM13; Steele is at offsets 56/484/464 in TM14/TM15/TM16. Final-field extents
+are asserted in the actual owners and checked through the original parser.
+TM16 retains its leading 64-byte TECHNODE and mission_state at offset 64.
+The existing schema fixture correlates saved admiral IDs and the final failure
+field, compares embedded schemas, and rejects shared module resource identities.
+Actual external maps retain 3236-byte Globals and exact script identities:
+`Script13.dll`, `Script14.dll`, `script15.dll`, `Script16.dll`. The source registry,
+briefing/load/strings, shell full-material admission and saved system-map paths
+admit all four existing aliases. No serialized pointer or field is widened.
+
+**Final films:** original zero-based outcome ID 15 plays `cq_4b.mpg` on victory.
+Original defeat IDs 12 and 15 play `cq_4.mpg`; the final defeat retains its
+additional seen bit 6. Native calls use existing MovieScreen and honor
+bSkipMovies, marking seen only after return. Original selector replay buttons
+4/5 and the missing intro replay button 0 now call the same owner. Windows
+behavior and genuine mission completion/unlock ownership remain unchanged.
+
+Validation on Linux x86_64 uses Clang 22.1.8/GCC 16.2.1 full-media Debug and fatal
+Clang ASan/UBSan, the private p1c-clang-20261015, p1b-video-gcc and
+p1b-video-clang-san configurations:
+
+```sh
+cmake --build "$BUILD" --target frontierx_native_shell frontierx_view_parser_probe frontierx_native_window_manager_probe -j 4
+ctest --test-dir "$BUILD" --output-on-failure \
+  -R '^portability\.(script(12|13|14|15|16)_schema|native_shell|layout|native_window_manager)$'
+"$BUILD/frontierx_view_parser_probe" --mission-schema "$RETAIL/DATA" T_Mission13.dmission Script13.dll
+"$BUILD/frontierx_view_parser_probe" --mission-schema "$RETAIL/DATA" T_Mission14.dmission Script14.dll
+"$BUILD/frontierx_view_parser_probe" --mission-schema "$RETAIL/DATA" T_Mission15.dmission script15.dll
+"$BUILD/frontierx_view_parser_probe" --mission-schema "$RETAIL/DATA" T_Mission16.dmission Script16.dll
+python3 Tools/ci/test_ci_gates.py
+```
+
+All eight focused checks pass in each configuration, without skips or fatal
+sanitizer findings; each configuration also executes all four real-map schema
+checks. These are source-owner/automated CPU and external-data schema results,
+not mission gameplay passes.
+
+Fatal sanitizer checks set ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 and
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1. The source caller checks protect
+outcome/skip/seen ordering and replay isolation. The existing native window
+fixture executes synthetic decoder/video lifecycle and input teardown. The CI
+sanitizer selection includes the four schemas; local CI driver tests pass,
+hosted CI and Windows Debug/Final/module ABI remain unexecuted.
+
+A private, read-only harness compiles the actual NativeVideoSystem.cpp Decoder,
+DecodeAudio and Movie::NextFrame against the reviewed external shared-LGPL
+FFmpeg 9.0.1. Both lawful external final movies decode to EOF and rewind:
+`cq_4.mpg` has 3384 video frames, 5015808 audio frames and 113.737 seconds of
+audio; `cq_4b.mpg` has 4914 video frames, 7249536 audio frames and 164.389 seconds
+of audio. Timestamp validation and the delayed last MPEG picture execute.
+This is actual media decoding, not audible playback, GPU presentation or a
+mission outcome. Neither film nor harness output containing copied media enters
+the repository. Embedded TM13–TM16 text also contains no characters outside the
+currently supported native font subset.
+
+The pinned full-media candidate starts the original selector and preserves the
+newest genuine saves/configuration/progress, without artificial unlocks or
+injected input. Its handoff checklist covers each mission, active F7/F8, normal
+victory/defeat, both final films through EOF/Esc and original selector return.
+No mission 17 exists. Full TM13–TM16 gameplay, new special-unit/effect states,
+actual movie audio/video playback, hardware behavior and retail/determinism
+comparisons remain pending user/runtime evidence.
+
+## TM12 SOL-entry news subtitle (2026-10-19)
+
+The user's next real crash occurs when the original SOL news subtitle draws an
+authored ellipsis, U+2026. GDB confirms an explicit NativeFont character-subset
+abort. Native glyph admission and the existing font-layout regression now cover
+its actual FreeType rendering, width and multiline layout. See the
+[font owner evidence](NATIVE_TERRAN_MEDIA.md#tm12-sol-entry-subtitle-ellipsis-2026-10-19).
+The pinned replacement preserves the newest genuine checkpoint and all earlier
+repairs. The user confirms full TM12 completion after this repair; TM12 is accepted.
+
 ## TM10 construction reservation follow-up (2026-10-19)
 
 The next actual crash is a second, confirmed batching defect: a full alpha pool
@@ -223,7 +358,11 @@ later scripted/AI-created content have been reviewed.
 | 9. Nine Lives | `Script09T` | Original next entry/module, 896-byte schema and array-expression repair; native Chrome/Solarian material owner and fixed-function/App shader-state isolation after real entry failure | Complete gameplay, late production/media and persistence coverage remain unreviewed | GCC/Clang material/shell/schema/layout and visible GPU checks; fatal sanitizer CPU scope | **in implementation**, focused crash-retest candidate; no complete gameplay acceptance |
 | 10. Betrayal | `Script10T` | Original entry reached in user playtest; 356-byte native record, Solarian construction, debris markings, probe frame and Mass Disruptor repair | Exact repaired combat/build scene, active saves and full outcomes await user | Genuine crash core; GCC/Clang/fatal sanitizer CPU and generated GPU material regressions | **focused retest ready**, no complete mission acceptance |
 | 11. The Traitor | `Script11T` | Original module/briefing/resources and 496-byte native mission record linked | Actual entry, full gameplay/media, active saves and outcomes await user; TM13 not linked | GCC/Clang and fatal sanitizer schema/layout/shell, real external map correlation and synthetic video lifecycle | **prepared for user entry**, no mission runtime acceptance |
-| 12. Survival of the Fittest | `Script12T` | Original module/briefing/resources and 220-byte native mission record linked | Actual entry, full gameplay/media, active saves and outcomes await user; TM13 not linked | GCC/Clang and fatal sanitizer schema/layout/shell, real external map correlation and synthetic video lifecycle | **prepared for user entry**, no mission runtime acceptance |
+| 12. Survival of the Fittest | `Script12T` | Original briefing, campaign gameplay and final SOL news event | Carried technical Windows/ABI gates remain | Source/schema checks and user full playthrough after ellipsis repair | **accepted**, explicit user confirmation 2026-10-19 |
+| 13. | `Script13T` | Original script/schema/resources and entry paths linked | Full mission playtest pending | GCC/Clang/fatal-sanitizer schema/program checks and actual external map correlation | **prepared for user entry**, no full gameplay acceptance |
+| 14. | `Script14T` | Original script/schema/resources and entry paths linked | Full mission playtest pending | GCC/Clang/fatal-sanitizer schema/program checks and actual external map correlation | **prepared for user entry**, no full gameplay acceptance |
+| 15. | `Script15T` | Original script/schema/resources and entry paths linked | Full mission playtest pending | GCC/Clang/fatal-sanitizer schema/program checks and actual external map correlation | **prepared for user entry**, no full gameplay acceptance |
+| 16. | `Script16T` | Original script/schema/resources and entry paths linked | Full mission playtest pending | GCC/Clang/fatal-sanitizer schema/program checks and actual external map correlation | **prepared for user entry**, no full gameplay acceptance |
 | 13. Remember the Alamo! | `Script13T` | Not yet reviewed | Native script/schema/resource owner not linked | None | **untested** |
 | 14. Super Weapon | `Script14T` | Not yet reviewed | Native script/schema/resource owner not linked | None | **untested** |
 | 15. Major Offensive | `Script15T` | Not yet reviewed | Native script/schema/resource owner not linked | None | **untested** |
