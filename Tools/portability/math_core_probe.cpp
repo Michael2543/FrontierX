@@ -138,6 +138,13 @@ int main()
 		get_angle(-1.0F, 0.0F) != static_cast<float>(-1.570796) ||
 		get_angle(0.0F, 0.0F) != static_cast<float>(-1.570796)) return 25;
 
+    // Planetoid::enableTerrainFootprint visits a half-square below zero.
+    // Its byte coordinates wrap as on Win32; clamping would change footprints.
+    GRIDVECTOR wrapped{};
+    wrapped.init(-0.5F,64.25F);
+    if (wrapped.getX()!=63.5F || wrapped.getY()!=0.25F) return 33;
+    wrapped.init(1.125F,2.875F);
+    if (wrapped.getX()!=1.0F || wrapped.getY()!=2.75F) return 34;
 	// ObjectList's proximity path consumes the production quarter-grid table.
 	GRIDVECTOR origin{};
 	GRIDVECTOR point{};

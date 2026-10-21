@@ -26,13 +26,14 @@
 #include "NativeAppImage.h"
 #include "MyVertex.h"
 #include <IRenderPrimitive.h>
-#include <xform.h>
+#include <3dmath.h>
 #include <VFX.H>
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <vector>
+#include <utility>
 #endif
 
 #include "DrawAgent.h"
@@ -118,6 +119,29 @@ struct DACOM_NO_VTABLE DrawAgent : IDrawAgent
 	U32			*hintID;
 	BLOCKRECT	*blockRect;
 	S16			numTextures;
+#if !defined(_WIN32)
+	// Archetypes outlive native window size changes; retain authored coordinates.
+	std::vector<BLOCKRECT> nativeBlocks;
+	bool nativeScaleData = false;
+	BLOCKRECT currentBlock(U32 index) const
+	{
+		BLOCKRECT rect = nativeBlocks.at(index);
+		if (nativeScaleData)
+		{
+			if (bHiRes)
+			{
+				rect.left = HRIDEAL2REALX(rect.left); rect.right = HRIDEAL2REALX(rect.right);
+				rect.top = HRIDEAL2REALY(rect.top); rect.bottom = HRIDEAL2REALY(rect.bottom);
+			}
+			else
+			{
+				rect.left = IDEAL2REALX(rect.left); rect.right = IDEAL2REALX(rect.right);
+				rect.top = IDEAL2REALY(rect.top); rect.bottom = IDEAL2REALY(rect.bottom);
+			}
+		}
+		return rect;
+	}
+#endif
 	//------------------------------
 	// general data
 	//------------------------------
@@ -302,7 +326,11 @@ void DrawAgent::Draw (PANE *pane, S32 x, S32 y)
 				PB.Begin(PB_QUADS);
 			}
 			
+#if defined(_WIN32)
 			rect = blockRect[i];
+#else
+			rect = currentBlock(i);
+#endif
 			rect.left += x;
 			rect.right += x;// + 1;	
 			rect.top += y;
@@ -418,7 +446,11 @@ void DrawAgent::Draw (PANE *src, PANE *dst)
 				PB.Begin(PB_QUADS);
 			}
 			
+#if defined(_WIN32)
 			rect = blockRect[i];
+#else
+			rect = currentBlock(i);
+#endif
 			rect.left += dst->x0;
 			rect.right += dst->x0;
 			rect.top += dst->y0;
@@ -438,6 +470,12 @@ void DrawAgent::Draw (PANE *src, PANE *dst)
 //
 void DrawAgent::GetDimensions (U16 & width, U16 & height) const
 {
+#if !defined(_WIN32)
+	if (!nativeScaleData)
+	{ width=imageWidth; height=imageHeight; return; }
+	if (bHiRes)
+	{ width=HRIDEAL2REALX(imageWidth); height=HRIDEAL2REALY(imageHeight); return; }
+#endif
 	if(bHiRes)
 	{
 		width = IDEAL2REALX(HRIDEAL2IDEALX(imageWidth));
@@ -555,6 +593,13 @@ void DrawAgent::loadTexture (U32 block, const BLOCKRECT & rect, struct IImageRea
 	//
 	// convert to real coordinates
 	//
+#if !defined(_WIN32)
+	nativeScaleData = bScaleData != 0;
+	if (nativeBlocks.size() <= block) nativeBlocks.resize(block + 1);
+	nativeBlocks[block] = blockRect[block];
+	++nativeBlocks[block].right;
+	++nativeBlocks[block].bottom;
+#endif
 	if(bHiRes)
 	{
 		blockRect[block].left  = HRIDEAL2IDEALX(blockRect[block].left);
@@ -1035,6 +1080,48 @@ void __stdcall CreateDrawAgent(const char *filename, IComponentFactory *parent,
     if (!*agent) std::fprintf(stderr, "Native UI image rejected: %s image=%u bytes=%u\n", filename, subImage, size);
 }
 #endif // source Win32 file/raw-table constructors
+#if !defined(_WIN32)
+namespace FrontierX
+{
+bool CheckNativeDrawAgentResize()
+{
+    struct Restore {
+        DWORD x = SCREENRESX, y = SCREENRESY;
+        S32 width = SCREEN_WIDTH, height = SCREEN_HEIGHT;
+        ~Restore() { SCREENRESX=x; SCREENRESY=y; SCREEN_WIDTH=width; SCREEN_HEIGHT=height; }
+    } restore;
+    DAComponent<DrawAgent> agent;
+    agent.numTextures=0; agent.textureID=nullptr; agent.hintID=nullptr; agent.blockRect=nullptr;
+    agent.imageWidth=320; agent.imageHeight=200; agent.bHiRes=false;
+    agent.nativeScaleData=true;
+    agent.nativeBlocks.push_back({0,0,320,200,1,1,0,0});
+    for (const auto &size : {std::pair<int,int>{800,600}, {1200,900}, {1280,720}, {801,600}, {1279,719}, {800,600}})
+        for (S32 ideal : {800,640})
+        {
+            SCREENRESX=size.first; SCREENRESY=size.second;
+            SCREEN_WIDTH=ideal; SCREEN_HEIGHT=ideal*3/4;
+            U16 width=0,height=0; agent.GetDimensions(width,height);
+            const auto rect=agent.currentBlock(0);
+            if (static_cast<U16>(rect.right) != width || static_cast<U16>(rect.bottom) != height ||
+                rect.right != IDEAL2REALX(320.0f) || rect.bottom != IDEAL2REALY(200.0f)) return false;
+        }
+    agent.bHiRes=true;
+    for (S32 ideal : {640,800})
+    {
+        SCREEN_WIDTH=ideal; SCREEN_HEIGHT=ideal*3/4;
+        U16 width=0,height=0; agent.GetDimensions(width,height);
+        const auto rect=agent.currentBlock(0);
+        if (static_cast<U16>(rect.right)!=width || static_cast<U16>(rect.bottom)!=height ||
+            rect.right!=HRIDEAL2REALX(320.0f) || rect.bottom!=HRIDEAL2REALY(200.0f)) return false;
+    }
+    agent.bHiRes=false;
+    agent.nativeScaleData=false;
+    const auto unscaled=agent.currentBlock(0);
+    return unscaled.right==320 && unscaled.bottom==200 && unscaled.twidth==1 && unscaled.theight==1;
+}
+}
+#endif
+
 //--------------------------FontDrawAgent class-----------------------------//
 //--------------------------------------------------------------------------//
 //

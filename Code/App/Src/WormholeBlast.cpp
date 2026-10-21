@@ -19,6 +19,7 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "Include/CQTrace.h"
+#include "Include/NativeWormholeState.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
 #include <IHardPoint.h>
@@ -412,6 +413,58 @@ void WormholeBlast::CloseUp()
 {
 	bClosing = true;
 }
+#if !defined(_WIN32)
+bool CaptureNativeWormholeVisual(IWormholeBlast *effect,NativeWormholeVisual &state)
+{
+    auto *blast=dynamic_cast<WormholeBlast *>(effect);
+    if (!blast) return false;
+    NativeWormholeVisual result{};
+    result.version=1;
+    for (unsigned i=0;i<3;++i)
+    {
+        for (unsigned j=0;j<3;++j) result.transform[i*3+j]=blast->transform.d[i][j];
+    }
+    result.transform[9]=blast->transform.translation.x;
+    result.transform[10]=blast->transform.translation.y;
+    result.transform[11]=blast->transform.translation.z;
+    result.flashTime=blast->flashTime; result.systemID=blast->systemID;
+    result.playerID=blast->playerID; result.radius=blast->radius;
+    result.reverse=blast->bReverse; result.closing=blast->bClosing;
+    result.numStrips=blast->numStrips; result.lastStripTime=blast->lastStripTime;
+    for (unsigned i=0;i<20;++i)
+    {
+        const auto &strip=blast->strips[i];
+        if (strip.bActive) result.strips[i]={1,strip.startIndex,strip.time,strip.maxTime,
+            strip.segments,strip.timeSegementDif,strip.altitude};
+    }
+    if (!ValidateNativeWormholeVisual(result)) return false;
+    state=result;
+    return true;
+}
+
+bool RestoreNativeWormholeVisual(IWormholeBlast *effect,const NativeWormholeVisual &state)
+{
+    auto *blast=dynamic_cast<WormholeBlast *>(effect);
+    if (!blast || blast->objMapNode || !ValidateNativeWormholeVisual(state)) return false;
+    TRANSFORM trans;
+    for (unsigned i=0;i<3;++i)
+    {
+        for (unsigned j=0;j<3;++j) trans.d[i][j]=state.transform[i*3+j];
+    }
+    trans.translation=Vector(state.transform[9],state.transform[10],state.transform[11]);
+    // Init only restores placement/OBJMAP ownership and consumes no RNG.
+    blast->InitWormholeBlast(trans,state.systemID,state.radius,state.playerID,state.reverse!=0);
+    blast->flashTime=state.flashTime; blast->bClosing=state.closing!=0;
+    blast->numStrips=state.numStrips; blast->lastStripTime=state.lastStripTime;
+    for (unsigned i=0;i<20;++i)
+    {
+        const auto &strip=state.strips[i];
+        blast->strips[i]={strip.startIndex,strip.time,strip.maxTime,strip.segments,
+            strip.timeStep,strip.altitude,strip.active!=0};
+    }
+    return true;
+}
+#endif
 //----------------------------------------------------------------------------------
 //
 BOOL32 WormholeBlast::Update ()

@@ -1,4 +1,5 @@
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativePlayerProfiles.h"
 
 #if !defined(_WIN32)
 #include "DEffectOpts.h"
@@ -162,6 +163,7 @@ IFileSystem *TEXTURESDIR = nullptr;
 IFileSystem *OBJECTDIR = nullptr;
 IFileSystem *INTERFACEDIR = nullptr;
 IFileSystem *SPMAPDIR = nullptr;
+IFileSystem *MPMAPDIR = nullptr;
 IFileSystem *MATERIALDIR = nullptr;
 IFileSystem *PROFILEDIR = nullptr;
 IFileSystem *GAMETYPESDIR = nullptr;
@@ -261,7 +263,7 @@ namespace FrontierX
 {
 NativeAppSaveBinding::~NativeAppSaveBinding()
 {
-    if (SAVEDIR == save_) SAVEDIR = nullptr;
+    BindNativePlayerSaveRoot(nullptr);
     if (save_) save_->Release();
 }
 
@@ -271,7 +273,7 @@ bool NativeAppSaveBinding::Bind(IFileSystem * saveDirectory)
         !(saveDirectory->GetAccessType() & GENERIC_WRITE)) return false;
     saveDirectory->AddRef();
     save_ = saveDirectory;
-    SAVEDIR = saveDirectory;
+    BindNativePlayerSaveRoot(saveDirectory);
     return true;
 }
 
@@ -360,11 +362,20 @@ NativeAppDataSources::~NativeAppDataSources()
     if (PROFILEDIR == profiles_) PROFILEDIR = nullptr;
     if (MATERIALDIR == materials_) MATERIALDIR = nullptr;
     if (SPMAPDIR == campaign_) SPMAPDIR = nullptr;
+    if (MPMAPDIR == multiplayer_) MPMAPDIR = nullptr;
+    if (multiplayer_) multiplayer_->Release();
     if (OBJECTDIR == objects_) OBJECTDIR = nullptr;
     if (materials_) materials_->Release();
     if (profiles_) profiles_->Release();
     if (campaign_) campaign_->Release();
     if (objects_) objects_->Release();
+}
+
+bool NativeAppDataSources::BindMultiplayer(IFileSystem *directory)
+{
+    if (!directory || multiplayer_ || MPMAPDIR) return false;
+    directory->AddRef(); multiplayer_ = MPMAPDIR = directory;
+    return true;
 }
 
 bool NativeAppDataSources::BindInterface(IFileSystem * interfaceDirectory)

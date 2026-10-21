@@ -183,7 +183,8 @@ static bool NativeLoadMissionSystemMap(IFileSystem *file)
 		char script[MAX_PATH] = {};
 		char filename[MAX_PATH + 4] = {};
 		const LONG filenameLength = file ? file->GetFileName(filename, sizeof(filename)) : 0;
-		if (!MGlobals::GetScriptName(script, sizeof(script)) || filenameLength <= 0 ||
+		const bool offline = PLAYERID == 0 && !MGlobals::IsSinglePlayer();
+		if ((!MGlobals::GetScriptName(script, sizeof(script)) && !offline) || filenameLength <= 0 ||
 			filenameLength >= S32(sizeof(filename)))
 			throw std::runtime_error("cannot identify the loaded mission");
 		std::string foldedScript = script;
@@ -209,7 +210,7 @@ static bool NativeLoadMissionSystemMap(IFileSystem *file)
 		std::string foldedExtension = extension ? extension : "";
 		for (char &value : foldedExtension)
 			value = static_cast<char>(std::tolower(static_cast<unsigned char>(value)));
-		FrontierX::LoadNativeSystemMap(SYSMAP, file, regularTerran && foldedExtension == ".mission");
+		FrontierX::LoadNativeSystemMap(SYSMAP, file, (regularTerran || offline) && foldedExtension == ".mission");
 		return true;
 	}
 	catch (const std::exception &error)

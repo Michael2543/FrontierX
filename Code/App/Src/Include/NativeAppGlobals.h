@@ -29,6 +29,7 @@ struct IAdmiral;
 bool QueryNativeRetailAdmiralShields(IBaseObject *admiral, U32 shipClass, SINGLE &value);
 bool CheckNativeRetailAdmiralBonuses();
 extern BaseHotRect *FULLSCREEN;
+namespace FrontierX { bool CheckNativeDrawAgentResize(); }
 bool NativeAppCheckOperationStorage();
 bool NativeAppCheckObjectiveStorage();
 void __stdcall CreateDrawAgent(struct IImageReader *reader, struct IDrawAgent **drawAgent,
@@ -59,6 +60,7 @@ extern bool NATIVE_SKIP_SUBTITLES;
 #define FAB_MAX_QUEUE_SIZE 15
 #define CQE_BUILDQUEUE_REMOVE 0x103F
 #define CQE_TABCONTROL_CHANGE 0x1055
+#define CQE_GET_MAX_PLAYERS 0x1058
 #define GAS_MULTIPLIER 25
 #define METAL_MULTIPLIER 25
 #define CREW_MULTIPLIER 10
@@ -125,6 +127,11 @@ extern bool NATIVE_SKIP_SUBTITLES;
 #define CQE_CAMERA_MOVED 0x100F
 #define CQE_SYSTEM_CHANGED 0x1018
 #define CQE_DLG_RESULT 0x1020
+#define CQE_DIPLOMACYBUTTON 0x1057
+#define CQE_DELETE_CHAT_MENU 0x1034
+#define CQE_CHATDLG_SETYPOS 0x1040
+#define CQE_DELETE_DIPLOMACY_MENU 0x1045
+#define CQE_DELETE_CHATFILTER_MENU 0x1046
 #define CQE_DELETE_OBJECTIVES_MENU 0x1047
 #define CQE_OBJECT_PRECAPTURE 0x104C
 #define CQE_OBJECT_POSTCAPTURE 0x104D
@@ -298,6 +305,7 @@ extern struct IFileSystem *TEXTURESDIR;
 extern struct IFileSystem *OBJECTDIR;
 extern struct IFileSystem *INTERFACEDIR;
 extern struct IFileSystem *SPMAPDIR;
+extern struct IFileSystem *MPMAPDIR;
 extern struct IFileSystem *MATERIALDIR;
 extern struct IFileSystem *PROFILEDIR;
 extern struct IFileSystem *GAMETYPESDIR;
@@ -311,6 +319,8 @@ S32 __stdcall FindChild(const char *pathname, S32 parent);
 struct MeshChain;
 void SetNativeLegacyTeamColor(IEngine *engine, IRenderer *renderer, S32 root, COLORREF color, MeshChain *chain = nullptr);
 void __stdcall SetupDiffuseBlend(U32 texture_id, bool clamp);
+U32 __stdcall GetProductVersion(void);
+U32 __stdcall GetProductVersion(char *buffer, U32 bufferSize);
 U32 __stdcall GetBuildVersion(void);
 U32 __stdcall GetBuildVersion(char *buffer, U32 bufferSize);
 const char * __cdecl _localLoadString(U32 id);
@@ -376,6 +386,7 @@ public:
     bool Bind(IFileSystem * objects, IFileSystem * campaign,
               IFileSystem * materials, IFileSystem * profiles);
     bool BindInterface(IFileSystem * interfaceDirectory);
+    bool BindMultiplayer(IFileSystem * directory);
     bool BindTextures(IFileSystem * textureDirectory);
 
 private:
@@ -385,6 +396,7 @@ private:
     IFileSystem *profiles_ = nullptr;
     IFileSystem *interface_ = nullptr;
     IFileSystem *textures_ = nullptr;
+    IFileSystem *multiplayer_ = nullptr;
 };
 
 class NativeAppSaveBinding
@@ -476,6 +488,8 @@ bool CheckNativeMimicPersistence(IFileSystem *directory);
 bool CheckNativeRepellentCloudPersistence(IFileSystem *directory);
 bool CheckNativeStasisBoltPersistence(IFileSystem *directory);
 bool CheckNativeMissionAbilityPersistence(IFileSystem *directory);
+bool CheckNativeWormholePersistence(IFileSystem *directory);
+int CheckNativeWormholeMissionRoundTrip(U32 &partID);
 namespace FrontierX
 {
 void LoadNativeSystemMap(ISystemMap *map, IFileSystem *file, bool requireRecord);

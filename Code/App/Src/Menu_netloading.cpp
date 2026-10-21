@@ -1,3 +1,4 @@
+#if defined(_WIN32)
 //--------------------------------------------------------------------------//
 //                                                                          //
 //                            Menu_netloading.cpp                           //
@@ -27,7 +28,7 @@
 #include "NetFileTransfer.h"
 #include "GenData.h"
 #include "MusicManager.h"
-#include "InprogressAnim.h"
+#include "InProgressAnim.h"
 
 #include <dplay.h>
 #include <dplobby.h>
@@ -539,3 +540,94 @@ U32 __stdcall DoMenu_nl (Frame * parent, const GT_MENU1 & data, ICQGame & cqgame
 //--------------------------------------------------------------------------//
 //-----------------------End Menu_netloading.cpp----------------------------//
 //--------------------------------------------------------------------------//
+
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Frame.h"
+#include "CQGame.h"
+#include <DMenu1.h>
+#include "Mission.h"
+#include "Menu.h"
+#include "InProgressAnim.h"
+#include "MusicManager.h"
+#include "Cursor.h"
+#include <chrono>
+#include <stdexcept>
+#include <cstdlib>
+#include <cstdio>
+
+// Original local load/generate/assign sequence, without remote transfers.
+U32 LoadNativeOfflineSkirmish(const FULLCQGAME &game, U32 seed)
+{
+    if (PLAYERID || HOSTID) throw std::runtime_error("Native skirmish loader requires a local session");
+    COMPTR<IPANIM> progress;
+    MISSION->StartProgressAnim(progress);
+    if (!progress) throw std::runtime_error("Native skirmish progress owner unavailable");
+    CURSOR->SetBusy(true);
+    struct ProgressLifetime
+    {
+        InterfaceRes previous=GetCurrentInterfaceRes();
+        bool complete=false;
+        ~ProgressLifetime()
+        {
+            // Match Menu_nl::~Menu_nl, including its netload ownership flag.
+            MISSION->CancelProgressAnim();
+            CURSOR->SetBusy(false);
+            if (!complete) ChangeInterfaceRes(previous);
+        }
+    } cleanup;
+    ChangeInterfaceRes(IR_IN_GAME_RESOLUTION);
+    MUSICMANAGER->PlayMusic("Battle_loading.wav", false);
+    std::fprintf(stderr, "Native offline skirmish seed: %u\n", seed);
+    if (game.mapType == CQGAMETYPES::RANDOM_MAP)
+        MISSION->GenerateMultiplayerMap(game, seed);
+    else
+    {
+        char name[256]{};
+        _localWideToAnsi(game.szMapName, name, sizeof(name));
+        IFileSystem *directory = game.mapType == CQGAMETYPES::SELECTED_MAP ? MPMAPDIR : SAVEDIR;
+        if (!directory || !MISSION->Load(name, directory))
+        {
+            return IDS_HELP_LOADFAILED;
+        }
+    }
+    MISSION->InitializeNetGame(game, seed);
+    cleanup.complete=true;
+    return 0;
+}
+U32 __stdcall DoMenu_nl(Frame *, const GT_MENU1 &, ICQGame &game, U32, U32)
+{
+    const U32 ticks = static_cast<U32>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+    const U32 seed = U32(rand()) * ticks;
+    return LoadNativeOfflineSkirmish(game, seed);
+}
+
+U32 CheckNativeOfflineSkirmish(U32 race,const char *map)
+{
+    using namespace CQGAMETYPES;
+    FULLCQGAME game{};
+    game.version=GetBuildVersion();
+    game.activeSlots=MAX_PLAYERS; game.gameType=KILL_PLATS_FABS;
+    game.money=MEDIUM_MONEY; game.mapSize=SMALL_MAP; game.templateType=TEMPLATE_RING;
+    game.terrain=MEDIUM_TERRAIN; game.units=UNITS_MEDIUM;
+    game.visibility=VISIBILITY_NORMAL; game.numSystems=4; game.regenOn=true;
+    game.mapType=RANDOM_MAP; game.commandLimit=COMMAND_NORMAL;
+    for (unsigned i=0;i<MAX_PLAYERS;++i) game.slot[i].state=CLOSED;
+    game.slot[0].type=HUMAN; game.slot[0].state=READY;
+    game.slot[0].race=race; game.slot[0].color=YELLOW; game.slot[0].team=_1;
+    game.slot[1].type=COMPUTER; game.slot[1].state=READY;
+    game.slot[1].race=(race%3)+1; game.slot[1].color=RED; game.slot[1].team=_2;
+    game.slot[1].compChalange=AVERAGE_CH;
+    std::wcscpy(game.szPlayerNames[0],L"Diagnostic");
+    std::wcscpy(game.szPlayerNames[1],L"Mantis AI");
+    if (map)
+    {
+        if (std::strpbrk(map,"/\\") || !_localAnsiToWide(map,game.szMapName,sizeof(game.szMapName)))
+            throw std::runtime_error("Invalid supplied skirmish diagnostic map name");
+        game.mapType=SELECTED_MAP;
+    }
+    return LoadNativeOfflineSkirmish(game, 0x20261020U);
+}
+#endif

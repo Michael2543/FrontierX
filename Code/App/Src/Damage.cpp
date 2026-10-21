@@ -1401,7 +1401,13 @@ void ObjectDamage< Base >::renderShieldDown()
 	scaleTrans.d[1][1] = shieldScale.y*(1+0.1*tech);
 	scaleTrans.d[2][2] = shieldScale.z*(1+0.1*tech);
 
+	#if defined(_WIN32)
 	TRANSFORM trans = transform*scaleTrans;
+#else
+	const bool directShipHull = this->objClass == OC_SPACESHIP &&
+		(this->instanceMesh == NULL || CQEFFECTS.bFastRender == 0);
+	TRANSFORM trans = NativeShipVisualTransform(transform, directShipHull)*scaleTrans;
+#endif
 	//trans.rotate_about_j(PI);
 
 	BATCH->set_state(RPR_BATCH,TRUE);

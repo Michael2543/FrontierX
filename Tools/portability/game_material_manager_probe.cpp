@@ -58,6 +58,7 @@
 #include "TComponent.h"
 #include "TManager.h"
 #include "View2d.h"
+#include "../../Code/Libs/Src/EngComps/RenderMgr/chull.h"
 #include "xmesh.h"
 #include "matrix4.h"
 #if defined(FRONTIERX_GAME_GPU)
@@ -66,6 +67,7 @@
 #include <SDL3/SDL.h>
 #endif
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstring>
@@ -540,8 +542,16 @@ GENRESULT DACOM_CDECL CaptureGameProjection(void * context,
     return GR_OK;
 }
 
-GENRESULT DACOM_CDECL RejectGameDraw(void *, const FrontierX::RenderSubmissionView &)
+bool captureCloak = false;
+std::vector<FrontierX::RenderVertexP3DiffuseT2> cloakVertices;
+GENRESULT DACOM_CDECL RejectGameDraw(void *, const FrontierX::RenderSubmissionView &view)
 {
+    if (captureCloak)
+    {
+        if (!view.IsValid()) return GR_INVALID_PARMS;
+        cloakVertices.assign(view.vertices, view.vertices + view.vertexCount);
+        return GR_OK;
+    }
     ++gameDrawCalls;
     return GR_NOT_IMPLEMENTED;
 }
@@ -652,7 +662,8 @@ struct PreviewCameraPosition final : IBaseCamera
     U32 COMAPI GetStateInfo(CAMERA_DATA *) const override { return 0; }
     BOOL32 COMAPI SetStateInfo(const CAMERA_DATA *, BOOL32) override { return FALSE; }
     GENRESULT COMAPI SetPerspective() override { return GR_NOT_IMPLEMENTED; }
-    GENRESULT COMAPI SetModelView(const Transform *) override { return GR_NOT_IMPLEMENTED; }
+    GENRESULT COMAPI SetModelView(const Transform *world) override
+    { return BATCH->set_modelview(world ? source.inverse * *world : source.inverse); }
     BOOL32 COMAPI SetLookAtPosition(const Vector &) override { return FALSE; }
     Vector COMAPI GetLookAtPosition() const override { return source.look; }
     BOOL32 COMAPI SnapToTargetRotation() override { return FALSE; }
@@ -966,6 +977,23 @@ extern bool RegisterNativeLightManager(ICOManager *manager);
 
 int main(int argc, char **argv)
 {
+    // A live Portal plus 4K highlight projection overflowed chull's S32
+    // orientation products. Exercise the production hull used by RenderMgr,
+    // including collinear sorting and full-range coordinate differences.
+    for (const S32 extent : {S32(10),S32(500000),std::numeric_limits<S32>::max()})
+    {
+        const std::array<ViewPoint,6> points{{{-extent,-extent},{extent,-extent},
+            {extent,extent},{-extent,extent},{0,0},{1,1}}};
+        const auto original=points;
+        std::array<ViewPoint,8> hull{};
+        const int count=ComputeConvexHull(hull.data(),hull.size(),points.data(),points.size());
+        bool corners=count==4 && std::memcmp(points.data(),original.data(),sizeof(points))==0;
+        for (unsigned corner=0;corner<4;++corner)
+            corners=corners && std::any_of(hull.begin(),hull.begin()+(count==4 ? count : 0),
+                [&](const auto &point) { return point.x==points[corner].x && point.y==points[corner].y; });
+        FreeConvexHullScratchBuffer();
+        if (!Expect(corners,"production projected hull retains four corners without S32 overflow")) return 1;
+    }
     // Original asteroid background sorting floors nonnegative distances and
     // keeps original index order for ties. The real F8 camera exposed a key
     // above U32 range; compare bounded behavior with the actual old radix owner.
@@ -1183,6 +1211,22 @@ int main(int argc, char **argv)
                 std::fabs(cargoLongAxis.x + 1) < 1e-5F &&
                 std::fabs(cargoLongAxis.y) < 1e-5F && std::fabs(cargoLongAxis.z) < 1e-5F,
                 "original ship visual axes align attachment and cargo without mutating simulation or nondirect hull")) return 1;
+    for (float heading : {0.0F, 0.7F, 1.9F})
+    {
+        Transform pose;
+        pose.rotate_about_k(heading);
+        pose.translation = Vector(10,20,30);
+        Transform shieldScale;
+        shieldScale.d[0][0] = 2; shieldScale.d[1][1] = 3; shieldScale.d[2][2] = 11;
+        const Transform hull = NativeShipVisualTransform(pose, true);
+        const Transform shield = hull * shieldScale;
+        const Vector shieldTip = shield * Vector(0,0,1);
+        const Vector hullTip = hull * Vector(0,0,11);
+        const Transform copiedPlatform = NativeShipVisualTransform(pose, false);
+        if (!Expect((shieldTip-hullTip).magnitude_squared() < 1e-8F &&
+                    std::memcmp(&copiedPlatform, &pose, sizeof(Transform)) == 0,
+                    "Aegis length scale and Mimic ship frame follow hull at every heading; platforms retain frame")) return 1;
+    }
     // ObjectDamage::damagePostRender places smoke at a raw mesh-extent point.
     // The hull correction must move that point without rotating the plume a
     // second time. Existing glow/muzzle checks do not cover that distinction.
@@ -3032,6 +3076,30 @@ int main(int argc, char **argv)
         if (!Expect(nativeLegacyDrawCalls == afterPreview,
                     "successful placement preview restores ordinary material dispatch")) return 1;
     }
+    // Original ObjectCloak surface must submit live extent faces, retain alpha
+    // and scrolling UVs, and respect per-instance hidden/building masks.
+    captureCloak = true;
+    IRenderPrimitive *cloakBatch = BATCH;
+    BATCH = primitive;
+    Transform cloakWorld = engine->get_transform(previewChain.mi[0]->instanceIndex);
+    const U8 originalFace = previewChain.mi[0]->faceRenders[0];
+    TreeRenderNativeCloak(previewChain, cloakWorld, true, 0.25F, -0.5F, 0x80ffffffU);
+    const auto allCloak = cloakVertices;
+    if (!Expect(allCloak.size() == appRender->face_cnt * 3U &&
+                allCloak.front().diffuseBgra == 0x80ffffffU,
+                "original cloak surface reaches receiver with transition alpha")) return 1;
+    previewChain.mi[0]->faceRenders[0] |= FS__HIDDEN;
+    TreeRenderNativeCloak(previewChain, cloakWorld, true, 0.25F, -0.5F, 0xffffffffU);
+    if (!Expect(cloakVertices.size() + 3U == allCloak.size(),
+                "cloak respects original per-instance hidden faces")) return 1;
+    previewChain.mi[0]->faceRenders[0] = originalFace;
+    TreeRenderNativeCloak(previewChain, cloakWorld, false, 0.75F, 0.5F, 0xffffffffU);
+    if (!Expect(cloakVertices.size() == allCloak.size() &&
+                std::fabs(cloakVertices[0].u - allCloak[0].u - 0.5F) < 1e-5F &&
+                std::fabs(cloakVertices[0].v - allCloak[0].v - 1.0F) < 1e-5F,
+                "cloak scrolls authored model UVs without mutating the shared mesh")) return 1;
+    captureCloak = false;
+    BATCH = cloakBatch;
     rejectNativeLegacyDraw = true;
     bool previewRejected = false;
     try { TreeRenderNativeLegacyPreview(previewChain); }

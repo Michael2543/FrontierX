@@ -94,10 +94,6 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 	HOTKEYS::HOTKEY hotkey;
 
 	bool bReseachState:1;
-#ifndef _WIN32
-	// Flagship/Fleet owners are outside the current native link closure.
-	bool bNativeUnavailable = false;
-#endif
 
 	bool bDisabled:1;
 	bool bPushState:1;			// used for selection state
@@ -239,9 +235,6 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 
 	void doLPushAction (void)
 	{
-#ifndef _WIN32
-		if (bNativeUnavailable) return;
-#endif
 		if (bPostMessageBlocked==false)
 		{
 			parent->PostMessage(CQE_LHOTBUTTON, (void*)controlID);
@@ -252,9 +245,6 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 
 	void doRPushAction (void)
 	{
-#ifndef _WIN32
-		if (bNativeUnavailable) return;
-#endif
 		if (bPostMessageBlocked==false)
 		{
 			parent->PostMessage(CQE_RHOTBUTTON, (void*)controlID);
@@ -264,9 +254,6 @@ struct DACOM_NO_VTABLE ResearchButton : BaseHotRect, IHotButton, IActiveButton
 
 	void doDblPushAction (void)
 	{
-#ifndef _WIN32
-		if (bNativeUnavailable) return;
-#endif
 		parent->PostMessage(CQE_LDBLHOTBUTTON, (void*)controlID);
 	}
 };
@@ -304,10 +291,6 @@ void ResearchButton::InitResearchButton (const RESEARCHBUTTON_DATA & data, BaseH
 	}
 
 	buttonText = data.tooltip;
-
-	#ifndef _WIN32
-	bNativeUnavailable = false;
-	#endif
 	EnableButton(data.bDisabled==false);
 
 	buildCost.gas = 0;
@@ -334,10 +317,6 @@ void ResearchButton::InitResearchButton (const RESEARCHBUTTON_DATA & data, BaseH
 			}
 			else if(resData->type == RESEARCH_ADMIRAL)
 			{
-				#ifndef _WIN32
-				bNativeUnavailable = true;
-				EnableButton(false);
-				#endif
 				BT_ADMIRAL_RES * admiral = (BT_ADMIRAL_RES *) resData;
 				upgradeID = -2;
 				nodeDepend = admiral->dependancy;
@@ -410,9 +389,6 @@ void ResearchButton::InitMultiHotButton (const MULTIHOTBUTTON_DATA & data, BaseH
 //
 void ResearchButton::EnableButton (bool bEnable)
 {
-#ifndef _WIN32
-	if (bNativeUnavailable) bEnable = false;
-#endif
 	if (bEnable == bDisabled)	// if we are changing state
 	{
 		bDisabled = !bEnable;
@@ -694,9 +670,6 @@ HOTKEYS::HOTKEY ResearchButton::GetHotkey()
 //
 bool ResearchButton::IsActive()
 {
-#ifndef _WIN32
-	if (bNativeUnavailable) return false; // Context hotkeys bypass mouse actions.
-#endif
 	return bReseachState;
 }
 //--------------------------------------------------------------------------//
@@ -779,14 +752,6 @@ void ResearchButton::draw (void)
 //
 void ResearchButton::setStatus (void)
 {
-#ifndef _WIN32
-	if (bNativeUnavailable)
-	{
-		STATUS->SetTextString(L"Fleet admirals are not available in this native build.", STM_BUILD);
-		STATUS->SetRect(screenRect);
-		return;
-	}
-#endif
 	if(!buttonText)
 		return;
 

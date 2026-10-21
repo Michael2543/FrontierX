@@ -143,6 +143,25 @@ class NativeShellTests(unittest.TestCase):
         self.assertIn('NativeProbeVisualTransform(transform, targetPos)', probe)
         self.assertIn('TreeRender(mc.mi, mc.numChildren, transform.get_inverse() * visual)', probe)
 
+    def test_cloak_aegis_mimic_and_mantis_use_original_visual_owners(self):
+        # These runtime owners are campaign-only; tie the executable geometry
+        # regressions to the callers that previously omitted them.
+        source = Path(__file__).resolve().parents[2] / 'Code/App/Src'
+        cloak = (source / 'TObjCloak.h').read_text().split('void ObjectCloak< Base >::RenderCloaked', 1)[1]
+        self.assertIn('TreeRenderNativeCloak(this->GetMeshChain()', cloak)
+        shield = (source / 'Damage.cpp').read_text().split('void ObjectDamage< Base >::renderShieldDown()', 1)[1]
+        self.assertIn('NativeShipVisualTransform(transform, directShipHull)*scaleTrans', shield)
+        mimic = (source / 'UnbornMeshList.cpp').read_text().split('void UnbornMeshList::RenderMeshAt', 1)[1].split('MeshEntry * UnbornMeshList::findMesh', 1)[0]
+        self.assertIn('NativeShipVisualTransform(trans, data->objClass == OC_SPACESHIP)', mimic)
+        build = (source / 'TObjBuild.h').read_text().split('void setupNativeConstructionBuild', 1)[1].split('SINGLE emitterPause', 1)[0]
+        self.assertIn('this->race != M_MANTIS', build)
+        self.assertIn('ConfigureNativeMantisBuildVisual', build)
+        mantis = (source / 'MantisBuild.cpp').read_text()
+        self.assertIn('NativeShipHardpointTransform(trans, ENGINE->get_transform(childIndex)', mantis)
+        self.assertIn('const Transform visual = NativeShipVisualTransform(trans, nativeShipHull)', mantis)
+        self.assertIn('if (!smesh) setupGrowthMesh(mesh_info)', mantis)
+        self.assertIn('pellet_verts[pelletOffset+base_v+index_list[', mantis)
+
     def test_later_campaign_movies_use_original_result_and_replay_owners(self):
         # Missing original TM9/TM11 movie calls silently marked unseen media as
         # seen. Protect the caller; actual decoder/EOF is checked separately.
@@ -235,7 +254,8 @@ class NativeShellTests(unittest.TestCase):
             'static bool NativeLoadMissionSystemMap', 1)[1].split('#endif', 1)[0]
         for alias in ('script03t.dll', 'script03.dll', 'script04t.dll', 'script04.dll', 'script05t.dll', 'script05.dll', 'script06t.dll', 'script06.dll', 'script07t.dll', 'script07.dll', 'script08t.dll', 'script08.dll', 'script09t.dll', 'script09.dll', 'script10t.dll', 'script10.dll', 'script11t.dll', 'script11.dll', 'script12t.dll', 'script12.dll'):
             self.assertIn(f'foldedScript == "{alias}"', mission)
-        self.assertIn('regularTerran && foldedExtension == ".mission"', mission)
+        self.assertIn('(regularTerran || offline) && foldedExtension == ".mission"', mission)
+        self.assertIn('const bool offline = PLAYERID == 0 && !MGlobals::IsSinglePlayer()', mission)
 
     def test_tm4_direct_source_retains_full_terran_effects_and_materials(self):
         # The original selector starts from TM1; a direct TM4 diagnostic must
@@ -364,6 +384,8 @@ class NativeShellTests(unittest.TestCase):
             'Native user defaults initialized before GameSystem startup')
         self.assertGreaterEqual(defaults_ready, 0)
         self.assertIn('Native shell opened; video driver: dummy', result.stdout)
+        if GPU_ENABLED:
+            self.assertIn('Native cached menu images follow current resolution and interface coordinates', result.stdout)
         self.assertIn('retail game startup and rendering were not attempted', result.stdout)
         if GPU_ENABLED:
             game_ready = result.stdout.find(

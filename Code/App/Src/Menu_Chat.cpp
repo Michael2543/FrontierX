@@ -10,10 +10,29 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
-#include <mglobals.h>
-#include <mscript.h>
+#include <cstdint>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "ObjList.h"
+#include "NetPacket.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+using namespace FrontierX::NativeAppUi;
+using std::min;
+using std::max;
+#define swprintf FormatLegacyWide
+#define _wcsicmp wcscasecmp
+#endif
+#include <MGlobals.h>
+#include <MScript.h>
 
 #include <stdio.h>
 
@@ -124,7 +143,12 @@ struct MenuChat : public DAComponent<Frame>
 
 		// need to move the screen rect to the given ypos
 		int diff = screenRect.top - yPos;
-		::OffsetRect(&screenRect, 0, -diff);
+		#if defined(_WIN32)
+        ::OffsetRect(&screenRect, 0, -diff);
+#else
+        screenRect.top -= diff;
+        screenRect.bottom -= diff;
+#endif
 
 		chatbox->InitEdit(editData, this); 
 		background->InitStatic(backData, this);
@@ -155,6 +179,11 @@ struct MenuChat : public DAComponent<Frame>
 //
 MenuChat::~MenuChat (void)
 {
+#if !defined(_WIN32)
+    // Release toolbar editing before its control disappears. This restores the
+    // gameplay hotkeys and the EventSystem-owned native text owner's focus.
+    setFocus(nullptr);
+#endif
 }
 //----------------------------------------------------------------------------------//
 //
@@ -172,13 +201,19 @@ GENRESULT MenuChat::OnUpdate (struct IDocument *doc, const C8 *message, void *pa
 //
 GENRESULT MenuChat::Notify (U32 message, void *param)
 {
+	#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	const auto *msg = &fields;
+#endif
 	GENRESULT result=GR_OK;
 
 	switch (message)
 	{
 	case CQE_CHATDLG_SETYPOS:
-		setMenuYPos(int(param));
+		setMenuYPos(static_cast<int>(reinterpret_cast<std::intptr_t>(param)));
 		break;
 	
 	case WM_MOUSEMOVE:
@@ -575,3 +610,13 @@ Frame * __stdcall CreateMenuChat (bool bChatAll)
 //--------------------------------------------------------------------------//
 //-----------------------------End Menu_Chat.cpp---------------------------//
 //--------------------------------------------------------------------------//
+#if !defined(_WIN32)
+bool CheckNativeQuickChatControls(Frame *frame)
+{
+    auto *menu=static_cast<MenuChat *>(frame);
+    if (!menu) return false;
+    menu->chatbox->SetText(L"Native local quick chat regression");
+    menu->onHandleEdit();
+    return true;
+}
+#endif

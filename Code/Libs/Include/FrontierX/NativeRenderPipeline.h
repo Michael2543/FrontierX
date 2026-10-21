@@ -54,6 +54,7 @@ struct NativeFrameOperations
     void * context = nullptr;
     GENRESULT (*clear)(void *, U32 color, U32 depth) = nullptr;
     GENRESULT (*present)(void *) = nullptr;
+    GENRESULT (*gamma)(void *, float) = nullptr;
 };
 
 struct NativeTextureOperations
@@ -93,6 +94,7 @@ public:
                         void * vertexConstantsContext) noexcept;
     GENRESULT UnbindScene() noexcept;
     GENRESULT BindFrames(NativeFrameOperations frames) noexcept;
+    GENRESULT SetGamma(float gamma);
     GENRESULT COMAPI clear_buffers(U32 flags, RECT * rectangle) override;
     GENRESULT COMAPI swap_buffers() override;
 
@@ -257,6 +259,7 @@ private:
 };
 
 GENRESULT BindNativeRenderFrames(IRenderPipeline * pipeline, NativeFrameOperations frames);
+GENRESULT SetNativeRenderGamma(IRenderPipeline *pipeline, float gamma);
 
 void RegisterNativeRenderPipeline(ICOManager * manager);
 GENRESULT BindNativeRenderPipeline(IRenderPipeline * pipeline,

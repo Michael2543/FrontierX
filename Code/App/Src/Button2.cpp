@@ -441,6 +441,16 @@ void Button2::InitButton (const BUTTON_DATA & data, BaseHotRect * _parent)
 	buttonArea.bottom = IDEAL2REALY(data.buttonArea.bottom+1)-1;
 
 
+#if !defined(_WIN32)
+    U16 shapeWidth=0,shapeHeight=0;
+    if (bUseShapeFile) pButtonType->shapes[0]->GetDimensions(shapeWidth,shapeHeight);
+    // The resource's zero extent selects the shape dimensions. Test the
+    // authored value before scaling, which can turn zero into a nonzero edge.
+    if (data.buttonArea.right==0)
+        buttonArea.right=shapeWidth+buttonArea.left-1;
+    if (data.buttonArea.bottom==0)
+        buttonArea.bottom=shapeHeight+buttonArea.top-1;
+#else
 	if (buttonArea.right == 0)
 	{
 		buttonArea.right = pButtonType->width + buttonArea.left - 1;
@@ -449,6 +459,7 @@ void Button2::InitButton (const BUTTON_DATA & data, BaseHotRect * _parent)
 	{
 		buttonArea.bottom = pButtonType->height + buttonArea.top - 1;
 	}
+#endif
 
 	//
 	// calculate screen rect. If no shape, rect == button area
@@ -456,6 +467,10 @@ void Button2::InitButton (const BUTTON_DATA & data, BaseHotRect * _parent)
 	screenRect.left = IDEAL2REALX(data.xOrigin) + parent->screenRect.left;
 	screenRect.top = IDEAL2REALY(data.yOrigin) + parent->screenRect.top;
 
+#if !defined(_WIN32)
+    screenRect.bottom=screenRect.top+(shapeHeight ? shapeHeight-1 : buttonArea.bottom);
+    screenRect.right=screenRect.left+(shapeWidth ? shapeWidth-1 : buttonArea.right);
+#else
 	if (pButtonType->height)
 		screenRect.bottom = screenRect.top + pButtonType->height - 1;
 	else
@@ -465,6 +480,7 @@ void Button2::InitButton (const BUTTON_DATA & data, BaseHotRect * _parent)
 		screenRect.right = screenRect.left + pButtonType->width - 1;
 	else
 		screenRect.right = screenRect.left + buttonArea.right;
+#endif
 
 	//
 	// calculate text offset
@@ -562,8 +578,13 @@ void Button2::SetControlID (U32 id)
 //
 void Button2::GetDimensions (U32 & width, U32 & height)
 {
+#if !defined(_WIN32)
+    width=screenRect.right-screenRect.left+1;
+    height=screenRect.bottom-screenRect.top+1;
+#else
 	width  = pButtonType->width;
 	height = pButtonType->height;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -673,6 +694,15 @@ GENRESULT Button2::Notify (U32 message, void *param)
 //
 void Button2::calculateTextOffest (void)
 {
+#if !defined(_WIN32)
+    const S32 leftMargin=IDEAL2REALX(pButtonType->leftMargin);
+    const S32 rightMargin=IDEAL2REALX(pButtonType->rightMargin);
+    const S32 width=screenRect.right-screenRect.left+1;
+    const S32 height=screenRect.bottom-screenRect.top+1;
+    yText=(height-S32(pFont->GetFontHeight()))/2;
+    xText=leftMargin+(width-leftMargin-rightMargin-S32(pFont->GetStringWidth(szButtonText)))/2;
+#else
+	const S32 leftMargin=pButtonType->leftMargin;
 	if (bUseShapeFile)
 	{
 		yText = S32(pButtonType->height - pFont->GetFontHeight()) / 2;
@@ -683,13 +713,18 @@ void Button2::calculateTextOffest (void)
 		yText = S32(m_height - pFont->GetFontHeight()) / 2;
 		xText = pButtonType->leftMargin + (S32(m_width - pButtonType->leftMargin - pButtonType->rightMargin - pFont->GetStringWidth(szButtonText)) / 2);
 	}
+#endif
 
-	if (xText < pButtonType->leftMargin)
+	if (xText < leftMargin)
 	{
-		xText = pButtonType->leftMargin;
+		xText = leftMargin;
 
 		// if the text is too wide, then we should cut the string short with '...'
-		U32 max_width = buttonArea.right - buttonArea.left - 2*pButtonType->leftMargin;
+#if !defined(_WIN32)
+        U32 max_width=std::max<S32>(0,buttonArea.right-buttonArea.left-2*leftMargin);
+#else
+		U32 max_width = buttonArea.right - buttonArea.left - 2*leftMargin;
+#endif
 		U32 string_width = pFont->GetStringWidth(szButtonText);
 
 		if (string_width > max_width)
@@ -720,6 +755,23 @@ void Button2::calculateTextOffest (void)
 }
 //--------------------------------------------------------------------------//
 //
+#if !defined(_WIN32)
+// Existing Options diagnostic compares the actual shape, hit rectangle and
+// font pane after a mode change; cached archetype dimensions cannot prove it.
+bool CheckNativeButtonGeometry(IButton2 *control)
+{
+    auto *button=dynamic_cast<Button2 *>(control);
+    if (!button || !button->bUseShapeFile || !button->pFont) return false;
+    U16 width=0,height=0;
+    button->pButtonType->shapes[0]->GetDimensions(width,height);
+    return width==button->screenRect.right-button->screenRect.left+1 &&
+        height==button->screenRect.bottom-button->screenRect.top+1 &&
+        button->xText>=0 && button->yText>=0 &&
+        button->xText+button->pFont->GetStringWidth(button->szButtonText)<=width &&
+        button->yText+button->pFont->GetFontHeight()<=height;
+}
+#endif
+
 void Button2::draw (void)
 {
 	U32 state;
@@ -1039,8 +1091,13 @@ HANDLE ButtonFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objClas
 			result->shapes[0]->GetDimensions(result->width, result->height);
 		}
 
+#if !defined(_WIN32)
+        result->leftMargin=data->leftMargin;
+        result->rightMargin=data->rightMargin;
+#else
 		result->leftMargin = IDEAL2REALX(data->leftMargin);
 		result->rightMargin = IDEAL2REALX(data->rightMargin);
+#endif
 		result->bDropdown = (result->rightMargin || result->leftMargin);
 
 		return result;

@@ -312,6 +312,11 @@ void HotButton::InitHotButton (const HOTBUTTON_DATA & data, BaseHotRect * _paren
 		resPriority = _parent->resPriority+1;
 	}
 
+#if !defined(_WIN32)
+	// Toolbar reflow reuses this control and its owned label.
+	::free(szButtonText);
+	szButtonText = 0;
+#endif
 	if ((buttonText = data.buttonText) != 0)
 		szButtonText = _wcsdup(_localLoadStringW(buttonText));
 	//	wcsncpy(szButtonText, _localLoadStringW(buttonText), sizeof(szButtonText)/sizeof(wchar_t));

@@ -12,14 +12,34 @@
 // Multiplayer load map
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+#define swprintf FormatLegacyWide
+using std::min;
+using std::max;
+extern IMenuResource *MENU;
+struct SAVED_CONNECTION;
+#endif
 
 #include <DMenu1.h>
 
 #include "Frame.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IButton2.h"
 #include "ISlider.h"
 #include "CQGame.h"
@@ -28,7 +48,9 @@
 #include "NetBuffer.h"
 
 #include <wchar.h>
+#if defined(_WIN32)
 #include <dplay.h>
+#endif
 
 #define MT_RANDOM 11001
 #define MT_MULTI  11002
@@ -146,7 +168,7 @@ struct Menu_map : public DAComponent<Frame>
 			return;
 		}
 
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			// if lock settings is turned on then go to that control
 			if (pushLockSettings->GetPushState())
@@ -165,7 +187,7 @@ struct Menu_map : public DAComponent<Frame>
 
 	virtual bool onTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -190,7 +212,7 @@ struct Menu_map : public DAComponent<Frame>
 
 	virtual bool onShiftTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -563,6 +585,10 @@ void Menu_map::setStateInfo (void)
 	bandWidthOption->EnableDropdown(true);
 	bandWidthOption->SetVisible(true);
 	staticBandwidth->SetVisible(bInternet);
+#if !defined(_WIN32)
+    bandWidthOption->SetVisible(false);
+    staticBandwidth->SetVisible(false);
+#endif
 	dropUnits->EnableDropdown(bEnableControls);
 	dropGameType->EnableDropdown(bEnableControls);
 	dropSystems->EnableDropdown(bEnableDemoControls);
@@ -1114,8 +1140,10 @@ void Menu_map::onListSelection (S32 listID)		// user has selected a list item
 
 	case IDS_BANDWIDTH_NORMAL:
 		DEFAULTS->GetDefaults()->bNetworkBandwidth = (bandWidthOption->GetCurrentSelection() != 0);
+#if defined(_WIN32)
 		NETBUFFER->SetTCPNetworkPerformance(DEFAULTS->GetDefaults()->bNetworkBandwidth);
 		EVENTSYS->Send(CQE_RESET_NETWORK_PERFORMANCE, 0);
+#endif
 		break;
 	
 	case IDS_NUMBERS_0:

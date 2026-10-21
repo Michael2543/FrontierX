@@ -316,6 +316,19 @@ void ObjectCloak< Base >::physUpdateCloak(SINGLE dt)
 template <class Base> 
 void ObjectCloak< Base >::RenderCloaked(U32 texID)
 {
+#if !defined(_WIN32)
+	BATCH->set_render_state(D3DRS_CULLMODE,D3DCULL_CW);
+	Vector pos = transform.translation*0.001f;
+	const SINGLE shiftX = fmod(pos.x,1.0)-0.5+0.3*cos(1+2*cloakShift);
+	cloakShift += 0.01;
+	const SINGLE shiftY = fmod(pos.y,1.0)-0.5+0.3*cos(cloakShift);
+	const U32 color = (cloakTimer <= CLOAK_TIME && cloakTimer > 0)
+		? (U32(U8((1.0-cloakPercent)*255)) << 24) | 0x00ffffff : 0xffffffff;
+	TreeRenderNativeCloak(this->GetMeshChain(), transform,
+		this->objClass == OC_SPACESHIP && (this->instanceMesh == NULL || !CQEFFECTS.bFastRender),
+		shiftX, shiftY, color);
+#endif
+
 /*	U16 re_index_list[1000];
 
 	BATCH->set_render_state(D3DRS_CULLMODE,D3DCULL_CW);//NONE);

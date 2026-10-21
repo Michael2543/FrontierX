@@ -563,6 +563,16 @@ GENRESULT BindNativeRenderFrames(IRenderPipeline * pipeline, NativeFrameOperatio
     return native ? native->BindFrames(frames) : GR_INVALID_PARMS;
 }
 
+GENRESULT NativeRenderPipeline::SetGamma(float gamma)
+{
+    return frames_.gamma ? frames_.gamma(frames_.context, gamma) : GR_NOT_IMPLEMENTED;
+}
+GENRESULT SetNativeRenderGamma(IRenderPipeline *pipeline, float gamma)
+{
+    auto *native = dynamic_cast<NativeRenderPipeline *>(pipeline);
+    return native ? native->SetGamma(gamma) : GR_INVALID_PARMS;
+}
+
 GENRESULT NativeRenderPipeline::clear_buffers(U32 flags, RECT * rectangle)
 {
     if (!frames_.clear) return GR_NOT_IMPLEMENTED;

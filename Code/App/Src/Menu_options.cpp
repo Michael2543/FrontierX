@@ -10,25 +10,54 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativePlayerProfiles.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include "IListBox.h"
+#include "Cursor.h"
+#include "CQTrace.h"
+#include <WindowManager.h>
+#include <FrontierX/NativeWindowManager.h>
+#include <FrontierX/NativeRenderPipeline.h>
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <stdexcept>
+#include <string>
+#include <array>
+using namespace FrontierX::NativeAppUi;
+#endif
 
 #include <DEffectOpts.h>
 #include <Digoptions.h>
 #include <wchar.h>
-#include <Rpul\\RPUL_Misc.h>
+#if defined(_WIN32)
+#include <RPUL/RPUL_Misc.h>
+#endif
 
 #include "Frame.h"
 #include "IButton2.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "ISlider.h"
 #include "ITabControl.h"
 #include "IShapeLoader.h"
 
+#if defined(_WIN32)
 #include "IGammaControl.h"
+#endif
 #include "SoundManager.h"
 #include "Menu.h"
+#if !defined(_WIN32)
+extern IMenuResource *MENU;
+#endif
 #include "IGameProgress.h"
 
 #include "Mission.h"
@@ -260,6 +289,7 @@ void delete_item_from_list (NameList *& list, wchar_t * szName)
 
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 struct ResEnum
 {
 	U32 regWidth, regHeight, regDepth;
@@ -270,6 +300,7 @@ struct ResEnum
 };
 //--------------------------------------------------------------------------//
 //
+#endif
 struct PackedRes
 {
 	U32 dwWidth:12;
@@ -307,6 +338,10 @@ struct Menu_options : public DAComponent<dummy_options>
 	// data items
 	//
 	GT_OPTIONS data;
+#if !defined(_WIN32)
+    bool nativeInitialized=false;
+    bool nativeAppliedFullscreen=false;
+#endif
 
 	COMPTR<IStatic> background, title;
 
@@ -388,7 +423,10 @@ struct Menu_options : public DAComponent<dummy_options>
 	DefaultInfo currentInfo;
 	DefaultInfo defaultInfo;
 
-	DDDEVICEIDENTIFIER2 ident2;		// valid after calling fillDeviceList()
+#if defined(_WIN32)
+	DDDEVICEIDENTIFIER2 ident2;
+#endif
+	//		// valid after calling fillDeviceList()
 	bool b3DCardFound;
 
 	//
@@ -528,9 +566,12 @@ struct Menu_options : public DAComponent<dummy_options>
 		return (strncmp(pGUID, "{00000000-0000-0000-0000-000000000000}", strlen("{00000000-0000-0000-0000-000000000000}")) == 0);
 	}
 
+#if defined(_WIN32)
 	static int __stdcall fillResolutionList (const char * pGUID, IListbox * list, DDDEVICEIDENTIFIER2 * ident2);
 
 	static HRESULT __stdcall resCallback (struct _DDSURFACEDESC2 * ddesc, LPVOID lpContext);
+
+#endif
 
 	int fillDeviceList (IListbox * devList, IListbox * resList);
 
@@ -556,7 +597,9 @@ struct Menu_options : public DAComponent<dummy_options>
 //
 Menu_options::~Menu_options (void)
 {
-	tb.~subStruct();
+#if defined(_WIN32)
+    tb.~subStruct();
+#endif
 
 	// delete everything in our name lists if we must
 	delete_list(listAdd);
@@ -608,7 +651,9 @@ void Menu_options::deleteMarkedNames (void)
 void Menu_options::addMarkedFolders (void)
 {
 	// this function may well fail - we're just making sure the SavedGame directory is there
+	#if defined(_WIN32)
 	::CreateDirectory("SavedGame\\", 0);
+#endif
 
 	NameList * p = listAdd;
 
@@ -619,10 +664,12 @@ void Menu_options::addMarkedFolders (void)
 		// place the name into the registry
 		char nameAnsi[MAX_PLAYER_CHARS];
 		_localWideToAnsi(p->szName, nameAnsi, sizeof(nameAnsi));
+#if defined(_WIN32)
 		DEFAULTS->SetStringInRegistry(NAME_REG_KEY, nameAnsi);
 
 		// the newly selected player will have a different game progress, reinitialize everything
 		GAMEPROGRESS->ReInitialize();
+#endif
 
 		p = p->pNext;
 	}
@@ -656,6 +703,7 @@ void Menu_options::changeBackFolders (void)
 //
 void Menu_options::deleteInfoForPlayer (wchar_t * szFolderNameWide)
 {
+#if defined(_WIN32)
 	COMPTR<IFileSystem> file;
 	char szFolderNameAnsi[MAX_PLAYER_CHARS];
 	char szFolderPathAnsi[MAX_CHARS];
@@ -663,7 +711,7 @@ void Menu_options::deleteInfoForPlayer (wchar_t * szFolderNameWide)
 	_localWideToAnsi(szFolderNameWide, szFolderNameAnsi, sizeof(szFolderNameAnsi));
 
 	// delete the single player filename folder and its contents
-	wsprintf(szFolderPathAnsi, "%s%s", GAME_DIR_ANSI, szFolderNameAnsi);
+	sprintf(szFolderPathAnsi, "%s%s", GAME_DIR_ANSI, szFolderNameAnsi);
 
 	DAFILEDESC fdesc = szFolderPathAnsi;
 	if (DACOM->CreateInstance(&fdesc, file) == GR_OK)
@@ -672,28 +720,51 @@ void Menu_options::deleteInfoForPlayer (wchar_t * szFolderNameWide)
 
 		// now delete the directory
 		file.free();
+#if defined(_WIN32)
 		::RemoveDirectory(szFolderPathAnsi);
+#else
+		SAVEDIR->RemoveDirectory(szFolderNameAnsi);
+#endif
 	}
 
 	DEFAULTS->DeletePlayerDefaults(szFolderNameAnsi);
+
+#else
+    char name[MAX_PLAYER_CHARS]{};
+    _localWideToAnsi(szFolderNameWide, name, sizeof(name));
+    if (!FrontierX::DeleteNativePlayerProfile(name)) throw std::runtime_error("Native player profile deletion failed");
+    DEFAULTS->DeletePlayerDefaults(name);
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_options::createFolder (wchar_t * szNameWide)
 {
+#if defined(_WIN32)
 	char szNameAnsi[128];
 	_localWideToAnsi(szNameWide, szNameAnsi, sizeof(szNameAnsi)); 
 
 	// the new path +directory
 	char szPathAnsi[256];
-	wsprintf(szPathAnsi, "%s%s", GAME_DIR_ANSI, szNameAnsi);
+	sprintf(szPathAnsi, "%s%s", GAME_DIR_ANSI, szNameAnsi);
 
+#if defined(_WIN32)
 	::CreateDirectory(szPathAnsi, 0);
+#else
+	if (!SAVEDIR->CreateDirectory(szNameAnsi)) throw std::runtime_error("Native player directory creation failed");
+#endif
+
+#else
+    char name[MAX_PLAYER_CHARS]{};
+    _localWideToAnsi(szNameWide, name, sizeof(name));
+    if (!FrontierX::CreateNativePlayerProfile(name)) throw std::runtime_error("Native player profile creation failed");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_options::changeFolderName (wchar_t * szOldNameWide, wchar_t * szNewNameWide)
 {
+#if defined(_WIN32)
 	char szNewNameAnsi[128];
 	_localWideToAnsi(szNewNameWide, szNewNameAnsi, sizeof(szNewNameAnsi)); 
 
@@ -702,18 +773,29 @@ void Menu_options::changeFolderName (wchar_t * szOldNameWide, wchar_t * szNewNam
 	
 	// the old path + directory
 	char szOldPathAnsi[256];
-	wsprintf(szOldPathAnsi, "%s%s", GAME_DIR_ANSI, szOldNameAnsi);
+	sprintf(szOldPathAnsi, "%s%s", GAME_DIR_ANSI, szOldNameAnsi);
 
 	// the new path +directory
 	char szNewPathAnsi[256];
-	wsprintf(szNewPathAnsi, "%s%s", GAME_DIR_ANSI, szNewNameAnsi);
+	sprintf(szNewPathAnsi, "%s%s", GAME_DIR_ANSI, szNewNameAnsi);
 
 
 	// now, switch the name, man
+#if defined(_WIN32)
 	::MoveFile(szOldPathAnsi, szNewPathAnsi);
+#else
+	if (!SAVEDIR->MoveFile(szOldNameAnsi, szNewNameAnsi)) throw std::runtime_error("Native player rename failed");
+#endif
 
 	// is there anymore cleanup to do here?
 	// does the registry stuff change properly
+
+#else
+    char previous[MAX_PLAYER_CHARS]{}, name[MAX_PLAYER_CHARS]{};
+    _localWideToAnsi(szOldNameWide, previous, sizeof(previous));
+    _localWideToAnsi(szNewNameWide, name, sizeof(name));
+    if (!FrontierX::RenameNativePlayerProfile(previous, name)) throw std::runtime_error("Native player profile rename failed");
+#endif
 }
 //----------------------------------------------------------------------------------//
 //
@@ -792,6 +874,28 @@ void Menu_options::resetDefaults (DefaultInfo & info)
 //
 void Menu_options::setStateInfo (void)
 {
+#if !defined(_WIN32)
+    const bool reflow=nativeInitialized;
+    FrontierX::NativeWindowMode liveDisplay;
+    if (!FrontierX::GetNativeWindowMode(WM,liveDisplay)) throw std::runtime_error("Native display owner unavailable");
+    ISlider *sliders[]={tb.sliderSound,tb.sliderMusic,tb.sliderComm,tb.sliderChat,
+        tb.sliderSpeed,tb.sliderScroll,tb.sliderMouse,tb.sliderGamma,tb.slideDrawBack,tb.sliderShips3D};
+    IButton2 *buttons[]={tb.pushSound,tb.pushMusic,tb.pushComm,tb.pushDInput,tb.pushStatus,
+        tb.pushRollover,tb.pushSectorMap,tb.pushRightClick,tb.pushSubtitles,
+        tb.pushTrails,tb.pushEmissive,tb.pushDetail};
+    std::array<S32,10> positions{};
+    std::array<bool,10> enabled{};
+    std::array<bool,12> pushed{};
+    const int selectedTab=reflow ? tabControl->GetCurrentTab() : 0;
+    const int displaySelection=reflow && nativeAppliedFullscreen==liveDisplay.fullscreen ?
+        tb.dropDevice->GetCurrentSelection() : int(liveDisplay.fullscreen);
+    const U32 selectedResolution=reflow ? tb.dropResolution->GetDataValue(tb.dropResolution->GetCurrentSelection()) : 0;
+    if (reflow)
+    {
+        for (unsigned i=0;i<positions.size();++i) { positions[i]=sliders[i]->GetPosition(); enabled[i]=sliders[i]->GetEnableState(); }
+        for (unsigned i=0;i<pushed.size();++i) pushed[i]=buttons[i]->GetPushState();
+    }
+#endif
 	//
 	// create members if not done already
 	//
@@ -990,8 +1094,13 @@ void Menu_options::setStateInfo (void)
 
 	// keep track of the current and default user settings
 	// god dammit this design sucks major ass!
-	resetDefaults(defaultInfo);
-	currentInfo = defaultInfo;
+#if !defined(_WIN32)
+    if (!reflow)
+#endif
+    {
+	    resetDefaults(defaultInfo);
+	    currentInfo = defaultInfo;
+    }
 
 	// fill all of the devices into the drop box
 	fillDeviceList(tb.dropDevice, tb.dropResolution);
@@ -1020,8 +1129,20 @@ void Menu_options::setStateInfo (void)
 		}
 	}
 
+#if !defined(_WIN32)
+    // The active native renderer is Vulkan; there is no software/DirectDraw device.
+    tb.push3DHardware->EnableButton(false);
+    tb.staticDevice->SetText(L"Display mode");
+    tb.static3DHardware->SetText(L"Vulkan renderer");
+    tb.dropDevice->EnableDropdown(true);
+    tb.pushDInput->EnableButton(false);
+    tb.sliderMouse->EnableSlider(false);
+#endif
 	// put all of the names into the list
-	initNameList();
+#if !defined(_WIN32)
+    if (!reflow)
+#endif
+	    initNameList();
 
 	if (CQFLAGS.bGameActive)
 	{
@@ -1065,6 +1186,20 @@ void Menu_options::setStateInfo (void)
 
 	setFocus(tabControl);
 	tabControl->SetCurrentTab(0);
+#if !defined(_WIN32)
+    tb.dropDevice->EnableDropdown(true);
+    if (reflow)
+    {
+        for (unsigned i=0;i<positions.size();++i) { sliders[i]->SetPosition(positions[i]); sliders[i]->EnableSlider(enabled[i]); }
+        for (unsigned i=0;i<pushed.size();++i) buttons[i]->SetPushState(pushed[i]);
+        tb.dropDevice->SetCurrentSelection(displaySelection);
+        for (S32 i=0;i<tb.dropResolution->GetNumberOfItems();++i)
+            if (tb.dropResolution->GetDataValue(i)==selectedResolution) tb.dropResolution->SetCurrentSelection(i);
+        tabControl->SetCurrentTab(selectedTab);
+    }
+    nativeInitialized=true;
+    nativeAppliedFullscreen=liveDisplay.fullscreen;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1331,7 +1466,15 @@ void Menu_options::onButtonOk (void)
 			pUserDefaults->bHardwareRender = true;
 		}
 
+#if defined(_WIN32)
 		Set3DVarialbes(width, height, depth);
+#else
+		const int selection = tb.dropResolution->GetCurrentSelection();
+		if (selection < 0) throw std::runtime_error("Native display mode selection missing");
+		const U32 value = tb.dropResolution->GetDataValue(selection);
+		PackedRes mode; std::memcpy(&mode, &value, sizeof(mode));
+		width = mode.dwWidth; height = mode.dwHeight; depth = 32;
+#endif
 
 		// right the vars to the registry
 		DEFAULTS->SetDataInRegistry(WIDTH_REG_KEY, &width, sizeof(U32));
@@ -1339,6 +1482,25 @@ void Menu_options::onButtonOk (void)
 		DEFAULTS->SetDataInRegistry(DEPTH_REG_KEY, &depth, sizeof(U32));
 	}
 
+#if !defined(_WIN32)
+    FrontierX::NativeWindowMode mode;
+    if (!FrontierX::GetNativeWindowMode(WM,mode)) throw std::runtime_error("Native display owner unavailable");
+    const S32 selection=tb.dropDevice->GetCurrentSelection();
+    if (selection<0 || selection>1) throw std::runtime_error("Native display mode selection invalid");
+    mode.fullscreen=selection==1;
+    if (!CQFLAGS.bGameActive)
+    {
+        const U32 value=tb.dropResolution->GetDataValue(tb.dropResolution->GetCurrentSelection());
+        PackedRes res; std::memcpy(&res,&value,sizeof(res));
+        mode.width=res.dwWidth; mode.height=res.dwHeight;
+    }
+    if (!FrontierX::SetNativeWindowMode(WM,mode)) throw std::runtime_error("Native display mode change rejected");
+    U32 fullscreen=mode.fullscreen;
+    if (!DEFAULTS->SetDataInRegistry("CQFullscreen",&fullscreen,sizeof(fullscreen)) ||
+        !DEFAULTS->SetDataInRegistry(WIDTH_REG_KEY,&mode.width,sizeof(mode.width)) ||
+        !DEFAULTS->SetDataInRegistry(HEIGHT_REG_KEY,&mode.height,sizeof(mode.height)))
+        throw std::runtime_error("Native display preference write failed");
+#endif
 	// set the game speed, cursor speed, and scroll rate
 	pUserDefaults->gameSpeed = tb.sliderSpeed->GetPosition();
 	pUserDefaults->mouseSpeed = tb.sliderMouse->GetPosition();
@@ -1359,9 +1521,25 @@ void Menu_options::onButtonOk (void)
 	changeMarkedFolders();
 	addMarkedFolders();
 
+#if !defined(_WIN32)
+	if (!CQFLAGS.bGameActive)
+	{
+		wchar_t wide[MAX_PLAYER_CHARS]{}; char name[MAX_PLAYER_CHARS]{};
+		const int selected = tb.listNames->GetCurrentSelection();
+		if (selected < 0) throw std::runtime_error("Native player selection missing");
+		tb.listNames->GetString(selected, wide, sizeof(wide));
+		_localWideToAnsi(wide, name, sizeof(name));
+		if (!FrontierX::SelectNativePlayerProfile(name)) throw std::runtime_error("Native player profile selection failed");
+		GAMEPROGRESS->ReInitialize();
+	}
+#endif
 	// select the player
 	tb.listNames->SetCurrentSelection(tb.listNames->GetCurrentSelection());
 
+#if !defined(_WIN32)
+    if (!DEFAULTS->SetDataInRegistry("effectsOptions", &CQEFFECTS, sizeof(CQEFFECTS)))
+        throw std::runtime_error("Native graphics preferences could not be stored");
+#endif
 	DEFAULTS->StoreDefaults();		// store the current defaults
 	MENU->InitPreferences();
 
@@ -1393,12 +1571,21 @@ void Menu_options::onButtonCancel (void)
 	USER_DEFAULTS * pUserDefaults = DEFAULTS->GetDefaults();
 
 	// reset the gamma value back to the default
+	#if defined(_WIN32)
 	COMPTR<IGammaControl> gamma;
+#endif
+	#if defined(_WIN32)
 	GS->QueryInterface(IID_IGammaControl, gamma);
+#endif
 	
 	pUserDefaults->gammaCorrection = defaultInfo.nDefaultGamma;
 	SINGLE gamma_value = SINGLE(defaultInfo.nDefaultGamma + 10)/SINGLE(10);
+	#if defined(_WIN32)
 	gamma->set_gamma_function(IGC_ALL, gamma_value, 0, 1.0, 0);
+#else
+	if (FrontierX::SetNativeRenderGamma(PIPE, gamma_value) != GR_OK)
+		throw std::runtime_error("Native gamma change rejected");
+#endif
 
 	// reset all of the sound controls back to their defaults
 	SOUNDMANAGER->SetSfxVolumeLevel(defaultInfo.nDefaultEffects, defaultInfo.bDefaultEffectsMuted);
@@ -1482,9 +1669,21 @@ void Menu_options::onButtonDelete (void)
 
 	tb.listNames->GetString(sel, nameWide, (MAX_CHARS-20)*sizeof(wchar_t));
 
+#if !defined(_WIN32)
+	char profile[MAX_PLAYER_CHARS]{}; _localWideToAnsi(nameWide, profile, sizeof(profile));
+	if (FrontierX::IsNativeLegacyPlayerProfile(profile))
+	{ CQMessageBox(IDS_CANT_DELETE, IDS_APP_NAMETM, MB_OK, this); return; }
+#endif
 	// check if we really want to do this
 	wchar_t ask[MAX_CHARS];
+	#if defined(_WIN32)
 	swprintf(ask, _localLoadStringW(IDS_ASK_DELETE), nameWide);
+#else
+	std::wstring format = _localLoadStringW(IDS_ASK_DELETE);
+	const auto place = format.find(L"%s");
+	if (place != std::wstring::npos) format.replace(place, 2, L"%ls");
+	std::swprintf(ask, sizeof(ask)/sizeof(*ask), format.c_str(), nameWide);
+#endif
 	if (CQMessageBox(ask, IDS_HELP_DELETE, MB_OKCANCEL, this) == 0)
 	{
 		return;
@@ -1553,11 +1752,15 @@ void Menu_options::onButtonChange (void)
 //
 void Menu_options::initFileSys (void)
 {
-	if (fileSys == NULL)
+	if (!fileSys)
 	{
 		DAFILEDESC fdesc;
 		fdesc = "SavedGame";
+#if defined(_WIN32)
 		DACOM->CreateInstance(&fdesc, (void**)&fileSys);
+#else
+		fileSys = SAVEDIR;
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -1569,6 +1772,7 @@ void Menu_options::redoNameList (void)
 	// only the first time through...
 	if (listCurrent == NULL)
 	{
+#if defined(_WIN32)
 		// we need to look for a bunch of folders
 		HANDLE handle;
 		WIN32_FIND_DATA data;
@@ -1577,13 +1781,21 @@ void Menu_options::redoNameList (void)
 		initFileSys();
 
 		// add the folder to the single player dir
-		if (fileSys == NULL || (handle = fileSys->FindFirstFile("*.*", &data)) == INVALID_HANDLE_VALUE)
+		if (!fileSys || (handle = fileSys->FindFirstFile("*.*", &data)) == INVALID_HANDLE_VALUE)
 		{
 			return;
 		}
 		addFolder(handle);
 		addFolder(data);
 		fileSys->FindClose(handle);
+#else
+		for (const auto &name : FrontierX::NativePlayerProfileNames())
+		{
+			wchar_t wide[MAX_PLAYER_CHARS]{};
+			_localAnsiToWide(name.c_str(), wide, sizeof(wide));
+			add_name_to_list(listCurrent, wide, NULL);
+		}
+#endif
 	}
 
 	NameList * p = listCurrent;
@@ -1660,9 +1872,14 @@ void Menu_options::initNameList (void)
 			int sel;
 
 			// save off the old name...
+#if defined(_WIN32)
 			wcsncpy(szDefaultName, nameWide, sizeof(szDefaultName)/sizeof(wchar_t));
-
+#endif
 			_localAnsiToWide(nameAnsi, nameWide, sizeof(nameWide));
+#if !defined(_WIN32)
+			std::wcsncpy(szDefaultName, nameWide, MAX_PLAYER_CHARS);
+			szDefaultName[MAX_PLAYER_CHARS-1] = 0;
+#endif
 			sel = tb.listNames->FindStringExact(nameWide);
 			if (sel > -1)
 			{
@@ -1692,13 +1909,19 @@ void Menu_options::onListCaretMove (S32 listID)
 
 			tb.listNames->GetString(tb.listNames->GetCurrentSelection(), playerName, sizeof(playerName));
 
+			#if defined(_WIN32)
 			swprintf(fullString, L"%s  %s", playerPlace, playerName);
+#else
+			std::swprintf(fullString, 256, L"%ls  %ls", playerPlace, playerName);
+#endif
 			tb.staticName->SetText(fullString);		
 
 			// place the name into the registry
 			char nameAnsi[MAX_PLAYER_CHARS];
 			_localWideToAnsi(playerName, nameAnsi, sizeof(nameAnsi));
+#if defined(_WIN32)
 			DEFAULTS->SetStringInRegistry(NAME_REG_KEY, nameAnsi);
+#endif
 			
 			resetDefaults(currentInfo);
 		}
@@ -1718,9 +1941,11 @@ void Menu_options::onListSelection (S32 listID)
 		int sel = tb.dropDevice->GetCurrentSelection();
 		CQASSERT(sel>=0);
 
+#if defined(_WIN32)
 		char buffer[MAX_PATH];
 		getGUIDFromIndex(sel, buffer, sizeof(buffer));
 		fillResolutionList(buffer, tb.dropResolution, &ident2);
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -1731,13 +1956,22 @@ void Menu_options::onSliderPressed (U32 sliderID)
 	{
 	case SLIDER_GAMMA:
 		{
-			COMPTR<IGammaControl> gamma;
-			GS->QueryInterface(IID_IGammaControl, gamma);
+			#if defined(_WIN32)
+	COMPTR<IGammaControl> gamma;
+#endif
+			#if defined(_WIN32)
+	GS->QueryInterface(IID_IGammaControl, gamma);
+#endif
 
 			S32 value = tb.sliderGamma->GetPosition();
 			SINGLE gamma_value = SINGLE(value + 10)/SINGLE(10);
 
-			gamma->set_gamma_function(IGC_ALL, gamma_value, 0, 1.0, 0);
+			#if defined(_WIN32)
+	gamma->set_gamma_function(IGC_ALL, gamma_value, 0, 1.0, 0);
+#else
+	if (FrontierX::SetNativeRenderGamma(PIPE, gamma_value) != GR_OK)
+		throw std::runtime_error("Native gamma change rejected");
+#endif
 			DEFAULTS->GetDefaults()->gammaCorrection = value;
 		}
 		break;
@@ -1871,6 +2105,7 @@ void Menu_options::onButton3DHardware (void)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 HRESULT Menu_options::resCallback (struct _DDSURFACEDESC2 * ddesc, LPVOID lpContext)
 {
 	ResEnum * pResEnum = (ResEnum *) lpContext;
@@ -2030,6 +2265,28 @@ int Menu_options::fillDeviceList (IListbox * devlist, IListbox * resList)
 }
 //--------------------------------------------------------------------------//
 //
+#else
+int Menu_options::fillDeviceList(IListbox *devices, IListbox *resolutions)
+{
+	devices->ResetContent(); resolutions->ResetContent();
+    FrontierX::NativeWindowMode selected;
+    if (!FrontierX::GetNativeWindowMode(WM,selected)) throw std::runtime_error("Native display owner unavailable");
+	devices->AddString(L"Windowed"); devices->AddString(L"Fullscreen");
+    devices->SetCurrentSelection(selected.fullscreen ? 1 : 0);
+	for (const auto &mode : FrontierX::GetNativeWindowDisplayModes(WM))
+	{
+		wchar_t label[64];
+		std::swprintf(label, 64, L"%u x %u", mode.width, mode.height);
+		const int index = resolutions->AddString(label);
+		PackedRes packed{};
+		packed.dwWidth = mode.width; packed.dwHeight = mode.height; packed.dwDepth = 32;
+		resolutions->SetDataValue(index, packed);
+		if (mode.width == selected.width && mode.height == selected.height) resolutions->SetCurrentSelection(index);
+	}
+	b3DCardFound = true;
+	return 1;
+}
+#endif
 U32 __stdcall CreateOptionsMenu (const bool bFocusing)
 {
 	static U8 recurse;
@@ -2049,7 +2306,7 @@ U32 __stdcall CreateOptionsMenu (const bool bFocusing)
 			if (PLAYERID == 0)
 			{
 				CQFLAGS.bGamePaused = TRUE;
-				EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
+				EVENTSYS->Send(CQE_PAUSE_CHANGE, reinterpret_cast<void *>(std::uintptr_t(CQFLAGS.bGamePaused)));
 			}
 		}
 
@@ -2062,7 +2319,7 @@ U32 __stdcall CreateOptionsMenu (const bool bFocusing)
 			if (PLAYERID == 0)
 			{
 				CQFLAGS.bGamePaused = bOldPause;
-				EVENTSYS->Send(CQE_PAUSE_CHANGE, (void *)(CQFLAGS.bGamePaused));
+				EVENTSYS->Send(CQE_PAUSE_CHANGE, reinterpret_cast<void *>(std::uintptr_t(CQFLAGS.bGamePaused)));
 			}
 		}
 
@@ -2076,3 +2333,87 @@ U32 __stdcall CreateOptionsMenu (const bool bFocusing)
 //--------------------------------------------------------------------------//
 //-----------------------------End Menu_options.cpp-------------------------//
 //--------------------------------------------------------------------------//
+#if !defined(_WIN32)
+// Explicit external-data diagnostic for the original Options owner. Use its
+// real controls and handlers so preview, Cancel and persistence cannot diverge.
+bool CheckNativeNewPlayerInput();
+bool CheckNativeButtonGeometry(IButton2 *control);
+bool CheckNativeOptionsTransactions()
+{
+    if (!CheckNativeNewPlayerInput()) return false;
+    char player[64]{};
+    if (!DEFAULTS->GetStringFromRegistry(NAME_REG_KEY,player,sizeof(player)))
+        std::strcpy(player,"Diagnostic");
+    if (!FrontierX::SelectNativePlayerProfile(player)) return false;
+    GAMEPROGRESS->ReInitialize();
+    DEFAULTS->LoadDefaults();
+    MENU->InitPreferences();
+    const USER_DEFAULTS before=*DEFAULTS->GetDefaults();
+    FrontierX::NativeWindowMode displayBefore;
+    if (!FrontierX::GetNativeWindowMode(WM,displayBefore)) return false;
+    const GlobalEffectsOptions effectsBefore=CQEFFECTS;
+    const S32 gammaNext=before.gammaCorrection<10 ? before.gammaCorrection+1 : before.gammaCorrection-1;
+    const S32 musicNext=(before.soundState.music.volume+1)%11;
+    auto run=[&](bool apply,bool restore)
+    {
+        auto *menu=new Menu_options;
+        menu->createViewer("\\GT_OPTIONS\\MenuOptions","GT_OPTIONS",IDS_VIEWOPTIONS);
+        menu->beginModalFocus();
+        if (!CheckNativeButtonGeometry(menu->buttonOk) ||
+            !CheckNativeButtonGeometry(menu->buttonCancel))
+        { std::fputs("Native Options button shape/text/hit geometry differs\n",stderr); delete menu; return false; }
+        menu->tb.sliderGamma->SetPosition(restore ? before.gammaCorrection : gammaNext);
+        menu->onSliderPressed(SLIDER_GAMMA);
+        menu->tb.sliderMusic->SetPosition(restore ? before.soundState.music.volume : musicNext);
+        menu->tb.pushMusic->SetPushState(restore ? !before.soundState.music.bMute : before.soundState.music.bMute);
+        menu->onSliderPressed(SLIDER_MUSIC);
+        menu->tb.pushStatus->SetPushState(restore ? !before.bNoStatusBar : before.bNoStatusBar);
+        menu->tb.pushTrails->SetPushState(restore ? effectsBefore.bWeaponTrails!=0 : effectsBefore.bWeaponTrails==0);
+        menu->tb.dropDevice->SetCurrentSelection(restore ? displayBefore.fullscreen : !displayBefore.fullscreen);
+        menu->tabControl->SetCurrentTab(1);
+        const int gamma=menu->tb.sliderGamma->GetPosition();
+        const int music=menu->tb.sliderMusic->GetPosition();
+        const bool trails=menu->tb.pushTrails->GetPushState();
+        menu->setStateInfo();
+        if (menu->tabControl->GetCurrentTab()!=1 || menu->tb.sliderGamma->GetPosition()!=gamma ||
+            menu->tb.sliderMusic->GetPosition()!=music || menu->tb.pushTrails->GetPushState()!=trails ||
+            menu->tb.dropDevice->GetCurrentSelection()!=(restore ? displayBefore.fullscreen : !displayBefore.fullscreen))
+        { std::fprintf(stderr,"Native Options reflow lost staged controls\n"); delete menu; return false; }
+        if (apply) menu->onButtonOk(); else menu->onButtonCancel();
+        const U32 result=CQDoModal(menu);
+        delete menu;
+        std::fprintf(stderr,"Native Options transaction apply=%u restore=%u result=%u\n",apply,restore,result);
+        return result==(apply ? 1U : 0U);
+    };
+    bool valid=run(false,false);
+    FrontierX::NativeWindowMode display;
+    valid=FrontierX::GetNativeWindowMode(WM,display) && display.fullscreen==displayBefore.fullscreen && valid;
+    DEFAULTS->LoadDefaults();
+    auto *current=DEFAULTS->GetDefaults();
+    valid=valid && current->gammaCorrection==before.gammaCorrection &&
+        current->soundState.music.volume==before.soundState.music.volume &&
+        current->soundState.music.bMute==before.soundState.music.bMute &&
+        current->bNoStatusBar==before.bNoStatusBar && CQEFFECTS.bWeaponTrails==effectsBefore.bWeaponTrails;
+    std::fprintf(stderr,"Native Options Cancel/display check=%u\n",valid);
+    valid=run(true,false) && valid;
+    U32 fullscreen=0;
+    valid=FrontierX::GetNativeWindowMode(WM,display) && display.fullscreen!=displayBefore.fullscreen &&
+        DEFAULTS->GetDataFromRegistry("CQFullscreen",&fullscreen,sizeof(fullscreen))==sizeof(fullscreen) &&
+        fullscreen==U32(!displayBefore.fullscreen) && valid;
+    DEFAULTS->LoadDefaults(); current=DEFAULTS->GetDefaults();
+    GlobalEffectsOptions stored{};
+    valid=valid && current->gammaCorrection==gammaNext && current->soundState.music.volume==musicNext &&
+        current->soundState.music.bMute!=before.soundState.music.bMute &&
+        current->bNoStatusBar!=before.bNoStatusBar &&
+        DEFAULTS->GetDataFromRegistry("effectsOptions",&stored,sizeof(stored))==sizeof(stored) &&
+        stored.bWeaponTrails!=effectsBefore.bWeaponTrails;
+    std::fprintf(stderr,"Native Options Apply/display check=%u\n",valid);
+    valid=run(true,true) && valid;
+    valid=FrontierX::GetNativeWindowMode(WM,display) && display.fullscreen==displayBefore.fullscreen && valid;
+    *DEFAULTS->GetDefaults()=before; CQEFFECTS=effectsBefore;
+    valid=DEFAULTS->StoreDefaults() && valid;
+    valid=DEFAULTS->SetDataInRegistry("effectsOptions",&CQEFFECTS,sizeof(CQEFFECTS)) && valid;
+    MENU->InitPreferences();
+    return valid;
+}
+#endif

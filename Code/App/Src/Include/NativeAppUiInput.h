@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <string>
+#include <stdexcept>
 
 // Source UI message names refer to the existing SDL legacy-message contract.
 namespace FrontierX::NativeAppUi
@@ -91,6 +93,21 @@ inline FrontierX::LegacyLParam MAKELPARAM(S32 x, S32 y)
 {
     return static_cast<FrontierX::LegacyLParam>((static_cast<U32>(x) & 0xffff) |
         ((static_cast<U32>(y) & 0xffff) << 16));
+}
+// Windows wide printf treats %s as a wide string; POSIX requires %ls.
+template<std::size_t N, class... Args>
+inline int FormatLegacyWide(wchar_t (&output)[N], const wchar_t *format, Args... args)
+{
+    std::wstring native = format;
+    for (std::size_t i=0; i+1<native.size(); ++i)
+        if (native[i] == L'%')
+        {
+            if (native[i+1] == L'%') { ++i; continue; }
+            if (native[i+1] == L's') { native.insert(i+1, 1, L'l'); i+=2; }
+        }
+    const int result = std::swprintf(output, N, native.c_str(), args...);
+    if (result < 0) throw std::length_error("Native menu formatted text exceeds capacity");
+    return result;
 }
 struct MessageFields
 {

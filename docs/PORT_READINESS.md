@@ -1,6 +1,109 @@
 # Linux Port Readiness Plan
 
+## Single-player finalization (2026-10-20)
+
+The user requests an optimized retail-data single-player build with fullscreen,
+excluding multiplayer. Follow the [finalization record](RETAIL_SINGLEPLAYER_FINALIZATION.md)
+for executed checks and unresolved gates. Preserve the accepted campaign and
+genuine saves. Fullscreen and portal persistence changes do not waive the
+remaining catalogue, gameplay, lifecycle, Windows/ABI or distribution checks.
+
 ## Active plan: playable single-player first (2026-10-13)
+
+### Accepted campaign and next delivery plan (2026-10-20)
+
+**User gameplay evidence:** the user reports that the complete Terran campaign
+finished perfectly, including its ending. Record campaign completion as accepted
+in the delivered Linux scope. This aggregate report does not invent individual
+defeat/retry tests, accept every optional effect scenario, or close Windows,
+module ABI, comparative determinism, whole-process leak or resize gates. Earlier
+dated mission-readiness statements below are historical.
+
+**Implementation update:** original single-player menus, Options, menu-coordinate
+and resize repairs, profile directories, and offline skirmish are integrated.
+The [focused implementation and validation record](NATIVE_SINGLEPLAYER_MENUS.md)
+records bounded real-menu and live-AI save/load execution. Complete user matches,
+nested navigation acceptance, and the carried retail gates remain separate.
+Preserve the accepted campaign and genuine saves.
+
+**Refreshed retail audit:** the original exclusive unit catalogue now admits
+162/164 race-tagged archetypes. Two variants still lack their required external
+models. The later finalization work repairs wormhole persistence; unresolved
+optional groups remain blockers, not exclusions. See the
+[dated unit audit](NATIVE_UNIT_COVERAGE.md#refreshed-single-player-audit-2026-10-20).
+After this candidate, complete menu/skirmish user acceptance, repair original
+remaining ability coverage, resolve the missing assets against their actual callers,
+then exercise all race research branches and optional abilities. Retain the
+graphical process leak failure and Windows/ABI/determinism checks as open gates.
+
+The following pre-integration findings and acceptance criteria define the
+requested scope. Integration does not by itself satisfy every acceptance item.
+
+1. **Repair modal-menu rendering first.** Reproduce repeated pause/return,
+   save/load child dialogs and camera/HUD transitions at the reported resolution,
+   then another aspect ratio. Trace `Menu_igoptions::setStateInfo`, original
+   IDEAL2REAL coordinates, static/shape drawing, viewport/projection, texture
+   stages and blend/depth ownership. Separate a persistent coordinate mismatch
+   from render-state leakage; the screenshot alone does not identify the owner.
+   Extend the existing batcher/material GPU check only once that failure is
+   isolated. Acceptance: menu frame, text and clickable regions agree; repeated
+   opening and nested dialogs remain stable; the game/HUD is restored afterward.
+2. **Restore the original options owner.** Native `Menu_igoptions` explicitly
+   disables Options and excludes its `BUTTON_OPTIONS` caller; `Menu_options.cpp`
+   is outside the native in-game-menu target. Integrate its existing tabs and
+   controls through the current native settings/audio/window/render interfaces.
+   Inventory each original control and verify actual effects: audio levels and
+   mute, interface/subtitles, mouse/scroll/game speed, graphics/detail and
+   display/gamma where exposed. Handle obsolete Windows device choices through
+   their native owning boundary, without presenting nonfunctional controls.
+   Preserve Apply/OK/Cancel/reset semantics, profile persistence, hotkey access
+   where exposed, and restart behavior. Acceptance: settings work both in-game
+   and from the front end; cancellation restores the previous effective state;
+   changes persist after restart and do not damage mission saves.
+3. **Restore the single-player front end.** `NativeShell` currently enters
+   `DoMenu_campaign` directly. Integrate the original main and single-player
+   menu owners so Campaign, Load, Skirmish, Options and Back/Exit form a normal
+   reachable flow. Retain campaign progress and unlocked movie replay; audit
+   remaining original menu entries rather than treating a visible button as
+   working functionality. Acceptance: start, return from a mission, restart
+   the process, and navigate every delivered entry without stale modal state.
+4. **Integrate offline skirmish through its original owners.**
+   `Menu_SPGame::IDS_SKIRMISH` calls `DoMenu_mshell(..., false, false)`.
+   `Menu_mshell` also contains DirectPlay/session/thread dependencies; adapt its
+   local game-setup/start path at existing boundaries without enabling online
+   multiplayer. The production `SPlayerAI` dispatcher and Terran/Mantis/Solarian
+   strategy factories are already in `frontierx_native_player_ai_boundary`.
+   `NativeUnsupportedPlayerAI.cpp` is an unused historical stub, not evidence
+   that current campaign AI is absent. Reuse and verify real AI rather than
+   replacing it or merely enabling a button. Cover original map selection,
+   random-map generation where offered, slots, races/colors/teams, difficulty,
+   resources/limits and victory conditions through the actual CQGAME/start path.
+   Acceptance: a complete match against functioning AI; all three races in
+   representative matches, both authored and generated maps if offered; active
+   save/load with AI orders/economy/research intact; victory/defeat/rematch and
+   return to the front end. Test multi-AI and team configurations separately.
+5. **Audit remaining retail single-player coverage.** Reconcile the existing
+   unit/media/feature ledgers against campaign and skirmish use, especially
+   optional abilities and all race tech trees. Recheck resize, lifecycle and
+   long-session memory/resource behavior. Keep packaging, dependency provenance,
+   retail-data separation and legal gates explicit. Publish no release merely
+   because these menus and campaign completion work.
+
+For each implementation batch: use the existing full-media GCC/Clang builds,
+focused CTest/layout and fatal ASan/UBSan checks, generated GPU checks when the
+renderer changes, and a short user gameplay checklist. Use actual menu/settings
+and AI save/load execution rather than source checks alone. Native Windows
+Debug/Final and affected cross-module ABI checks remain required and unexecuted
+on this host. No new full campaign replay is required for each narrow fix;
+select relevant campaign checkpoints for shared-owner regressions.
+
+**Retail boundary:** accepted campaign completion is a major single-player
+milestone, not complete retail parity. Even after this plan's menu and skirmish
+acceptance, full retail coverage still requires a feature audit and the carried
+runtime/compatibility gates. Multiplayer remains a distinct later scope under
+the current project priorities. Do not claim additional campaigns are missing
+without verifying that they belong to the shipped retail feature set.
+
 
 The user accepts complete TM12 after the SOL subtitle repair on 2026-10-19.
 TM13–TM16 source owners, original entry/save schemas and final-film callers are

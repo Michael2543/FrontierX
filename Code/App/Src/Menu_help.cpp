@@ -12,8 +12,24 @@
 // New player dialog
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+extern IMenuResource *MENU;
+#endif
 #include <wchar.h>
 
 #include <DMenu1.h>
@@ -154,7 +170,11 @@ void Menu_help::setStateInfo (void)
 
 	wchar_t szWide[128];
 	char    szAnsi[128];
+	#if defined(_WIN32)
 	GetProductVersion(szAnsi, sizeof(szAnsi));
+#else
+	GetBuildVersion(szAnsi, sizeof(szAnsi));
+#endif
 
 	_localAnsiToWide(szAnsi, szWide, sizeof(szWide));
 	staticNumber->SetText(szWide);

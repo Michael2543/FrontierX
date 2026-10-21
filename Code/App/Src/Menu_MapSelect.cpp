@@ -12,8 +12,28 @@
 // New player dialog
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+
+using std::min;
+using std::max;
+extern IMenuResource *MENU;
+struct SAVED_CONNECTION;
+#endif
 #include <wchar.h>
 
 #include "CQGame.h"
@@ -23,7 +43,7 @@
 #include "IButton2.h"
 #include "IStatic.h"
 #include "IEdit2.h"
-#include "IListbox.h"
+#include "IListBox.h"
 
 #include <DMenu1.h>
 
@@ -403,7 +423,12 @@ void Menu_MapSelect::onListCaretMove (S32 listID)
 		
 		// get the actual file name back out of the list...
 		U32 num = listSaved->GetDataValue(listSaved->GetCurrentSelection());
+		#if defined(_WIN32)
 		swprintf(szFileName, L"m%07d.mission", num);
+#else
+		if (std::swprintf(szFileName, numChars, L"m%07u.mission", num) < 0)
+			throw std::length_error("Native selected save filename exceeds capacity");
+#endif
 	}
 }
 //--------------------------------------------------------------------------//
@@ -432,7 +457,12 @@ void Menu_MapSelect::onListSelection (S32 listID)
 		
 		// get the actual file name back out of the list...
 		U32 num = listSaved->GetDataValue(listSaved->GetCurrentSelection());
+		#if defined(_WIN32)
 		swprintf(szFileName, L"m%07d.mission", num);
+#else
+		if (std::swprintf(szFileName, numChars, L"m%07u.mission", num) < 0)
+			throw std::length_error("Native selected save filename exceeds capacity");
+#endif
 	}
 
 	onButtonPressed(IDS_OK);
@@ -563,12 +593,12 @@ void Menu_MapSelect::addSavedFile (const WIN32_FIND_DATA & data)
 		if (MISSION->GetFileDescription(data.cFileName, string, sizeof(string)/sizeof(wchar_t)))
 		{
 			U32 number, index;
-			char szNumber[7];
+			char szNumber[8]{};
 
 			index = listSaved->AddString(string);
 
 			// get the number associated with the file
-			memcpy(szNumber, &data.cFileName[1], sizeof(char)*7);
+			memcpy(szNumber, &data.cFileName[1], 7);
 			number = atol(szNumber);
 			listSaved->SetDataValue(index, number);
 		}

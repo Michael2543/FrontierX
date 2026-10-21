@@ -196,6 +196,16 @@ public:
                 std::strcmp(file->lpFileName, "..") == 0)
                 return GR_INVALID_PARMS;
             const auto childPath = path_ / file->lpFileName;
+            std::error_code childError;
+            if (std::filesystem::symlink_status(childPath, childError).type() == std::filesystem::file_type::directory &&
+                !childError && file->dwCreationDistribution == OPEN_EXISTING && file->dwDesiredAccess == GENERIC_READ)
+            {
+                std::string error;
+                IFileSystem *child = nullptr;
+                if (!OpenNativeSaveDirectory(childPath, &child, error)) return GR_DATA_NOT_FOUND;
+                *instance = child;
+                return GR_OK;
+            }
             if (file->lpImplementation && std::strcmp(file->lpImplementation, "DOS") == 0)
             {
                 if (file->dwCreationDistribution == OPEN_EXISTING &&
@@ -419,10 +429,11 @@ public:
             for (std::filesystem::directory_iterator it(path_, error), end;
                  !error && it != end; it.increment(error))
             {
-                if (!std::filesystem::is_regular_file(it->symlink_status(error)) || error)
+                const auto kind = it->symlink_status(error).type();
+                if (error || (kind != std::filesystem::file_type::regular && kind != std::filesystem::file_type::directory))
                     continue;
                 const auto name = it->path().filename().string();
-                if (name.size() < sizeof(data->cFileName) && Matches(pattern, name))
+                if (name.size() < sizeof(data->cFileName) && Matches(std::strcmp(pattern, "*.*") == 0 ? "*" : pattern, name))
                     search.names.push_back(name);
             }
             if (error || search.names.empty())
@@ -486,6 +497,13 @@ public:
     BOOL CreateDirectory(LPCTSTR name, LPSECURITY_ATTRIBUTES attributes) override
     {
         if (fileView_ || attributes) return FALSE;
+        if (saveDirectory_)
+        {
+            if (!ValidPhysicalLeaf(name)) return FALSE;
+            std::error_code error;
+            const auto child = path_ / name;
+            return std::filesystem::create_directory(child, error) && !error ? TRUE : FALSE;
+        }
         std::string resolved;
         if (!ResolvePath(directory_, name, false, resolved)) return FALSE;
         std::lock_guard<std::mutex> lock(state_->mutex);
@@ -498,6 +516,14 @@ public:
     BOOL RemoveDirectory(LPCTSTR name) override
     {
         if (fileView_) return FALSE;
+        if (saveDirectory_)
+        {
+            if (!ValidPhysicalLeaf(name)) return FALSE;
+            std::error_code error;
+            const auto child = path_ / name;
+            if (std::filesystem::symlink_status(child, error).type() != std::filesystem::file_type::directory || error) return FALSE;
+            return std::filesystem::remove(child, error) && !error ? TRUE : FALSE;
+        }
         std::string resolved;
         if (!ResolvePath(directory_, name, false, resolved)) return FALSE;
         std::lock_guard<std::mutex> lock(state_->mutex);
@@ -562,8 +588,27 @@ public:
         return TRUE;
     }
     BOOL CopyFile(LPCTSTR, LPCTSTR, BOOL) override { return FALSE; }
-    BOOL MoveFile(LPCTSTR, LPCTSTR) override { return FALSE; }
-    DWORD GetFileAttributes(LPCTSTR) override { return InvalidPosition; }
+    BOOL MoveFile(LPCTSTR source, LPCTSTR target) override
+    {
+        if (!saveDirectory_ || !ValidPhysicalLeaf(source) || !ValidPhysicalLeaf(target)) return FALSE;
+        std::error_code error;
+        const auto kind = std::filesystem::symlink_status(path_ / source, error).type();
+        if (error || (kind != std::filesystem::file_type::directory && kind != std::filesystem::file_type::regular)) return FALSE;
+        const auto destination = std::filesystem::symlink_status(path_ / target, error).type();
+        if (error == std::errc::no_such_file_or_directory) error.clear();
+        if (error || destination != std::filesystem::file_type::not_found) return FALSE;
+        std::filesystem::rename(path_ / source, path_ / target, error);
+        return !error ? TRUE : FALSE;
+    }
+    DWORD GetFileAttributes(LPCTSTR name) override
+    {
+        if (!saveDirectory_ || !ValidPhysicalLeaf(name)) return InvalidPosition;
+        std::error_code error;
+        const auto kind = std::filesystem::symlink_status(path_ / name, error).type();
+        if (error) return InvalidPosition;
+        return kind == std::filesystem::file_type::directory ? FILE_ATTRIBUTE_DIRECTORY :
+            kind == std::filesystem::file_type::regular ? FILE_ATTRIBUTE_NORMAL : InvalidPosition;
+    }
     BOOL SetFileAttributes(LPCTSTR, DWORD) override { return FALSE; }
     DWORD GetLastError() override { return lastError_; }
 
@@ -712,6 +757,11 @@ private:
         std::fprintf(stderr, "Native UTF save failed: %s\n", message);
         std::abort();
     }
+    static bool ValidPhysicalLeaf(const char *name)
+    {
+        return name && *name && !std::strpbrk(name, "/\\") &&
+            std::strcmp(name,".") != 0 && std::strcmp(name,"..") != 0;
+    }
     bool HasParentDirectory(const std::string & path) const
     {
         const auto slash = path.rfind('/');
@@ -747,9 +797,11 @@ private:
     bool FillPhysicalFindData(const std::string & name, WIN32_FIND_DATA * data)
     {
         *data = {};
-        data->dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
         std::error_code error;
-        const auto size = std::filesystem::file_size(path_ / name, error);
+        const auto kind = std::filesystem::symlink_status(path_ / name, error).type();
+        if (error || (kind != std::filesystem::file_type::regular && kind != std::filesystem::file_type::directory)) return false;
+        data->dwFileAttributes = kind == std::filesystem::file_type::directory ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
+        const auto size = kind == std::filesystem::file_type::directory ? 0 : std::filesystem::file_size(path_ / name, error);
         if (error) return false;
         data->nFileSizeLow = size > std::numeric_limits<DWORD>::max() ?
             InvalidPosition : static_cast<DWORD>(size);

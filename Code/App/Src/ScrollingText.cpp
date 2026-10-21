@@ -20,6 +20,8 @@
 #else
 #include "Include/NativeAppGlobals.h"
 #include "Include/NativeAppFont.h"
+#include "Include/NativeAppUiInput.h"
+#define swprintf FrontierX::NativeAppUi::FormatLegacyWide
 #include "Include/NativeAppTextResources.h"
 #include "CQTrace.h"
 #include "IObject.h"
@@ -38,6 +40,7 @@ static std::uint64_t scrollingDraws = 0;
 #endif
 
 #include <wchar.h>
+#include <cstdint>
 
 #include "resource.h"
 #include "TResource.h"
@@ -55,9 +58,7 @@ static std::uint64_t scrollingDraws = 0;
 #include "CQGame.h"
 #include "SoundManager.h"
 #include "SFX.h"
-#if defined(_WIN32)
 #include "IBanker.h"
-#endif
 
 #include "Frame.h"
 #include "Hotkeys.h"
@@ -75,15 +76,11 @@ static std::uint64_t scrollingDraws = 0;
 #endif
 
 #include "CommPacket.h"
-#if defined(_WIN32)
 #include "NetPacket.h"
-#endif
 #if defined(_WIN32)
 #include "MGlobals.h"
 #endif
-#if defined(_WIN32)
 #include "Sector.h"
-#endif
 #if defined(_WIN32)
 #include "ObjList.h"
 #endif
@@ -98,13 +95,18 @@ static std::uint64_t scrollingDraws = 0;
 using namespace da_std;
 #endif
 
-#if defined(_WIN32)
 Frame * __stdcall CreateMenuChat (bool bChatAll);
+#if defined(_WIN32)
 Frame * __stdcall CreatePlayerMenu (void);
+#endif
 Frame * __stdcall CreateMenuDiplomacy (void);
 Frame * __stdcall CreateMenuPlayerChat (void);
-#endif
 Frame * __stdcall CreateMenuObjectives (void);
+#if !defined(_WIN32)
+bool CheckNativeDiplomacyControls(Frame *);
+bool CheckNativePlayerChatControls(Frame *);
+bool CheckNativeQuickChatControls(Frame *);
+#endif
 
 
 //--------------------------------------------------------------------------//
@@ -145,13 +147,14 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 	U32 toolbarHeight;
 	bool bHasFocus;
 
-#if defined(_WIN32)
 	// our chat dlg pointer
 	Frame * pChatDlg;
+#if defined(_WIN32)
 	Frame * pPlayerMenu;
+#endif
 	Frame * pDiplomacyDlg;
 	Frame * pChatFilterDlg;
-#else
+#if !defined(_WIN32)
     bool skipNotificationCue = false;
 #endif
 	Frame * pObjectivesDlg;
@@ -231,7 +234,6 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 
 	}
 
-#if defined(_WIN32)
 	void addStringToPlayerChat (U32 dwResourceID);
 
 	void addStringToPlayerChat (const wchar_t * string);
@@ -247,6 +249,7 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 		}
 	}
 
+#if defined(_WIN32)
 	void deletePlayerMenu (void)
 	{
 		if (pPlayerMenu)
@@ -256,6 +259,7 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 		}
 	}
 
+#endif
 	void deleteDiplomacyMenu (void)
 	{
 		if (pDiplomacyDlg)
@@ -277,7 +281,6 @@ struct DACOM_NO_VTABLE ScrollingText : public IEventCallback, IScrollingText
 	}
 
 	void handleAlliancePacket (ALLIANCE_PACKET * ap);
-#endif
 
 	void deleteObjectivesMenu (void)
 	{
@@ -391,12 +394,11 @@ void ScrollingText::Redraw (void)
 			y += (font_height + 6) * multiply;
 		}
 
-#if defined(_WIN32)
 		if (pChatDlg)
 		{
-			pChatDlg->PostMessage(CQE_CHATDLG_SETYPOS, (void*)y_positionChat);
+			pChatDlg->PostMessage(CQE_CHATDLG_SETYPOS, reinterpret_cast<void *>(static_cast<std::uintptr_t>(y_positionChat)));
 		}
-#else
+#if !defined(_WIN32)
         scrollingDraws += FrontierX::NativeFontDrawCount() - drawsBefore;
 #endif
 
@@ -455,7 +457,6 @@ void ScrollingText::unDraw (void)
 }
 //--------------------------------------------------------------------------//
 //
-#if defined(_WIN32)
 void ScrollingText::addStringToPlayerChat (U32 dwResourceID)
 {
 	wchar_t buffer[256];
@@ -470,7 +471,7 @@ void ScrollingText::addStringToPlayerChat (const wchar_t * string)
 
 	COMPTR<IPlayerChat> playerChat;
 	pChatFilterDlg->GetBase()->QueryInterface("IPlayerChat", playerChat);
-	CQASSERT(playerChat != NULL);
+	CQASSERT(playerChat);
 
 	playerChat->AddTextString(string);
 }
@@ -482,13 +483,12 @@ void ScrollingText::addStringToPlayerChat (const wchar_t * string, const U32 pla
 
 	COMPTR<IPlayerChat> playerChat;
 	pChatFilterDlg->GetBase()->QueryInterface("IPlayerChat", playerChat);
-	CQASSERT(playerChat != NULL);
+	CQASSERT(playerChat);
 
 	playerChat->AddTextString(string, playerID, dplayID);
 }
 //--------------------------------------------------------------------------//
 //
-#endif
 U32 ScrollingText::GetText (void)
 {
 	return dwTextID[0];
@@ -501,14 +501,12 @@ GENRESULT ScrollingText::SetText (U32 dwResourceID)
 	{
 		return GR_INVALID_PARMS;
 	}
-#if defined(_WIN32)
 	if (pChatFilterDlg)
 	{
 		// display the text in the player chat menu
 		addStringToPlayerChat(dwResourceID);
 		return GR_OK;
 	}
-#endif
 
 	TextEntity te;
 	memset(&te, 0, sizeof(TextEntity));
@@ -572,14 +570,12 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 {
 	if (string && *string)
 	{
-#if defined(_WIN32)
 		if (pChatFilterDlg)
 		{
 			// display the text in the player chat menu
 			addStringToPlayerChat(string);
 			return GR_OK;
 		}
-#endif
 
 		TextEntity te;
 		memset(&te, 0, sizeof(TextEntity));
@@ -588,7 +584,7 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 		te.colorID = 0;
 		te.name[0] = 0;
 
-		wcsncpy(te.text, string, CHARCOUNT(te.text));
+		wcsncpy(te.text, string, CHARCOUNT(te.text)-1);
 #if !defined(_WIN32)
         te.text[CHARCOUNT(te.text)-1] = 0;
 #endif
@@ -640,7 +636,6 @@ GENRESULT ScrollingText::SetTextString (const wchar_t *string)
 //
 GENRESULT ScrollingText::SetTextStringEx (const wchar_t *string, U32 playerID, U32 dplayID)
 {
-#if defined(_WIN32)
 	if (string && *string)
 	{
 		if (pChatFilterDlg)
@@ -678,7 +673,7 @@ GENRESULT ScrollingText::SetTextStringEx (const wchar_t *string, U32 playerID, U
 		te.name[sName++] = ' ';
 		te.name[sName++] = '\0';
 
-		wcsncpy(te.text, string, CHARCOUNT(te.text));
+		wcsncpy(te.text, string, CHARCOUNT(te.text)-1);
 
 		// add the text entity to the list
 		teVector.push_back(te);
@@ -701,11 +696,6 @@ GENRESULT ScrollingText::SetTextStringEx (const wchar_t *string, U32 playerID, U
 	}
 	return GR_OK;
 
-#else
-    (void)string; (void)playerID; (void)dplayID;
-    std::fputs("Native attributed chat is not part of the single-player text closure\n", stderr);
-    return GR_GENERIC;
-#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -733,11 +723,11 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		reloadFonts(false);
 		break;
 
-#if defined(_WIN32)
 	case CQE_ADMIRALBAR_ACTIVE:
-		bottomAdmiralEdge = (int)param;
+		bottomAdmiralEdge = static_cast<int>(reinterpret_cast<std::intptr_t>(param));
 		break;
 
+#if defined(_WIN32)
 	case WM_ENTERMENULOOP:
 		bInMenuLoop=1;
 		break;
@@ -749,10 +739,15 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		Redraw();
 		break;
 
-#if defined(_WIN32)
+#if !defined(_WIN32)
+    case CQE_MISSION_CLOSE:
+        teVector.clear();
+#endif
 	case CQE_MISSION_ENDING:
 	case CQE_GAME_ACTIVE:
+#if defined(_WIN32)
 		deletePlayerMenu();
+#endif
 		deleteChatMenu();
 		deleteDiplomacyMenu();
 		deleteChatFilterMenu();
@@ -763,10 +758,11 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		deleteChatMenu();
 		break;
 
-	case CQE_DELETE_PLAYER_MENU:
-		deletePlayerMenu();
-		break;
-
+#if defined(_WIN32)
+    case CQE_DELETE_PLAYER_MENU:
+        deletePlayerMenu();
+        break;
+#endif
 	case CQE_DELETE_DIPLOMACY_MENU:
 		deleteDiplomacyMenu();
 		break;
@@ -780,14 +776,17 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		break;
 
 	case CQE_HOTKEY:
+#if !defined(_WIN32)
+        if (Frame::g_pFocusFrame) break; // Modal owners suspend gameplay hotkeys.
+#endif
 		if (bHasFocus)
-		switch ((U32) param)
+		switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
 		{
 		case IDH_CHATALL:
 			if (DEFAULTS->GetDefaults()->bSpectatorModeOn == false && pChatDlg == NULL && CQFLAGS.bGameActive)
 			{
 				pChatDlg = CreateMenuChat(true);
-				pChatDlg->PostMessage(CQE_CHATDLG_SETYPOS, (void*)y_positionChat);
+				pChatDlg->PostMessage(CQE_CHATDLG_SETYPOS, reinterpret_cast<void *>(static_cast<std::uintptr_t>(y_positionChat)));
 			}
 			break;
 
@@ -795,7 +794,7 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 			if (DEFAULTS->GetDefaults()->bSpectatorModeOn == false && pChatDlg == NULL && CQFLAGS.bGameActive)
 			{
 				pChatDlg = CreateMenuChat(false);
-				pChatDlg->PostMessage(CQE_CHATDLG_SETYPOS, (void*)y_positionChat);
+				pChatDlg->PostMessage(CQE_CHATDLG_SETYPOS, reinterpret_cast<void *>(static_cast<std::uintptr_t>(y_positionChat)));
 			}
 			break;
 
@@ -813,6 +812,7 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 			}
 			break;
 
+#if defined(_WIN32)
 		case IDH_MULTIPLAYER_SCORE:
 			if (pPlayerMenu == NULL && CQFLAGS.bGameActive && MGlobals::GetGameSettings().gameType != CQGAMETYPES::MISSION_DEFINED) // PLAYERID != 0)
 			{
@@ -820,10 +820,13 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 			}
 			else if (MGlobals::GetGameSettings().gameType != CQGAMETYPES::MISSION_DEFINED)
 			{
-				deletePlayerMenu();
+		#if defined(_WIN32)
+		deletePlayerMenu();
+#endif
 			}
 			break;
 
+#endif
 		case IDH_MISSION_OBJ:
 			if (pObjectivesDlg == NULL && CQFLAGS.bGameActive && MGlobals::GetGameSettings().gameType == CQGAMETYPES::MISSION_DEFINED) // PLAYERID != 0)
 			{
@@ -837,38 +840,6 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		}
 		break;
 
-#else
-    case CQE_MISSION_CLOSE:
-        teVector.clear();
-        deleteObjectivesMenu();
-        break;
-    case CQE_MISSION_ENDING:
-    case CQE_GAME_ACTIVE:
-        deleteObjectivesMenu();
-        break;
-    case CQE_DELETE_OBJECTIVES_MENU:
-        deleteObjectivesMenu();
-        break;
-    case CQE_HOTKEY:
-        if (!bHasFocus) break;
-        switch (static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)))
-        {
-        case IDH_MISSION_OBJ:
-            if (MGlobals::GetGameSettings().gameType == CQGAMETYPES::MISSION_DEFINED)
-            {
-                if (!pObjectivesDlg && CQFLAGS.bGameActive)
-                    pObjectivesDlg = CreateMenuObjectives();
-                else
-                    deleteObjectivesMenu();
-            }
-            break;
-        case IDH_CHATALL: case IDH_CHATTEAM: case IDH_CHAT_MENU:
-        case IDH_DIPLOMACY: case IDH_MULTIPLAYER_SCORE:
-            std::fputs("Native scrolling-text menus are not ported\n", stderr);
-            return GR_GENERIC;
-        }
-        break;
-#endif
 	case CQE_KILL_FOCUS:
 		bHasFocus = 0;
 		break;
@@ -877,7 +848,6 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		bHasFocus = 1;
 		break;
 
-#if defined(_WIN32)
 	case CQE_NETPACKET:
 		if (CQFLAGS.bGameActive)
 		{
@@ -936,7 +906,6 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 		}
 		break;
 
-#endif
 	case CQE_UPDATE:
 		#if defined(_WIN32)
         onUpdate(S32(param) >> 10);
@@ -951,7 +920,6 @@ GENRESULT ScrollingText::Notify (U32 message, void *param)
 }
 //--------------------------------------------------------------------------//
 //
-#if defined(_WIN32)
 void ScrollingText::handleAlliancePacket (ALLIANCE_PACKET * ap)
 {
 	const U32 oldOneWayMask = MGlobals::GetOneWayAllyMask(ap->playerID);
@@ -1023,7 +991,6 @@ void ScrollingText::handleAlliancePacket (ALLIANCE_PACKET * ap)
 		}
 	}
 }
-#endif
 //--------------------------------------------------------------------------//
 //
 void ScrollingText::reloadFonts (bool bLoad)
@@ -1104,6 +1071,37 @@ static _scrollingText startup;
 namespace FrontierX
 {
 std::uint64_t NativeScrollingTextDrawCount() { return scrollingDraws; }
+bool CheckNativeSkirmishSocialMenus(unsigned stage)
+{
+    auto *owner=static_cast<ScrollingText *>(SCROLLTEXT);
+    if (!owner) return false;
+    switch(stage)
+    {
+    case 0:
+        owner->Notify(CQE_HOTKEY,reinterpret_cast<void *>(std::uintptr_t(IDH_DIPLOMACY)));
+        return owner->pDiplomacyDlg!=nullptr;
+    case 1:
+        return CheckNativeDiplomacyControls(owner->pDiplomacyDlg);
+    case 2:
+        owner->Notify(CQE_DELETE_DIPLOMACY_MENU);
+        return !owner->pDiplomacyDlg;
+    case 3:
+        owner->Notify(CQE_HOTKEY,reinterpret_cast<void *>(std::uintptr_t(IDH_CHAT_MENU)));
+        return owner->pChatFilterDlg!=nullptr;
+    case 4:
+        return CheckNativePlayerChatControls(owner->pChatFilterDlg);
+    case 5:
+        owner->Notify(CQE_DELETE_CHATFILTER_MENU);
+        return !owner->pChatFilterDlg;
+    case 6:
+        owner->Notify(CQE_HOTKEY,reinterpret_cast<void *>(std::uintptr_t(IDH_CHATALL)));
+        return owner->pChatDlg!=nullptr;
+    case 7:
+        return CheckNativeQuickChatControls(owner->pChatDlg) && !owner->pChatDlg;
+    default:
+        return false;
+    }
+}
 IScrollingText *CreateNativeSourceScrollingText(bool skipNotificationCue)
 {
     if (!EVENTSYS) return nullptr;

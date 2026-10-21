@@ -30,6 +30,9 @@
 #include <View2d.h>
 #include <algorithm>
 #include <stdlib.h>
+#if !defined(_WIN32)
+#include <cstdint>
+#endif
 
 #if !defined(_WIN32)
 static constexpr U8 GetRValue(COLORREF color) { return static_cast<U8>(color); }
@@ -292,6 +295,20 @@ BOOL32 __stdcall RectIntersects (const RECT & _rect, struct ViewPoint * points, 
 	//
 	if (SCREENRESX != SCREEN_WIDTH || SCREENRESY != SCREEN_HEIGHT)
 	{
+#if !defined(_WIN32)
+        const auto toIdeal=[](S32 value,U32 ideal,U32 actual) {
+            return static_cast<S32>(std::int64_t(value)*ideal/actual);
+        };
+        rect.left=toIdeal(_rect.left,SCREEN_WIDTH,SCREENRESX);
+        rect.right=toIdeal(_rect.right,SCREEN_WIDTH,SCREENRESX);
+        rect.top=toIdeal(_rect.top,SCREEN_HEIGHT,SCREENRESY);
+        rect.bottom=toIdeal(_rect.bottom,SCREEN_HEIGHT,SCREENRESY);
+        for (i=0;i<numPoints;++i)
+        {
+            points[i].x=toIdeal(points[i].x,SCREEN_WIDTH,SCREENRESX);
+            points[i].y=toIdeal(points[i].y,SCREEN_HEIGHT,SCREENRESY);
+        }
+#else
 		rect.left   = REAL2IDEALX(_rect.left);
 		rect.right  = REAL2IDEALX(_rect.right);
 		rect.top    = REAL2IDEALY(_rect.top);
@@ -302,6 +319,7 @@ BOOL32 __stdcall RectIntersects (const RECT & _rect, struct ViewPoint * points, 
 			points[i].x = REAL2IDEALX(points[i].x);
 			points[i].y = REAL2IDEALY(points[i].y);
 		}
+#endif
 	}
 	else
 		rect = _rect;
@@ -365,6 +383,25 @@ BOOL32 __stdcall RectIntersects (const RECT & _rect, struct ViewPoint * points, 
 Done:
 	return result;
 }
+#if !defined(_WIN32)
+// Existing native shell lifecycle check: real highlight rasterization with
+// the large projected coordinate observed after a 4K Portal reload.
+bool CheckNativeSelectionProjection()
+{
+    const S32 width=SCREEN_WIDTH,height=SCREEN_HEIGHT;
+    const U32 realWidth=SCREENRESX,realHeight=SCREENRESY;
+    SCREEN_WIDTH=640; SCREEN_HEIGHT=480; SCREENRESX=3840; SCREENRESY=2160;
+    ViewPoint points[]{{-4734111,0},{100,0},{100,100},{-4734111,100}};
+    const RECT inside{10,10,50,50};
+    const bool intersects=RectIntersects(inside,points,4)!=0;
+    const bool scaled=points[0].x==-789018 && points[2].y==22;
+    ViewPoint outsidePoints[]{{-4734111,0},{100,0},{100,100},{-4734111,100}};
+    const RECT outside{1000,1000,1100,1100};
+    const bool misses=RectIntersects(outside,outsidePoints,4)==0;
+    SCREEN_WIDTH=width; SCREEN_HEIGHT=height; SCREENRESX=realWidth; SCREENRESY=realHeight;
+    return intersects && scaled && misses;
+}
+#endif
 #pragma warning (default : 4701)	// variable may be used before initialized
 //--------------------------------------------------------------------------//
 //-------------------------------OBJECT Methods-----------------------------//

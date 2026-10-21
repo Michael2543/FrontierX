@@ -764,10 +764,19 @@ void BuildButton::draw (void)
 		U32 num = screenRect.right-screenRect.left;
 		num = num/3;
 		U32 num2 = num/3;
-		DA::RectangleFill(0, screenRect.left+num2, screenRect.top+num, screenRect.left+num2, screenRect.bottom-num, RGB(64,200,64));
-		DA::RectangleFill(0, screenRect.left+num, screenRect.top+num2, screenRect.right-num, screenRect.top+num2, RGB(64,200,64));
-		DA::RectangleFill(0, screenRect.right-num2, screenRect.top+num, screenRect.right-num2, screenRect.bottom-num, RGB(64,200,64));
-		DA::RectangleFill(0, screenRect.left+num, screenRect.bottom-num2, screenRect.right-num, screenRect.bottom-num2, RGB(64,200,64));
+#if !defined(_WIN32)
+        // Widescreen HUD scaling makes a square icon non-square in pixels.
+        // Derive vertical marker insets from height, not the scaled width.
+        const U32 numY=(screenRect.bottom-screenRect.top)/3;
+        const U32 num2Y=numY/3;
+#else
+        const U32 numY=num;
+        const U32 num2Y=num2;
+#endif
+		DA::RectangleFill(0, screenRect.left+num2, screenRect.top+numY, screenRect.left+num2, screenRect.bottom-numY, RGB(64,200,64));
+		DA::RectangleFill(0, screenRect.left+num, screenRect.top+num2Y, screenRect.right-num, screenRect.top+num2Y, RGB(64,200,64));
+		DA::RectangleFill(0, screenRect.right-num2, screenRect.top+numY, screenRect.right-num2, screenRect.bottom-numY, RGB(64,200,64));
+		DA::RectangleFill(0, screenRect.left+num, screenRect.bottom-num2Y, screenRect.right-num, screenRect.bottom-num2Y, RGB(64,200,64));
 	}
 
 	if((stall == NO_MONEY) && noMoneyShape != 0)

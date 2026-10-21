@@ -10,8 +10,25 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativePlayerProfiles.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+extern IMenuResource *MENU;
+#endif
 
 #include <stdio.h>
 
@@ -25,11 +42,13 @@
 #include "Mission.h"
 #include "SoundManager.h"
 #include "MusicManager.h"
-#include "hotkeys.h"
+#include "Hotkeys.h"
 #include "IGameProgress.h"
 
+#if defined(_WIN32)
 #include <dplay.h>
 #include "ZoneLobby.h"
+#endif
 
 #define NAME_REG_KEY		"CQPlayerName"
 #define WIDTH_REG_KEY		"CQWindowWidth"
@@ -51,7 +70,9 @@ U32 __stdcall DoMenu_help (Frame * parent, const GT_MENU1 & data);
 
 #define ZONE_QUIT 10 //also defined in menu_zone.cpp
 
+#if defined(_WIN32)
 Frame * Frame::g_pFocusFrame;
+#endif
 
 static bool g_bSkipIntroMovies = false;
 
@@ -208,6 +229,7 @@ struct Menu1 : public DAComponent<dummy_menu1>
 			}
 			break;
 
+#if defined(_WIN32)
 		case IDS_MULTI_PLAYER:
 			if (checkForName())
 			{
@@ -234,6 +256,7 @@ struct Menu1 : public DAComponent<dummy_menu1>
 			}
 			break;
 
+#endif
 		case IDS_OPTIONS:
 			if (checkForName())
 			{
@@ -250,6 +273,9 @@ struct Menu1 : public DAComponent<dummy_menu1>
 
 
 		case IDS_INTRODUCTION:
+#if !defined(_WIN32) && defined(FRONTIERX_HAVE_VIDEO_DECODER)
+			if (bHasFocus) MovieScreen(this, "cq_intro.mpg");
+#endif
 /*			setMenuVisible(false);
 			background->SetVisible(false);
 			if (bHasFocus)
@@ -338,7 +364,13 @@ GENRESULT Menu1::OnUpdate (struct IDocument *doc, const C8 *message, void *parm)
 //
 GENRESULT Menu1::Notify (U32 message, void *param)
 {
+	#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	const MessageFields *msg = &fields;
+#endif
 
 	switch (message)
 	{
@@ -390,9 +422,15 @@ void Menu1::createFolder (wchar_t * szNameWide)
 
 	// the new path +directory
 	char szPathAnsi[256];
-	wsprintf(szPathAnsi, "%s%s", S_GAME_DIR_A, szNameAnsi);
+	sprintf(szPathAnsi, "%s%s", S_GAME_DIR_A, szNameAnsi);
 
+#if defined(_WIN32)
 	::CreateDirectory(szPathAnsi, 0);
+#else
+	if (!FrontierX::CreateNativePlayerProfile(szNameAnsi) || !FrontierX::SelectNativePlayerProfile(szNameAnsi))
+		throw std::runtime_error("Native player profile creation failed");
+	GAMEPROGRESS->ReInitialize();
+#endif
 }
 //----------------------------------------------------------------------------------//
 //
@@ -410,6 +448,7 @@ const bool Menu1::checkForName (void)
 		// this would happen if the player unistalled Conquest but kept the saved games around
 
 		// just find the first directory within the SavedGame diretory and use that for the players name...
+#if defined(_WIN32)
 		WIN32_FIND_DATA findFileData;
 		HANDLE hFind;
 		
@@ -453,6 +492,7 @@ const bool Menu1::checkForName (void)
 				result = 1;
 			}
 		}
+#endif
 	}
 
 	if (!result || !buffer[0])
@@ -528,8 +568,21 @@ void Menu1::setStateInfo (void)
 	help->SetControlID(IDS_STATIC_HELP);
 	quit->SetControlID(IDS_QUIT);
 
+#if defined(_WIN32)
 	intro->EnableButton(false);
-	staticIntro->SetTextColor(RGB(100,100,100));
+#else
+	multi->EnableButton(false);
+#if defined(FRONTIERX_HAVE_VIDEO_DECODER)
+    intro->EnableButton(!CQFLAGS.bSkipMovies);
+#else
+    intro->EnableButton(false);
+#endif
+#endif
+#if defined(_WIN32)
+    staticIntro->SetTextColor(RGB(100,100,100));
+#else
+    staticIntro->SetTextColor(RGB(255,255,255));
+#endif
 
 	DEFAULTS->GetDefaults()->bEditorMode = 0;
 	MENU->InitPreferences();
@@ -556,6 +609,7 @@ void Menu1::setStateInfo (void)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 bool Menu1::find3DCard (void)
 {
 	HANDLE hSection;
@@ -635,10 +689,15 @@ bool Menu1::find3DCard (void)
 }
 //--------------------------------------------------------------------------//
 //
+#else
+bool Menu1::find3DCard() { DEFAULTS->GetDefaults()->bHardwareRender = true; return true; }
+#endif
 void Menu1::verifyPlayerNames (void)
 {
 	// these functions should fail 99% of the time - we're just making sure the SavedGame directory is around
+#if defined(_WIN32)
 	::CreateDirectory("SavedGame\\", 0);
+#endif
 
 	// make sure that we have the proper directories set up in the single player and multiplayer folders
 	char szName[128];
@@ -673,11 +732,17 @@ void Menu1::verifyPlayerNames (void)
 	}
 
 	// we've got a name so make sure the directories are set up and good (create them if you have to)
+#if defined(_WIN32)
 	wsprintf(szDirectory, "%s%s", S_GAME_DIR_A, szName);
 	::CreateDirectory(szDirectory, 0);
 	wsprintf(szDirectory, "%s%s", M_GAME_DIR_A, szName);
 	::CreateDirectory(szDirectory, 0);
 
+	#endif
+#if !defined(_WIN32)
+	if (!FrontierX::SelectNativePlayerProfile(szName)) throw std::runtime_error("Native player profile restoration failed");
+	GAMEPROGRESS->ReInitialize();
+#endif
 	// now we are going to check that there is always a match between what's in SinglePlayer and what's in
 	// multiplayer.  We'll create directories if we have to
 }
@@ -747,6 +812,7 @@ void Menu1::init (void)
 //--------------------------------------------------------------------------//
 // command line switch included /lobby
 //
+#if defined(_WIN32)
 void Menu1::initLobby (void)
 {
 	S32 lobbied;
@@ -831,6 +897,9 @@ void Menu1::getSessionNames (wchar_t szPlayerName[64], wchar_t szSessionName[128
 	}
 }
 //--------------------------------------------------------------------------//
+#else
+void Menu1::initLobby() { throw std::runtime_error("Online lobby is outside native offline scope"); }
+#endif
 //
 U32 __stdcall CreateMenu1 (bool bSkipMenus)
 {

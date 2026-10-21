@@ -4,6 +4,7 @@
 
 #include "Include/NativeAppGlobals.h"
 #include "Include/NativeRetailFlagshipData.h"
+#include "Include/NativeWormholeState.h"
 #include "CQTrace.h"
 #include "resource.h"
 #if defined(__GNUC__)
@@ -542,6 +543,21 @@ static bool checkRetailFlagshipDecoder()
 
 int main()
 {
+    // Active wormhole reload lacked any portal storage. Pin the versioned
+    // sidecar's fixed widths and reject corrupt live strip state at its boundary.
+    NativeWormholeVisual worm{};
+    worm.version=1; worm.systemID=1; worm.playerID=1; worm.radius=1200;
+    worm.numStrips=1;
+    worm.strips[0]={1,39,0.75f,2.5f,24,0.2f,-0.5f};
+    if (!ValidateNativeWormholeVisual(worm)) return 6;
+    worm.strips[0].startIndex=40;
+    if (ValidateNativeWormholeVisual(worm)) return 6;
+    worm.strips[0].startIndex=0; worm.numStrips=2;
+    if (ValidateNativeWormholeVisual(worm)) return 6;
+    worm.numStrips=1; worm.version=2;
+    if (ValidateNativeWormholeVisual(worm)) return 6;
+    worm.version=1; worm.radius=0;
+    if (ValidateNativeWormholeVisual(worm)) return 6;
     if (!checkRetailFlagshipDecoder())
     {
         std::cerr << "Retail flagship decoder accepted invalid data or changed failed output\n";

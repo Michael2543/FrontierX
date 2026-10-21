@@ -19,6 +19,7 @@
 #else
 #include "CQTrace.h"
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeShipVisualTransform.h"
 #include <ICamera.h>
 struct IMeshArchetype;
 #endif
@@ -246,6 +247,10 @@ void UnbornMeshList::RenderMeshAt(TRANSFORM trans,U32 archID,U32 playerID,U8 red
 	{
 		setMeshColor(mesh,playerID,red,green,blue,alpha);
 	}
+#if !defined(_WIN32)
+	const BASIC_DATA *data = static_cast<const BASIC_DATA *>(ARCHLIST->GetArchetypeData(mesh->pArchetype));
+	trans = NativeShipVisualTransform(trans, data->objClass == OC_SPACESHIP);
+#endif
 	setMeshTransform(mesh,trans);
 #if defined(_WIN32)
 	TreeRender(mesh->mc);

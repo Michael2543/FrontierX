@@ -245,6 +245,25 @@ public:
         return TRUE;
     }
 
+    bool RenamePlayerSettings(const char *previous,const char *name)
+    {
+        if (!previous || !name || !*previous || !*name) return false;
+        const auto before=NativeUserSettingsOwner::PlayerPrefix(previous);
+        const auto after=NativeUserSettingsOwner::PlayerPrefix(name);
+        if (before==after) return true;
+        NativeUserSettings settings;
+        std::string error;
+        const auto loaded=LoadNativeUserSettingsAtPrefix(preferences_.store,settings,before,&error);
+        if (loaded==NativeUserSettingsLoadResult::NoSettings) return true;
+        if (loaded!=NativeUserSettingsLoadResult::Loaded) return false;
+        PreferenceStore updated=preferences_.store;
+        if (!StoreNativeUserSettingsAtPrefix(settings,updated,after,&error)) return false;
+        updated.RemovePrefix(before);
+        if (!Save(updated)) return false;
+        preferences_.store=std::move(updated);
+        return true;
+    }
+
     BOOL32 DeletePlayerDefaults(const char * player_name) override
     {
         if (!player_name || !player_name[0] || std::strlen(player_name) >= 64) return FALSE;
@@ -467,6 +486,12 @@ private:
     std::filesystem::path path_;
     StartupPreferences preferences_;
 };
+}
+
+bool RenameNativePlayerDefaults(IUserDefaults *defaults,const char *previous,const char *name)
+{
+    auto *native=dynamic_cast<NativeUserDefaults *>(defaults);
+    return native && native->RenamePlayerSettings(previous,name);
 }
 
 void RegisterNativeUserDefaults(

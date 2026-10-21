@@ -578,6 +578,8 @@ int main()
         Require(window->Startup(nullptr, "FrontierX native window probe", ExitHandler,
             WMF_PREVENT_MULTIPLE, nullptr) == 1, "native window startup failed");
         Require(window->GetWindowHandle() != 0, "native window token is zero");
+        Require(FrontierX::SetNativeWindowMinimumSize(window,400,300) &&
+            !FrontierX::SetNativeWindowMinimumSize(window,0,300),"native minimum client bounds failed");
         Require(window->SetWindowPos(400, 300,
             WMF_ALLOW_WINDOW_RESIZE | WMF_CENTER) == TRUE,
             "native window configuration failed");
@@ -586,6 +588,17 @@ int main()
         window->GetClientArea(client);
         Require(client.w == 400 && client.h == 300,
             "native client-area dimensions changed");
+        FrontierX::NativeWindowMode mode;
+        Require(FrontierX::GetNativeWindowMode(window,mode) && !mode.fullscreen &&
+            mode.width==400 && mode.height==300,"native windowed mode query failed");
+        mode.fullscreen=true;
+        Require(FrontierX::SetNativeWindowMode(window,mode) &&
+            FrontierX::GetNativeWindowMode(window,mode) && mode.fullscreen &&
+            mode.width==400 && mode.height==300,"native fullscreen lost restored window size");
+        mode.fullscreen=false;
+        Require(FrontierX::SetNativeWindowMode(window,mode),"native windowed restoration failed");
+        window->GetClientArea(client);
+        Require(client.w==400 && client.h==300,"native restored client size changed");
         window->SetCursorPos(17, 23);
         S32 cursor_x = 0;
         S32 cursor_y = 0;

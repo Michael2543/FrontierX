@@ -99,6 +99,20 @@ U32 starTreeY[STAR_MAX_TREE][3] = {{2,0,0},{2,0,1},{4,3,5},{6,7,8},{6,8,8},{6,8,
 //the random numbers caqn be understood to be in fixed 15 floating point.
 #define FIX15 15 
 
+#if !defined(_WIN32)
+// GetRand consumes 15-bit fixed fractions. The host libc rand range is 31 bits.
+// Keep the Windows CRT recurrence local to this source map-generation owner.
+static U32 nativeMapRandomState=1;
+static void NativeMapSeed(U32 seed) { nativeMapRandomState=seed; }
+static U32 NativeMapRand()
+{
+    nativeMapRandomState=nativeMapRandomState*214013U+2531011U;
+    return (nativeMapRandomState>>16U)&0x7fffU;
+}
+#define rand NativeMapRand
+#define srand NativeMapSeed
+#endif
+
 static U32 linearFunc()
 {
 	return rand();

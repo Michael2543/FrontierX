@@ -157,7 +157,14 @@ int main()
                 live->scrollRate == 2.5F && live->fogMode == FOGOWAR_NONE &&
                 live->bWindowMode && live->bSubtitles && live->maxProjectiles == 73,
             "native schema-to-live-defaults restart mapping failed");
-        Require(defaults->DeletePlayerDefaults("Admiral") == TRUE,
+        Require(FrontierX::RenameNativePlayerDefaults(defaults,"Admiral","Renamed Admiral"),
+            "native player settings rename failed");
+        Require(defaults->SetStringInRegistry("CQPlayerName","Renamed Admiral") && defaults->LoadDefaults(),
+            "renamed native player settings could not be selected");
+        Require(IUserDefaults::GetDefaults()->iMainWidth==1280 &&
+                IUserDefaults::GetDefaults()->maxProjectiles==73,
+            "native player settings were lost during rename");
+        Require(defaults->DeletePlayerDefaults("Renamed Admiral") == TRUE,
             "native player-default deletion failed");
         defaults->ResetToDefaultSettings();
         live = IUserDefaults::GetDefaults();

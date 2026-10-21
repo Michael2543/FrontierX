@@ -83,6 +83,7 @@ public:
     bool IsTexture(std::uint32_t handle) const;
     static GENRESULT ClearFrameCallback(void * context, U32 color, U32 depth);
     static GENRESULT PresentFrameCallback(void * context);
+    static GENRESULT GammaCallback(void *context, float gamma);
     bool BeginFrame(std::string & error);
     std::size_t FrameSubmissionCount() const;
     bool Present(bool & presented, std::string & error);

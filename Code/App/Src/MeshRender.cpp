@@ -875,6 +875,49 @@ void TreeRenderNativePuffy(MeshInfo **mi, int num_children, const Vector &scale,
     const Transform correction = NativeShipModelAxisCorrection();
     RenderPuffyTree(mi, num_children, scale, percent, directShipHull ? &correction : nullptr);
 }
+
+void TreeRenderNativeCloak(MeshChain &mc, const Transform &world, bool directShipHull,
+                           SINGLE shiftX, SINGLE shiftY, U32 color)
+{
+    const Transform visual = NativeShipVisualTransform(world, directShipHull);
+    const TRANSFORM orientation = world;
+    const SINGLE heading = orientation.get_yaw();
+    for (int child = 0; child < mc.numChildren; ++child)
+    {
+        MeshInfo *info = mc.mi[child];
+        if (!info || !info->bHasMesh || !info->mr || !info->mr->pos_cnt) continue;
+        const Transform node = ENGINE->get_transform(info->instanceIndex);
+        const Transform model = visual * world.get_inverse() * node;
+        CAMERA->SetModelView(&model);
+        std::vector<RPVertex> vertices;
+        int base = 0;
+        IRenderMaterial *group = nullptr;
+        while ((group = info->mr->GetNextFaceGroup(group)) != nullptr)
+        {
+            for (U32 face = 0; face < group->new_face_cnt; ++face)
+            {
+                if (info->faceRenders[group->face_offset + face] & (FS__HIDDEN | FS__BUILDING)) continue;
+                for (int corner = 0; corner < 3; ++corner)
+                {
+                    const U32 index = base + group->index_list[3 * face + corner];
+                    if (index >= info->mr->pos_cnt) throw std::runtime_error("Native cloak vertex exceeds extent");
+                    RPVertex vertex = {};
+                    vertex.pos = info->mr->pos_list[index];
+                    const SINGLE u = vertex.pos.x * 0.0012f, v = vertex.pos.z * 0.0012f;
+                    vertex.u = -u*cos(heading)-v*sin(heading)+shiftX;
+                    vertex.v = u*sin(heading)-v*cos(heading)+shiftY;
+                    vertex.color = color;
+                    vertices.push_back(vertex);
+                }
+            }
+            base += group->vert_cnt;
+        }
+        if (!vertices.empty() && BATCH->draw_primitive(D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX,
+                vertices.data(), vertices.size(), 0) != GR_OK)
+            throw std::runtime_error("Native cloak surface submission rejected");
+    }
+}
+
 #endif
 
 MeshRender::MeshRender()

@@ -60,6 +60,18 @@ struct IDrawAgent;
 #include "ObjSet.h"
 #include "Camera.h"
 #include "IWormholeBlast.h"
+#if !defined(_WIN32)
+#include "Include/NativeWormholeState.h"
+#include "Include/MScript.h"
+#include "Include/MPartRef.h"
+#include <cmath>
+#include <stdexcept>
+#include <memory>
+#include <string>
+#include <vector>
+
+
+#endif
 
 #include <ENGINE.H>
 #include <TSmartPointer.h>
@@ -84,6 +96,57 @@ struct WormLauncherArchetype
 
 #define LAST_CHANCE_TIME 15
 
+#if !defined(_WIN32)
+struct NativeWormholeLauncherState
+{
+    U32 version;
+    SINGLE accumedDamage,circleTime;
+    U32 portalMask;
+    NativeWormholeVisual portals[2];
+};
+static_assert(sizeof(NativeWormholeLauncherState)==1304);
+static_assert(sizeof(WORMHOLE_LAUNCHER_SAVELOAD)==112);
+
+static bool WriteWormholeRecord(IFileSystem *directory,const char *name,const void *data,U32 size)
+{
+    DAFILEDESC descriptor(name);
+    descriptor.lpImplementation="DOS";
+    descriptor.dwDesiredAccess=GENERIC_READ|GENERIC_WRITE;
+    descriptor.dwShareMode=0; descriptor.dwCreationDistribution=CREATE_ALWAYS;
+    COMPTR<IFileSystem> file;
+    DWORD written=0;
+    return directory && directory->CreateInstance(&descriptor,file)==GR_OK &&
+        file->WriteFile(0,data,size,&written,0) && written==size;
+}
+
+static bool ReadWormholeRecord(IFileSystem *directory,const char *name,void *data,U32 size)
+{
+    DAFILEDESC descriptor(name);
+    descriptor.lpImplementation="DOS";
+    COMPTR<IFileSystem> file;
+    DWORD read=0;
+    return directory && directory->CreateInstance(&descriptor,file)==GR_OK &&
+        file->GetFileSize(0,nullptr)==size && file->ReadFile(0,data,size,&read,0) && read==size;
+}
+
+static bool ValidWormholeState(const WORMHOLE_LAUNCHER_SAVELOAD &state,const NativeWormholeLauncherState &extra)
+{
+    U32 mode=0;
+    std::memcpy(&mode,&state.mode,sizeof(mode));
+    if (mode>WORMHOLE_LAUNCHER_SAVELOAD::WORM_DONE || state.numTargets>MAX_WORM_VICTIMS ||
+        state.targetsLeft>state.numTargets || !std::isfinite(state.lastChanceTimer) ||
+        extra.version!=1 || extra.portalMask>3 ||
+        !std::isfinite(extra.accumedDamage) || extra.accumedDamage<0 ||
+        !std::isfinite(extra.circleTime) || extra.circleTime<0 || extra.circleTime>CIRC_TIME)
+        return false;
+    if (mode==WORMHOLE_LAUNCHER_SAVELOAD::WORM_WORKING &&
+        (!state.workingID || !state.targetSystemID || extra.portalMask!=3)) return false;
+    for (unsigned i=0;i<2;++i)
+        if ((extra.portalMask&(1U<<i)) && !ValidateNativeWormholeVisual(extra.portals[i])) return false;
+    return true;
+}
+#endif
+
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
@@ -107,6 +170,10 @@ struct _NO_VTABLE WormholeLauncher : IBaseObject, ILauncher, ISaveLoad, WORMHOLE
 	SINGLE accumedDamage;
 
 	SINGLE circleTime;
+#if !defined(_WIN32)
+    NativeWormholeLauncherState restoredState{};
+    bool restorePending=false;
+#endif
 
 	//----------------------------------
 	//----------------------------------
@@ -244,19 +311,62 @@ struct _NO_VTABLE WormholeLauncher : IBaseObject, ILauncher, ISaveLoad, WORMHOLE
 #if defined(_WIN32)
 		return TRUE;
 #else
-		// The source has no corresponding loader or persisted portal objects.
-		CQERROR0("WormholeLauncher cannot save: original portal persistence is unimplemented");
-		return FALSE;
+        NativeWormholeLauncherState extra{};
+        extra.version=1; extra.accumedDamage=accumedDamage; extra.circleTime=circleTime;
+        if (hole1) { extra.portalMask|=1; if (!CaptureNativeWormholeVisual(hole1,extra.portals[0])) return FALSE; }
+        if (hole2) { extra.portalMask|=2; if (!CaptureNativeWormholeVisual(hole2,extra.portals[1])) return FALSE; }
+        const auto &base=*static_cast<WORMHOLE_LAUNCHER_SAVELOAD *>(this);
+        return ValidWormholeState(base,extra) &&
+            WriteWormholeRecord(file,"WORMHOLE_LAUNCHER_SAVELOAD",&base,sizeof(base)) &&
+            WriteWormholeRecord(file,"NativeWormholeStateV1",&extra,sizeof(extra));
 #endif
 	}
 
 	virtual BOOL32 Load (struct IFileSystem * file)
 	{
+#if !defined(_WIN32)
+        WORMHOLE_LAUNCHER_SAVELOAD state{};
+        NativeWormholeLauncherState extra{};
+        U8 bytes[sizeof(state)]{};
+        if (!ReadWormholeRecord(file,"WORMHOLE_LAUNCHER_SAVELOAD",bytes,sizeof(bytes)) ||
+            !MISSION || MISSION->CorrelateSymbol("WORMHOLE_LAUNCHER_SAVELOAD",bytes,&state)!=GR_OK ||
+            !ReadWormholeRecord(file,"NativeWormholeStateV1",&extra,sizeof(extra)) ||
+            !ValidWormholeState(state,extra) || hole1 || hole2 || restorePending) return FALSE;
+        *static_cast<WORMHOLE_LAUNCHER_SAVELOAD *>(this)=state;
+        accumedDamage=extra.accumedDamage; circleTime=extra.circleTime;
+        restoredState=extra; restorePending=true;
+        return TRUE;
+#else
 		return FALSE;
+#endif
 	}
 	
 	virtual void ResolveAssociations()
 	{
+#if !defined(_WIN32)
+        if (!restorePending) return;
+        for (unsigned i=0;i<numTargets;++i)
+            if (targetIDs[i]) OBJLIST->FindObject(targetIDs[i],NONSYSVOLATILEPTR,targets[i],IShipMoveID);
+        auto *arch=static_cast<WormLauncherArchetype *>(ARCHLIST->GetArchetypeHandle(pArchetype));
+        std::unique_ptr<IBaseObject> restoredPortals[2];
+        for (unsigned i=0;i<2;++i)
+        {
+            if (!(restoredState.portalMask&(1U<<i))) continue;
+            restoredPortals[i].reset(ARCHLIST->CreateInstance(arch->pWormEffectType));
+            OBJPTR<IWormholeBlast> portal;
+            if (!restoredPortals[i] || !restoredPortals[i]->QueryInterface(IWormholeBlastID,portal,NONSYSVOLATILEPTR) ||
+                !RestoreNativeWormholeVisual(portal,restoredState.portals[i]))
+                throw std::runtime_error("Native saved wormhole portal restoration failed");
+        }
+        for (unsigned i=0;i<2;++i)
+            if (restoredPortals[i])
+            {
+                auto &portal=i==0 ? hole1 : hole2;
+                restoredPortals[i]->QueryInterface(IWormholeBlastID,portal,NONSYSVOLATILEPTR);
+                OBJLIST->AddObject(restoredPortals[i].release());
+            }
+        restorePending=false;
+#endif
 	}
 
 	/* WormholeLauncher methods */
@@ -691,6 +801,152 @@ inline IBaseObject * createWormholeLauncher (PARCHETYPE pArchetype)
 
 	return wormholeLauncher;
 }
+#if !defined(_WIN32)
+// Explicit skirmish diagnostic: synthetic active launcher state, real factories,
+// schema correlation, filesystem, portal placement and association restoration.
+// It issues no ship orders and does not establish actual ability acceptance.
+bool CheckNativeWormholePersistence(IFileSystem *directory)
+{
+    struct FindLauncher : IArchetypeEnum
+    {
+        std::string name;
+        BOOL32 __stdcall ArchetypeEnum(const char *candidate,void *data,U32 bytes) override
+        {
+            U32 words[2]{};
+            if (bytes>=sizeof(BASIC_DATA)+sizeof(U32))
+            {
+                std::memcpy(&words[0],data,sizeof(U32));
+                std::memcpy(&words[1],static_cast<const char *>(data)+sizeof(BASIC_DATA),sizeof(U32));
+            }
+            if (bytes==sizeof(BT_WORMHOLE_LAUNCHER) && words[0]==OC_LAUNCHER && words[1]==LC_WORMHOLE_LAUNCH)
+                name=candidate;
+            else if (words[0]==OC_LAUNCHER && words[1]==LC_WORMHOLE_LAUNCH)
+                std::fprintf(stderr,"Native wormhole launcher extent=%u expected=%zu\n",bytes,sizeof(BT_WORMHOLE_LAUNCHER));
+            return TRUE;
+        }
+    } found;
+    if (!directory || !MISSION || !ARCHLIST->EnumerateArchetypeData(&found) || found.name.empty())
+    { std::fputs("Native wormhole diagnostic could not locate a validated launcher record\n",stderr); return false; }
+    PARCHETYPE archetype=ARCHLIST->LoadArchetype(found.name.c_str());
+    if (!archetype) { std::fputs("Native wormhole diagnostic archetype load failed\n",stderr); return false; }
+    std::unique_ptr<IBaseObject> sourceObject(ARCHLIST->CreateInstance(archetype));
+    std::unique_ptr<IBaseObject> restoredObject(ARCHLIST->CreateInstance(archetype));
+    auto *source=dynamic_cast<WormholeLauncher *>(sourceObject.get());
+    auto *restored=dynamic_cast<WormholeLauncher *>(restoredObject.get());
+    if (!source || !restored) { std::fputs("Native wormhole diagnostic factory type mismatch\n",stderr); return false; }
+    struct PortalCleanup
+    {
+        std::vector<IBaseObject *> objects;
+        ~PortalCleanup() { for (auto *object : objects) delete object; }
+    } cleanup;
+    IBaseObject *anchor=OBJLIST->GetObjectList();
+    while (anchor && (!anchor->GetSystemID() || !anchor->GetPlayerID())) anchor=anchor->next;
+    if (!anchor) { std::fputs("Native wormhole diagnostic anchor absent\n",stderr); return false; }
+    auto *arch=static_cast<WormLauncherArchetype *>(ARCHLIST->GetArchetypeHandle(archetype));
+    for (unsigned i=0;i<2;++i)
+    {
+        IBaseObject *object=ARCHLIST->CreateInstance(arch->pWormEffectType);
+        if (!object) { std::fputs("Native wormhole diagnostic portal factory failed\n",stderr); return false; }
+        cleanup.objects.push_back(object);
+        auto &portal=i==0 ? source->hole1 : source->hole2;
+        if (!object->QueryInterface(IWormholeBlastID,portal,NONSYSVOLATILEPTR))
+        { std::fputs("Native wormhole diagnostic portal interface absent\n",stderr); return false; }
+        TRANSFORM trans; trans.set_identity(); trans.set_position(anchor->GetPosition());
+        portal->InitWormholeBlast(trans,anchor->GetSystemID(),1200,anchor->GetPlayerID(),i!=0);
+        portal->Flash();
+        OBJLIST->AddObject(object);
+        object->Update();
+    }
+    source->mode=WORMHOLE_LAUNCHER_SAVELOAD::WORM_WORKING;
+    source->numTargets=source->targetsLeft=1;
+    source->targetIDs[0]=anchor->GetPartID(); source->workingID=0x1234;
+    source->targetSystemID=anchor->GetSystemID(); source->lastChanceTimer=8.5f;
+    source->targetPos=anchor->GetPosition();
+    source->accumedDamage=2.75f; source->circleTime=1.25f;
+    if (!source->Save(directory)) { std::fputs("Native wormhole diagnostic Save failed\n",stderr); return false; }
+    if (!restored->Load(directory)) { std::fputs("Native wormhole diagnostic Load failed\n",stderr); return false; }
+    restored->ResolveAssociations();
+    cleanup.objects.push_back(dynamic_cast<IBaseObject *>(restored->hole1.Ptr()));
+    cleanup.objects.push_back(dynamic_cast<IBaseObject *>(restored->hole2.Ptr()));
+    NativeWormholeLauncherState before{},after{};
+    if (!ReadWormholeRecord(directory,"NativeWormholeStateV1",&before,sizeof(before)) ||
+        !restored->Save(directory) ||
+        !ReadWormholeRecord(directory,"NativeWormholeStateV1",&after,sizeof(after)) ||
+        std::memcmp(&before,&after,sizeof(before)) ||
+        std::memcmp(static_cast<WORMHOLE_LAUNCHER_SAVELOAD *>(source),
+                    static_cast<WORMHOLE_LAUNCHER_SAVELOAD *>(restored),sizeof(WORMHOLE_LAUNCHER_SAVELOAD)))
+    { std::fputs("Native wormhole diagnostic restored state differs\n",stderr); return false; }
+    std::unique_ptr<IBaseObject> rejectedObject(ARCHLIST->CreateInstance(archetype));
+    auto *rejected=dynamic_cast<WormholeLauncher *>(rejectedObject.get());
+    before.version=2;
+    if (!rejected || !WriteWormholeRecord(directory,"NativeWormholeStateV1",&before,sizeof(before)) ||
+        rejected->Load(directory)) return false;
+    before.version=1;
+    if (!WriteWormholeRecord(directory,"NativeWormholeStateV1",&before,sizeof(before)-1) ||
+        rejected->Load(directory)) return false;
+    return true;
+}
+
+// Explicit skirmish diagnostic: original script creation/order, full mission
+// save/load, and live portal visuals. Never used by a normal player session.
+int CheckNativeWormholeMissionRoundTrip(U32 &partID)
+{
+    if (!partID)
+    {
+        const U32 player=MGlobals::GetThisPlayer();
+        IBaseObject *anchor=nullptr;
+        U32 destination=0;
+        for (auto *object=OBJLIST->GetObjectList();object;object=object->next)
+            if (object->GetPlayerID()==player && object->GetSystemID() &&
+                object->objClass==OC_SPACESHIP) { anchor=object; break; }
+        if (!anchor) { std::fprintf(stderr,"Native Portal diagnostic: no ship for player %u\n",player); return -1; }
+        for (auto *object=OBJLIST->GetObjectList();object;object=object->next)
+            if (object->GetSystemID() && object->GetSystemID()!=anchor->GetSystemID())
+            { destination=object->GetSystemID(); break; }
+        if (!destination) { std::fputs("Native Portal diagnostic: no destination\n",stderr); return -1; }
+        const auto portal=MScript::CreatePart("PLATGUN!!S_TesPortal",
+            MScript::GetPartByID(anchor->GetPartID()),player,"Native Portal regression");
+        if (!portal) { std::fputs("Native Portal diagnostic: stock creation failed\n",stderr); return -1; }
+        partID=portal->dwMissionID;
+        MScript::OrderDoWormhole(portal,destination);
+        return 0;
+    }
+    std::vector<NativeWormholeVisual> before;
+    for (auto *object=OBJLIST->GetObjectList();object;object=object->next)
+    {
+        OBJPTR<IWormholeBlast> portal;
+        if (object->QueryInterface(IWormholeBlastID,portal,NONSYSVOLATILEPTR))
+        {
+            NativeWormholeVisual state{};
+            if (!CaptureNativeWormholeVisual(portal,state)) { std::fputs("Native Portal diagnostic: capture failed\n",stderr); return -1; }
+            before.push_back(state);
+        }
+    }
+    if (before.empty()) return 0;
+    if (before.size()!=2) { std::fprintf(stderr,"Native Portal diagnostic: count=%zu\n",before.size()); return -1; }
+    if (!MISSION->QuickSaveFile()) { std::fputs("Native Portal diagnostic: mission save failed\n",stderr); return -1; }
+    if (!MISSION->QuickLoadFile()) { std::fputs("Native Portal diagnostic: mission load failed\n",stderr); return -1; }
+    if (!OBJLIST->FindObject(partID)) { std::fputs("Native Portal diagnostic: owner missing\n",stderr); return -1; }
+    std::vector<NativeWormholeVisual> after;
+    for (auto *object=OBJLIST->GetObjectList();object;object=object->next)
+    {
+        OBJPTR<IWormholeBlast> portal;
+        if (object->QueryInterface(IWormholeBlastID,portal,NONSYSVOLATILEPTR))
+        {
+            NativeWormholeVisual state{};
+            if (!CaptureNativeWormholeVisual(portal,state)) return -1;
+            after.push_back(state);
+        }
+    }
+    if (after.size()!=before.size()) { std::fprintf(stderr,"Native Portal diagnostic: restored count=%zu\n",after.size()); return -1; }
+    // Object insertion order may change during association resolution.
+    for (const auto &expected:before)
+        if (std::none_of(after.begin(),after.end(),[&](const auto &actual) {
+                return std::memcmp(&expected,&actual,sizeof(expected))==0;
+            })) { std::fputs("Native Portal diagnostic: restored visuals differ\n",stderr); return -1; }
+    return 1;
+}
+#endif
 //------------------------------------------------------------------------------------------
 //---------------------------WormholeLauncher Factory------------------------------------------
 //------------------------------------------------------------------------------------------

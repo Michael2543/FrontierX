@@ -1,6 +1,21 @@
 # FrontierX Project Charter
 
-## Delivery status (2026-10-19)
+## Delivery status (2026-10-20)
+
+The next authorized delivery is an optimized single-player retail build with
+fullscreen, excluding multiplayer. Implementation and remaining acceptance are
+tracked in [single-player finalization](RETAIL_SINGLEPLAYER_FINALIZATION.md).
+
+The user accepts the complete Terran campaign and its ending on 2026-10-20.
+Original single-player menus, Options, and offline Skirmish are now integrated.
+The [menu and skirmish record](NATIVE_SINGLEPLAYER_MENUS.md) separates automated
+owner/runtime evidence from pending user matches and the remaining retail gates.
+The [ordered plan](PORT_READINESS.md#accepted-campaign-and-next-delivery-plan-2026-10-20)
+retains its acceptance checklist. Campaign acceptance does not close unreported
+optional scenarios, Windows ABI, comparative determinism, or long-session
+lifecycle and hardware gates. Earlier dated records below are implementation
+history.
+
 
 The user accepts complete TM12 after the SOL subtitle repair on 2026-10-19.
 TM13–TM16 source owners, original entry/save schemas and final-film callers are

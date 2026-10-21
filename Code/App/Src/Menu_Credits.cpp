@@ -10,8 +10,30 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "UserDefaults.h"
+#include "Include/NativeAppFont.h"
+#include <fstream>
+#include <string>
+struct CreditPoint { S32 x, y; };
+static std::string nativeCreditsFile;
+void SetNativeCreditsFile(const char *path) { nativeCreditsFile = path ? path : ""; }
+#include "Menu.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+extern IMenuResource *MENU;
+#endif
 
 #include "Frame.h"
 #include "IStatic.h"
@@ -32,7 +54,11 @@ struct CreditText
 {
 	COMPTR<IFontDrawAgent> fontCredit;
 	COMPTR<IFontDrawAgent> fontBack;
+#if defined(_WIN32)
 	POINT pt;
+#else
+	CreditPoint pt;
+#endif
 	wchar_t szText[64];
 
 	CreditText * pNext;
@@ -47,6 +73,7 @@ struct CreditText
 		pFont->CreateDuplicate(fontCredit);
 
 		// create the background font
+#if defined(_WIN32)
 		HFONT hFont;
 		COLORREF background;
 
@@ -54,6 +81,10 @@ struct CreditText
 		hFont = CQCreateFont(fontID);
 
 		CreateFontDrawAgent(hFont, 0, background | 0xFF000000, background, fontBack);
+#else
+		fontBack.free();
+	*static_cast<IFontDrawAgent **>(fontBack) = FrontierX::CreateNativeFontDrawAgent(fontID, 0xff000000U);
+#endif
 	}
 };
 
@@ -309,6 +340,7 @@ void Menu_Credits::setStateInfo (void)
 	pane.y1 = 599;
 
 	// create our font draw agents
+#if defined(_WIN32)
 	HFONT hFont1, hFont2;
 	COLORREF pen1, pen2, background;
 
@@ -321,11 +353,29 @@ void Menu_Credits::setStateInfo (void)
 	CreateFontDrawAgent(hFont1, 1, pen1, background, fontTitleTemplate);
 	CreateFontDrawAgent(hFont2, 1, pen2, background, fontNameTemplate);
 
+#else
+	fontTitleTemplate.free();
+	*static_cast<IFontDrawAgent **>(fontTitleTemplate) = FrontierX::CreateNativeFontDrawAgent(IDS_MESSAGEBOX_FONT, 0xffc65a31U);
+	fontNameTemplate.free();
+	*static_cast<IFontDrawAgent **>(fontNameTemplate) = FrontierX::CreateNativeFontDrawAgent(IDS_OPENING_FONT, 0xfff0c8a0U);
+	if (!fontTitleTemplate || !fontNameTemplate) throw std::runtime_error("Native credits fonts unavailable");
+	pane.x1 = IDEAL2REALX(800)-1; pane.y0 = IDEAL2REALY(104); pane.y1 = IDEAL2REALY(600)-1;
+#endif
+#if defined(_WIN32)
 	yOffset = 540;
 	yClimb = 0;
 	
 	// read the first 32 credit entries into the list
 	parseCredits(24);
+#else
+    if (!credits_buffer)
+    {
+        yOffset=540; yClimb=0;
+        parseCredits(24);
+    }
+    else
+        for (CreditText *line=pCreditsList;line;line=line->pNext) alignText(*line);
+#endif
 
 	if (childFrame)
 		childFrame->setStateInfo();
@@ -335,7 +385,11 @@ void Menu_Credits::setStateInfo (void)
 void Menu_Credits::alignText (CreditText & credit)
 {
 	U32 swidth = credit.fontCredit->GetStringWidth(credit.szText);
+#if defined(_WIN32)
 	credit.pt.x = TEXT_XPOS + S32(TEXT_WIDTH - swidth)/2;
+#else
+	credit.pt.x = TEXT_XPOS + S32(TEXT_WIDTH - REAL2IDEALX(swidth))/2;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -368,6 +422,7 @@ void Menu_Credits::parseCredits (U32 nLines)
 	if (credits_buffer == NULL)
 	{
 		// read the data from the file
+#if defined(_WIN32)
 		HANDLE hFile = ::CreateFile("credits.txt", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 		if (hFile != INVALID_HANDLE_VALUE)
@@ -398,6 +453,17 @@ void Menu_Credits::parseCredits (U32 nLines)
 			// this will atleast keep us from entering this functions every goddamn update
 			bEndOfFile = true;
 		}
+#else
+		std::ifstream file(nativeCreditsFile, std::ios::binary | std::ios::ate);
+		if (!file) throw std::runtime_error("Native credits text unavailable");
+		const auto size = file.tellg();
+		if (size <= 0 || size > 1024*1024) throw std::runtime_error("Native credits text size rejected");
+		fileSize = static_cast<U32>(size);
+		credits_buffer = new char[fileSize+1]; bufferPtr = credits_buffer;
+		file.seekg(0);
+		if (!file.read(credits_buffer, fileSize)) throw std::runtime_error("Native credits text read failed");
+		credits_buffer[fileSize] = 0;
+#endif
 	}
 
 	// now read nLines of lines
@@ -414,7 +480,12 @@ void Menu_Credits::parseCredits (U32 nLines)
 		// if new pos failed, than we are about to parse our last entry
 		if (newpos)
 		{
-			nChars = (newpos - oldpos) - 1;
+			nChars = (newpos - oldpos);
+#if defined(_WIN32)
+			nChars--;
+#else
+			if (nChars && oldpos[nChars-1] == '\r') --nChars;
+#endif
 		}
 		else
 		{
@@ -422,11 +493,20 @@ void Menu_Credits::parseCredits (U32 nLines)
 			nChars = strlen(oldpos);
 		}
 		
+#if !defined(_WIN32)
+        // Empty lines still consume their terminator; otherwise scrolling stalls.
+        bufferPtr=newpos ? newpos+1 : oldpos+nChars;
+#endif
 		memset(szLine, 0, sizeof(szLine));
 		if (nChars)
 		{
 			// only want the line of text
+#if defined(_WIN32)
 			strncpy(szLine, oldpos, nChars);
+#else
+			if (nChars < 0 || nChars >= int(sizeof(szLine))) throw std::runtime_error("Native credits line exceeds source capacity");
+			std::memcpy(szLine, oldpos, nChars);
+#endif
 
 			// advance the bufferPtr to get past any '\n''s
 			while (newpos && *newpos == '\n')
@@ -507,7 +587,11 @@ void Menu_Credits::init (void)
 //
 void Menu_Credits::drawCredits (void)
 {
+#if defined(_WIN32)
 	POINT pos;
+#else
+	CreditPoint pos;
+#endif
 	wchar_t * pString;
 
 	CreditText * p = pCreditsList;
@@ -517,6 +601,9 @@ void Menu_Credits::drawCredits (void)
 		pString = p->szText;
 		pos.x = p->pt.x;
 		pos.y = p->pt.y - yClimb;
+#if !defined(_WIN32)
+		pos.x = IDEAL2REALX(pos.x); pos.y = IDEAL2REALY(pos.y);
+#endif
 
 		// draw the string
 		p->fontBack->StringDraw(&pane, pos.x+2, pos.y+2, pString);
@@ -544,3 +631,14 @@ U32 __stdcall DoMenu_Credits (Frame * parent)
 
 	return result;
 }
+#if !defined(_WIN32)
+bool CheckNativeCreditsSequence()
+{
+    auto *menu=new Menu_Credits(nullptr);
+    menu->createViewer("\\GT_CREDITS\\Menu_Credits","GT_CREDITS",IDS_VIEWCREDITS);
+    menu->parseCredits(1024*1024+1);
+    const bool valid=menu->bEndOfFile && menu->pCreditsList;
+    delete menu;
+    return valid;
+}
+#endif

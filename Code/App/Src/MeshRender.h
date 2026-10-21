@@ -335,6 +335,8 @@ void TreeRender(MeshChain &mc,bool bLight=true, DWORD color = 0xFFFFFFFF);
 void TreeRenderNativeLegacyPreview(MeshChain &mc);
 // Original SolarianBuild changes only its private clone's topology.
 void TreeRenderNativePuffy(MeshInfo **mi, int count, const Vector &scale, SINGLE percent, bool directShipHull);
+void TreeRenderNativeCloak(MeshChain &mc, const Transform &world, bool directShipHull,
+                           SINGLE shiftX, SINGLE shiftY, U32 color);
 void ResetNativeLegacyBuildCorners(IRenderMaterial *destination, const IRenderMaterial *source);
 void UpdateNativeLegacyBuildFace(IRenderMaterial *destination, const IRenderMaterial *source,
                                 U32 face, U32 sourceFace);

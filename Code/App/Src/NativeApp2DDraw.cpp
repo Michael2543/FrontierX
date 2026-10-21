@@ -7,7 +7,7 @@
 #include "CQImage.h"
 #include "VFX.H"
 #include "rendpipeline.h"
-#include "xform.h"
+#include "3dmath.h"
 
 #include <cstdlib>
 #include <algorithm>

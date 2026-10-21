@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <math.h>
+#if !defined(_WIN32)
+#include <cstdint>
+#endif
 
 #include "chull.h"
 
@@ -76,9 +79,20 @@ ViewPoint * Points = NULL;
 
 int Area2(const ViewPoint * p1, const ViewPoint * p2, const ViewPoint * p3)
 {
+#if !defined(_WIN32)
+    // Projected points can lie far outside a 4K viewport. Only orientation is
+    // consumed here; keep the full S32-coordinate determinant exact.
+    const __int128 dx1=std::int64_t(p2->x)-p1->x;
+    const __int128 dy1=std::int64_t(p2->y)-p1->y;
+    const __int128 dx2=std::int64_t(p3->x)-p1->x;
+    const __int128 dy2=std::int64_t(p3->y)-p1->y;
+    const __int128 area=dx1*dy2-dy1*dx2;
+    return (area>0)-(area<0);
+#else
 	return	p1->x * p2->y - p1->y * p2->x +
 			p1->y * p3->x - p1->x * p3->y +
 			p2->x * p3->y - p3->x * p2->y;
+#endif
 }
 
 //
@@ -113,6 +127,15 @@ int Compare(const void * v1, const void * v2)
 	}
 	else
 	{
+#if !defined(_WIN32)
+        const __int128 dx1=std::int64_t(p1->x)-Points->x;
+        const __int128 dy1=std::int64_t(p1->y)-Points->y;
+        const __int128 dx2=std::int64_t(p2->x)-Points->x;
+        const __int128 dy2=std::int64_t(p2->y)-Points->y;
+        const __int128 l1=dx1*dx1+dy1*dy1;
+        const __int128 l2=dx2*dx2+dy2*dy2;
+        result=(l1<l2) ? -1 : (l1>l2) ? 1 : 0;
+#else
 		ViewPoint r1, r2;
 		r1.x = p1->x - Points->x;
 		r1.y = p1->y - Points->y;
@@ -124,6 +147,7 @@ int Compare(const void * v1, const void * v2)
 		float l2 = (float) sqrt((float)(r2.x * r2.x + r2.y * r2.y));
 
 		result = (l1 < l2) ? -1 : (l1 > l2) ? 1 : 0;
+#endif
 	}
 
 	return result;

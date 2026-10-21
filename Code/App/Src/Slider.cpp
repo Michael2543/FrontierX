@@ -11,8 +11,20 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppImage.h"
+#include "CQTrace.h"
+#include <VFX.H>
+using namespace FrontierX::NativeAppUi;
+struct NativeSliderPoint { S32 x, y; };
+static void OffsetRect(RECT *r,S32 x,S32 y) { r->left+=x; r->right+=x; r->top+=y; r->bottom+=y; }
+static void NativeSliderRect(RECT *r,S32 left,S32 top,S32 right,S32 bottom) { *r={left,top,right,bottom}; }
+#endif
 
 #include "ISlider.h"
 #include "Startup.h"
@@ -22,9 +34,14 @@
 #include "DrawAgent.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
+#if defined(_WIN32)
+#define SetSliderRect ::SetRect
+#else
+#define SetSliderRect NativeSliderRect
+#endif
 #define TAB_WIDTH			10
 #define MAX_SLIDER_SHAPES	8
 
@@ -108,7 +125,11 @@ struct DACOM_NO_VTABLE Slider : BaseHotRect, ISlider, IKeyboardFocus
 	S32 position;
 	short logicalMin, logicalMax;
 	RECT rcTab;
-	POINT ptPosition;
+#if defined(_WIN32)
+    POINT ptPosition;
+#else
+    NativeSliderPoint ptPosition;
+#endif
 	short int positionOffset;
 
 	bool bEndOnClick;
@@ -388,7 +409,13 @@ U32 Slider::GetControlID (void)
 //
 GENRESULT Slider::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+#if defined(_WIN32)
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg = &fields;
+#endif
 
 	if (bInvisible)
 	{
@@ -628,13 +655,13 @@ void Slider::setLogicalPosition (void)
 	// place the tab rect correctly
 	if (pSliderType->bVertical)
 	{
-		::SetRect(&rcTab, screenRect.left, (pos - pSliderType->tabWidth/2), screenRect.right, (pos + pSliderType->tabWidth/2));
+		SetSliderRect(&rcTab, screenRect.left, (pos - pSliderType->tabWidth/2), screenRect.right, (pos + pSliderType->tabWidth/2));
 		OffsetRect(&rcTab, -screenRect.left, -screenRect.top);
 		ptPosition.y = pos;
 	}
 	else
 	{
-		::SetRect(&rcTab, pos - pSliderType->tabWidth/2, screenRect.top, pos + pSliderType->tabWidth/2, screenRect.bottom);
+		SetSliderRect(&rcTab, pos - pSliderType->tabWidth/2, screenRect.top, pos + pSliderType->tabWidth/2, screenRect.bottom);
 		OffsetRect(&rcTab, -screenRect.left, -screenRect.top);
 		ptPosition.x = pos;
 	}
@@ -651,7 +678,7 @@ void Slider::draw (void)
 	pane.x1 = screenRect.right;
 	pane.y1 = screenRect.bottom;
 
-	if (pSliderType->shapes[0] == NULL)
+	if (!pSliderType->shapes[0])
 	{
 		// ugly drawing using primitives set up by programmers
 		// draw the backgound rect
@@ -822,11 +849,17 @@ HANDLE SliderFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYPE objClas
 		//
 		if (data->shapeFile[0])
 		{
+#if defined(_WIN32)
 			BEGIN_MAPPING(INTERFACEDIR, data->shapeFile);
 				int i;
 				for (i = 0; i < MAX_SLIDER_SHAPES; i++)
 					CreateDrawAgent((VFX_SHAPETABLE *) pImage, i, result->shapes[i]);
 			END_MAPPING(INTERFACEDIR);
+
+#else
+            for (int i=0; i<MAX_SLIDER_SHAPES; ++i)
+                CreateDrawAgent(data->shapeFile, INTERFACEDIR, DA::UNKTYPE, i, result->shapes[i]);
+#endif
 
 			// the tab width is defined by art
 			U16 dummyDimension;
@@ -889,7 +922,11 @@ struct _sliderfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<SliderFactory>;
-		AddToGlobalCleanupList(&factory);
+		#if defined(_WIN32)
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

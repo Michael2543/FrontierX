@@ -11,8 +11,28 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#include <cstdint>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include <VFX.H>
+#include "Include/NativeAppImage.h"
+#include "ObjList.h"
+#include "NetPacket.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+using namespace FrontierX::NativeAppUi;
+using std::min;
+using std::max;
+#define swprintf FormatLegacyWide
+#endif
 
 #include "IDiplomacyButton.h"
 #include "Startup.h"
@@ -23,7 +43,7 @@
 #include <DDiplomacyButton.h>
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 #define BEGIN_MAPPING(parent, name) \
@@ -198,7 +218,7 @@ struct DACOM_NO_VTABLE DiplomacyButton : BaseHotRect, IDiplomacyButton, IKeyboar
 	{
 		if (bPostMessageBlocked==false)
 		{
-			parent->PostMessage(CQE_DIPLOMACYBUTTON, (void*)controlID);
+			parent->PostMessage(CQE_DIPLOMACYBUTTON, reinterpret_cast<void *>(static_cast<std::uintptr_t>(controlID)));
 			bPostMessageBlocked = true;
 		}
 	}
@@ -223,6 +243,9 @@ void DiplomacyButton::InitDiplomacyButton (const DIPLOMACYBUTTON_DATA & data, Ba
 	//
 	// calculate screen rect. 
 	//
+#if !defined(_WIN32)
+    pDipButtonType->shapes[0]->GetDimensions(pDipButtonType->width,pDipButtonType->height);
+#endif
 	screenRect.left = IDEAL2REALX(data.xOrigin) + parent->screenRect.left;
 	screenRect.top = IDEAL2REALY(data.yOrigin) + parent->screenRect.top;
 	screenRect.right = screenRect.left + pDipButtonType->width - 1;
@@ -310,7 +333,13 @@ bool DiplomacyButton::SetKeyboardFocus (bool bEnable)
 //
 GENRESULT DiplomacyButton::Notify (U32 message, void *param)
 {
+	#if defined(_WIN32)
 	MSG *msg = (MSG *) param;
+#else
+	MessageFields fields;
+	if (!DecodeMessage(message, param, fields)) return GR_INVALID_PARMS;
+	const auto *msg = &fields;
+#endif
 
 	if (bInvisible==0)
 	switch (message)
@@ -342,7 +371,7 @@ GENRESULT DiplomacyButton::Notify (U32 message, void *param)
 		switch (msg->wParam)
 		{
 		case VK_RETURN:
-		case VK_SPACE:
+		case 0x20:
 			if ((msg->lParam & 0x40000000) == 0)		// previous state == up
 			{
 				doReleaseAction();
@@ -359,7 +388,7 @@ GENRESULT DiplomacyButton::Notify (U32 message, void *param)
 		bPostMessageBlocked = false;
 		if (bKeyboardFocus)
 		{
-			if (bKeyboardPressed && HOTKEY->GetVkeyState(VK_SPACE) == 0 && HOTKEY->GetVkeyState(VK_RETURN) == 0)
+			if (bKeyboardPressed && HOTKEY->GetVkeyState(0x20) == 0 && HOTKEY->GetVkeyState(VK_RETURN) == 0)
 			{
 				bKeyboardPressed = false;
 				doReleaseAction();
@@ -422,8 +451,13 @@ void DiplomacyButton::draw (void)
 	}
 
 	diplomacy += GT_DIPL_STATE0;
-	pDipButtonType->shapes[diplomacy]->Draw(0, screenRect.left + pDipButtonType->leftMargin,
-										   screenRect.top + pDipButtonType->topMargin);
+#if defined(_WIN32)
+    const S32 marginX=pDipButtonType->leftMargin, marginY=pDipButtonType->topMargin;
+#else
+    const S32 marginX=IDEAL2REALX(pDipButtonType->leftMargin);
+    const S32 marginY=IDEAL2REALY(pDipButtonType->topMargin);
+#endif
+    pDipButtonType->shapes[diplomacy]->Draw(0,screenRect.left+marginX,screenRect.top+marginY);
 
 }
 //--------------------------------------------------------------------------//
@@ -516,17 +550,27 @@ HANDLE DiplomacyButtonFactory::CreateArchetype (PGENTYPE pArchetype, GENBASE_TYP
 		//
 		if (data->shapeFile[0])
 		{
+#if defined(_WIN32)
 			BEGIN_MAPPING(INTERFACEDIR, data->shapeFile);
 				int i;
 				for (i = 0; i < GT_DIPL_MAX_SHAPES; i++)
 					CreateDrawAgent((VFX_SHAPETABLE *) pImage, i, result->shapes[i]);
 			END_MAPPING(INTERFACEDIR);
+#else
+            for (unsigned i=0;i<GT_DIPL_MAX_SHAPES;++i)
+                CreateDrawAgent(data->shapeFile,INTERFACEDIR,DA::VFX,i,result->shapes[i]);
+#endif
 
 			result->shapes[0]->GetDimensions(result->width, result->height);
 		}
 
-		result->leftMargin = IDEAL2REALX(data->leftMargin);
-		result->topMargin = IDEAL2REALX(data->topMargin);
+#if defined(_WIN32)
+        result->leftMargin = IDEAL2REALX(data->leftMargin);
+        result->topMargin = IDEAL2REALX(data->topMargin);
+#else
+        result->leftMargin=data->leftMargin;
+        result->topMargin=data->topMargin;
+#endif
 
 		return result;
 	}
@@ -562,7 +606,11 @@ struct _dipbuttonfactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<DiplomacyButtonFactory>;
-		AddToGlobalCleanupList(&factory);
+		#if defined(_WIN32)
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

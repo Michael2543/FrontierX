@@ -1,4 +1,49 @@
-2026-10-15 P1c technical snapshot: native Linux x86_64 GCC16.2.1 and
+# Linux Build Graph
+
+## Optimized single-player candidate (2026-10-20)
+
+Linux x86_64 Clang 22.1.8 builds the complete full-media graph in a separate
+`RelWithDebInfo` directory. GCC 16.2.1 Debug and Clang ASan/UBSan graphs remain
+separate. Exact configuration (all paths supplied externally):
+
+```sh
+cmake --preset linux-clang-debug -B "$RETAIL_BUILD" \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DFRONTIERX_BUILD_NATIVE_FONTS=ON \
+  -DFRONTIERX_BUILD_FFMPEG_AUDIO=ON \
+  -DFRONTIERX_BUILD_FFMPEG_VIDEO=ON \
+  -DCMAKE_PREFIX_PATH="$REVIEWED_FFMPEG_PREFIX" \
+  -DFRONTIERX_TEST_FONT_FILE="$EXTERNAL_FONT"
+cmake --build "$RETAIL_BUILD" -j 6
+ctest --test-dir "$RETAIL_BUILD" --output-on-failure \
+  -E 'sdl3_gpu|game_material_gpu'
+```
+
+The optimized suite executes 69/69 selected checks without failures or skips.
+The two separately invoked actual Vulkan GPU checks also execute and pass with
+the existing explicit Hyprland/X11 host preparation. The optimized link required
+explicit `3dmath.h` inline definitions in native DrawAgent/NativeApp2DDraw;
+Debug's coalesced definitions from other objects had hidden those missing
+includes. No math policy or simulation constant changed. See
+[single-player finalization](RETAIL_SINGLEPLAYER_FINALIZATION.md) for fullscreen,
+Options, Portal and AI save/load execution, subsequent display fixes and pending
+acceptance. This is a local retail-data candidate, not a public distribution
+approval or native-Windows/ABI result.
+
+## Native single-player menu integration (2026-10-20)
+
+The full-media graph now includes original main/options/help/credits, local game
+setup, map selection, and local loading in `frontierx_app_ingame_menu_owner`.
+`frontierx_app_toolbar_owner` also compiles the original Slider and Dropdown
+factories. `frontierx_app_map_gen_owner` includes the PlayerBomb starting-fleet
+factory. `frontierx_native_app_globals` owns native player-directory selection
+and exposes its required native user-defaults dependency to consumers.
+
+The optional video configuration defines its capability for both original menu
+owner targets. No dependency or standalone probe target was added. Existing
+filesystem, defaults, shell, material, batcher, layout, and GPU checks cover the
+changed boundaries. Detailed runtime scope and pending acceptance:
+[native menus and skirmish](NATIVE_SINGLEPLAYER_MENUS.md).
 
 ## Cruiser missiles, objectives, unit owners and strict fonts (2026-10-15)
 

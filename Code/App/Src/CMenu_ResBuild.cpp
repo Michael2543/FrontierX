@@ -921,3 +921,29 @@ static _cmenu_resbuild startup;
 //--------------------------------------------------------------------------//
 //-----------------------------End CMenu_ResBuild.cpp----------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+#include <DResearch.h>
+#include <iostream>
+// Reuses the real control/dependency checks and the same command as a mouse click.
+int CheckNativeAdmiralResearchControl(U32 partID)
+{
+    auto *panel=startup.menu;
+    if (!panel || !panel->bPanelOwned || !panel->menu || panel->lastMissionID!=partID) return 0;
+    for (const auto &button:panel->research)
+        if (button && button->IsActive())
+        {
+            COMPTR<IHotButton> hotButton;
+            if (button->QueryInterface("IHotButton",hotButton)!=GR_OK || !hotButton || !hotButton->GetEnableState()) continue;
+            const U32 archID=button->GetBuildArchetype();
+            const auto *data=static_cast<const BASE_RESEARCH_DATA *>(ARCHLIST->GetArchetypeData(archID));
+            if (data && data->objClass==OC_RESEARCH && data->type==RESEARCH_ADMIRAL)
+            {
+                panel->OnLeftButtonEvent(0,button->GetControlID());
+                std::cout << "Native original admiral research control activated: " << ARCHLIST->GetArchName(archID) << std::endl;
+                return 1;
+            }
+        }
+    return 0;
+}
+#endif

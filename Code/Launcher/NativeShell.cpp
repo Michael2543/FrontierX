@@ -61,6 +61,23 @@ bool CheckNativeUnitCatalog(IArchetypeList *objectList);
 bool CheckNativeUnitCatalogMetadata();
 U32 __stdcall DoMenu_Briefing (Frame * parent, const char * szFileName);
 U32 __stdcall CreateMenuEndGame(bool won);
+void SetNativeCreditsFile(const char *path);
+bool CheckNativeCreditsSequence();
+U32 __stdcall CreateMenu1(bool skipMenus);
+U32 CheckNativeOfflineSkirmish(U32 race,const char *map);
+void ResizeNativeAppInterface(U32 width,U32 height);
+U32 __stdcall CreateOptionsMenu(bool focusing);
+bool CheckNativeOptionsTransactions();
+bool CheckNativeSelectionProjection();
+bool CheckNativeBuilderPanel(U32 partID);
+int CheckNativeSkirmishAdmiral(U32 &,U32 &);
+bool CheckNativeAdmiralPanel(U32);
+namespace FrontierX { bool CheckNativeSkirmishSocialMenus(unsigned); bool CheckNativeSavedGameMenu(const char *); }
+U32 __stdcall DoMenu_Credits(Frame *parent);
+U32 __stdcall DoMenu_help(Frame *, const GT_MENU1 &);
+U32 __stdcall CreateMenu_igoptions();
+U32 __stdcall DoMenu_SPGame(Frame *, const GT_MENU1 &, bool);
+U32 __stdcall DoMenu_mshell(Frame *, const GT_MENU1 &, const struct SAVED_CONNECTION *, const wchar_t *, const wchar_t *, bool, bool);
 U32 __stdcall DoMenu_campaign(Frame *parent, const GT_MENU1 &data, bool skip);
 #endif
 #include "Include/NativeMusicManager.h"
@@ -123,6 +140,7 @@ bool CheckNativeAnimationBorder();
 #include "ITeletype.h"
 #include "UnitComm.h"
 #include "ObjList.h"
+#include "MPart.h"
 #include <DMBaseData.h>
 #include "Mission.h"
 #include "IObject.h"
@@ -302,6 +320,22 @@ struct NativeMissionModalExit final : IEventCallback
     std::uint32_t duration = 0;
     unsigned int frames = 0;
     bool frameStats = false;
+    bool menuOnly = false;
+    bool skirmishRoundTrip = false;
+    bool campaignBuilderCheck = false;
+    bool savedGameCheck = false;
+    bool roundTripDone = false;
+    bool builderSelectionMade = false;
+    unsigned builderSelectedFrame = 0;
+    U32 builderPartID = 0;
+    unsigned socialStage = 0;
+    U32 admiralProducerID = 0, admiralPartID = 0;
+    bool admiralComplete = false;
+    unsigned admiralSelectedFrame = 0;
+    U32 wormholeCheckPart = 0;
+    bool wormholeRoundTripDone = false;
+    unsigned displayCheckStage = 0;
+    FrontierX::NativeWindowMode originalDisplayMode{};
     std::uint32_t statsStarted = 0;
     unsigned int statsFrames = 0;
     FrontierX::SdlGpuRenderer * timingRenderer = nullptr;
@@ -312,9 +346,124 @@ struct NativeMissionModalExit final : IEventCallback
 
     GENRESULT COMAPI Notify(U32 message, void *parameter) override
     {
+        const bool builderCheck=skirmishRoundTrip || campaignBuilderCheck;
         if (message == CQE_HOTKEY)
             std::cout << "Native App hotkey event "
                       << reinterpret_cast<std::uintptr_t>(parameter) << '\n' << std::flush;
+        // F7/F8 runs while the match is live. Normal Quit destroys AI owners,
+        // so checking their save state after Quit would test an empty game.
+        if (message==CQE_UPDATE && builderCheck && wormholeRoundTripDone && frames && !builderSelectionMade)
+        {
+            IBaseObject *builder=nullptr;
+            for (auto *object=OBJLIST->GetObjectList();object;object=object->next)
+            {
+                MPart part(object);
+                if (part.isValid() && object->GetPlayerID()==MGlobals::GetThisPlayer() &&
+                    (part->mObjClass==M_FABRICATOR || part->mObjClass==M_WEAVER || part->mObjClass==M_FORGER))
+                { builder=object; break; }
+            }
+            if (!builder) throw std::runtime_error("Native skirmish has no starting builder");
+            OBJLIST->FlushSelectedList();
+            OBJLIST->FlushHighlightedList();
+            OBJLIST->HighlightObject(builder);
+            OBJLIST->SelectHighlightedObjects();
+            if (OBJLIST->GetSelectedList()!=builder)
+                throw std::runtime_error("Native starting builder selection failed");
+            builderSelectionMade=true;
+            builderSelectedFrame=frames;
+            builderPartID=builder->GetPartID();
+            std::cout << "Native original starting builder selected: class=" << MPart(builder)->mObjClass << std::endl;
+        }
+        if (message==CQE_UPDATE && skirmishRoundTrip && frames && !wormholeRoundTripDone)
+        {
+            const int result=CheckNativeWormholeMissionRoundTrip(wormholeCheckPart);
+            if (result<0) throw std::runtime_error("Native live stock Portal mission reload failed");
+            wormholeRoundTripDone=result==1;
+            if (wormholeRoundTripDone)
+                std::cout << "Native live stock Portal order and full mission save/reload preserved both portals" << std::endl;
+            else if (FrontierX::Platform::MonotonicMilliseconds()-started>=60000U)
+                throw std::runtime_error("Native stock Portal order never produced live portals");
+        }
+        if (message==CQE_UPDATE && builderCheck && frames>=3 && displayCheckStage==0)
+        {
+            if (!FrontierX::GetNativeWindowMode(WM,originalDisplayMode))
+                throw std::runtime_error("Native live display query failed");
+            auto mode=originalDisplayMode; mode.fullscreen=!mode.fullscreen;
+            if (!FrontierX::SetNativeWindowMode(WM,mode))
+                throw std::runtime_error("Native live fullscreen transition failed");
+            displayCheckStage=1;
+        }
+        if (message==CQE_UPDATE && builderCheck && builderSelectionMade &&
+            frames>=builderSelectedFrame+30 && displayCheckStage==1)
+        {
+            if (!CheckNativeBuilderPanel(builderPartID))
+                throw std::runtime_error("Native builder construction panel did not populate");
+            std::cout << "Native original builder construction panel rendered across display change" << std::endl;
+            if (!FrontierX::SetNativeWindowMode(WM,originalDisplayMode))
+                throw std::runtime_error("Native live window restoration failed");
+            displayCheckStage=2;
+            std::cout << "Native live mission rendered across fullscreen and window restoration" << std::endl;
+        }
+        if (message==CQE_UPDATE && skirmishRoundTrip && builderSelectionMade &&
+            socialStage<8 && frames>=builderSelectedFrame+5+socialStage*10)
+        {
+            if (!FrontierX::CheckNativeSkirmishSocialMenus(socialStage))
+                throw std::runtime_error("Native social-menu diagnostic failed at stage "+std::to_string(socialStage));
+            std::cout << "Native original social-menu stage " << socialStage++ << " passed" << std::endl;
+        }
+        if (message==CQE_UPDATE && skirmishRoundTrip && socialStage==8 && !admiralComplete)
+        {
+            const int result=CheckNativeSkirmishAdmiral(admiralProducerID,admiralPartID);
+            if (result<0) throw std::runtime_error("Native stock admiral recruitment failed");
+            admiralComplete=result==1;
+            if (admiralComplete)
+            {
+                OBJLIST->FlushSelectedList();OBJLIST->FlushHighlightedList();
+                OBJLIST->HighlightObject(OBJLIST->FindObject(admiralPartID));
+                OBJLIST->SelectHighlightedObjects();
+                admiralSelectedFrame=frames;
+            }
+            if (!admiralComplete && FrontierX::Platform::MonotonicMilliseconds()-started>270000U)
+                throw std::runtime_error("Native stock admiral recruitment timed out");
+        }
+        if (message==CQE_UPDATE && builderCheck && wormholeRoundTripDone &&
+            displayCheckStage==2 && (!skirmishRoundTrip || (socialStage==8 && admiralComplete && frames>=admiralSelectedFrame+30)) && !roundTripDone && frames &&
+            duration && FrontierX::Platform::MonotonicMilliseconds()-started>=duration)
+        {
+            const U32 updates=MGlobals::GetUpdateCount();
+            const U32 aiPlayers=MISSION->GetNumAIPlayers();
+            const bool singlePlayer=MGlobals::IsSinglePlayer();
+            if (!updates || (skirmishRoundTrip && aiPlayers!=1) || (campaignBuilderCheck && !singlePlayer))
+                throw std::runtime_error("Native builder diagnostic has no expected live mission state");
+            if (skirmishRoundTrip && !CheckNativeAdmiralPanel(admiralPartID))
+                throw std::runtime_error("Native recruited admiral panel failed");
+            if (!MISSION->QuickSaveFile()) throw std::runtime_error("Native live skirmish quicksave failed");
+            if (!MISSION->QuickLoadFile()) throw std::runtime_error("Native live skirmish quickload failed");
+            if (MGlobals::GetUpdateCount()!=updates || MGlobals::IsSinglePlayer()!=singlePlayer ||
+                MISSION->GetNumAIPlayers()!=aiPlayers)
+                throw std::runtime_error("Native live skirmish reload changed AI/update state");
+            if (skirmishRoundTrip && CheckNativeSkirmishAdmiral(admiralProducerID,admiralPartID)!=1)
+                throw std::runtime_error("Native recruited admiral lost on reload");
+            roundTripDone=true;
+            builderSelectionMade=false;
+            socialStage=0;
+            std::cout << (campaignBuilderCheck ? "Native campaign builder save/reload preserved updates: " :
+                "Native offline skirmish save/reload preserved updates: ") << updates
+                      << "; AI players=" << aiPlayers << std::endl;
+        }
+        if (message==CQE_UPDATE && savedGameCheck && frames>=30 && !roundTripDone)
+        {
+            const U32 updates = MGlobals::GetUpdateCount();
+            const U32 aiPlayers = MISSION->GetNumAIPlayers();
+            const bool singlePlayer = MGlobals::IsSinglePlayer();
+            if (!MISSION->QuickSaveFile() || !MISSION->QuickLoadFile() ||
+                updates!=MGlobals::GetUpdateCount() || aiPlayers!=MISSION->GetNumAIPlayers() ||
+                singlePlayer!=bool(MGlobals::IsSinglePlayer()))
+                throw std::runtime_error("Native existing save quicksave/reload changed mission state");
+            roundTripDone=true;
+            std::cout << "Native existing save quicksave/reload preserved updates: " << updates
+                      << "; AI players=" << aiPlayers << std::endl;
+        }
         if (message != CQE_ENDFRAME) return GR_OK;
         ++frames;
         if (frameStats)
@@ -351,6 +500,16 @@ struct NativeMissionModalExit final : IEventCallback
                 statsFrames = frames;
             }
         }
+        if (menuOnly)
+        {
+            if (!requested && duration && FrontierX::Platform::MonotonicMilliseconds()-started >= duration)
+            {
+                FrontierX::LegacyWindowMessage close{WM->GetWindowHandle(), FrontierX::LegacyMessage::Close, 0, 0};
+                requested = true;
+                return EVENTSYS->Send(FrontierX::LegacyMessage::Close, &close);
+            }
+            return GR_OK;
+        }
         // Sol_T/resource.h: original objective IDs 46..69. Observation only.
         U32 listed = 0, completed = 0;
         for (U32 index = 0; index < 24; ++index)
@@ -367,8 +526,14 @@ struct NativeMissionModalExit final : IEventCallback
         observedObjectives = listed;
         observedCompletedObjectives = completed;
         if (!requested && (shellCloseRequested ||
-            (duration && FrontierX::Platform::MonotonicMilliseconds() - started >= duration)))
+            (duration && (!savedGameCheck || (roundTripDone && frames>=60)) && (!builderCheck || (roundTripDone && builderSelectionMade &&
+                frames>=builderSelectedFrame+30 && (!skirmishRoundTrip || socialStage==8))) &&
+             FrontierX::Platform::MonotonicMilliseconds() - started >= duration)))
         {
+            if (builderCheck && !CheckNativeBuilderPanel(builderPartID))
+                throw std::runtime_error("Native builder construction panel missing after reload");
+            if (builderCheck)
+                std::cout << "Native original builder construction panel rendered after reload" << std::endl;
             requested = EVENTSYS->Post(CQE_PLAYER_QUIT) == GR_OK;
             if (!requested) return GR_GENERIC;
         }
@@ -408,6 +573,27 @@ LRESULT COMAPI ShellWindowCallback(HWND window, UINT message, WPARAM wparam, LPA
     if (message == FrontierX::LegacyMessage::Close) shellCloseRequested = true;
     if (!shellEventSystem) return 0;
 
+    if ((message==FrontierX::LegacyMessage::SystemKeyDown ||
+         message==FrontierX::LegacyMessage::SystemKeyUp) &&
+        wparam==FrontierX::LegacyVirtualKey::Return && (U32(lparam)&(1U<<29)))
+    {
+        if (message==FrontierX::LegacyMessage::SystemKeyDown && !(U32(lparam)&(1U<<30)))
+        {
+            FrontierX::NativeWindowMode mode;
+            if (!FrontierX::GetNativeWindowMode(WM,mode))
+                throw std::runtime_error("Native fullscreen window owner unavailable");
+            mode.fullscreen=!mode.fullscreen;
+            if (!FrontierX::SetNativeWindowMode(WM,mode))
+                throw std::runtime_error("Native fullscreen transition rejected");
+            U32 fullscreen=mode.fullscreen;
+            if (!DEFAULTS->SetDataInRegistry("CQFullscreen",&fullscreen,sizeof(fullscreen)) ||
+                !DEFAULTS->SetDataInRegistry("CQWindowWidth",&mode.width,sizeof(mode.width)) ||
+                !DEFAULTS->SetDataInRegistry("CQWindowHeight",&mode.height,sizeof(mode.height)))
+                throw std::runtime_error("Native fullscreen preference write failed");
+        }
+        return 0;
+    }
+
     if (message == FrontierX::LegacyMessage::KeyDown ||
         message == FrontierX::LegacyMessage::KeyUp)
         std::cout << "Native App SDL key " << message << " virtual "
@@ -421,6 +607,17 @@ LRESULT COMAPI ShellWindowCallback(HWND window, UINT message, WPARAM wparam, LPA
                   << (lparam & 0xffff) << ',' << ((lparam >> 16) & 0xffff)
                   << '\n' << std::flush;
 
+#if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
+    if (message==FrontierX::LegacyMessage::Size && WM && PIPE && SCREENRESX && SCREENRESY)
+    {
+        WM_WINAREA area{}; WM->GetClientArea(area);
+        if (area.w>0 && area.h>0 && (SCREENRESX!=U32(area.w) || SCREENRESY!=U32(area.h)))
+        {
+            ResizeNativeAppInterface(area.w,area.h);
+            std::cout << "Native interface resized: " << area.w << ',' << area.h << std::endl;
+        }
+    }
+#endif
     if (message == FrontierX::LegacyMessage::Character)
         shellEventSystem->Send(FrontierX::LegacyMessage::UnicodeCharacter,
             reinterpret_cast<void *>(wparam & 0xffffU));
@@ -546,6 +743,10 @@ struct Options
     bool unitCatalogCheck = false;
     bool missionBriefing = false;
     bool missionCampaign = false;
+    std::string menuCheck;
+    std::string saveCheckFile;
+    std::string skirmishCheckMap;
+    U32 skirmishCheckRace=1;
     bool HasUiFont() const { return !uiFontPath.empty() || !uiFontMappingPath.empty(); }
 };
 
@@ -574,7 +775,7 @@ Options ParseOptions(int argc, char ** argv)
                          "[--game-scene MATERIAL_SOURCE MESH_UTF VERTEX_SPV "
                          "FRAGMENT_SPV EXTENDED_SPV GAME_SPV] "
                          "[--mission-gpu VERTEX_SPV FRAGMENT_SPV EXTENDED_SPV GAME_SPV] "
-                         "[--capture-ppm FILE] [--skip-movies] [--skip-notification-cue] [--skip-sector-map] [--skip-space-background] [--skip-unit-labels] [--skip-planet-ui] [--skip-animated-portraits] [--skip-subtitles] [--base-textures-only] [--skip-legacy-lighting] [--skip-training-speech] [--skip-unit-voice] [--skip-unit-alerts] [--mission-alert-smoke] [--mission-hint-check] [--skip-mission-sfx] [--skip-teletype-visuals] [--skip-mission-music] [--sfx-smoke] [--no-frame-limit] [--frame-stats] [--profile-smoke FILE] [--mission-engine] [--mission-start] [--unit-catalog-check] [--mission-briefing] [--mission-campaign] "
+                         "[--capture-ppm FILE] [--skip-movies] [--skip-notification-cue] [--skip-sector-map] [--skip-space-background] [--skip-unit-labels] [--skip-planet-ui] [--skip-animated-portraits] [--skip-subtitles] [--base-textures-only] [--skip-legacy-lighting] [--skip-training-speech] [--skip-unit-voice] [--skip-unit-alerts] [--mission-alert-smoke] [--mission-hint-check] [--skip-mission-sfx] [--skip-teletype-visuals] [--skip-mission-music] [--sfx-smoke] [--no-frame-limit] [--frame-stats] [--profile-smoke FILE] [--mission-engine] [--mission-start] [--unit-catalog-check] [--mission-briefing] [--mission-campaign] [--menu-check MENU --smoke-ms MS] [--skirmish-check-race RACE] [--skirmish-check-map NAME] "
                          "[--animation-object OBJECT_NAME SCRIPT_NAME] "
                          "[--mesh-object OBJECT_NAME] "
                          "[--movie-source FILE (separate optional movie diagnostic)] "
@@ -752,6 +953,30 @@ Options ParseOptions(int argc, char ** argv)
             if (options.missionBriefing)
                 throw std::invalid_argument("duplicate option: --mission-briefing");
             options.missionBriefing = true;
+            continue;
+        }
+        if (option=="--skirmish-check-race" || option=="--skirmish-check-map")
+        {
+            if (index+1>=argc) throw std::invalid_argument("skirmish check option requires a value");
+            const std::string value=argv[++index];
+            if (option=="--skirmish-check-map") options.skirmishCheckMap=value;
+            else if(value=="terran") options.skirmishCheckRace=1;
+            else if(value=="mantis") options.skirmishCheckRace=2;
+            else if(value=="solarian") options.skirmishCheckRace=3;
+            else throw std::invalid_argument("skirmish check race must be terran/mantis/solarian");
+            continue;
+        }
+        if (option == "--save-check-file")
+        {
+            if (!options.saveCheckFile.empty() || index+1 >= argc) throw std::invalid_argument("--save-check-file requires a filename");
+            options.saveCheckFile=argv[++index];
+            if (options.saveCheckFile.find_first_of("/\\")!=std::string::npos) throw std::invalid_argument("save check requires a save-directory filename");
+            continue;
+        }
+        if (option == "--menu-check")
+        {
+            if (!options.menuCheck.empty() || index+1 >= argc) throw std::invalid_argument("--menu-check requires a menu name");
+            options.menuCheck=argv[++index];
             continue;
         }
         if (option == "--mission-campaign")
@@ -1007,6 +1232,16 @@ Options ParseOptions(int argc, char ** argv)
         throw std::invalid_argument("--game-types requires --mission-source");
     if (options.skipNotificationCue && options.missionSourceName.empty())
         throw std::invalid_argument("--skip-notification-cue requires --mission-source");
+    if ((options.skirmishCheckRace!=1 || !options.skirmishCheckMap.empty()) &&
+        options.menuCheck!="skirmish-start" && options.menuCheck!="skirmish-builder")
+        throw std::invalid_argument("skirmish check configuration requires --menu-check skirmish-start");
+    if ((options.menuCheck=="load-save") != !options.saveCheckFile.empty())
+        throw std::invalid_argument("--save-check-file requires --menu-check load-save");
+    if (!options.menuCheck.empty() && (!options.missionStart || !options.missionGpu ||
+        !options.smokeMilliseconds || options.missionCampaign || options.missionBriefing ||
+        options.unitCatalogCheck || !options.movieSourceName.empty() || (options.menuCheck!="main" && options.menuCheck!="options" &&
+        options.menuCheck!="pause" && options.menuCheck!="help" && options.menuCheck!="options-transactions" && options.menuCheck!="credits" && options.menuCheck!="single-player" && options.menuCheck!="skirmish" && options.menuCheck!="skirmish-start" && options.menuCheck!="skirmish-builder" && options.menuCheck!="campaign-builder" && options.menuCheck!="load-save")))
+        throw std::invalid_argument("--menu-check requires a supported menu name and exclusive timed GPU mission startup");
     if (options.unitCatalogCheck && (!options.missionStart || options.missionCampaign ||
         options.missionBriefing || !options.movieSourceName.empty()))
         throw std::invalid_argument("--unit-catalog-check requires exclusive --mission-start without campaign/briefing/movie");
@@ -1259,7 +1494,7 @@ int Run(int argc, char ** argv)
         ~FrameLimitRestore() { Restore(); }
     } frameLimitRestore{userDefaults.Get()->GetDefaults(),
         userDefaults.Get()->GetDefaults()->bNoFrameLimit, options.noFrameLimit};
-    if (options.missionStart)
+    if (options.missionStart || options.sfxSmoke)
     {
         if (DEFAULTS)
         {
@@ -1764,6 +1999,7 @@ int Run(int argc, char ** argv)
         InterfaceOwner<IFileSystem> physicalInterface;
         InterfaceOwner<IFileSystem> physicalTextures;
         InterfaceOwner<IFileSystem> physicalCampaign;
+        InterfaceOwner<IFileSystem> physicalMultiplayer;
         InterfaceOwner<IFileSystem> physicalMaterials;
         InterfaceOwner<IFileSystem> physicalProfiles;
         const auto resolveSource = [&](const char * name,
@@ -1785,6 +2021,9 @@ int Run(int argc, char ** argv)
         };
         IFileSystem * objects = resolveSource("Objects", physicalObjects);
         IFileSystem * campaign = resolveSource("Maps/Campaign", physicalCampaign);
+        IFileSystem * multiplayer = resolveSource("Maps/Multiplayer", physicalMultiplayer);
+        if (!multiplayer || !appDataSources.BindMultiplayer(multiplayer))
+            throw std::runtime_error("Original multiplayer map archive unavailable");
         IFileSystem * materials = materialSource.Get() ? materialSource.Get() :
             resolveSource("Mat", physicalMaterials);
         IFileSystem * profiles = resolveSource("Profiles", physicalProfiles);
@@ -2250,6 +2489,8 @@ int Run(int argc, char ** argv)
                 return 6;
             }
             std::cout << "Native operation storage alignment/copy/load checked\n";
+            if (!options.missionStart && !CheckNativeSelectionProjection())
+                throw std::runtime_error("Native projected selection coordinate regression failed");
             if (!NativeAppCheckObjectiveStorage())
             {
                 std::cerr << "Native objective storage contract failed\n";
@@ -2329,8 +2570,29 @@ int Run(int argc, char ** argv)
     }
     // Wayland compositors own top-level placement, so the portable shell does not
     // make successful startup depend on the legacy centering request.
-    const U32 windowFlags = options.hidden ? 0U : WMF_SHOW;
-    if (!windowManager.Get()->SetWindowPos(800, 600, windowFlags))
+    if (!options.menuCheck.empty() &&
+        !FrontierX::SetNativeWindowDiagnosticInput(windowManager.Get(),true))
+        throw std::runtime_error("Native menu diagnostic input isolation unavailable");
+    U32 initialWidth=800,initialHeight=600;
+    U32 savedWidth=0,savedHeight=0;
+    const U32 widthBytes=userDefaults.Get()->GetDataFromRegistry("CQWindowWidth",&savedWidth,sizeof(savedWidth));
+    const U32 heightBytes=userDefaults.Get()->GetDataFromRegistry("CQWindowHeight",&savedHeight,sizeof(savedHeight));
+    if (widthBytes || heightBytes)
+    {
+        if (widthBytes!=sizeof(savedWidth) || heightBytes!=sizeof(savedHeight) ||
+            savedWidth<640 || savedWidth>4095 || savedHeight<480 || savedHeight>4095)
+            throw std::runtime_error("Native saved display dimensions are invalid");
+        initialWidth=savedWidth; initialHeight=savedHeight;
+    }
+    U32 fullscreen=0;
+    const U32 fullscreenBytes=userDefaults.Get()->GetDataFromRegistry("CQFullscreen",&fullscreen,sizeof(fullscreen));
+    if (fullscreenBytes && (fullscreenBytes!=sizeof(fullscreen) || fullscreen>1))
+        throw std::runtime_error("Native saved fullscreen mode is invalid");
+    const U32 windowFlags = WMF_ALLOW_WINDOW_RESIZE | (options.hidden ? 0U : WMF_SHOW) |
+        (fullscreen ? WMF_FULL_SCREEN : 0U);
+    if (!FrontierX::SetNativeWindowMinimumSize(windowManager.Get(),640,480))
+        throw std::runtime_error("Native minimum game window size rejected");
+    if (!windowManager.Get()->SetWindowPos(initialWidth, initialHeight, windowFlags))
     {
         windowManager.Get()->SetCallback(nullptr);
         shellEventSystem = nullptr;
@@ -2353,8 +2615,9 @@ int Run(int argc, char ** argv)
 #if defined(FRONTIERX_HAS_SDL_GPU_RENDERER)
     if (!options.missionStart)
     {
-        if (!FrontierX::CheckNativeAnimationBorder())
-        { std::cerr << "Native animation border resize check failed\n"; return 6; }
+        if (!FrontierX::CheckNativeAnimationBorder() || !FrontierX::CheckNativeDrawAgentResize())
+        { std::cerr << "Native animation/draw-agent resize check failed\n"; return 6; }
+        std::cout << "Native cached menu images follow current resolution and interface coordinates\n";
     }
     if (!options.fontSmokePath.empty())
     {
@@ -2502,8 +2765,11 @@ int Run(int argc, char ** argv)
         missionGpuUnbind.pipeline = appPipeline.Get();
         if (FrontierX::BindNativeRenderFrames(appPipeline.Get(),
                 {&renderer, FrontierX::SdlGpuRenderer::ClearFrameCallback,
-                 FrontierX::SdlGpuRenderer::PresentFrameCallback}) != GR_OK)
+                 FrontierX::SdlGpuRenderer::PresentFrameCallback, FrontierX::SdlGpuRenderer::GammaCallback}) != GR_OK)
             return 7;
+        if (FrontierX::SetNativeRenderGamma(appPipeline.Get(),
+                float(DEFAULTS->GetDefaults()->gammaCorrection+10)/10.0f)!=GR_OK)
+            throw std::runtime_error("Native saved gamma setting rejected");
         if (PIPE->set_viewport(0, 0, static_cast<int>(SCREENRESX),
                 static_cast<int>(SCREENRESY)) != GR_OK ||
             PIPE->set_ortho(0.0F, static_cast<float>(SCREENRESX),
@@ -2760,7 +3026,7 @@ int Run(int argc, char ** argv)
                 std::cout << "Native App texture mip loading explicitly disabled; "
                              "SDL GPU samples the base level\n";
             }
-            ChangeInterfaceRes((options.missionBriefing || options.missionCampaign)
+            ChangeInterfaceRes((options.missionBriefing || options.missionCampaign || !options.menuCheck.empty())
                 ? IR_FRONT_END_RESOLUTION : IR_IN_GAME_RESOLUTION);
             std::cout << "Native App in-game interface: real=" << SCREENRESX << ',' << SCREENRESY
                       << "; ideal=" << SCREEN_WIDTH << ',' << SCREEN_HEIGHT << '\n';
@@ -2794,12 +3060,91 @@ int Run(int argc, char ** argv)
                 shellEventSystem = nullptr;
                 return complete ? 0 : 6;
             }
+            if (options.menuCheck=="options-transactions")
+            {
+                if (!CheckNativeOptionsTransactions()) throw std::runtime_error("Native Options Apply/Cancel/restart transaction failed");
+                FrontierX::NativeWindowMode before,after;
+                if (!FrontierX::GetNativeWindowMode(WM,before)) throw std::runtime_error("Native display query failed");
+                ShellWindowCallback(WM->GetWindowHandle(),FrontierX::LegacyMessage::SystemKeyDown,
+                    FrontierX::LegacyVirtualKey::Return,1U<<29);
+                ShellWindowCallback(WM->GetWindowHandle(),FrontierX::LegacyMessage::SystemKeyDown,
+                    FrontierX::LegacyVirtualKey::Return,(1U<<29)|(1U<<30));
+                if (!FrontierX::GetNativeWindowMode(WM,after) || after.fullscreen==before.fullscreen)
+                    throw std::runtime_error("Native Alt+Enter or repeat handling failed");
+                ShellWindowCallback(WM->GetWindowHandle(),FrontierX::LegacyMessage::SystemKeyUp,
+                    FrontierX::LegacyVirtualKey::Return,(1U<<29)|(1U<<31));
+                ShellWindowCallback(WM->GetWindowHandle(),FrontierX::LegacyMessage::SystemKeyDown,
+                    FrontierX::LegacyVirtualKey::Return,1U<<29);
+                if (!FrontierX::GetNativeWindowMode(WM,after) || after.fullscreen!=before.fullscreen)
+                    throw std::runtime_error("Native Alt+Enter window restoration failed");
+                std::cout << "Native fullscreen Options, Cancel, reflow and Alt+Enter repeat contracts checked" << std::endl;
+                std::cout << "Native original Options Apply/Cancel and persisted settings checked" << std::endl;
+                return 0;
+            }
+            if (options.menuCheck=="skirmish-start" || options.menuCheck=="skirmish-builder" || options.menuCheck=="pause")
+            {
+                if (CheckNativeOfflineSkirmish(options.skirmishCheckRace,
+                    options.skirmishCheckMap.empty()?nullptr:options.skirmishCheckMap.c_str())) throw std::runtime_error("Native offline skirmish generation failed");
+                if (options.menuCheck=="skirmish-start")
+                {
+                    COMPTR<IFileSystem> directory;
+                    DAFILEDESC descriptor("NativeWormholeRegression");
+                    if ((SAVEDIR->GetFileAttributes(descriptor.lpFileName)!=FILE_ATTRIBUTE_DIRECTORY &&
+                         !SAVEDIR->CreateDirectory(descriptor.lpFileName)) ||
+                        SAVEDIR->CreateInstance(&descriptor,directory)!=GR_OK ||
+                        !CheckNativeWormholePersistence(directory))
+                        throw std::runtime_error("Native active wormhole persistence check failed");
+                    std::cout << "Native synthetic active wormhole launcher and real portal save/load checked" << std::endl;
+                }
+                goto missionLoaded;
+            }
+            if (options.menuCheck=="load-save")
+            {
+                if (!FrontierX::CheckNativeSavedGameMenu(options.saveCheckFile.c_str()))
+                    throw std::runtime_error("Native saved-game menu load failed");
+                std::cout << "Native original save menu loaded " << options.saveCheckFile << std::endl;
+                goto missionLoaded;
+            }
+            if (!options.menuCheck.empty() && options.menuCheck!="pause" && options.menuCheck!="campaign-builder")
+            {
+                SetNativeCreditsFile((options.genDataPath.parent_path()/"credits.txt").string().c_str());
+                const auto *menu=static_cast<const GT_MENU1 *>(GENDATA->GetArchetypeData("Menu1"));
+                if (!menu) throw std::runtime_error("Original menu resource unavailable");
+                InterfaceOwner<IDAConnectionPoint> point;
+                NativeMissionModalExit timer;
+                timer.menuOnly=true; timer.started=FrontierX::Platform::MonotonicMilliseconds();
+                timer.duration=options.smokeMilliseconds;
+                ConnectionOwner connection;
+                if (EVENTSYS->QueryOutgoingInterface("IEventCallback",point.Receive())!=GR_OK ||
+                    !connection.Connect(point.Get(), &timer)) throw std::runtime_error("Menu timer connection failed");
+                std::cout << "Native original menu diagnostic: " << options.menuCheck << std::endl;
+                if (options.menuCheck=="main") CreateMenu1(false);
+                else if (options.menuCheck=="options") CreateOptionsMenu(true);
+                else if (options.menuCheck=="credits")
+                {
+                    if (!CheckNativeCreditsSequence()) throw std::runtime_error("Original credits did not parse through EOF");
+                    std::cout << "Native original complete credits text parsed through EOF" << std::endl;
+                    DoMenu_Credits(nullptr);
+                }
+                else if (options.menuCheck=="help") DoMenu_help(nullptr,*menu);
+                else if (options.menuCheck=="single-player") DoMenu_SPGame(nullptr,*menu,false);
+                else DoMenu_mshell(nullptr,*menu,nullptr,L"Diagnostic",nullptr,false,false);
+                connection.Disconnect();
+                std::cout << "Menu diagnostic exit: frames=" << timer.frames << "; timer=" << timer.requested
+                          << "; renderer=" << renderer.LastError() << std::endl;
+                if (!timer.frames || !timer.requested) throw std::runtime_error("Menu diagnostic did not complete timed source frames");
+                std::cout << "Native original menu frames: " << timer.frames << std::endl;
+                return 0;
+            }
             if (options.missionCampaign)
             {
+                SetNativeCreditsFile((options.genDataPath.parent_path() / "credits.txt").string().c_str());
                 const auto *menu = static_cast<const GT_MENU1 *>(GENDATA->GetArchetypeData("Menu1"));
                 if (!menu) throw std::runtime_error("Original training-menu resource unavailable");
                 std::cout << "Native App entering original campaign selector\n" << std::flush;
-                if (!DoMenu_campaign(nullptr, *menu, false)) return 0;
+                if (options.missionSourceName == "Sol_Train.dmission")
+                { if (!DoMenu_campaign(nullptr, *menu, false)) return 0; }
+                else if (!CreateMenu1(false)) return 0;
             }
             else if (options.missionBriefing)
             {
@@ -2810,15 +3155,22 @@ int Run(int argc, char ** argv)
                     return 0;
                 }
             }
-            else if (!LoadNativeSelectedMission(options.missionSourceName.c_str(), SPMAPDIR))
+            else
             {
-                std::cerr << "Native App production mission load failed\n";
-                return 6;
+                // Ordinary campaign entry performs this in the briefing Start
+                // handler before Reload. The direct diagnostic must do so too.
+                if (options.menuCheck=="campaign-builder") ChangeInterfaceRes(IR_IN_GAME_RESOLUTION);
+                if (!LoadNativeSelectedMission(options.missionSourceName.c_str(), SPMAPDIR))
+                {
+                    std::cerr << "Native App production mission load failed\n";
+                    return 6;
+                }
             }
         missionLoaded:
             std::cout << "Native App production mission records loaded\n" << std::flush;
             char selectedScript[MAX_PATH] = {};
-            if (!MGlobals::GetScriptName(selectedScript, sizeof(selectedScript))) return 6;
+            const bool offlineSkirmish = (options.missionCampaign || options.menuCheck=="skirmish-start" || options.menuCheck=="skirmish-builder" || options.menuCheck=="pause" || options.menuCheck=="load-save") && PLAYERID == 0 && !MGlobals::IsSinglePlayer();
+            if (!MGlobals::GetScriptName(selectedScript, sizeof(selectedScript)) && !offlineSkirmish) return 6;
             const bool trainingMission = std::strcmp(selectedScript, "Sol_T.dll") == 0;
             const bool firstTerranMission = std::strcmp(selectedScript, "Script01T.dll") == 0 ||
                 std::strcmp(selectedScript, "script01.dll") == 0;
@@ -2879,7 +3231,7 @@ int Run(int argc, char ** argv)
                 std::strcmp(selectedScript, "script16.dll") == 0 ||
                 std::strcmp(selectedScript, "Script16.dll") == 0 ||
                 std::strcmp(selectedScript, "SCRIPT16.dll") == 0;
-            if (!trainingMission && !firstTerranMission && !secondTerranMission &&
+            if (!offlineSkirmish && !trainingMission && !firstTerranMission && !secondTerranMission &&
                 !thirdTerranMission && !fourthTerranMission && !fifthTerranMission && !sixthTerranMission &&
                 !seventhTerranMission && !eighthTerranMission && !ninthTerranMission && !terran10Mission && !terran11Mission && !terran12Mission && !terran13Mission && !terran14Mission && !terran15Mission && !terran16Mission) return 6;
             std::cout << "Native App selected source script: " << selectedScript << '\n';
@@ -3028,9 +3380,31 @@ int Run(int argc, char ** argv)
             std::cout << "Native App production object frame presented; changed-pixels: "
                       << missionReadback.changedPixels << "; checksum: "
                       << missionReadback.checksum << '\n' << std::flush;
+            if (options.menuCheck=="pause")
+            {
+                InterfaceOwner<IDAConnectionPoint> point;
+                NativeMissionModalExit timer;
+                timer.menuOnly=true; timer.started=FrontierX::Platform::MonotonicMilliseconds();
+                timer.duration=options.smokeMilliseconds;
+                ConnectionOwner connection;
+                if (EVENTSYS->QueryOutgoingInterface("IEventCallback",point.Receive())!=GR_OK ||
+                    !connection.Connect(point.Get(), &timer)) throw std::runtime_error("Pause-menu timer connection failed");
+                std::cout << "Native original menu diagnostic: pause" << std::endl;
+                CreateMenu_igoptions();
+                connection.Disconnect();
+                if (!timer.frames || !timer.requested)
+                    throw std::runtime_error("Original pause menu did not complete: frames="+
+                        std::to_string(timer.frames)+"; renderer="+renderer.LastError());
+                std::cout << "Native original pause-menu frames: " << timer.frames << std::endl;
+                return 0;
+            }
             InterfaceOwner<IDAConnectionPoint> modalPoint;
             NativeMissionModalExit modalExit;
             modalExit.frameStats = options.frameStats;
+            modalExit.savedGameCheck=options.menuCheck=="load-save";
+            modalExit.skirmishRoundTrip=options.menuCheck=="skirmish-start" || options.menuCheck=="skirmish-builder";
+            modalExit.campaignBuilderCheck=options.menuCheck=="campaign-builder";
+            modalExit.wormholeRoundTripDone=options.menuCheck=="skirmish-builder" || modalExit.campaignBuilderCheck;
             if (options.frameStats)
             {
                 std::cout << "Native App GPU present mode: " << renderer.PresentModeName() << '\n';
@@ -3072,6 +3446,8 @@ int Run(int argc, char ** argv)
                 return 7;
             }
             std::cout << "Native App source modal returned " << modalResult << '\n';
+            if ((options.menuCheck=="skirmish-start" || options.menuCheck=="skirmish-builder" || options.menuCheck=="campaign-builder") && !modalExit.roundTripDone)
+                throw std::runtime_error("Native skirmish exited before live AI save/reload completed");
             if (shellCloseRequested || modalResult != MISSION_END_QUIT || !trainingMission)
             {
                 CQFLAGS.bGameActive = 0;
@@ -3114,7 +3490,10 @@ int Run(int argc, char ** argv)
                     FULLSCREEN->Notify(CQE_UPDATE, nullptr);
                     const auto *menu = static_cast<const GT_MENU1 *>(GENDATA->GetArchetypeData("Menu1"));
                     if (!menu) throw std::runtime_error("Original campaign-menu resource unavailable");
-                    if (DoMenu_campaign(nullptr, *menu, MGlobals::IsSinglePlayer())) goto missionLoaded;
+                    const bool resumeCampaign = MGlobals::IsSinglePlayer();
+                    if (options.missionSourceName == "Sol_Train.dmission")
+                    { if (DoMenu_campaign(nullptr, *menu, resumeCampaign)) goto missionLoaded; }
+                    else if (CreateMenu1(resumeCampaign)) goto missionLoaded;
                 }
                 return 0;
             }

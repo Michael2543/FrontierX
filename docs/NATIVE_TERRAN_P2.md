@@ -1,5 +1,16 @@
 # Terran campaign expansion
 
+## Full campaign user acceptance (2026-10-20)
+
+The user reports that the entire Terran campaign has finished perfectly,
+including the ending. Campaign completion is accepted in the delivered Linux
+scope. This supersedes earlier pending complete-playthrough statements; it adds
+no invented per-scenario evidence for defeat/retry, every optional ability,
+Windows/ABI, leak/resize or cross-platform parity. The next requested work is
+menus/options, intermittent in-game menu distortion and offline skirmish; see
+the [ordered plan](PORT_READINESS.md#accepted-campaign-and-next-delivery-plan-2026-10-20).
+
+
 ## Destroyed gun-platform quicksave rejection (2026-10-19)
 
 **Actual user save/log diagnosis:** the current quicksave in the TM13–TM16

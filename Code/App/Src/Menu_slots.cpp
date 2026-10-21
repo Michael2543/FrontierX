@@ -12,20 +12,42 @@
 // Multiplayer load map
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+#define swprintf FormatLegacyWide
+using std::min;
+using std::max;
+extern IMenuResource *MENU;
+struct SAVED_CONNECTION;
+#endif
 #include <wchar.h>
 
 #include "Frame.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IButton2.h"
 #include <DMenu1.h>
 #include "CQGame.h"
 #include "Mission.h"
 #include "NetBuffer.h"
 
+#if defined(_WIN32)
 #include <dplay.h>
+#endif
 
 #define DROP_SLOT_BEGIN		11200
 #define DROP_RACE_BEGIN		11300
@@ -128,7 +150,7 @@ struct Menu_slots : public DAComponent<Frame>
 
 	virtual bool onTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -152,7 +174,7 @@ struct Menu_slots : public DAComponent<Frame>
 
 	virtual bool onShiftTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -190,7 +212,7 @@ struct Menu_slots : public DAComponent<Frame>
 				finalFrame->onSetDefaultFocus(false);
 			}
 		}
-		else if (focusControl == NULL)
+		else if (!focusControl)
 		{
 				setFocus(dropPlayers[thisSlotID]);
 		}
@@ -328,9 +350,19 @@ void Menu_slots::setStateInfo (void)
 		staticNames[i]->InitStatic(data.staticNames[i], this);
 		staticPings[i]->InitStatic(data.staticPings[i], this);
 
+#if defined(_WIN32)
 		terranComputerNames[i] = data.terranComputerNames[i];
 		mantisComputerNames[i] = data.mantisComputerNames[i];
 		solarianComputerNames[i] = data.solarianComputerNames[i];
+#else
+		for (U32 character=0; character<32; ++character)
+		{
+			terranComputerNames[i].string[character] = data.terranComputerNames[i].string[character];
+			mantisComputerNames[i].string[character] = data.mantisComputerNames[i].string[character];
+			solarianComputerNames[i].string[character] = data.solarianComputerNames[i].string[character];
+		}
+		terranComputerNames[i].string[31] = mantisComputerNames[i].string[31] = solarianComputerNames[i].string[31] = 0;
+#endif
 	}
 
 	// initialize the names and colors of the players
@@ -454,8 +486,10 @@ void Menu_slots::setStateInfo (void)
 		dropRaces[i]->SetDataValue(index, MANTIS);
 		index = dropRaces[i]->AddString(_localLoadStringW(IDS_RACESELECT_SOLARIAN));
 		dropRaces[i]->SetDataValue(index, SOLARIAN);
+#if defined(_WIN32)
 		index = dropRaces[i]->AddString(_localLoadStringW(IDS_RACESELECT_VYRIUM));
 		dropRaces[i]->SetDataValue(index, VYRIUM);
+#endif
 #endif	
 
 		// set the proper selection

@@ -10,8 +10,11 @@
 #include "TConnPoint.h"
 #include "WindowManager.h"
 
+#include <SDL3/SDL.h>
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
+#include <cstdio>
 #include <limits>
 #include <string>
 
@@ -105,8 +108,35 @@ public:
             (flags & WMF_SHOW) != 0,
             (flags & WMF_CENTER) != 0,
             error);
+        if (!configured) std::fprintf(stderr,"Native window configuration rejected: %s\n",error.c_str());
+        if (configured)
+        {
+            mode_.fullscreen = (flags & WMF_FULL_SCREEN) != 0;
+            mode_.width = width; mode_.height = height;
+            // Options and Alt+Enter apply between source frames. Publish the
+            // completed geometry before the next full-target clear.
+            if (window_callback_)
+            {
+                WM_WINAREA area{}; GetClientArea(area);
+                window_callback_(GetWindowHandle(),LegacyMessage::Size,0,
+                    static_cast<LPARAM>((U32(area.w)&0xffffU)|((U32(area.h)&0xffffU)<<16)));
+            }
+        }
         return configured ? TRUE : FALSE;
     }
+
+    NativeWindowMode GetMode()
+    {
+        NativeWindowMode result=mode_;
+        if (!result.fullscreen)
+        {
+            WM_WINAREA area{}; GetClientArea(area);
+            if (area.w>0 && area.h>0) { result.width=area.w; result.height=area.h; }
+        }
+        return result;
+    }
+
+    void SetDiagnosticInput(bool enabled) { diagnostic_input_=enabled; if (enabled) active_=true; }
 
     void SetCallback(WNDPROC callback) override { window_callback_ = callback; }
 
@@ -150,7 +180,7 @@ public:
 
     void GetCursorPos(S32 & x, S32 & y) override
     {
-        if (controlled_input_)
+        if (controlled_input_ || diagnostic_input_)
         {
             int left = 0, top = 0, width = 0, height = 0;
             if (!window_.ClientArea(left, top, width, height)) std::abort();
@@ -185,7 +215,7 @@ private:
 
     bool HandleEvent(const WindowEvent & event)
     {
-        if (controlled_input_)
+        if (controlled_input_ || diagnostic_input_)
         {
             switch (event.type)
             {
@@ -264,10 +294,72 @@ private:
     S32 cursor_y_ = 0;
     bool active_ = true;
     bool controlled_input_ = false;
+    bool diagnostic_input_ = false;
+    NativeWindowMode mode_;
     bool close_requested_ = false;
 };
 
 NativeWindowManager * NativeWindowManager::live_window_ = nullptr;
+}
+
+bool SetNativeWindowDiagnosticInput(IWindowManager *manager,bool enabled)
+{
+    auto *native=dynamic_cast<NativeWindowManager *>(manager);
+    if (!native) return false;
+    native->SetDiagnosticInput(enabled);
+    return true;
+}
+
+bool GetNativeWindowMode(IWindowManager *manager,NativeWindowMode &mode)
+{
+    auto *native=dynamic_cast<NativeWindowManager *>(manager);
+    if (!native) return false;
+    mode=native->GetMode();
+    return true;
+}
+
+bool SetNativeWindowMode(IWindowManager *manager,const NativeWindowMode &mode)
+{
+    if (!dynamic_cast<NativeWindowManager *>(manager)) return false;
+    return manager->SetWindowPos(mode.width,mode.height,
+        WMF_SHOW | WMF_ALLOW_WINDOW_RESIZE | (mode.fullscreen ? WMF_FULL_SCREEN : 0)) != 0;
+}
+
+bool SetNativeWindowMinimumSize(IWindowManager *manager,std::uint32_t width,std::uint32_t height)
+{
+    if (!dynamic_cast<NativeWindowManager *>(manager) || !width || !height ||
+        width>std::numeric_limits<int>::max() || height>std::numeric_limits<int>::max()) return false;
+    SDL_Window *window=SDL_GetWindowFromID(manager->GetWindowHandle());
+    return window && SDL_SetWindowMinimumSize(window,width,height);
+}
+
+std::vector<NativeDisplayMode> GetNativeWindowDisplayModes(IWindowManager *manager)
+{
+    std::vector<NativeDisplayMode> result;
+    if (!manager) return result;
+    auto add = [&](int width, int height) {
+        if (width >= 640 && height >= 480 && width <= 4095 && height <= 4095 &&
+            std::none_of(result.begin(), result.end(), [&](const auto &m) {
+                return m.width == unsigned(width) && m.height == unsigned(height); }))
+            result.push_back({unsigned(width), unsigned(height)});
+    };
+    WM_WINAREA current{}; manager->GetClientArea(current); add(current.w, current.h);
+    NativeWindowMode mode;
+    if (GetNativeWindowMode(manager,mode)) add(mode.width,mode.height);
+    SDL_Window *window = SDL_GetWindowFromID(manager->GetWindowHandle());
+    if (window)
+    {
+        int count = 0;
+        SDL_DisplayMode **modes = SDL_GetFullscreenDisplayModes(SDL_GetDisplayForWindow(window), &count);
+        for (int i=0; modes && i<count; ++i) add(modes[i]->w, modes[i]->h);
+        SDL_free(modes);
+    }
+    for (const auto &mode : {NativeDisplayMode{800,600}, {1024,768}, {1280,720}, {1280,960}, {1600,900}, {1920,1080}})
+        add(mode.width, mode.height);
+    std::sort(result.begin(), result.end(), [](const auto &a, const auto &b) {
+        return a.width < b.width || (a.width == b.width && a.height < b.height);
+    });
+    return result;
 }
 
 bool HasNativeWindowMessageTarget(LegacyWindowToken window)

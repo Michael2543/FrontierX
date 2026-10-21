@@ -12,8 +12,28 @@
 // Multiplayer shell
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+#define swprintf FormatLegacyWide
+using std::min;
+using std::max;
+extern IMenuResource *MENU;
+struct SAVED_CONNECTION;
+#endif
 
 #include "Frame.h"
 #include "IStatic.h"
@@ -23,16 +43,24 @@
 #include "GRPackets.h"
 #include "Mission.h"
 #include "IEdit2.h"
-#include "IListbox.h"
+#include "IListBox.h"
+#if defined(_WIN32)
 #include "NetConnectBuffers.h"
+#endif
 #include "NetBuffer.h"
 #include "OpAgent.h"
 #include "MusicManager.h"
 
 #include <stdio.h>
+#if defined(_WIN32)
 #include <dplay.h>
+#endif
+#if defined(_WIN32)
 #include <dplobby.h>
+#endif
+#if defined(_WIN32)
 #include "zonelobby.h"
+#endif
 
 #define CHATMSGSIZE 128
 
@@ -158,7 +186,11 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 																				conn(_conn),
 																				szPlayerName(_szPlayerName),
 																				szSessionName(_szSessionName),
-																				bTCP(_conn && IsEqualGUID(_conn->guidSP,DPSPGUID_TCPIP)!=0),
+																				#if defined(_WIN32)
+                                                        bTCP(_conn && IsEqualGUID(_conn->guidSP,DPSPGUID_TCPIP)!=0),
+#else
+                                                        bTCP(false),
+#endif
 																				bLAN(_bLAN),
 																				bZone(_bZone)
 	{
@@ -208,7 +240,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 
 	virtual bool onTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -240,7 +272,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 
 	virtual bool onShiftTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -320,8 +352,11 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 	{
 		switch (message)
 		{
+#if defined(_WIN32)
 		case CQE_RESET_NETWORK_PERFORMANCE:
-			NETBUFFER->SetMaxBandwidth((conn) ? conn->guidSP : DPSPGUID_TCPIP, bLAN);
+		#if defined(_WIN32)
+	NETBUFFER->SetMaxBandwidth((conn) ? conn->guidSP : DPSPGUID_TCPIP, bLAN);
+#endif
 			break;
 		case CQE_ADDPLAYER:
 			onAddPlayer(DPID(param));
@@ -340,6 +375,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 			onNetPacket((const BASE_PACKET *)param);
 			break;
 
+#endif
 		case CQE_KILL_FOCUS:
 			if (childFrame)
 			{
@@ -354,6 +390,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 			}
 			break;
 
+#if defined(_WIN32)
 		case WM_ACTIVATEAPP:
 			if (bLoadInProgress || bDownloadEnabled)
 			{
@@ -376,6 +413,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 			else
 				SetState(localSlot, ACTIVE, true);
 			break;
+#endif
 
 		} // end switch (message)
 
@@ -463,6 +501,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 		}
 	}
 
+#if defined(_WIN32)
 	static DWORD WINAPI threadProc (LPVOID lpParameter)
 	{
 		struct Menu_mshell * _this = (Menu_mshell *) lpParameter;
@@ -470,6 +509,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 		_this->pollingThreadMain();
 		return 0;
 	}
+#endif
 
 	void clearReady (void);
 
@@ -523,6 +563,7 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 
 	static U32 getPlayerName (DPID id, wchar_t szName[PLAYERNAMESIZE])
 	{
+#if defined(_WIN32)
 		//
 		// get player name from the id
 		//
@@ -538,10 +579,15 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 			::free(pName);
 		}
 		return wcslen(szName);
-	}
+
+#else
+    szName[0] = 0; return 0;
+#endif
+}
 
 	void enableJoin (bool bEnable)
 	{
+#if defined(_WIN32)
 		if (DPLAY)
 		{
 			DPSESSIONDESC2 *pDesc;
@@ -561,10 +607,15 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 			DPLAY->SetSessionDesc(pDesc,0);
 			free(pDesc);
 		}
-	}
+
+#else
+    // Offline setup uses the existing frame update; no remote session/thread exists.
+#endif
+}
 
 	void updateSessDesc (void)
 	{
+#if defined(_WIN32)
 		if (DPLAY)
 		{
 			DPSESSIONDESC2 *pDesc;
@@ -589,7 +640,11 @@ struct Menu_mshell : public DAComponent<Frame>, ICQGame
 			}
 			free(pDesc);
 		}
-	}
+
+#else
+    // Offline setup uses the existing frame update; no remote session/thread exists.
+#endif
+}
 
 	void updateReadyCount (U32 dt)
 	{
@@ -728,7 +783,9 @@ void Menu_mshell::init (void)
 	setStateInfo();
 	startPollingThread();
 
+#if defined(_WIN32)
 	NETBUFFER->SetMaxBandwidth((conn) ? conn->guidSP : DPSPGUID_TCPIP, bLAN);
+#endif
 
 	if (!PLAYERID)
 	{
@@ -737,6 +794,7 @@ void Menu_mshell::init (void)
 		enterChat->SetVisible(false);
 	}
 
+#if defined(_WIN32)
 	if (ZONESCORE)
 	{
 		ZONESCORE->SendGameState(DPLOBBY, ZSTATE_STARTSTAGING);
@@ -761,6 +819,7 @@ void Menu_mshell::init (void)
 			ipaddress->SetText(bufferw);
 		}
 	}
+#endif
 
 	MUSICMANAGER->PlayMusic("Multiplayer_menu.wav");
 }
@@ -768,6 +827,7 @@ void Menu_mshell::init (void)
 //
 void Menu_mshell::stopPollingThread (void)
 {
+#if defined(_WIN32)
 	if (hThread)
 	{
 		bThreadCancel = true;
@@ -775,11 +835,16 @@ void Menu_mshell::stopPollingThread (void)
 		::CloseHandle(hThread);
 		hThread=0;
 	}
+
+#else
+    // Offline setup uses the existing frame update; no remote session/thread exists.
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::startPollingThread (void)
 {
+#if defined(_WIN32)
 	DWORD dwThreadID;
 
 	CQASSERT(hThread==0);
@@ -788,11 +853,16 @@ void Menu_mshell::startPollingThread (void)
 
 	hThread = CreateThread(0,4096, threadProc, (LPVOID)this, 0, &dwThreadID);
 	CQASSERT(hThread);
+
+#else
+    // Offline setup uses the existing frame update; no remote session/thread exists.
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::pollingThreadMain (void)
 {
+#if defined(_WIN32)
 	bMessageReceived = true;
 
 	while (bThreadCancel==false)
@@ -813,11 +883,16 @@ void Menu_mshell::pollingThreadMain (void)
 		bUpdateHandled = false;
 		Sleep(100);
 	}
+
+#else
+    // Offline setup uses the existing frame update; no remote session/thread exists.
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::uploadZoneInfo (void)
 {
+#if defined(_WIN32)
 	if (ZONESCORE)
 	{
 		char buffer[PLAYERNAMESIZE];
@@ -853,6 +928,10 @@ void Menu_mshell::uploadZoneInfo (void)
 		ZONESCORE->SendGameOptions(DPLOBBY);
 	}
 	MISSION->SetInitialCheatState();
+
+#else
+    MISSION->SetInitialCheatState();
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1513,6 +1592,7 @@ void Menu_mshell::clearReady (void)
 //
 void Menu_mshell::onAddPlayer (DPID id)
 {
+#if defined(_WIN32)
 	S32 row = getSlot(id);
 
 	if (bLoadInProgress)
@@ -1555,11 +1635,16 @@ void Menu_mshell::onAddPlayer (DPID id)
 	}
 
 	recalculateJoinState();
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::onDeletePlayer (DPID id)
 {
+#if defined(_WIN32)
 	S32 row = getSlot(id);
 
 	if (row>=0 && bLoadInProgress)
@@ -1584,11 +1669,16 @@ void Menu_mshell::onDeletePlayer (DPID id)
 		CQMessageBox(IDS_HELP_BOOTED, IDS_APP_NAMETM, MB_OK);
 		endDialog(0);
 	}
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::onNewHost (void)
 {
+#if defined(_WIN32)
 	if (bLoadInProgress)
 		killLoadProcess();
 
@@ -1603,6 +1693,10 @@ void Menu_mshell::onNewHost (void)
 		setStateInfo();
 	}
 	recalculateJoinState();
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1666,6 +1760,7 @@ void Menu_mshell::onLocalUpdate (void)
 	}
 
 
+#if defined(_WIN32)
 	if (bLocalDataChanged && HOSTID==PLAYERID)
 	{
 		if (NETPACKET->TestLowPrioritySend(sizeof(CQGAME_PACKET)) > sizeof(CQGAME_PACKET))
@@ -1693,11 +1788,16 @@ void Menu_mshell::onLocalUpdate (void)
 
 	if (bOutgoingData)
 		sendClientPacket();
+#else
+	if (bLocalDataChanged) { bLocalDataChanged=false; }
+	bMapNameChanged=false;
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::onNetPacket (const BASE_PACKET *_packet)
 {
+#if defined(_WIN32)
 	if (_packet->type == PT_GAMEROOM)
 	{
 		const GR_PACKET * packet = (const GR_PACKET *) _packet;
@@ -1763,11 +1863,16 @@ void Menu_mshell::onNetPacket (const BASE_PACKET *_packet)
 			break;
 		}
 	}
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::sendClientPacket (bool bAlwaysSend)
 {
+#if defined(_WIN32)
 	if (HOSTID && (bAlwaysSend || NETPACKET->TestLowPrioritySend(sizeof(CLIENTSETTING_PACKET)) >= sizeof(CLIENTSETTING_PACKET)))
 	{
 		CLIENTSETTING_PACKET packet;
@@ -1782,6 +1887,10 @@ void Menu_mshell::sendClientPacket (bool bAlwaysSend)
 	}
 	else
 		bOutgoingData = true;
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1855,6 +1964,7 @@ void Menu_mshell::receiveRemoteDefaults (const USER_DEFAULTS & userDefaults)
 //
 void Menu_mshell::sendChatMsg (void)
 {
+#if defined(_WIN32)
 	if (HOSTID && NETPACKET->TestLowPrioritySend(sizeof(GRCHAT_PACKET)) >= sizeof(GRCHAT_PACKET))
 	{
 		GRCHAT_PACKET packet;
@@ -1871,11 +1981,16 @@ void Menu_mshell::sendChatMsg (void)
 		}
 		editChat->SetText(L"");
 	}
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::onReceiveChatPacket (const GRCHAT_PACKET *packet)
 {
+#if defined(_WIN32)
 	S32 row;
 
 	row = getSlot(packet->fromID);
@@ -1885,16 +2000,25 @@ void Menu_mshell::onReceiveChatPacket (const GRCHAT_PACKET *packet)
 		swprintf(buffer, L"[%s] %s", szPlayerNames[row], packet->szMsg);
 		addToChatBox(packet->fromID, buffer);
 	}
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
 void Menu_mshell::chatAnnouncePlayer (U32 dpid, bool bEntering)
 {
+#if defined(_WIN32)
 	S32 row = getSlot(dpid);
 	wchar_t buffer[256];
 
 	swprintf(buffer, L"[%s] %s", szPlayerNames[row], _localLoadStringW((bEntering)?IDS_PLAYER_ENTERING:IDS_PLAYER_EXITING));
 	addToChatBox(0, buffer);
+
+#else
+    throw std::runtime_error("Remote game-room message in native offline setup");
+#endif
 }
 //--------------------------------------------------------------------------//
 //
@@ -1977,6 +2101,10 @@ void Menu_mshell::addToChatBox (U32 dpid, const wchar_t * string)
 //
 U32 __stdcall DoMenu_mshell (Frame * parent, const GT_MENU1 & data, const SAVED_CONNECTION * conn, const wchar_t * szPlayerName, const wchar_t * szSessionName, bool bLAN, bool bZone)
 {
+#if !defined(_WIN32)
+	if (conn || bLAN || bZone || PLAYERID || HOSTID)
+		throw std::runtime_error("Native game room only supports offline skirmish");
+#endif
 	Menu_mshell * dlg = new Menu_mshell(parent, data, conn, szPlayerName, szSessionName, bLAN, bZone);
 	dlg->beginModalFocus();
 

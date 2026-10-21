@@ -6,6 +6,7 @@
 #include "Include/MGlobals.h"
 #include <DACOM.H>
 #include "SoundManager.h"
+#include "UserDefaults.h"
 #include "MusicManager.h"
 #include "SFX.h"
 #include "resource.h"
@@ -90,6 +91,12 @@ struct NativeMissionSound : ISoundManager, IEventCallback
 
     bool Init()
     {
+        if (!DEFAULTS) return false;
+        const auto &sound=DEFAULTS->GetDefaults()->soundState;
+        music={sound.music.volume,sound.music.bMute!=0};
+        effects={sound.effects.volume,sound.effects.bMute!=0};
+        comms={sound.comms.volume,sound.comms.bMute!=0};
+        chat={sound.chat.volume,sound.chat.bMute!=0};
         COMPTR<IDAConnectionPoint> connection;
         return EVENTSYS && EVENTSYS->QueryOutgoingInterface("IEventCallback", connection) == GR_OK &&
             connection->Advise(static_cast<IEventCallback *>(this), &eventHandle) == GR_OK;
@@ -428,6 +435,11 @@ struct NativeMissionSound : ISoundManager, IEventCallback
     {
         if (level < 0 || level > 10) Unsupported("SetVolumeLevel range");
         setting = {level, muted};
+        // The original SoundMan holds a reference to USER_DEFAULTS::soundState.
+        auto &sound=DEFAULTS->GetDefaults()->soundState;
+        auto &item= &setting==&music ? sound.music : &setting==&effects ? sound.effects :
+            &setting==&comms ? sound.comms : sound.chat;
+        item.volume=level; item.bMute=muted;
         UpdateVolumeState(5000);
     }
 

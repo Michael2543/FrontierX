@@ -507,18 +507,36 @@ int main()
             if (!Expect(batcher->set_projection(worldProjection) == GR_OK &&
                         batcher->set_viewport(7,11,640,480) == GR_OK &&
                         batcher->set_modelview(world) == GR_OK &&
-                        batcher->set_state(RPR_STATE_FLAGS,0U) == GR_OK &&
+                        batcher->set_state(RPR_STATE_FLAGS, BM_M_F_HAS_BLEND | BM_M_F_HAS_DEPTH) == GR_OK &&
+                        batcher->set_render_state(D3DRS_ALPHABLENDENABLE, FALSE) == GR_OK &&
+                        batcher->set_render_state(D3DRS_ZWRITEENABLE, TRUE) == GR_OK &&
                         batcher->set_state(RPR_STATE_ID,41U + operation) == GR_OK,
                         "queued world transform and viewport prepared")) return 1;
             const auto before = drawTransforms.size();
             if (!Expect(FrontierX::SubmitIndexedRenderSmokeScene(batcher) == GR_OK &&
                         drawTransforms.size() == before, "world draw remains genuinely pooled")) return 1;
+            // Scarab sets ONE/ONE before Anim2D::render -> Camera::SetPerspective.
+            // Its view barrier must drain an older opaque hull without replacing
+            // the pending sprite's blend/depth with that hull's snapshot.
+            if (!Expect(batcher->set_render_state(D3DRS_ALPHABLENDENABLE, TRUE) == GR_OK &&
+                        batcher->set_render_state(D3DRS_SRCBLEND, D3DBLEND_ONE) == GR_OK &&
+                        batcher->set_render_state(D3DRS_DESTBLEND, D3DBLEND_ONE) == GR_OK &&
+                        batcher->set_render_state(D3DRS_ZWRITEENABLE, FALSE) == GR_OK,
+                        "Scarab pending additive sprite state prepared")) return 1;
             GENRESULT result = GR_GENERIC;
             Matrix4 changedProjection(true); changedProjection.d[0][0] = 0.75F;
             if (operation == 0) result = batcher->set_projection(changedProjection);
             if (operation == 1) result = batcher->set_ortho(0,1024,768,0,-1,1);
             if (operation == 2) result = batcher->set_perspective(0.5F,1.2F,5,100);
             if (operation == 3) result = batcher->set_viewport(3,5,320,240);
+            U32 blend = 0, source = 0, destination = 0, depthWrite = 1;
+            if (!Expect(batcher->get_render_state(D3DRS_ALPHABLENDENABLE, &blend) == GR_OK &&
+                        batcher->get_render_state(D3DRS_SRCBLEND, &source) == GR_OK &&
+                        batcher->get_render_state(D3DRS_DESTBLEND, &destination) == GR_OK &&
+                        batcher->get_render_state(D3DRS_ZWRITEENABLE, &depthWrite) == GR_OK &&
+                        blend == TRUE && source == D3DBLEND_ONE && destination == D3DBLEND_ONE &&
+                        depthWrite == FALSE,
+                        "Scarab additive sprite survives original view barrier without black opaque quad")) return 1;
             const bool submittedBeforeTransition = drawTransforms.size() == before + 1U;
             if (!submittedBeforeTransition)
             {

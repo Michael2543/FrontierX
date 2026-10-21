@@ -1398,7 +1398,8 @@ void SPlayerAI::SinglePassDataUpdate(void)
 				if(bBuildThreat && (enemySys < MAX_SYSTEMS))
 					SpreadThreat(gridIndexX, gridIndexY, enemySys, part, false);
 			}
-			else if(allyMask & (1 << (part->playerID-1)))
+			else if(part->playerID > 0 && part->playerID <= MAX_PLAYERS &&
+				(allyMask & (U32(1) << (part->playerID-1))))
 			{
 			//an allied unit
 				if(bBuildThreat && (enemySys < MAX_SYSTEMS))

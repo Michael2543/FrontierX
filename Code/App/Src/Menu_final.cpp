@@ -12,19 +12,41 @@
 // Multiplayer final setup screen
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include "CQTrace.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+#define swprintf FormatLegacyWide
+using std::min;
+using std::max;
+extern IMenuResource *MENU;
+struct SAVED_CONNECTION;
+#endif
 
 #include "Frame.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IButton2.h"
 #include <DMenu1.h>
 #include "CQGame.h"
 #include "NetBuffer.h"
 #include "NetPacket.h"
 
+#if defined(_WIN32)
 #include <dplay.h>
+#endif
 #include <stdio.h>
 
 #define RESYNC_PERIOD   15000     // milliseconds
@@ -160,7 +182,7 @@ struct Menu_final : public DAComponent<Frame>
 
 	virtual bool onTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -185,7 +207,7 @@ struct Menu_final : public DAComponent<Frame>
 
 	virtual bool onShiftTabPressed (void)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			return false;
 		}
@@ -219,7 +241,7 @@ struct Menu_final : public DAComponent<Frame>
 
 	virtual void onSetDefaultFocus (bool bFromPrevious)
 	{
-		if (focusControl == NULL)
+		if (!focusControl)
 		{
 			if (HOSTID == PLAYERID)
 			{
@@ -292,7 +314,11 @@ struct Menu_final : public DAComponent<Frame>
 			NETPACKET->StallPacketDelivery(true);
 
 			if (CQFLAGS.bNoExitConfirm || CQMessageBox(IDS_CONFIRM_QUIT, IDS_CONFIRM, MB_OKCANCEL))
+#if defined(_WIN32)
 				PostQuitMessage(0);
+#else
+				endDialog(0);
+#endif
 
 			NETPACKET->StallPacketDelivery(false);
 
@@ -378,7 +404,11 @@ bool Menu_final::checkDataValid (const ICQGame & cqgame)
 bool Menu_final::testForCheating (void)
 {
 	bool result = false;
+	#if defined(_WIN32)
 	const U32 checkSum = GetMultiplayerVersion();
+#else
+	const U32 checkSum = GetBuildVersion();
+#endif
 	U32 i;
 
 	if (PLAYERID!=0)

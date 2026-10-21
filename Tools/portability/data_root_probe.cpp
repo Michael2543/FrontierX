@@ -13,6 +13,10 @@ class Transform;
 #include "NativeAppMissionMedia.h"
 #include "NativeAppGlobals.h"
 #include "NativeAppArchetypeBytes.h"
+#include "NativePlayerProfiles.h"
+#include "UserDefaults.h"
+#include <FrontierX/NativeComponentManager.h>
+#include <FrontierX/NativeUserDefaults.h>
 
 #include <array>
 #include <algorithm>
@@ -29,6 +33,69 @@ class Transform;
 namespace
 {
 
+
+// Menu1 and Options share the actual save-root/profile owner. A new profile
+// must not expose the imported campaign progress; renaming must retain both
+// its files and its per-player settings. Existing raw save checks cannot cover
+// profile selection because they keep one physical root throughout.
+bool CheckPlayerDirectories(IFileSystem *root,const std::filesystem::path &path,std::string &error)
+{
+    if (DEFAULTS) return false;
+    FrontierX::StartupPreferences preferences;
+    if (!FrontierX::LoadStartupPreferences({},path/"profile-preferences",{},preferences,&error)) return false;
+    FrontierX::NativeComponentManager manager;
+    FrontierX::RegisterNativeUserDefaults(&manager,preferences.selection.path,preferences);
+    DACOMDESC descriptor("IUserDefaults");
+    void *raw=nullptr;
+    if (manager.CreateInstance(&descriptor,&raw)!=GR_OK || !raw) return false;
+    bool valid=false;
+    {
+        DEFAULTS=static_cast<IUserDefaults *>(raw);
+        struct Restore
+        {
+            ~Restore() { FrontierX::BindNativePlayerSaveRoot(nullptr); DEFAULTS->Release(); DEFAULTS=nullptr; }
+        } restore;
+        FrontierX::BindNativePlayerSaveRoot(root);
+        valid=FrontierX::CreateNativePlayerProfile("anchor") &&
+            FrontierX::SelectNativePlayerProfile("anchor") && SAVEDIR==root &&
+            DEFAULTS->StoreDefaults() && !FrontierX::DeleteNativePlayerProfile("anchor") &&
+            FrontierX::CreateNativePlayerProfile("new-player") &&
+            FrontierX::SelectNativePlayerProfile("new-player") && SAVEDIR!=root &&
+            SAVEDIR->GetFileAttributes("player.gpf")==0xffffffffU;
+        DAFILEDESC file("marker.dat");
+        file.lpImplementation="DOS"; file.dwDesiredAccess=GENERIC_READ|GENERIC_WRITE;
+        file.dwCreationDistribution=CREATE_ALWAYS;
+        IFileSystem *marker=nullptr;
+        U32 word=0x12345678U; DWORD bytes=0;
+        valid=valid && SAVEDIR->CreateInstance(&file,reinterpret_cast<void **>(&marker))==GR_OK && marker;
+        if (marker)
+        {
+            valid=marker->WriteFile(nullptr,&word,sizeof(word),&bytes,nullptr) && bytes==sizeof(word) && valid;
+            marker->Release(); marker=nullptr;
+        }
+        DEFAULTS->GetDefaults()->gammaCorrection=2;
+        valid=DEFAULTS->StoreDefaults() && valid;
+        valid=valid && FrontierX::RenameNativePlayerProfile("new-player","renamed-player") &&
+            FrontierX::SelectNativePlayerProfile("renamed-player") && DEFAULTS->LoadDefaults() &&
+            DEFAULTS->GetDefaults()->gammaCorrection==2;
+        file.dwDesiredAccess=GENERIC_READ; file.dwCreationDistribution=OPEN_EXISTING;
+        U32 read=0;
+        valid=valid && SAVEDIR->CreateInstance(&file,reinterpret_cast<void **>(&marker))==GR_OK && marker;
+        if (marker)
+        {
+            valid=marker->ReadFile(nullptr,&read,sizeof(read),&bytes,nullptr) && bytes==sizeof(read) && read==word && valid;
+            marker->Release();
+        }
+        valid=FrontierX::SelectNativePlayerProfile("anchor") && valid;
+        valid=valid && SAVEDIR==root && DEFAULTS->LoadDefaults() &&
+            DEFAULTS->GetDefaults()->gammaCorrection==0 &&
+            root->GetFileAttributes("player.gpf")!=0xffffffffU &&
+            root->GetFileAttributes("marker.dat")==0xffffffffU &&
+            FrontierX::DeleteNativePlayerProfile("renamed-player") &&
+            DEFAULTS->DeletePlayerDefaults("renamed-player");
+    }
+    return manager.ShutDown()==GR_OK && valid;
+}
 
 bool HasStatus(
 	const std::vector<FrontierX::Platform::DataRootEntry> &entries,
@@ -399,6 +466,25 @@ int RunSelfTest()
 			std::filesystem::remove_all(root, error);
 			return 1;
 		}
+        // Original player menus require directory handles as well as save files.
+        IFileSystem *profile = nullptr;
+        DAFILEDESC profileDesc("Profile-A");
+        bool profileOk = saveDirectory->CreateDirectory("Profile-A") &&
+            saveDirectory->GetFileAttributes("Profile-A") == FILE_ATTRIBUTE_DIRECTORY &&
+            saveDirectory->CreateInstance(&profileDesc, reinterpret_cast<void **>(&profile)) == GR_OK && profile;
+        if (profile) profile->Release();
+        profileOk = profileOk && saveDirectory->MoveFile("Profile-A", "Profile-B") &&
+            saveDirectory->CreateDirectory("Profile-A") &&
+            !saveDirectory->MoveFile("Profile-A", "Profile-B") &&
+            !saveDirectory->CreateDirectory("../escape") &&
+            !saveDirectory->RemoveDirectory("..") &&
+            saveDirectory->RemoveDirectory("Profile-A") &&
+            saveDirectory->RemoveDirectory("Profile-B");
+        if (!profileOk)
+        {
+            std::cerr << "Native player directory create/open/rename/isolation check failed\n";
+            saveDirectory->Release(); std::filesystem::remove_all(root, error); return 1;
+        }
 		DAFILEDESC save("saved.mission");
 		// GameProgress opens a raw twelve-byte DOS record, not a UTF archive.
 		DAFILEDESC progress("player.gpf");
@@ -437,6 +523,11 @@ int RunSelfTest()
 			std::filesystem::remove_all(root, error);
 			return 1;
 		}
+        if (!CheckPlayerDirectories(saveDirectory,root,utfError))
+        {
+            std::cerr << "Native profile create/select/rename/settings/delete isolation failed: " << utfError << '\n';
+            saveDirectory->Release(); std::filesystem::remove_all(root,error); return 1;
+        }
 		save.lpImplementation = "UTF";
 		save.dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
 		save.dwCreationDistribution = CREATE_ALWAYS;

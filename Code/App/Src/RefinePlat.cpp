@@ -2574,3 +2574,96 @@ static _refineplatfactory __plat;
 //--------------------------------------------------------------------------//
 //----------------------------End RefinePlat.cpp-------------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+#include "MPartRef.h"
+#include "MScript.h"
+#include "IAdmiral.h"
+#include <iostream>
+#include <string>
+// Private --menu-check fixture: original platform, stock research, normal matrix
+// order and unmodified build time. Never called by ordinary campaign/skirmish.
+int CheckNativeSkirmishAdmiral(U32 &producerID,U32 &admiralID)
+{
+    const U32 player=MGlobals::GetThisPlayer();
+    if (admiralID)
+    {
+        auto *object=OBJLIST->FindObject(admiralID);
+        OBJPTR<IAdmiral> admiral;
+        return object && object->GetPlayerID()==player && TESTADMIRAL(admiralID) &&
+            object->QueryInterface(IAdmiralID,admiral,NONSYSVOLATILEPTR) ? 1 : -1;
+    }
+    for (auto *object=OBJLIST->GetObjectList();object;object=object->next)
+        if (object->GetPlayerID()==player && TESTADMIRAL(object->GetPartID()))
+        {
+            admiralID=object->GetPartID();
+            std::cout << "Native stock admiral recruitment completed: " << admiralID << std::endl;
+            return CheckNativeSkirmishAdmiral(producerID,admiralID);
+        }
+    if (producerID)
+    {
+        static bool queued=false;
+        if (!queued)
+        {
+            extern int CheckNativeAdmiralResearchControl(U32);
+            const int result=CheckNativeAdmiralResearchControl(producerID);
+            if (result<0) return -1;
+            queued=result==1;
+        }
+        return 0;
+    }
+    IBaseObject *anchor=nullptr;
+    for (auto *object=OBJLIST->GetObjectList();object;object=object->next)
+        if (object->GetPlayerID()==player && object->objClass==OC_SPACESHIP) { anchor=object;break; }
+    if (!anchor) return -1;
+    const auto race=MPart(anchor)->race;
+    struct Enumerator final : IArchetypeEnum
+    {
+        U32 race;
+        std::string producer,research;
+        BT_ADMIRAL_RES admiral{};
+        BOOL32 __stdcall ArchetypeEnum(const char *name,void *bytes,U32 size) override
+        {
+            U32 kind=0;
+            if (size<sizeof(kind)) return true;
+            std::memcpy(&kind,bytes,sizeof(kind));
+            if (kind==OC_PLATFORM && size>=sizeof(BASE_PLATFORM_DATA))
+            {
+                const auto *data=static_cast<const BASE_PLATFORM_DATA *>(bytes);
+                const auto cls=data->missionData.mObjClass;
+                if (data->missionData.race==race &&
+                    (cls==M_ACADEMY || cls==M_WARLORDTRAINING || cls==M_CITADEL)) producer=name;
+            }
+            if (kind==OC_RESEARCH && size==sizeof(BT_ADMIRAL_RES) && research.empty())
+            {
+                const auto *data=static_cast<const BT_ADMIRAL_RES *>(bytes);
+                if (data->type!=RESEARCH_ADMIRAL) return true;
+                const auto *ship=static_cast<const BASE_SPACESHIP_DATA *>(ARCHLIST->GetArchetypeData(data->flagshipType));
+                if (ship && ship->objClass==OC_SPACESHIP && ship->missionData.race==race)
+                { research=name;admiral=*data; }
+            }
+            return true;
+        }
+    } enumerator;
+    enumerator.race=race;
+    if (!ARCHLIST->EnumerateArchetypeData(&enumerator) || enumerator.producer.empty() || enumerator.research.empty()) return -1;
+    const auto producer=MScript::CreatePart(enumerator.producer.c_str(),
+        MScript::GetPartByID(anchor->GetPartID()),player,"Native admiral recruitment fixture");
+    if (!producer) return -1;
+    producerID=producer->dwMissionID;
+    // Prepare only the isolated fixture; costs/timing and simulation remain stock.
+    auto tech=MGlobals::GetCurrentTechLevel(player);
+    tech.AddToNode(enumerator.admiral.dependancy);
+    MGlobals::SetCurrentTechLevel(tech,player);
+    MGlobals::SetMaxMetal(player,10000);MGlobals::SetCurrentMetal(player,10000);
+    MGlobals::SetMaxGas(player,10000);MGlobals::SetCurrentGas(player,10000);
+    MGlobals::SetMaxCrew(player,10000);MGlobals::SetCurrentCrew(player,10000);
+    OBJLIST->FlushSelectedList();OBJLIST->FlushHighlightedList();
+    OBJLIST->HighlightObject(OBJLIST->FindObject(producerID));
+    OBJLIST->SelectHighlightedObjects();
+    std::cout << "Native stock admiral recruitment fixture: " << enumerator.research
+        << "; producer=" << enumerator.producer << "; stock time=" << enumerator.admiral.time << std::endl;
+    return 0;
+}
+
+#endif

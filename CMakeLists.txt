@@ -1468,8 +1468,10 @@ target_compile_features(frontierx_native_app_math PRIVATE cxx_std_17)
 
 add_library(frontierx_native_app_globals STATIC
 	Code/App/Src/NativeAppGlobals.cpp
+	Code/App/Src/NativePlayerProfiles.cpp
 	Code/App/Src/NativeAppHardpoints.cpp
 	Code/App/Src/NativeAppHotRect.cpp)
+target_link_libraries(frontierx_native_app_globals PUBLIC frontierx_native_user_defaults)
 target_link_libraries(frontierx_data_root_probe PRIVATE frontierx_native_app_globals)
 target_include_directories(frontierx_native_app_globals PRIVATE
 	Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
@@ -2289,7 +2291,8 @@ target_include_directories(frontierx_app_light_owner PRIVATE
 target_compile_features(frontierx_app_light_owner PRIVATE cxx_std_17)
 
 add_library(frontierx_app_map_gen_owner OBJECT
-	Code/App/Src/MapGen.cpp)
+	Code/App/Src/MapGen.cpp
+	Code/App/Src/PlayerBomb.cpp)
 target_include_directories(frontierx_app_map_gen_owner PRIVATE
 	Code/App/Src Code/App/Src/Include Code/App/DInclude
 	Code/Libs/Include Code/Libs/Src/Include)
@@ -2574,6 +2577,8 @@ add_library(frontierx_app_toolbar_owner OBJECT
 	Code/App/Src/ShipSilButton.cpp
 	Code/App/Src/TabButton.cpp
 	Code/App/Src/TabControl.cpp
+	Code/App/Src/Slider.cpp
+	Code/App/Src/Dropdown.cpp
 	Code/App/Src/InterfaceManager.cpp
 	Code/App/Src/Icon.cpp
 	Code/App/Src/QueueControl.cpp
@@ -2582,7 +2587,23 @@ add_library(frontierx_app_toolbar_owner OBJECT
 # Original campaign in-game save/load and pause-options dialogs.
 add_library(frontierx_app_ingame_menu_owner OBJECT
     Code/App/Src/Menu_LoadSave.cpp
-    Code/App/Src/Menu_igoptions.cpp)
+    Code/App/Src/Menu_igoptions.cpp
+    Code/App/Src/Menu_options.cpp
+    Code/App/Src/Menu_newplayer.cpp
+    Code/App/Src/Menu1.cpp
+    Code/App/Src/Menu_SPGame.cpp
+    Code/App/Src/Menu_help.cpp
+    Code/App/Src/Menu_Credits.cpp
+    Code/App/Src/Menu_mshell.cpp
+    Code/App/Src/Menu_final.cpp
+    Code/App/Src/Menu_map.cpp
+    Code/App/Src/Menu_slots.cpp
+    Code/App/Src/Menu_MapSelect.cpp
+    Code/App/Src/Menu_netloading.cpp
+    Code/App/Src/Menu_Chat.cpp
+    Code/App/Src/Menu_PlayerChat.cpp
+    Code/App/Src/Menu_Diplomacy.cpp
+    Code/App/Src/DiplomacyButton.cpp)
 target_include_directories(frontierx_app_ingame_menu_owner PRIVATE
     Code/App/Src Code/App/Src/Include Code/App/DInclude
     Code/Libs/Include Code/Libs/Src/Include)
@@ -2861,6 +2882,7 @@ int main() { return std::strcmp(swscale_license(), "LGPL version 2.1 or later");
 	if(FRONTIERX_BUILD_FFMPEG_VIDEO)
 		add_library(frontierx_app_movie_screen_owner OBJECT Code/App/Src/MovieScreen.cpp)
 		target_compile_definitions(frontierx_app_toolbar_owner PRIVATE FRONTIERX_HAVE_VIDEO_DECODER=1)
+		target_compile_definitions(frontierx_app_ingame_menu_owner PRIVATE FRONTIERX_HAVE_VIDEO_DECODER=1)
 		target_include_directories(frontierx_app_movie_screen_owner PRIVATE
 			Code/App/Src Code/App/Src/Include Code/App/DInclude Code/Libs/Include)
 		target_compile_features(frontierx_app_movie_screen_owner PRIVATE cxx_std_17)

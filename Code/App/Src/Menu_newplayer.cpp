@@ -12,15 +12,24 @@
 // New player dialog
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include <cstring>
+using namespace FrontierX::NativeAppUi;
+#endif
 #include <wchar.h>
 
 #include "Frame.h"
 #include "IButton2.h"
 #include "IStatic.h"
 #include "IEdit2.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "Mission.h"
 #include <DNewPlayer.h>
 
@@ -220,7 +229,11 @@ U32 Menu_newplayer::prepareNewName (void)
 	wchar_t lowercase[MAX_CHARS_NAME+1];
 	memset(lowercase, 0, sizeof(lowercase));
 	wcscpy(lowercase, buffer);
+#if defined(_WIN32)
 	_wcslwr(lowercase);
+#else
+	for (auto &ch : lowercase) if (ch >= L'A' && ch <= L'Z') ch += L'a'-L'A';
+#endif
 	bool bBadName = false;
 
 	// first make sure the name entered isn't some kind of system command thing
@@ -320,3 +333,24 @@ U32 __stdcall DoMenu_newplayer (Frame * parent, wchar_t * szOldName, wchar_t * b
 //--------------------------------------------------------------------------//
 //-----------------------------End Menu_newplayer.cpp-----------------------//
 //--------------------------------------------------------------------------//
+#if !defined(_WIN32)
+bool CheckNativeNewPlayerInput()
+{
+    wchar_t name[MAX_CHARS_NAME+1]{};
+    auto *menu=new Menu_newplayer(nullptr,nullptr,name,MAX_CHARS_NAME+1);
+    menu->createViewer("\\GT_NEWPLAYER\\MenuNewPlayer","GT_NEWPLAYER",IDS_VIEWNEWPLAYER);
+    menu->beginModalFocus();
+    menu->edit->SetText(L"");
+    COMPTR<IEventCallback> input;
+    bool valid=menu->edit->QueryInterface("IEventCallback",input)==GR_OK && input;
+    if (input)
+        for (wchar_t c : {L'A',L'*',L'B',L'\u00e4'})
+            input->Notify(CQE_UNICHAR,reinterpret_cast<void *>(std::uintptr_t(c)));
+    valid=valid && menu->prepareNewName()==1 && std::wcscmp(name,L"AB")==0;
+    menu->onButtonPressed(IDS_CANCEL);
+    valid=(CQDoModal(menu)==0) && valid;
+    input.free();
+    delete menu;
+    return valid;
+}
+#endif

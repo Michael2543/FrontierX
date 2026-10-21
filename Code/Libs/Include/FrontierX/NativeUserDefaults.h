@@ -6,9 +6,11 @@
 #include <filesystem>
 
 struct ICOManager;
+struct IUserDefaults;
 
 namespace FrontierX
 {
+bool RenameNativePlayerDefaults(IUserDefaults *defaults,const char *previous,const char *name);
 void RegisterNativeUserDefaults(
     ICOManager * manager,
     const std::filesystem::path & path,

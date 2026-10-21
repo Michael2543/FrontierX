@@ -16,6 +16,8 @@
 #include <globals.h>
 #else
 #include "Include/NativeAppGlobals.h"
+#include "Include/NativeShipVisualTransform.h"
+#include <stdexcept>
 #include "Include/CQTrace.h"
 #include <ICamera.h>
 #include <IMeshManager.h>
@@ -143,6 +145,10 @@ struct _NO_VTABLE MantisBuild : public IBuildEffect
 	bool bCocoonMove:1;
 	bool bPaused:1;
 	bool bGrowsAway:1;
+#if !defined(_WIN32)
+	bool nativeShipHull = false;
+	bool nativeShipFabricator = false;
+#endif
 
 	MantisBuild (void) 
 	{
@@ -190,6 +196,7 @@ struct _NO_VTABLE MantisBuild : public IBuildEffect
 	void renderCocoon (void);
 
 	void renderGrowth (void);
+	int setupGrowthMesh(IMeshInfoTree *mesh_info);
 
 //	void renderMeshChunk();
 
@@ -197,6 +204,19 @@ struct _NO_VTABLE MantisBuild : public IBuildEffect
 	ISpiderDrone * getNextDrone ();
 	void resetDrones();
 };
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+void ConfigureNativeMantisBuildVisual(IBaseObject *effect, bool shipHull, bool shipFabricator)
+{
+    auto *build = dynamic_cast<MantisBuild *>(effect);
+    if (!build) throw std::runtime_error("Native Mantis construction requires MantisBuild");
+    build->nativeShipHull = shipHull;
+    build->nativeShipFabricator = shipFabricator;
+}
+}
+#endif
 
 //---------------------------------------------------------------------------
 //
@@ -277,8 +297,17 @@ void MantisBuild::SetupMesh (IBaseObject *fab,IBaseObject *obj,struct IMeshInfoT
 			//extent->
 			trans=obj->GetTransform();
 			SINGLE box[6];
+#if defined(_WIN32)
 			obj->GetObjectBox(box);
+#else
+			// IBaseObject::GetObjectBox is unsupported for these ships.
+			mesh_info->GetMeshInfo()->GetBoundingBox(box);
+#endif
+#if defined(_WIN32)
 			Vector dir = -trans.get_k();
+#else
+			Vector dir = -NativeShipVisualTransform(trans, nativeShipHull).get_k();
+#endif
 			SINGLE length = box[BBOX_MAX_Z]-box[BBOX_MIN_Z];
 			start_pos = trans.translation;
 			end_pos = start_pos+dir*(length/2);
@@ -336,10 +365,25 @@ void MantisBuild::SetupMesh (IBaseObject *fab,IBaseObject *obj,struct IMeshInfoT
 		HardpointInfo hardpointinfo;
 
 		if (FindHardpoint(fname, childIndex, hardpointinfo, fab->GetObjectIndex()))
+#if defined(_WIN32)
 			start_pos = trans*hardpointinfo.point;
+#else
+		{
+			Transform mouth;
+			mouth.set_identity();
+			mouth.translation = hardpointinfo.point;
+			start_pos = NativeShipHardpointTransform(trans, ENGINE->get_transform(childIndex),
+				mouth, nativeShipFabricator).translation;
+		}
+#endif
 		else
 			start_pos = trans.translation;
 	}
+
+#if !defined(_WIN32)
+	// Some authored platforms have no .shield cocoon; grow their live extent.
+	if (!smesh) setupGrowthMesh(mesh_info);
+#endif
 
 	totalTime = _totalTime;
 	deployTime = GROW_START_TIME;
@@ -368,6 +412,31 @@ void MantisBuild::SetupMesh (IBaseObject *fab,struct IMeshInfoTree *mesh_info,SI
 	OBJPTR<IFabricator> fabo;
 	fab->QueryInterface(IFabricatorID,fabo);
 
+	const int vert_cnt = setupGrowthMesh(mesh_info);
+
+//	if (smesh->e_list == 0)
+//		smesh->MakeEdges();
+
+	if(fabo)
+		numDrones = fabo->GetNumDrones();
+	else
+		numDrones = 0;
+	CQASSERT(numDrones <= MAX_DRONE_CNT);
+
+	for (int i=0;i<numDrones;i++)
+	{
+		droneRef[i] = rand()%vert_cnt;
+	}
+
+	//danger!!
+	Transform trans = fab->GetTransform();
+
+	totalTime = _totalTime;
+	deployTime = GROW_START_TIME;
+
+}
+int MantisBuild::setupGrowthMesh(IMeshInfoTree *mesh_info)
+{
 	num_childs = mesh_info->ListChildren(mc);
 
 	int vert_cnt=0;
@@ -400,28 +469,9 @@ void MantisBuild::SetupMesh (IBaseObject *fab,struct IMeshInfoTree *mesh_info,SI
 			}
 		}
 	}
-
-//	if (smesh->e_list == 0)
-//		smesh->MakeEdges();
-
-	if(fabo)
-		numDrones = fabo->GetNumDrones();
-	else
-		numDrones = 0;
-	CQASSERT(numDrones <= MAX_DRONE_CNT);
-	
-	for (i=0;i<numDrones;i++)
-	{
-		droneRef[i] = rand()%vert_cnt;
-	}
-	
-	//danger!!
-	Transform trans = fab->GetTransform();
-
-	totalTime = _totalTime;
-	deployTime = GROW_START_TIME;
-
+	return vert_cnt;
 }
+
 //---------------------------------------------------------------------------
 //
 void MantisBuild::SetBuildPercent (SINGLE newPercent)
@@ -586,7 +636,12 @@ void MantisBuild::Render (void)
 	if (num_childs && totalTime-timePassed < GROW_END_TIME)
 	{
 		//ENGINE->set_transform(mc[0]->instanceIndex,trans);
+#if defined(_WIN32)
 		TreeRender(mc,num_childs);
+#else
+		if (nativeShipHull) TreeRender(mc, num_childs, NativeShipModelAxisCorrection());
+		else TreeRender(mc, num_childs);
+#endif
 	}
 
 /*	if (1)//bVisible)
@@ -624,7 +679,12 @@ void MantisBuild::renderCocoon()
 	DisableTextures();
 
 	TRANSFORM trans = transform*scaleTrans;*/
-	CAMERA->SetModelView(&trans);
+#if defined(_WIN32)
+	const Transform visual = trans;
+#else
+	const Transform visual = NativeShipVisualTransform(trans, nativeShipHull);
+#endif
+	CAMERA->SetModelView(&visual);
 
 	BATCH->set_render_state(D3DRS_ALPHABLENDENABLE,TRUE);
 	BATCH->set_render_state(D3DRS_ZENABLE,TRUE);
@@ -637,7 +697,7 @@ void MantisBuild::renderCocoon()
 
 	SetupDiffuseBlend(arch->cocoonTex,FALSE);
 	BATCH->set_state(RPR_STATE_ID,arch->cocoonTex);
-	inv = trans.get_inverse();
+	inv = visual.get_inverse();
 
 	PB.Color3ub(255,255,255);
 	PB.Begin(PB_TRIANGLES,smesh->f_cnt*3);
@@ -683,8 +743,8 @@ void MantisBuild::renderCocoon()
 		{
 			S32 face = smesh->GetNeighborOnEdge(droneRef[droneCnt],rand()%3);
 			S32 vert = rand()%3;
-			v[0] = trans*(smesh->v_list[smesh->f_list[face].v[vert]].pt*morph+pellet_verts[smesh->f_list[face].v[vert]]*mmorph);
-			n[0] = trans.rotate(smesh->v_list[smesh->f_list[face].v[vert]].n*morph+pellet_verts[smesh->f_list[face].v[vert]]*mmorph*0.02f);
+			v[0] = visual*(smesh->v_list[smesh->f_list[face].v[vert]].pt*morph+pellet_verts[smesh->f_list[face].v[vert]]*mmorph);
+			n[0] = visual.rotate(smesh->v_list[smesh->f_list[face].v[vert]].n*morph+pellet_verts[smesh->f_list[face].v[vert]]*mmorph*0.02f);
 		
 			if (rand()%30 == 0)
 				drone->SpinTo(v[0]+50*n[0]);
@@ -738,14 +798,31 @@ void MantisBuild::renderGrowth()
 
 	int f=0;
 	int base_v;
+#if !defined(_WIN32)
+	int pelletBase = 0;
+#endif
 	for (int c=0;c<num_childs;c++)
 	{
 		base_v=0;
 		if (mc[c]->bHasMesh)
 		{
 			Vector *pos_list = mc[c]->mr->pos_list;
+#if defined(_WIN32)
+			const int pelletOffset = 0;
+#else
+			const int pelletOffset = pelletBase;
+			pelletBase += mc[c]->mr->pos_cnt;
+#endif
 
 			trans = ENGINE->get_transform(mc[c]->instanceIndex);
+#if !defined(_WIN32)
+			if (nativeShipHull && buildObj)
+			{
+				Transform local;
+				local.set_identity();
+				trans = NativeShipHardpointTransform(buildObj->GetTransform(), trans, local, true);
+			}
+#endif
 			CAMERA->SetModelView(&trans);
 			
 			inv = trans.get_inverse();
@@ -770,9 +847,9 @@ void MantisBuild::renderGrowth()
 						n[1].fast_normalize();
 						n[2].fast_normalize();
 						
-						v[0] = v[0]*morph+pellet_verts[base_v+index_list[i*3]]*mmorph;
-						v[1] = v[1]*morph+pellet_verts[base_v+index_list[i*3+1]]*mmorph;
-						v[2] = v[2]*morph+pellet_verts[base_v+index_list[i*3+2]]*mmorph;
+						v[0] = v[0]*morph+pellet_verts[pelletOffset+base_v+index_list[i*3]]*mmorph;
+						v[1] = v[1]*morph+pellet_verts[pelletOffset+base_v+index_list[i*3+1]]*mmorph;
+						v[2] = v[2]*morph+pellet_verts[pelletOffset+base_v+index_list[i*3+2]]*mmorph;
 						
 						
 						LIGHT->light_vertices(lit,v,n,3,&inv);
@@ -876,6 +953,11 @@ void MantisBuild::SynchBuilderShips()
 {
 	if (smesh)
 	{
+#if defined(_WIN32)
+		const Transform visual = trans;
+#else
+		const Transform visual = NativeShipVisualTransform(trans, nativeShipHull);
+#endif
 		for (int i=0;i<numDrones;i++)
 		{
 			Vector v;
@@ -883,7 +965,7 @@ void MantisBuild::SynchBuilderShips()
 			S32 face = droneRef[i];
 			SINGLE morph=min(__max(0,(smoothTimer-GROW_START_TIME)/(totalTime-GROW_END_TIME-GROW_START_TIME)),1.0f);
 			SINGLE mmorph = 1.0f - 13.0f*morph*morph + 12.0f*morph;
-			v = trans*(smesh->v_list[smesh->f_list[face].v[vert]].pt*morph+pellet_verts[smesh->f_list[face].v[vert]]*mmorph);
+			v = visual*(smesh->v_list[smesh->f_list[face].v[vert]].pt*morph+pellet_verts[smesh->f_list[face].v[vert]]*mmorph);
 			ISpiderDrone *drone = getNextDrone();
 			drone->IdleAt(v);
 		}

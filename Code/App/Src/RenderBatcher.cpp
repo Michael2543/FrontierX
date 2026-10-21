@@ -2167,16 +2167,26 @@ DA_METHOD(	get_modelview,(Transform & _modelview ))
 #if !defined(_WIN32)
 GENRESULT RenderBatcher::FlushBeforeViewChange()
 {
-    // Source world effects are queued, unlike the immediate hull draws.
-    // Their projection and viewport must precede the following HUD pane.
+    if (!bQueueSetup && bm_pools[0].is_empty() && bm_pools[1].is_empty() && bm_pools[2].is_empty())
+        return GR_OK;
+    // Anim2D may change the camera after its caller sets additive blending.
+    // Drain earlier world draws without leaking their material into that sprite.
+    const U32 pendingFlags = state[RPR_STATE_FLAGS] | BM_M_F_HAS_BLEND | BM_M_F_HAS_DEPTH;
+    BATCHEDMATERIAL pending;
+    pending.save(this, pendingFlags, D3DPT_TRIANGLELIST, D3DFVF_RPVERTEX);
+    Transform pendingModelview;
+    const GENRESULT captured = PIPE->get_modelview(pendingModelview);
+    if (captured != GR_OK) return captured;
     if (bQueueSetup)
     {
         FlushQueue1();
         FlushQueue2();
     }
-    if (bm_pools[0].is_empty() && bm_pools[1].is_empty() && bm_pools[2].is_empty())
-        return GR_OK;
-    return flush(FLUSH_INTERNAL);
+    const GENRESULT result = (bm_pools[0].is_empty() && bm_pools[1].is_empty() && bm_pools[2].is_empty())
+        ? GR_OK : flush(FLUSH_INTERNAL);
+    pending.restore(pendingFlags);
+    const GENRESULT restored = PIPE->set_modelview(pendingModelview);
+    return result == GR_OK ? restored : result;
 }
 #endif
 

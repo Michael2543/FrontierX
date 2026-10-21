@@ -10,15 +10,33 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#include <cstdint>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "ObjList.h"
+#include "NetPacket.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+using namespace FrontierX::NativeAppUi;
+using std::min;
+using std::max;
+#define swprintf FormatLegacyWide
+#endif
 #include <MGlobals.h>
 #include <DPlayerMenu.h>
 
 #include "Frame.h"
 #include "IButton2.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IDiplomacyButton.h"
 #include "OpAgent.h"
 
@@ -192,7 +210,7 @@ GENRESULT Menu_Diplomacy::Notify (U32 message, void *param)
 	switch (message)
 	{
 	case CQE_DIPLOMACYBUTTON:
-		pushAllyButton(U32(param) - ALLY_BUTTONS_BEGIN);
+		pushAllyButton(static_cast<U32>(reinterpret_cast<std::uintptr_t>(param)) - ALLY_BUTTONS_BEGIN);
 		break;
 
 	default:
@@ -927,3 +945,27 @@ Frame * __stdcall CreateMenuDiplomacy (void)
 //--------------------------------------------------------------------------//
 //-----------------------------End Menu_Diplomacy.cpp-----------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+// Exercises the real gift/alliance controls on a private local-match fixture.
+bool CheckNativeDiplomacyControls(Frame *frame)
+{
+    auto *menu=static_cast<Menu_Diplomacy *>(frame);
+    if (!menu || !menu->bReady || menu->numPlayers!=1) return false;
+    const U32 player=MGlobals::GetThisPlayer();
+    const U32 other=MGlobals::GetPlayerIDFromSlot(menu->slotIndexArray[0]);
+    const U32 before=MGlobals::GetOneWayAllyMask(player);
+    menu->pushAllyButton(0);
+    menu->onButtonPressed(IDS_APPLY);
+    if ((MGlobals::GetOneWayAllyMask(player) ^ before)!=(1U<<(other-1))) return false;
+    menu->pushAllyButton(0);
+    menu->onButtonPressed(IDS_APPLY);
+    menu->onButtonPressed(METAL_BUTTONS_BEGIN);
+    wchar_t amount[32]{};
+    menu->buttonMetal[0]->GetText(amount,sizeof(amount));
+    if (std::wcstoul(amount,nullptr,10)!=250) return false;
+    menu->onButtonPressed(IDS_RESET);
+    menu->buttonMetal[0]->GetText(amount,sizeof(amount));
+    return std::wcstoul(amount,nullptr,10)==0 && MGlobals::GetOneWayAllyMask(player)==before;
+}
+#endif

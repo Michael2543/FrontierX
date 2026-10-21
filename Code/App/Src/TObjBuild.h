@@ -44,6 +44,7 @@ namespace FrontierX
 {
 bool IsNativeTerranBuildEffect(const IBaseObject *effect);
 void ConfigureNativeTerranBuildVisual(IBaseObject *effect, bool directEngineShipHull);
+void ConfigureNativeMantisBuildVisual(IBaseObject *effect, bool directEngineShipHull, bool shipFabricator);
 }
 #endif
 
@@ -190,7 +191,7 @@ struct _NO_VTABLE ObjectBuild : public Base, IBuild, BUILD_SAVELOAD
 	void setupNativeConstructionBuild(IFabricator *fabricator, bool restoring, bool reverse)
 	{
 		if (!NATIVE_USE_ORIGINAL_LEGACY_MATERIALS ||
-            (this->race != M_TERRAN && this->race != M_SOLARIAN)) return;
+            (this->race != M_TERRAN && this->race != M_SOLARIAN && this->race != M_MANTIS)) return;
 		IBaseObject *effect = fabricator->GetBuildEffectObj();
 		if (!effect || !effect->QueryInterface(IBuildEffectID, buildEffectObj, NONSYSVOLATILEPTR) ||
 			(this->race == M_TERRAN && !FrontierX::IsNativeTerranBuildEffect(buildEffectObj.Ptr())))
@@ -204,6 +205,10 @@ struct _NO_VTABLE ObjectBuild : public Base, IBuild, BUILD_SAVELOAD
         if (this->race == M_TERRAN)
             FrontierX::ConfigureNativeTerranBuildVisual(buildEffectObj.Ptr(),
                 objClass == OC_SPACESHIP && !(this->instanceMesh && CQEFFECTS.bFastRender));
+        if (this->race == M_MANTIS)
+            FrontierX::ConfigureNativeMantisBuildVisual(buildEffectObj.Ptr(),
+                objClass == OC_SPACESHIP && !(this->instanceMesh && CQEFFECTS.bFastRender),
+                fabObject->objClass == OC_SPACESHIP);
 		U32 buildTime = (pInitData->buildTime*(1.0-MGlobals::GetAIBonus(playerID)));
 		buildEffectObj->SetupMesh(fabObject.Ptr(), this, tree, this->instanceIndex,
 			buildTime ? buildTime : 1.0);

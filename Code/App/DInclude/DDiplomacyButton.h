@@ -41,11 +41,23 @@
 //
 struct GT_DIPLOMACYBUTTON : GENBASE_DATA
 {
-	S32 leftMargin:8;		// skip pixels on the edge 
+#if defined(_WIN32) || defined(_ADB)
+	S32 leftMargin:8;		// skip pixels on the edge
 	S32 topMargin:8;
+#else
+    // MSVC reserves the full four-byte bitfield allocation unit in retail data.
+    S8 leftMargin;
+    S8 topMargin;
+    U16 reservedMargins;
+#endif
 
 	char shapeFile[GT_PATH];			// vfx shape file
 };
+#if !defined(_WIN32) && !defined(_ADB)
+#include <cstddef>
+static_assert(offsetof(GT_DIPLOMACYBUTTON, shapeFile)==8 &&
+    sizeof(GT_DIPLOMACYBUTTON)==40, "Retail diplomacy button record layout");
+#endif
 //---------------------------------------------------------------------------
 //
 struct DIPLOMACYBUTTON_DATA

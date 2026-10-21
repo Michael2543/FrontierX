@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cwchar>
+#include <cstring>
 #include <stdexcept>
 using namespace FrontierX::NativeAppUi;
 #endif
@@ -469,7 +470,14 @@ void MenuLoadSave::onSelection (const wchar_t *buffer)
 	if (bLoad)
 	{
 		BOOL32 bWasEnabled;
-		if ((bWasEnabled = CQFLAGS.b3DEnabled) == 0)
+#if defined(_WIN32)
+        bWasEnabled = CQFLAGS.b3DEnabled;
+#else
+        // Native frontend drawing also uses the 3D pipeline. Its enabled flag
+        // does not indicate that gameplay owners have received their entry event.
+        bWasEnabled = GetCurrentInterfaceRes() == IR_IN_GAME_RESOLUTION;
+#endif
+        if (bWasEnabled == 0)
 		{
 			SetVisible(false);
 			ChangeInterfaceRes(IR_IN_GAME_RESOLUTION);
@@ -650,3 +658,47 @@ U32 __stdcall CreateMenuLoadSaveSpecial (bool bLoad, bool bSinglePlayerMaps)
 //--------------------------------------------------------------------------//
 //-----------------------------End Menu_LoadSave.cpp------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+namespace FrontierX
+{
+// Exercise the real saved-game list, selection, rendering and Load handler.
+// Only the exclusive shell diagnostic constructs this frame.
+bool CheckNativeSavedGameMenu(const char *fileName)
+{
+    struct LoadCheck : MenuLoadSave
+    {
+        const char *fileName;
+        unsigned frames = 0;
+        bool selected = false;
+        LoadCheck(const char *name) : MenuLoadSave(true, name[0]=='f'), fileName(name) {}
+        GENRESULT COMAPI Notify(U32 message, void *parameter) override
+        {
+            const auto result = MenuLoadSave::Notify(message, parameter);
+            if (message==CQE_UPDATE && ++frames==30)
+            {
+                for (int index=0; index<list->GetNumberOfItems(); ++index)
+                {
+                    char name[MAX_PATH] = {};
+                    indexToFileName(index,name);
+                    if (std::strcmp(name,fileName)) continue;
+                    list->SetCurrentSelection(index);
+                    onListCaretMove(0);
+                    selected=true;
+                    break;
+                }
+                if (!selected) throw std::runtime_error("Diagnostic save is absent from original Load list");
+            }
+            if (message==CQE_UPDATE && frames==60) onButtonPressed();
+            return result;
+        }
+    };
+    auto *menu = new LoadCheck(fileName);
+    menu->createViewer("\\GT_LOADSAVE\\MenuLoadSave", "GT_LOADSAVE", IDS_VIEWLOADSAVE);
+    menu->beginModalFocus();
+    const bool result = CQDoModal(menu)==1 && menu->selected;
+    delete menu;
+    return result;
+}
+}
+#endif

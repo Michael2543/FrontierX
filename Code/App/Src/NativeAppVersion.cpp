@@ -21,4 +21,6 @@ U32 __stdcall GetBuildVersion(void)
 {
     return NativeAppBuildVersion;
 }
+U32 __stdcall GetProductVersion(void) { return GetBuildVersion(); }
+U32 __stdcall GetProductVersion(char *buffer, U32 capacity) { return GetBuildVersion(buffer, capacity); }
 #endif

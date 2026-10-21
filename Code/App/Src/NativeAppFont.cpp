@@ -91,7 +91,7 @@ struct Span { int x0, x1, y; };
 struct Glyph { int advance; std::vector<Span> spans; };
 bool IsFontTextCharacter(wchar_t c)
 {
-    return (c >= 32 && c <= 126) || c == 0x2122 || c == 0x2026 || c == L'\r' || c == L'\n';
+    return (c >= 32 && c <= 126) || c == 0xa9 || c == 0x2122 || c == 0x2026 || c == L'\r' || c == L'\n';
 }
 struct NativeFont : IFontDrawAgent
 {
@@ -103,6 +103,7 @@ struct NativeFont : IFontDrawAgent
     U32 resource = 0;
     COLORREF color = 0;
     unsigned height = 0;
+    unsigned authoredHeight = 0;
     bool counted = false;
     bool multiline = false;
     bool notScaling = false;
@@ -152,6 +153,7 @@ struct NativeFont : IFontDrawAgent
             }
             selectedFile = selected->second;
         }
+        authoredHeight = pixels;
         height = notScaling ? pixels : IDEAL2REALY(pixels);
         if (!height || height > 256 || FT_Init_FreeType(&library) ||
             FT_New_Face(library, selectedFile.c_str(), 0, &face) ||
@@ -161,9 +163,18 @@ struct NativeFont : IFontDrawAgent
         ++liveFonts; counted = true;
         return true;
     }
+    void EnsureScale()
+    {
+        const unsigned next=notScaling ? authoredHeight : IDEAL2REALY(authoredHeight);
+        if (next==height) return;
+        if (!next || next>256 || FT_Set_Pixel_Sizes(face,0,next)) FontFailure("resized font height");
+        height=next; baseline=static_cast<int>(face->size->metrics.ascender>>6);
+        glyphs.clear();
+    }
     Glyph &GetGlyph(wchar_t c)
     {
-        if (!IsFontTextCharacter(c)) FontFailure("selected font path supports printable ASCII, trademark, ellipsis and CR/LF only");
+        EnsureScale();
+        if (!IsFontTextCharacter(c)) FontFailure("selected font path supports printable ASCII, copyright, trademark, ellipsis and CR/LF only");
         // Single-line agents keep one baseline. Only the multiline owner below
         // interprets CR/LF as line separators; neither path rasterizes them.
         if (c == L'\r' || c == L'\n')
@@ -196,7 +207,7 @@ struct NativeFont : IFontDrawAgent
         }
         return glyphs.emplace(c, std::move(glyph)).first->second;
     }
-    U32 COMAPI GetFontHeight() const override { return height; }
+    U32 COMAPI GetFontHeight() const override { const_cast<NativeFont *>(this)->EnsureScale(); return height; }
     U32 COMAPI GetStringWidth(const wchar_t *text) override
     {
         if (!text || std::wcslen(text) > 1024) FontFailure("string bounds");
@@ -245,7 +256,7 @@ struct NativeFont : IFontDrawAgent
     int COMAPI GetNumRows(const wchar_t *text, PANE *pane) override
     {
         if (!multiline) { GetStringWidth(text); return 1; }
-        if (!pane || pane->x0 < 0 || pane->x1 < pane->x0 || pane->x1 > 32768)
+        if (!pane || pane->x0 < -32768 || pane->x1 < pane->x0 || pane->x1 > 32768)
             FontFailure("row pane");
         return static_cast<int>(Lines(text, pane->x1-pane->x0+1).size());
     }
@@ -262,6 +273,11 @@ struct NativeFont : IFontDrawAgent
         const int left = pane ? pane->x0 : 0, top = pane ? pane->y0 : 0;
         const int right = pane ? pane->x1 : static_cast<int>(SCREENRESX)-1;
         const int bottom = pane ? pane->y1 : static_cast<int>(SCREENRESY)-1;
+        // Legacy static controls can center text partly outside the window.
+        // Preserve their origin and wrapping, then clip pixels to the viewport.
+        const int clipLeft = std::max(0, left), clipTop = std::max(0, top);
+        const int clipRight = std::min(right, static_cast<int>(SCREENRESX)-1);
+        const int clipBottom = std::min(bottom, static_cast<int>(SCREENRESY)-1);
         std::vector<Span> visible;
         const auto lines = Lines(text, right-left+1);
         int rowY = top + y;
@@ -273,8 +289,8 @@ struct NativeFont : IFontDrawAgent
             const Glyph &glyph = GetGlyph(c);
             for (const auto &span : glyph.spans)
             {
-                Span clipped{std::max(left, cursor + span.x0), std::min(right + 1, cursor + span.x1), rowY + span.y};
-                if (clipped.x1 > clipped.x0 && clipped.y >= top && clipped.y <= bottom)
+                Span clipped{std::max(clipLeft, cursor + span.x0), std::min(clipRight + 1, cursor + span.x1), rowY + span.y};
+                if (clipped.x1 > clipped.x0 && clipped.y >= clipTop && clipped.y <= clipBottom)
                     visible.push_back(clipped);
             }
             cursor += glyph.advance;
@@ -289,7 +305,7 @@ struct NativeFont : IFontDrawAgent
         if (!PIPE || !BATCH || CQFLAGS.bFrameLockEnabled || !SCREENRESX || !SCREENRESY ||
             SCREENRESX > 32768 || SCREENRESY > 32768 || x < -32768 || x > 32768 ||
             y < -32768 || y > 32768) FontFailure("render owner or coordinate bounds");
-        if (pane && (pane->x0 < 0 || pane->y0 < 0 || pane->x1 < pane->x0 || pane->y1 < pane->y0 ||
+        if (pane && (pane->x0 < -32768 || pane->y0 < -32768 || pane->x1 < pane->x0 || pane->y1 < pane->y0 ||
             pane->x1 > 32768 || pane->y1 > 32768))
             FontFailure("pane bounds");
         const auto visible = VisibleSpans(pane, x, y, text);
@@ -457,6 +473,9 @@ bool CheckNativeFontTextLayout(IFontDrawAgent *agent, U32 textResource)
     valid = valid && std::wcscmp(title, L"Conquest: Frontier Wars\u2122") == 0 &&
         font->GetStringWidth(title) > font->GetStringWidth(L"Conquest: Frontier Wars") &&
         !font->VisibleSpans(&pane, 0, 0, L"\u2122").empty();
+    valid = valid && _localLoadStringW(IDS_LEGAL_MAINSCREEN)[0] == L'\u00a9' &&
+        _localLoadStringW(IDS_LEGAL_ABOUTBOX)[0] == L'\u00a9' &&
+        !font->VisibleSpans(&pane, 0, 0, L"\u00a9").empty();
     // The original SOL-entry news subtitle contains an authored ellipsis.
     // Rasterize the actual glyph, preserving its metrics instead of replacing
     // it with three ASCII dots or suppressing the subtitle.
@@ -488,6 +507,24 @@ bool CheckNativeFontTextLayout(IFontDrawAgent *agent, U32 textResource)
         sameSpans(font->VisibleSpans(&pane, 0, 0, L"A\r\nB"), rows) &&
         sameSpans(font->VisibleSpans(&pane, 0, 0, L"A\r\n\r\nB"), rows) &&
         sameSpans(font->VisibleSpans(&pane, 0, 0, L"AB\r\n"), font->VisibleSpans(&pane, 0, 0, L"AB"));
+    // Regression: Static::draw may supply a negative origin when a resource
+    // counter's centered font is taller than its resized control rectangle.
+    font->multiline = false;
+    auto expectedClipped = font->VisibleSpans(&pane, 0, 0, L"37/45");
+    for (auto &span : expectedClipped)
+    {
+        span.x0 = std::max(0, span.x0-4);
+        span.x1 -= 4;
+        span.y -= 4;
+    }
+    expectedClipped.erase(std::remove_if(expectedClipped.begin(), expectedClipped.end(),
+        [](const Span &span) { return span.y<0 || span.x1<=span.x0; }), expectedClipped.end());
+    PANE clippedPane = pane;
+    clippedPane.x0 = clippedPane.y0 = -4;
+    valid = valid && !expectedClipped.empty() &&
+        sameSpans(font->VisibleSpans(&clippedPane, 0, 0, L"37/45"), expectedClipped) &&
+        sameSpans(font->VisibleSpans(&clippedPane, 4, 4, L"37/45"),
+                  font->VisibleSpans(&pane, 0, 0, L"37/45"));
     return valid;
 #else
     (void)agent; (void)textResource;

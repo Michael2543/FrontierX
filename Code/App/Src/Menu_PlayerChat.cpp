@@ -10,15 +10,32 @@
 */
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "ObjList.h"
+#include "NetPacket.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
+using namespace FrontierX::NativeAppUi;
+using std::min;
+using std::max;
+#define swprintf FormatLegacyWide
+#endif
 #include <MGlobals.h>
 #include <DPlayerMenu.h>
 
 #include "Frame.h"
 #include "IButton2.h"
 #include "IStatic.h"
-#include "IListbox.h"
+#include "IListBox.h"
 #include "IEdit2.h"
 
 #include "Mission.h"
@@ -660,3 +677,21 @@ Frame * __stdcall CreateMenuPlayerChat (void)
 //--------------------------------------------------------------------------//
 //-----------------------------End Menu_PlayerChat.cpp----------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+bool CheckNativePlayerChatControls(Frame *frame)
+{
+    auto *menu=static_cast<Menu_PlayerChat *>(frame);
+    if (!menu || menu->numPlayers!=1) return false;
+    menu->pushEnemies();
+    menu->pushAllies();
+    menu->pushEveryone();
+    if (!menu->isEveryoneSelected()) return false;
+    const auto before=menu->listChat->GetNumberOfItems();
+    menu->editChat->SetText(L"Native local chat regression");
+    menu->sendChatMessage();
+    wchar_t remaining[100]{};
+    menu->editChat->GetText(remaining,sizeof(remaining));
+    return !remaining[0] && menu->listChat->GetNumberOfItems()==before+1;
+}
+#endif

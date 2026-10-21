@@ -11,8 +11,25 @@
 //------------------------------- #INCLUDES --------------------------------//
 //--------------------------------------------------------------------------//
 
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "CQTrace.h"
+#include <ICamera.h>
+#include <IMeshManager.h>
+#include <VFX.H>
+#include <ENGINE.H>
+#include <renderer.h>
+#include <rendpipeline.h>
+#include <RPUL/PrimitiveBuilder.h>
+#include "CQBatch.h"
+#include "MyVertex.h"
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#endif
 
 #include "TComponent.h"
 #include "TObjFrame.h"
@@ -29,7 +46,7 @@
 #include "Startup.h"
 #include "DrawAgent.h"
 #include "TerrainMap.h"
-#include "Anim2d.h"
+#include "anim2d.h"
 #include "GenData.h"
 #include <DPlayerBomb.h>
 #include "MPart.h"
@@ -39,18 +56,18 @@
 #include "IPlanet.h"
 #include "DPlatform.h"
 #include "Sector.h"
-#include "CQGAME.h"
+#include "CQGame.h"
 #include "CommPacket.h"
 #include "MScript.h"
 #include "DQuickSave.h"
 #include "IBanker.h"
 
 #include <WindowManager.h>
-#include <Engine.h>
+#include <ENGINE.H>
 #include <TSmartPointer.h>
-#include <Physics.h>
-#include <3DMath.h>
-#include <FileSys.h>
+#include <physics.h>
+#include <3dmath.h>
+#include <Filesys.h>
 #include <IConnection.h>
 
 using namespace CQGAMETYPES;
@@ -720,7 +737,7 @@ void PlayerBomb::ResolveAssociations()
 //
 void PlayerBomb::QuickSave (struct IFileSystem * file)
 {
-	DAFILEDESC fdesc = partName;
+	DAFILEDESC fdesc = static_cast<const char *>(partName);
 	HANDLE hFile;
 
 	file->CreateDirectory("MT_PLAYERBOMB_QLOAD");
@@ -808,6 +825,13 @@ struct DACOM_NO_VTABLE PlayerBombFactory : public IObjectFactory
 		{
 			return calloc(size,1);
 		}
+
+#if !defined(_WIN32)
+		void operator delete (void *ptr)
+		{
+			free(ptr);
+		}
+#endif
 
 		OBJTYPE (void)
 		{
@@ -928,7 +952,9 @@ BOOL32 PlayerBombFactory::DestroyArchetype (HANDLE hArchetype)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
 
-	EditorStopObjectInsertion(objtype->pArchetype);
+#if defined(_WIN32)
+    EditorStopObjectInsertion(objtype->pArchetype);
+#endif
 	delete objtype;
 
 	return 1;
@@ -945,7 +971,12 @@ IBaseObject * PlayerBombFactory::CreateInstance (HANDLE hArchetype)
 void PlayerBombFactory::EditorCreateInstance (HANDLE hArchetype, const MISSION_INFO & info)
 {
 	OBJTYPE * objtype = (OBJTYPE *)hArchetype;
-	EditorStartObjectInsertion(objtype->pArchetype, info);
+#if defined(_WIN32)
+    EditorStartObjectInsertion(objtype->pArchetype, info);
+#else
+    (void)objtype; (void)info;
+    CQERROR0("Native PlayerBomb editor insertion is unavailable");
+#endif
 }
 
 //---------------------------------------------------------------------------

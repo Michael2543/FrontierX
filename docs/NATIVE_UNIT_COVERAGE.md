@@ -1,5 +1,39 @@
 # Native unit and shared-component coverage
 
+## Refreshed single-player audit (2026-10-20)
+
+**Actual external-data factory/asset execution:** the full-media Linux x86_64
+Clang 22.1.8 Debug shell repeats the existing exclusive `--unit-catalog-check`
+against the same lawfully external installation. It admits **162/164** selected
+race-tagged ship/platform archetypes: Terran ships 38/38, platforms 25/26;
+Mantis ships 25/25, platforms 24/25; Solarian ships 25/25, platforms 25/25.
+No raw record fails the extent preflight. Exit 6 still reports failed completeness.
+The two rejected variants remain Defense Battery and Antenna Beacon, each with
+its original required model absent from the supplied object archive. They remain
+in the denominator; no replacement asset or claim of safe nonuse is introduced.
+
+This supersedes the historical 142/164 admission count below. Flagship retail
+adaptation, troopships, probes, SellPlat and their campaign consumers have since
+joined the production closure. Campaign completion is user-accepted, while
+factory admission still establishes neither all-unit activation nor all tech
+branches, construction, combat, audiovisual appearance, and save/load cycles.
+
+**Source review:** the native build still excludes GeneralPlat, Repulsor,
+Swapper and KamikazeWing. The earlier unresolved ship-launch/torpedo
+relationships remain unresolved. Missing named ancestry does not establish
+that these are required by retail or safely unused. The subsequent
+[finalization repair](RETAIL_SINGLEPLAYER_FINALIZATION.md) implements native
+Wormhole persistence alongside the unchanged original schema and executes a
+stock Portal command plus full mission save/load while both portals exist.
+
+The next single-player work is to resolve the two missing variant assets against
+actual callers/data provenance, extend the portal acceptance to ordinary
+construction/combat, then exercise optional abilities and all race research/construction
+branches in genuine skirmish saves. Multi-AI/team matches and victory/defeat
+acceptance follow the menu handoff. Whole-process leaks, native Windows
+Debug/Final/module ABI and comparative determinism remain open. Multiplayer is
+a separate later workstream. Retail is therefore not complete.
+
 ## Executed original catalogue admission (2026-10-15)
 
 **Lawful external retail-input runtime, Linux x86_64 GCC16.2.1, full-media Debug:**

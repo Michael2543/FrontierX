@@ -31,6 +31,7 @@ namespace FrontierX
 {
 struct SdlGpuRenderer::Impl
 {
+    float displayGamma = 1.0F;
     struct UploadSet
     {
         SDL_GPUBuffer * vertex = nullptr;
@@ -177,6 +178,7 @@ struct SdlGpuRenderer::Impl
                                       0.0F, 0.0F, 1.0F, 0.0F,
                                       0.0F, 0.0F, 0.0F, 1.0F}};
     SDL_Rect viewport{0, 0, 0, 0};
+    int frameWidth = 0, frameHeight = 0;
     std::array<float, 4> vertexUv{{0.0F, 0.0F, 1.0F, 1.0F}};
     std::array<float, 4> vertexColor{{1.0F, 1.0F, 1.0F, 1.0F}};
     TextureStageSnapshot textureStage{};
@@ -326,6 +328,7 @@ struct alignas(16) TextureStageUniform
     Uint32 alphaTest[4];
     Uint32 secondOperations[4];
     Uint32 secondArguments[4];
+    float correction[4];
 };
 
 struct alignas(16) VertexTransformUniform
@@ -341,7 +344,7 @@ constexpr std::array<float, 4> FixedFunctionUv{{0.0F, 0.0F, 1.0F, 1.0F}};
 constexpr std::array<float, 4> FixedFunctionColor{{1.0F, 1.0F, 1.0F, 1.0F}};
 
 TextureStageUniform MakeTextureStageUniform(const TextureStageSnapshot & state,
-                                           const RenderStateSnapshot & renderState)
+                                           const RenderStateSnapshot & renderState, float gamma)
 {
     const U32 color = renderState.textureFactor;
     constexpr float scale = 1.0F / 255.0F;
@@ -358,7 +361,7 @@ TextureStageUniform MakeTextureStageUniform(const TextureStageSnapshot & state,
             {state.second.colorOperation, state.second.alphaOperation, 0U,
              state.second.textureCoordinateIndex},
             {state.second.colorArgument1, state.second.colorArgument2,
-             state.second.alphaArgument1, state.second.alphaArgument2}};
+             state.second.alphaArgument1, state.second.alphaArgument2}, {1.0F/gamma,0,0,0}};
 }
 
 std::array<float, 16> MakeClipMatrix(const std::array<float, 16> & projection,
@@ -1576,6 +1579,13 @@ GENRESULT SdlGpuRenderer::TextureDestroyCallback(void * context, std::uint32_t h
                    : GR_INVALID_PARMS;
 }
 
+GENRESULT SdlGpuRenderer::GammaCallback(void *context, float gamma)
+{
+    if (!context || !std::isfinite(gamma) || gamma < 0.1F || gamma > 3.0F) return GR_INVALID_PARMS;
+    static_cast<SdlGpuRenderer *>(context)->impl_->displayGamma = gamma;
+    return GR_OK;
+}
+
 GENRESULT SdlGpuRenderer::ClearFrameCallback(void * context, U32 color, U32 depth)
 {
     if (!context) return GR_INVALID_PARMS;
@@ -1617,6 +1627,11 @@ bool SdlGpuRenderer::BeginFrame(std::string & error)
     if (!impl_->device || !SDL_WaitForGPUIdle(impl_->device))
     {
         error = impl_->device ? SDL_GetError() : "SDL GPU device is not initialized";
+        return false;
+    }
+    if (!SDL_GetWindowSizeInPixels(impl_->window, &impl_->frameWidth, &impl_->frameHeight))
+    {
+        error = SDL_GetError();
         return false;
     }
     if (impl_->frameCapture)
@@ -1719,7 +1734,7 @@ bool SdlGpuRenderer::DrawCapturedFrame(SDL_GPUCommandBuffer * commandBuffer,
             return false;
         }
         const TextureStageUniform stage =
-            MakeTextureStageUniform(draw.textureStage, draw.renderState);
+            MakeTextureStageUniform(draw.textureStage, draw.renderState, impl_->displayGamma);
         const VertexTransformUniform vertex{
             MakeClipMatrix(draw.projection, draw.modelview),
             draw.vertexUv, draw.vertexColor};
@@ -1810,6 +1825,35 @@ bool SdlGpuRenderer::Present(bool & presented, std::string & error)
         impl_->error = error;
         return false;
     }
+    if (impl_->frameCapture &&
+        (width != static_cast<Uint32>(impl_->frameWidth) ||
+         height != static_cast<Uint32>(impl_->frameHeight)) &&
+        std::all_of(impl_->frameDraws.begin(),impl_->frameDraws.end(),[&](const auto &draw)
+        {
+            return draw.viewport.x >= 0 && draw.viewport.y >= 0 &&
+                draw.viewport.w >= 0 && draw.viewport.h >= 0 &&
+                Uint64(draw.viewport.x)+draw.viewport.w <= Uint64(impl_->frameWidth) &&
+                Uint64(draw.viewport.y)+draw.viewport.h <= Uint64(impl_->frameHeight);
+        }) &&
+        std::any_of(impl_->frameDraws.begin(),impl_->frameDraws.end(),[&](const auto &draw)
+        {
+            return draw.viewport.x >= 0 && draw.viewport.y >= 0 &&
+                draw.viewport.w > 0 && draw.viewport.h > 0 &&
+                (Uint64(draw.viewport.x)+draw.viewport.w > width ||
+                 Uint64(draw.viewport.y)+draw.viewport.h > height);
+        }))
+    {
+        // A resize can arrive while the original frame is being captured.
+        // Retire that stale frame; the next frame uses the reflowed interface.
+        // Viewports on an unchanged target still undergo strict validation.
+        if (!SDL_SubmitGPUCommandBuffer(commandBuffer))
+        {
+            error = SDL_GetError();
+            impl_->error = error;
+            return false;
+        }
+        return true;
+    }
     SDL_GPUColorTargetInfo colorTarget{};
     colorTarget.texture = swapchainTexture;
     colorTarget.clear_color = impl_->clearColor;
@@ -1848,7 +1892,7 @@ bool SdlGpuRenderer::Present(bool & presented, std::string & error)
         return true;
     }
     const TextureStageUniform textureStageUniform =
-        MakeTextureStageUniform(impl_->textureStage, impl_->renderState);
+        MakeTextureStageUniform(impl_->textureStage, impl_->renderState, impl_->displayGamma);
     SDL_PushGPUFragmentUniformData(commandBuffer, 0U, &textureStageUniform,
                                    sizeof(textureStageUniform));
     const VertexTransformUniform vertexUniform{
@@ -1967,7 +2011,7 @@ bool SdlGpuRenderer::Readback64(SdlGpuReadback & result, std::string & error)
     else
     {
     const TextureStageUniform textureStageUniform =
-        MakeTextureStageUniform(impl_->textureStage, impl_->renderState);
+        MakeTextureStageUniform(impl_->textureStage, impl_->renderState, impl_->displayGamma);
     SDL_PushGPUFragmentUniformData(commandBuffer, 0U, &textureStageUniform,
                                    sizeof(textureStageUniform));
     const VertexTransformUniform vertexUniform{

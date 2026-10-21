@@ -536,9 +536,13 @@ struct DACOM_NO_VTABLE Edit2 : BaseHotRect, IEdit2, IKeyboardFocus
 
 	bool isIgnorable (const wchar_t letter)
 	{
+#if !defined(_WIN32)
+        // Native editable names retain the current English/ASCII storage contract.
+        if (letter<32 || letter>126) return true;
+#endif
 		if (szIgnoreChars[0])
 		{
-			if (wcspbrk(&letter, szIgnoreChars) != NULL)
+			if (wcschr(szIgnoreChars, letter) != NULL)
 				return true;
 
 			// also, if we are inputting the first character, make sure it is not space
@@ -622,7 +626,9 @@ bool Edit2::SetKeyboardFocus (bool bEnable)
 			{
 				EVENTSYS->Send(CQE_KILL_FOCUS, static_cast<BaseHotRect *>(this));
 				HOTKEY->Disable();
-				DBHOTKEY->Disable();
+#if defined(_WIN32)
+                DBHOTKEY->Disable(); // The native runtime has no Windows debug-hotkey owner.
+#endif
 		
 				if (bChatboxControl)
 				{
@@ -671,7 +677,9 @@ bool Edit2::SetKeyboardFocus (bool bEnable)
 			{
 				EVENTSYS->Send(CQE_SET_FOCUS, static_cast<BaseHotRect *>(this));
 				HOTKEY->Enable();
-				DBHOTKEY->Enable();
+#if defined(_WIN32)
+                DBHOTKEY->Enable();
+#endif
 				desiredOwnedFlags = 0;
 				releaseResources();
 			}
@@ -839,7 +847,14 @@ void Edit2::draw (void)
 		else if (szEditText[0] == 0)
 		{
 			const GT_EDIT::COLOR & color = pEditType->colors[GTETXT_SELECTED];
+#if defined(_WIN32)
 			DA::RectangleFill(&pane, xText+0, yText, emptyTextWidth-1, yText+pFont->GetFontHeight(), RGB(color.red, color.green, color.blue));
+#else
+            // The empty-selection width is relative to the text origin, like
+            // the populated selection above. Large text insets can exceed it.
+            DA::RectangleFill(&pane,xText,yText,xText+emptyTextWidth-1,
+                yText+pFont->GetFontHeight(),RGB(color.red,color.green,color.blue));
+#endif
 		}
 
 		if (bBlinkOn)

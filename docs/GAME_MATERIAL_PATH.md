@@ -1,5 +1,88 @@
 # Game Mesh and Material Ownership for Milestone 5
 
+## Campaign visual feedback work list (2026-10-20)
+
+Implementation work is complete; actual user-scene acceptance remains pending:
+
+- [x] Restore the original player-visible cloak surface.
+- [x] Align the Dreadnought Aegis shield with its native ship model frame.
+- [x] Align the Mantis Frigate's copied Mimic hull in its target model frame.
+- [x] Connect original Mantis cocoon/growth construction presentation.
+- [x] Investigate shield penetration/follow-on damage without changing mechanics.
+- [x] Repair the renderer state loss behind Scarab's opaque effect rectangles.
+
+**Source review and repairs:** `ObjectCloak::RenderCloaked` contained only a
+commented implementation. The native branch now draws the live extent through
+`TreeRenderNativeCloak`, retaining source scrolling model UVs, transition alpha,
+per-instance hidden/building face masks and child transforms. It uses the same
+model correction as the direct Engine hull, with no fixed 1,000-vertex remap.
+Cloak timing, visibility rules, targeting and saved state are unchanged.
+`ObjectDamage::renderShieldDown` (called by Aegis through
+`FancyShieldRender`) now inserts that correction before the local shield scale.
+`UnbornMeshList::RenderMeshAt`, called by Mimic, corrects copied spaceship
+archetypes while retaining the original platform frame.
+
+`ObjectBuild::setupNativeConstructionBuild` previously admitted only Terran
+and Solarian effects. It now admits the original `MantisBuild` owner on initial
+construction, restoration and dismantling. Its native cocoon, lighting and drone
+anchors use the hull frame; the fabricator mouth includes the actual child
+hardpoint frame. Ship growth length comes from the live extent rather than the
+unsupported `IBaseObject::GetObjectBox`. Lawfully external archetype/media
+inspection found platforms without separate shield geometry (including the
+antenna model). They now initialize the original growth geometry instead of
+hiding an undrawn hull. Growth mesh allocation is shared with the existing morph
+setup; concatenated pellet indices retain their offset across children. Source
+rates, completion rules and existing random calls are retained. The new native
+flags are transient effect state, outside serialized records and Windows layouts.
+
+**Scarab failing-before/passing-after automated execution:** the supplied named
+save contains active `STBOLT!!M_Stasis` objects, matching Scarab's Gravity Well
+launcher and `StasisBolt::renderAnm`. That caller sets ONE/ONE additive blending
+before `Anim2D::render` calls `Camera::SetPerspective`. The native view barrier
+drains earlier materials but previously left their opaque/alpha state in PIPE.
+An extension of `render_batcher_runtime` fails before the repair: a queued opaque
+object replaces the pending sprite's blend and depth-write settings. The native
+barrier now preserves the pending material/modelview while drawing the old
+projection. The test checks all four view-changing entry points, retains the old
+queued world projection/viewport assertions, and verifies ONE/ONE, enabled blend
+and disabled depth writes afterward. No texture substitution, effect-size or
+weapon/gameplay change is involved.
+
+**Focused validation (Linux x86_64):** full-media Debug Clang 22.1.8
+(`p1c-clang-20261015`), GCC 16.2.1 (`p1b-video-gcc`) and Clang ASan/UBSan
+(`p1b-video-clang-san`) build `frontierx_native_shell`,
+`frontierx_game_material_manager_probe` and `frontierx_render_batcher_runtime_probe`.
+Execute `portability.layout`, `game_material_manager`, its `_cr` and `_missing_end`
+variants, `render_batcher_runtime` and `native_shell` through CTest. Fatal sanitizer
+runs use `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1` and
+`UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1`. Generated material execution
+checks the actual cloak draw, transition alpha, hidden-face suppression and UV
+scrolling; existing frame checks now include an elongated shield at multiple
+headings and unchanged copied-platform transforms. Source-caller guards connect
+those checks to the campaign owners and Mantis admission/fallback. Existing
+`portability.game_material_gpu` and `portability.sdl3_gpu` execute on Vulkan under
+both compilers with the explicit owned-window Hyprland/X11 setup; neither skips.
+Their inputs are generated repository fixtures, not the user's battle. The
+Mantis cocoon/growth sequence, complete cloak transition and exact Scarab scene
+still require the user's focused visual/save-load test. Native Windows
+Debug/Final, affected module ABI and retail comparison remain unexecuted.
+
+### Shield mechanics investigation only
+
+Source evidence: `MGlobals::GetEffectiveDamage` applies shields as a damage
+reduction factor (`result *= 1 - targetShields`), including upgrades, existing
+admiral handling and inoperable-shield effects. `SpaceShip::ApplyDamage` subtracts
+the effective amount immediately from authoritative hull points. No generic
+shield-penetration damage-over-time stage was found in these paths.
+`SpaceShip::update` and `TPlatform::update` separately approach actual hull points
+with `MAXDAMAGECHANGE`; `GetDisplayHullPoints` feeds selection bars and individual
+unit menus. This existing delayed *display* can resemble follow-on damage.
+`CreateShieldHit` also suppresses shield-hit presentation below 30% hull; the
+20-second field-damage tick is an independent environmental mechanism. This is
+source evidence, not proof of every retail effect. No damage formula, hull/display
+update, shield threshold or balance value was changed; direct retail comparison
+of the remembered behavior remains open.
+
 ## TM10 locked construction reservation eviction (2026-10-19)
 
 **Actual user runtime/core diagnosis:** the replacement candidate aborts in

@@ -1275,7 +1275,7 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
     const U32 clearBoth = RP_CLEAR_COLOR_BIT | RP_CLEAR_DEPTH_BIT;
     const bool lifecycleValid = windowViewportRestored &&
         pipeline.BindFrames({&renderer, FrontierX::SdlGpuRenderer::ClearFrameCallback,
-                             FrontierX::SdlGpuRenderer::PresentFrameCallback}) == GR_OK &&
+                             FrontierX::SdlGpuRenderer::PresentFrameCallback, FrontierX::SdlGpuRenderer::GammaCallback}) == GR_OK &&
         pipeline.clear_buffers(clearBoth, nullptr) == GR_OK &&
         pipeline.begin_scene() == GR_OK && pipeline.end_scene() == GR_OK &&
         renderer.Readback64(emptyBlack, error) && pipeline.swap_buffers() == GR_OK &&
@@ -1309,6 +1309,50 @@ bool SubmitProductionFixture(FrontierX::SdlGpuRenderer & renderer, SDL_Window * 
         pipeline.end_scene() == GR_OK &&
         renderer.Readback64(lifecycleDraw, error) && lifecycleDraw.changedPixels > 0 &&
         pipeline.swap_buffers() == GR_OK;
+    // Original Options previews gamma and restores it on Cancel. Verify the
+    // actual shader image changes and resets without changing geometry.
+    FrontierX::SdlGpuReadback gammaNormal, gammaBright, gammaReset;
+    auto gammaImage = [&](float value, FrontierX::SdlGpuReadback &image)
+    {
+        return FrontierX::SetNativeRenderGamma(&pipeline,value)==GR_OK &&
+            renderer.BeginFrame(error) && pipeline.set_modelview(left)==GR_OK &&
+            FrontierX::SubmitRenderSmokeScene(&pipeline)==GR_OK && renderer.Readback64(image,error);
+    };
+    if (!gammaImage(1.0f,gammaNormal) || !gammaImage(1.8f,gammaBright) ||
+        FrontierX::SetNativeRenderGamma(&pipeline,0.0f)!=GR_INVALID_PARMS ||
+        !gammaImage(1.0f,gammaReset) || gammaNormal.checksum==gammaBright.checksum ||
+        gammaNormal.checksum!=gammaReset.checksum || gammaNormal.changedPixels!=gammaBright.changedPixels)
+    {
+        std::cerr << "Original Options gamma image/Cancel restoration failed: " << error << '\n';
+        return false;
+    }
+    std::cout << "Original Options gamma changes shader output and restores the original image\n";
+    // A pause/Options resize can shrink the swapchain after the source frame
+    // was captured. Existing lifecycle/readback checks do not cover that race.
+    bool stalePresented=true;
+    if (!WaitForSdlGpuHostSetup() ||
+        !SDL_GetWindowSizeInPixels(window,&outputWidth,&outputHeight) ||
+        !renderer.BeginFrame(error) ||
+        pipeline.set_viewport(0,0,outputWidth,outputHeight)!=GR_OK ||
+        FrontierX::SubmitRenderSmokeScene(&pipeline)!=GR_OK ||
+        !SDL_SetWindowSize(window,outputWidth/2,outputHeight/2) || !SDL_SyncWindow(window) ||
+        !renderer.Present(stalePresented,error) || stalePresented ||
+        !SDL_SetWindowSize(window,outputWidth,outputHeight) || !SDL_SyncWindow(window))
+    {
+        std::cerr << "captured resize retirement failed: " << error << '\n';
+        return false;
+    }
+    std::cout << "Captured resize retires the stale frame before fresh presentation\n";
+    // A genuinely invalid viewport on an unchanged target must still fail.
+    if (!renderer.BeginFrame(error) ||
+        pipeline.set_viewport(0,0,outputWidth+1,outputHeight)!=GR_OK ||
+        FrontierX::SubmitRenderSmokeScene(&pipeline)!=GR_OK ||
+        renderer.Present(stalePresented,error) ||
+        error!="captured render viewport exceeds target")
+    {
+        std::cerr << "unchanged-target viewport rejection failed: " << error << '\n';
+        return false;
+    }
     // Regression: mission material changes repeatedly revisit fixed GPU states.
     // This existing production submission also checks that cache pressure never
     // destroys a pipeline borrowed by the current captured frame.
@@ -1708,6 +1752,7 @@ int main(int argc, char ** argv)
                     std::cerr << "window resize request failed: " << SDL_GetError() << '\n';
                     return 1;
                 }
+
             }
         }
         SDL_Delay(10U);

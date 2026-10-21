@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <stdexcept>
 using namespace FrontierX::NativeAppUi;
 extern struct IMenuResource *MENU;
 [[noreturn]] static void NativeMenuUnavailable()
@@ -62,6 +63,10 @@ extern struct IMenuResource *MENU;
 #include <Filesys.h>
 #include <WindowManager.h>
 #include <rendpipeline.h>
+#if !defined(_WIN32)
+#include <FrontierX/NativeRenderPipeline.h>
+#include "SoundManager.h"
+#endif
 #include <IMaterialManager.h>
 
 #include <stdio.h>
@@ -74,6 +79,27 @@ extern struct IMenuResource *MENU;
 #define ID_APP_EXIT 0xE141
 #endif
 #include <math.h>
+
+#if !defined(_WIN32)
+void ResizeNativeAppInterface(U32 width,U32 height)
+{
+    SCREENRESX=width; SCREENRESY=height;
+    if (CQFLAGS.bGameActive && CAMERA)
+        CAMERA->SetInterfaceBarHeight(0); // Original toolbar uses the full world viewport.
+    if (PIPE->set_viewport(0,0,width,height)!=GR_OK ||
+        PIPE->set_ortho(0.0f,float(width),float(height),0.0f,-1.0f,1.0f)!=GR_OK)
+        throw std::runtime_error("Native resized interface viewport rejected");
+    EVENTSYS->Send(CQE_INTERFACE_RES_CHANGE);
+    if (Frame::g_pFocusFrame)
+    {
+        Frame *root=Frame::g_pFocusFrame;
+        while (root->pPrevFocusFrame) root=root->pPrevFocusFrame;
+        root->setStateInfo();
+    }
+    if (CQFLAGS.bGameActive && TOOLBAR)
+        if (auto *frame=dynamic_cast<Frame *>(TOOLBAR)) frame->setStateInfo();
+}
+#endif
 
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
@@ -978,7 +1004,18 @@ void MenuResource::InitPreferences (void)
 	enableCheatItems(defaults->bCheatsEnabled != 0);
 
 #else
-	NativeMenuUnavailable();
+	// Restore the same live settings that SoundMan references on Windows.
+    const auto &sound=DEFAULTS->GetDefaults()->soundState;
+    if (SOUNDMANAGER)
+    {
+        SOUNDMANAGER->SetMusicVolumeLevel(sound.music.volume,sound.music.bMute!=0);
+        SOUNDMANAGER->SetSfxVolumeLevel(sound.effects.volume,sound.effects.bMute!=0);
+        SOUNDMANAGER->SetCommVolumeLevel(sound.comms.volume,sound.comms.bMute!=0);
+        SOUNDMANAGER->SetChatVolumeLevel(sound.chat.volume,sound.chat.bMute!=0);
+    }
+    if (PIPE && FrontierX::SetNativeRenderGamma(PIPE,
+        float(DEFAULTS->GetDefaults()->gammaCorrection+10)/10.0f)!=GR_OK)
+        throw std::runtime_error("Native preferences gamma restore failed");
 #endif
 }
 //--------------------------------------------------------------------------//

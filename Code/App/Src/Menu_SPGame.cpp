@@ -12,8 +12,25 @@
 // New player dialog
 //--------------------------------------------------------------------------//
  
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativePlayerProfiles.h"
+#include "Include/NativeAppUiInput.h"
+#include "Include/NativeAppTextResources.h"
+#include "CQTrace.h"
+#include "UserDefaults.h"
+#include "Menu.h"
+#include <algorithm>
+#include <cstring>
+#include <cwchar>
+#include <cstdio>
+#include <stdexcept>
+using namespace FrontierX::NativeAppUi;
+extern IMenuResource *MENU;
+#endif
 #include <wchar.h>
 
 #include <DMenu1.h>
@@ -241,6 +258,7 @@ void Menu_SPGame::init (void)
 }
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 bool Menu_SPGame::setSPSaveDir (void)
 {
 	char name[128];
@@ -278,6 +296,9 @@ bool Menu_SPGame::setSPSaveDir (void)
 }
 //--------------------------------------------------------------------------//
 //
+#else
+bool Menu_SPGame::setSPSaveDir() { return SAVEDIR != nullptr; }
+#endif
 void Menu_SPGame::addFile (const WIN32_FIND_DATA & data)
 {
 	// ignore directories
@@ -329,6 +350,7 @@ U32 Menu_SPGame::countNumberSavedGames (void)
 
 	addFile(handle);		// recursion
 	addFile(data);
+	SAVEDIR->FindClose(handle);
 
 	return nSavedGames;
 }

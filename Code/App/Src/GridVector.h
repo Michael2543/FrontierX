@@ -98,8 +98,15 @@ struct GRIDVECTOR
 
 	GRIDVECTOR & init (SINGLE X, SINGLE Y)		// in terms of squares
 	{
+#if !defined(_WIN32)
+        // Planet footprints can cross the zero edge. Truncate in the signed
+        // domain, then preserve the original byte wrap without float-to-U8 UB.
+        x=static_cast<U8>(static_cast<S32>(X*4));
+        y=static_cast<U8>(static_cast<S32>(Y*4));
+#else
 		x = X*4;		// leave these the same, round down expected
 		y = Y*4;
+#endif
 		return *this;
 	}
 

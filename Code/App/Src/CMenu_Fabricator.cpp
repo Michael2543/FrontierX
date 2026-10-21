@@ -734,6 +734,20 @@ struct _cmenu_fabricator: GlobalComponent
 
 static _cmenu_fabricator startup;
 
+#if !defined(_WIN32)
+// Explicit builder-selection diagnostic must exercise the populated original
+// panel, not merely observe a selected object before its deferred update.
+bool CheckNativeBuilderPanel(U32 partID)
+{
+    const auto *panel=startup.menu;
+    if (!panel || !panel->bPanelOwned || !panel->menu || panel->lastMissionID!=partID)
+        return false;
+    for (const auto &button:panel->buildButton)
+        if (button) return true;
+    return false;
+}
+#endif
+
 //--------------------------------------------------------------------------//
 //-----------------------------End CMenu_Ind.cpp----------------------------//
 //--------------------------------------------------------------------------//

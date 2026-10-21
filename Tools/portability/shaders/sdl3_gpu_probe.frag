@@ -16,6 +16,7 @@ layout(set = 3, binding = 0) uniform TextureStageState
     uvec4 alpha_test;
     uvec4 second_operations;
     uvec4 second_arguments;
+    vec4 correction;
 } stage;
 
 vec4 argument(uint selector, vec4 texel, vec4 current)
@@ -73,5 +74,5 @@ void main()
     }
     if (stage.alpha_test.x == 1u && !alpha_passes(alpha.a)) discard;
     vec3 specular = stage.operations.z == 1u ? vertex_specular.rgb : vec3(0.0);
-    out_color = vec4(clamp(color.rgb + specular, 0.0, 1.0), alpha.a);
+    out_color = vec4(pow(clamp(color.rgb + specular, 0.0, 1.0), vec3(stage.correction.x)), alpha.a);
 }

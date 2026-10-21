@@ -1072,3 +1072,12 @@ static _cmenu_fleet startup;
 //--------------------------------------------------------------------------//
 //-----------------------------End CMenu_Fleet.cpp----------------------------//
 //--------------------------------------------------------------------------//
+
+#if !defined(_WIN32)
+bool CheckNativeAdmiralPanel(U32 partID)
+{
+    const auto *panel=startup.menu;
+    return panel && panel->bPanelOwned && panel->menu &&
+        panel->dwAdmiralID==partID && panel->admiralHead;
+}
+#endif

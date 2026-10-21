@@ -763,8 +763,8 @@ void MScript::Save (IFileSystem * outFile)
 		saveProgramData(outFile);
 	}
 #if !defined(_WIN32)
-	else
-		std::abort();
+	else if (MGlobals::IsSinglePlayer() || PLAYERID || g_pPrograms || g_pScriptData || g_scriptDataSize)
+		std::abort(); // Missing campaign state is never a valid empty skirmish script.
 #endif
 
 	MGlobals::SetLastStreamID(SOUNDMANAGER->GetLastStreamID());
@@ -1151,7 +1151,28 @@ void MScript::Load (IFileSystem * inFile)
 {
 #if !defined(_WIN32)
 	char scriptName[MAX_PATH] = {};
-    if (!MGlobals::GetScriptName(scriptName, sizeof(scriptName))) std::abort();
+    if (!MGlobals::GetScriptName(scriptName, sizeof(scriptName)))
+    {
+        // Offline skirmish has no campaign program/schema. Saved empty Script
+        // directories must not silently admit a missing campaign record.
+        if (PLAYERID || MGlobals::IsSinglePlayer() || g_pPrograms || g_pScriptData || g_scriptDataSize) std::abort();
+        g_pScripts = nullptr;
+        if (inFile)
+        {
+            const bool found = inFile->SetCurrentDirectory("\\Script") != 0;
+            if (!found && MGlobals::GetUpdateCount() != 0) std::abort();
+            if (found)
+            {
+                WIN32_FIND_DATA entry{};
+                const HANDLE search = inFile->FindFirstFile("*", &entry);
+                if (search != INVALID_HANDLE_VALUE) { inFile->FindClose(search); std::abort(); }
+            }
+            if (!inFile->SetCurrentDirectory("\\")) std::abort();
+        }
+        SOUNDMANAGER->SetLastStreamID(MGlobals::GetLastStreamID());
+        TELETYPE->SetLastTeletypeID(MGlobals::GetLastTeletypeID());
+        return;
+    }
     const bool training = strcmp(scriptName, "Sol_T.dll") == 0;
     const bool terran = strcmp(scriptName, "Script01T.dll") == 0 ||
         strcmp(scriptName, "script01.dll") == 0;
@@ -1430,9 +1451,7 @@ void MScript::Close  (void)
 		g_scriptDataType = 0;
 		g_pScriptData    = 0;
 		g_scriptDataSize = 0;
-#if defined(_WIN32)
 		g_pScripts		 = 0;
-#endif
 		g_hLocalDLL		 = 0;
 
 		if (g_hScriptDLL)

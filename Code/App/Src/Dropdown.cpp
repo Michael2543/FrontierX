@@ -11,20 +11,27 @@
 //--------------------------------------------------------------------------//
 //--------------------------------------------------------------------------//
 //
+#if defined(_WIN32)
 #include "pch.h"
 #include <globals.h>
+#else
+#include "Include/NativeAppGlobals.h"
+#include "Include/NativeAppUiInput.h"
+#include "CQTrace.h"
+using namespace FrontierX::NativeAppUi;
+#endif
 
 #include "IButton2.h"
 #include "IListBox.h"
 #include "Startup.h"
 #include "BaseHotRect.h"
 #include "GenData.h"
-#include <DDropdown.h>
+#include <DDropDown.h>
 #include "DrawAgent.h"
 //#include "Hotkeys.h"
 
 #include <TComponent.h>
-#include <FileSys.h>
+#include <Filesys.h>
 #include <HKEvent.h>
 
 //--------------------------------------------------------------------------//
@@ -557,13 +564,19 @@ U32 Dropdown::GetControlID (void)
 //
 GENRESULT Dropdown::Notify (U32 message, void *param)
 {
-	MSG *msg = (MSG *) param;
+#if defined(_WIN32)
+    MSG *msg = (MSG *) param;
+#else
+    MessageFields fields;
+    if (!DecodeMessage(message,param,fields)) return GR_INVALID_PARMS;
+    const MessageFields *msg=&fields;
+#endif
 
 	if (bInvisible==false)
 	switch (message)
 	{
 	case CQE_BUTTON:
-		if (S32(param) >= 0)		// ignore double-click message
+		if (static_cast<S32>(reinterpret_cast<std::intptr_t>(param)) >= 0)		// ignore double-click message
 		{
 			bDropped = !bDropped;
 			list->SetVisible(bDropped);
@@ -577,7 +590,7 @@ GENRESULT Dropdown::Notify (U32 message, void *param)
 		break;
 
 	case WM_CHAR:
-		switch (TCHAR(msg->wParam))
+		switch (char(msg->wParam))
 		{
 		case 27:	// ESC pressed
 			if (bDropped)
@@ -800,7 +813,11 @@ struct _dropdownFactory : GlobalComponent
 	virtual void Startup (void)
 	{
 		factory = new DAComponent<DropdownFactory>;
-		AddToGlobalCleanupList(&factory);
+		#if defined(_WIN32)
+        AddToGlobalCleanupList(&factory);
+#else
+        AddToGlobalCleanupList(reinterpret_cast<IDAComponent **>(&factory));
+#endif
 	}
 
 	virtual void Initialize (void)

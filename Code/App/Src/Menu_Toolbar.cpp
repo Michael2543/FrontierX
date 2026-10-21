@@ -984,6 +984,9 @@ struct Menu_tb : public Frame, IToolbar
 	const SHAPENAMESTYPE * vfxBarShapeType;
 	const RECT * pContextRect;
 	U16 topBarX,topBarY,topWidth,topHeight;
+#if !defined(_WIN32)
+	U32 authoredTopBarX=0,authoredTopBarY=0;
+#endif
 	void * m_pPaddedData;	// zero-padded copy of pData; kept alive while vfxShapeType etc. point into it
 
 	COMPTR<IHotButton> DEBUG_selectedButton;
@@ -1537,6 +1540,24 @@ GENRESULT Menu_tb::Notify (U32 message, void *param)
 //
 void Menu_tb::setStateInfo (void)
 {
+#if !defined(_WIN32)
+	// Controls include negative offsets from the bottom HUD to the top bar.
+	// Reflow that anchor before applying their newly scaled offsets.
+	if (shape)
+	{
+		U16 width,height;
+		shape->GetDimensions(width,height);
+		screenRect.left=0;
+		screenRect.top=SCREENRESY-height;
+		screenRect.right=SCREENRESX-1;
+		screenRect.bottom=SCREENRESY-1;
+		topBarX=IDEAL2REALX(authoredTopBarX);
+		topBarY=IDEAL2REALY(authoredTopBarY);
+		if (topShape) topShape->GetDimensions(topWidth,topHeight);
+		STATUS->SetToolbarHeight(bInvisible ? 0 : height);
+		HINTBOX->SetToolbarHeight(bInvisible ? 0 : height);
+	}
+#endif
 	COMPTR<IDAComponent> pComp;
 	COMPTR<IShapeLoader> pLoader;
 	CONTROL_NODE * node = 0;
@@ -1784,6 +1805,10 @@ void Menu_tb::loadInterface (const enum M_RACE *pRace)
 	sectorMapRect = callback.sectorMapRect;
 	topBarX = IDEAL2REALX(callback.topBarX);
 	topBarY = IDEAL2REALY(callback.topBarY);
+#if !defined(_WIN32)
+	authoredTopBarX=callback.topBarX;
+	authoredTopBarY=callback.topBarY;
+#endif
 	{
 		static FILE* _srf = nullptr;
 		if (!_srf) _srf = fopen("debug/sysmap_rect_diag.txt", "w");

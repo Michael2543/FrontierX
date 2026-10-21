@@ -176,6 +176,17 @@ bool SdlWindow::Configure(int width, int height, bool fullscreen, bool resizable
         error = SDL_GetError();
         return false;
     }
+    // Some asynchronous backends use a short per-call timeout. Keep waiting
+    // for confirmation within a bounded transition deadline, including startup.
+    const Uint64 deadline=SDL_GetTicks()+2000;
+    bool synchronized=SDL_SyncWindow(window);
+    while (!synchronized && SDL_GetTicks()<deadline)
+        synchronized=SDL_SyncWindow(window);
+    if (!synchronized)
+    {
+        error = "SDL window transition did not complete within two seconds";
+        return false;
+    }
     return true;
 }
 
