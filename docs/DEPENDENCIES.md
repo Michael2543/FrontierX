@@ -1,10 +1,38 @@
 # Third-Party Dependency Record
 
-Status: updated inventory, 2026-09-17
+Status: native dependency inventory with source-repository review, 2026-11-07
 
 This record covers third-party source used by the native Linux build graph. It does not approve a
 release. The unmodified Conquest source license and [LEGAL.md](../LEGAL.md) remain controlling for
 the Program Derivative as a whole.
+
+## Source repository review (2026-11-07)
+
+Source distribution includes legacy tools and SDK material outside the native
+Linux dependency graph. Their absence from CMake does not remove them from Git.
+The [publication review](PUBLICATION_REVIEW.md) records the current inventory,
+history scan, exact source-archive comparison and remaining decisions.
+
+The user's lawful Steam installation supplies the original
+`conquest_frontier_wars_source_code.zip`, SHA-256
+`3413ffdacb488e3b8cc38e71ce1d3ae2bec278a1005885ff6784daf11547b5f6`.
+All 5,475 inherited selected media files match that archive exactly. The
+following source-review findings identify notices without granting new rights:
+
+| Component | Version or identity evidence | Notice and remaining review |
+|---|---|---|
+| Bink SDK | Header version 1.5y; three import libraries match the original source archive | RAD attribution in `Code/Libs/Include/bink/radbase.h`; complete applicable redistribution terms are not recorded |
+| Python SDK/runtime | Headers identify 2.3.4; `python23` DLLs and import libraries match the original source archive | Record exact binary identity and applicable Python notices before bundling; no standalone Python license is recorded in the existing dependency inventory |
+| HAP debugger | Humongous Entertainment copyright 2001 in `Code/Libs/Src/Tools/hap/tools/HapDebugger/DbgRemote.cpp` | Explicit LGPL 2.1-or-later notice and included `tools/license.txt`; compatibility/distribution review remains required |
+| Scintilla/SciTE | Vendored 1998–2002 attribution; exact upstream release unresolved | Preserve `Code/Libs/Src/Tools/hap/libraries/scintilla/doc/License.txt` and its source/documentation notice requirements |
+| CSizingControlBar | Version 2.43, Cristi Posea, in HAP's `sizecbar.h` | Embedded notice permits use, requires retained notices and marked changes, and separately requires consent for inclusion in a software library |
+| Lua | `Code/Libs/Src/Obsolete/lualib/LUA/INCLUDE/LUA.H` identifies Lua 3.1 | Complete permission/copyright notice is embedded at the end of that header, despite the README's missing standalone `COPYRIGHT` reference |
+| Old FFTW header | `Code/Libs/Src/Tools/Exporters/Common/fftw.h`, revision 1.13, 1997-03-19 | Preserve its actual MIT-authored no-fee-distribution notice; do not substitute the license of a modern FFTW release |
+| Setup/debug DLLs | `dsetup.dll`, `dsetup32.dll`, `dbghelp.dll`, `EBUEula.dll` match the original source archive | Acquisition provenance verified; applicable third-party redistribution terms remain to be recorded |
+
+This is a targeted notice inventory, not an exhaustive legal review. All original
+notices remain intact. Existing externally installed SDL, FFmpeg, FreeType and
+build-tool package gates below are separate from these tracked-source findings.
 
 ## TinyXML and TinyString
 
@@ -18,7 +46,7 @@ the Program Derivative as a whole.
 | Original attribution | Lee Thomason for TinyXML; Yves Berquin for TinyString, as recorded in the source notices |
 | License | Embedded permissive three-clause notices in the six source files; the notices must remain intact |
 | Maintenance state | Legacy vendored snapshot with no verified upstream update path |
-| Acquisition | Already present in the historical development-source tree; no source was fetched for the Linux target |
+| Acquisition | Historical development-source tree; the original files are also present in the verified Steam source archive identified above. FrontierX modifications are described below; no upstream source was fetched for the Linux target |
 | Linux build role | `frontierx_tinyxml` static library and `frontierx_tinyxml_probe` test consumer |
 | Existing Windows owner | `Code/Libs/Src/StringTable/StringTable.vcxproj` compiles the same four implementation files |
 | Distribution status | Blocked pending exact upstream-version provenance and a package-level license review |

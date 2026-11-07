@@ -1,59 +1,100 @@
-# FrontierX
+<p align="center">
+  <a href="https://gamesdb.launchbox-app.com/games/images/32522-conquest-frontier-wars">
+    <img src="https://images.launchbox-app.com/3ab0fd39-b49b-4a78-8a7c-d121ccb8a49b.jpg" alt="Original North American Conquest: Frontier Wars box cover" width="240">
+  </a>
+</p>
 
-FrontierX is a community project to bring *Conquest: Frontier Wars* to native
-64-bit Linux. It preserves the original C and C++ engine, retail gameplay, and
-save formats while replacing Windows dependencies behind the engine's existing
-interfaces.
+<h1 align="center">FrontierX</h1>
 
-The immediate goal is a playable single-player campaign. The Windows restoration
-remains the regression baseline, and Linux campaign support is expanding mission
-by mission.
+<p align="center">
+  <strong>Conquest: Frontier Wars, running natively on 64-bit Linux.</strong>
+</p>
 
-**A lawfully obtained retail installation is required to play.** Retail game data
-is not included. FrontierX is a modified version of the Program, released solely
-under the [original Fever Pitch Studios license](Conquest%20Source%20License.txt).
-The entire derivative and its recipients are subject to those exact terms.
+<p align="center">
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#current-status">Status</a> ·
+  <a href="#build-from-source">Build</a> ·
+  <a href="#contribute">Contribute</a> ·
+  <a href="docs/PROJECT.md">Documentation</a>
+</p>
 
-## Current state
+---
 
-Status as of **2026-10-19**. FrontierX is in active development and is intended for
-developers and early playtesters. Expect defects and incomplete campaign coverage.
+FrontierX brings the original *Conquest: Frontier Wars* engine to modern Linux.
+Command fleets across star systems, maintain supply lines, and play through the
+Terran campaign with native graphics, sound, and input. No Wine is required.
 
-| Area | Current scope |
+The port preserves the game's original C and C++ engine and retail gameplay while
+replacing Windows dependencies at the existing platform interfaces.
+
+> **You need a lawfully obtained retail installation to play.** The historical
+> development resources in this source tree do not replace it. FrontierX is a
+> modified Program Derivative released solely under the
+> [original Conquest source license](Conquest%20Source%20License.txt). The entire
+> derivative and its recipients are subject to those exact terms.
+
+## Highlights
+
+- **Complete Terran campaign.** All 16 missions and the ending are accepted through
+  user playtesting in the delivered Linux build.
+- **Native Linux x86_64.** SDL3 handles windows, input, and audio; SDL GPU provides
+  Vulkan rendering.
+- **Original presentation.** Models, effects, HUD, both minimaps, animated portraits,
+  speech, and movies are integrated for the accepted campaign.
+- **Single-player menus and skirmish.** Original menus, Options, and offline AI
+  matches are integrated, including Admirals and diplomacy. Full skirmish
+  acceptance is still in progress.
+- **Fullscreen and save/load.** Borderless fullscreen, Alt+Enter, campaign progress,
+  and mission persistence use the original game flows and native platform adapters.
+
+## Getting started
+
+FrontierX is currently for developers and early playtesters. An optimized local
+single-player candidate has been prepared; public binary distribution has not
+been cleared. Start with a source build and your own external game data.
+
+1. [Build the native targets](#build-from-source).
+2. Prepare fonts, speech, and movies with the [full-media guide](docs/NATIVE_TERRAN_MEDIA.md).
+3. Follow the [playtest setup and launch guide](docs/LINUX_PLAYTEST_CI.md) to configure
+   external data, preserve your saves, and prepare a candidate.
+
+Keep retail data, fonts, saves, and runtime output outside the checkout. Training
+uses `--mission-campaign u`; the launch guide supplies the remaining required
+arguments. Default builds leave optional fonts and FFmpeg media support off.
+
+## Current status
+
+Reviewed **2026-11-07**, based on recorded runtime checks and user acceptance from
+**2026-10-20**. This README update adds no new gameplay validation.
+
+| Area | Status |
 |---|---|
-| Native Linux | Linux x86_64, SDL3 window/input/audio, and Vulkan rendering through SDL GPU |
-| Training | Original Terran training accepted in its documented Linux scope |
-| Terran campaign | Missions 1–6 accepted through user playtests in their reported scope |
-| Later missions | Missions 7–12 have varying integration and test coverage; missions 13–16 are not yet linked |
-| Presentation | Models, textures, effects, HUD, minimaps, portraits, speech, and movies are integrated for selected missions; complete coverage remains mission-specific |
-| Windows | VS2022 Win32 restoration remains the supported baseline; affected native Windows rebuild and module-ABI checks remain open for current Linux changes |
-| Other platforms and multiplayer | Later work |
+| Training and Terran campaign | Accepted in the documented native Linux scope, including the campaign ending |
+| Menus, Options, and fullscreen | Integrated; bounded X11 and Wayland runtime checks recorded |
+| Offline skirmish | Live AI, research, Admiral recruitment, and save/load exercised; complete matches and broader ability coverage still need acceptance |
+| Unit catalogue | 162 of 164 race-tagged archetypes admitted; two variants lack required models in the tested external data |
+| Stability | Focused regression and sanitizer checks pass; whole-process graphical memory leaks remain unresolved |
+| Windows | VS2022 Win32 restoration remains the regression baseline; affected rebuilds and module-ABI checks remain open |
+| Multiplayer, macOS, and ARM64 | Deferred |
 
-Acceptance records describe particular playthroughs, not every unit, scenario, or
-hardware configuration. Later-mission crash repairs, missing media, whole-process
-leaks, and broader compatibility checks remain open. Full cross-platform
-determinism and retail parity have not been established.
+Campaign completion does not establish every optional ability, all hardware, or
+full retail parity. Cross-platform determinism and public distribution review
+remain open. See [single-player finalization](docs/RETAIL_SINGLEPLAYER_FINALIZATION.md)
+for the remaining work and [unit and ability coverage](docs/NATIVE_UNIT_COVERAGE.md)
+for the exact catalogue gaps.
 
-See the [campaign mission matrix](docs/NATIVE_TERRAN_P2.md#mission-matrix) for
-individual mission status and the [active delivery plan](docs/PORT_READINESS.md#active-plan-playable-single-player-first-2026-10-13)
-for priorities. Focused documents distinguish automated checks, synthetic runtime,
-retail-data runtime, and user gameplay evidence.
+The [publication review](docs/PUBLICATION_REVIEW.md) records the original
+source-archive comparison and outstanding third-party distribution checks.
 
-## Build on Linux
+## Build from source
 
-The checked-in GCC and Clang presets require:
+### Linux
 
-- Linux x86_64, CMake 3.25 or newer, and Ninja.
-- GCC or Clang with a C++ toolchain.
-- Python 3 and LLVM's resource compiler, `llvm-rc`.
-- `pkg-config` and SDL3 development files.
-- shaderc's `glslc` shader compiler.
+Install CMake 3.25 or newer, Ninja, GCC or Clang with a C++ toolchain, Python 3,
+LLVM's `llvm-rc`, `pkg-config`, SDL3 development files, and shaderc's `glslc`.
+Visible rendering requires a working Vulkan driver.
 
-Visible native rendering also requires a working Vulkan driver. Consult the
-[dependency record](docs/DEPENDENCIES.md) for reviewed versions, provenance, and
-optional dependencies.
-
-From the repository root, configure, build, and run the checks:
+From the repository root:
 
 ```sh
 cmake --preset linux-gcc-debug
@@ -61,19 +102,16 @@ cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```
 
-Replace `linux-gcc-debug` with `linux-clang-debug` for Clang. These commands build
-the native development targets, shell, and regression checks. Building them does
-not require retail data. Some visible GPU checks need a real display; a skipped
-check is not evidence that rendering works on your machine.
+Use `linux-clang-debug` for Clang. These presets build native development targets,
+the shell, and regression checks without retail data. GPU checks require a real
+display; a skipped check does not verify rendering.
 
-### Prepare a playable candidate
+<details>
+<summary>Enable fonts, speech, and movies for a playable candidate</summary>
 
-The default configuration leaves optional fonts and FFmpeg media support off.
-A full-media campaign candidate requires FreeType 2.14 or newer, external font
-faces, and the reviewed external shared-LGPL FFmpeg configuration for speech and
-movies.
-
-After preparing those dependencies, configure the optional build:
+A full-media build requires FreeType 2.14 or newer, external original-family font
+faces, and the reviewed shared-LGPL FFmpeg configuration. Follow the
+[dependency record](docs/DEPENDENCIES.md) before configuring:
 
 ```sh
 cmake --preset linux-gcc-debug \
@@ -84,75 +122,82 @@ cmake --preset linux-gcc-debug \
 cmake --build --preset linux-gcc-debug
 ```
 
-Replace `/external/lgpl-prefix` with your reviewed dependency prefix. Keep your
-retail installation, fonts, saves, and runtime output outside the checkout.
-Original-family fonts are supplied through an external `--ui-font-map` file.
+Replace `/external/lgpl-prefix` with your reviewed dependency prefix. Supply the
+external font mapping through `--ui-font-map`. The [playtest guide](docs/LINUX_PLAYTEST_CI.md)
+describes candidate preparation and launch.
 
-Follow the [Linux playtest preparation and launch guide](docs/LINUX_PLAYTEST_CI.md)
-for the external data configuration, candidate preparation, exact launcher, and
-mission checklist. The [media guide](docs/NATIVE_TERRAN_MEDIA.md) explains the
-font and movie requirements. Training uses `--mission-campaign u` at the native
-shell entry point; the preparation guide supplies the remaining required options.
+</details>
 
-## Build the Windows baseline
+### Windows baseline
 
-The Windows build requires Windows 10 or 11, Visual Studio 2022 with the Desktop
-development with C++ workload, Python 3 with the `py` launcher, and the June 2010
-DirectX SDK. The build expects the SDK in `DXSDK` beside the repository.
-Runtime testing also requires the DirectX 9 runtime components and retail data.
+The supported restoration build requires Windows 10 or 11, Visual Studio 2022
+with the C++ desktop workload, Python 3 with the `py` launcher, and the June 2010
+DirectX SDK in `DXSDK` beside the repository.
 
-To rebuild without deploying files into a retail installation, run in PowerShell:
+Rebuild without deploying into a retail installation from PowerShell:
 
 ```powershell
 .\Build-Conquest.ps1 -Configuration Debug -NoDeploy
 .\Build-Conquest.ps1 -Configuration Final -NoDeploy
 ```
 
-The `build-debug.cmd` and `build-final.cmd` wrappers also support the established
-build-and-deploy workflow. Review deployment settings before using them. See the
-[Windows restoration handoff](HANDOFF.md) and
-[retail test matrix](RETAIL_TEST_MATRIX.md) for baseline details and runtime evidence.
+See the [Windows restoration handoff](HANDOFF.md) and [retail test matrix](RETAIL_TEST_MATRIX.md).
+Runtime testing also requires the DirectX 9 runtime components and retail data.
 
-## Report a problem or contribute
+## Project goals
 
-Bug reports are most useful when they include the revision, compiler/build
-configuration, mission, steps to reproduce, and expected and observed behavior.
-For rendering or audio problems, include the relevant hardware and driver details.
-Remove personal paths and other private information from logs before sharing.
-Do not attach retail assets, saves containing retail material, binaries, or memory
-dumps to public reports.
+- Preserve shipped gameplay, simulation behavior, and fixed save formats.
+- Finish reliable native Linux single-player play, including optional abilities
+  and complete skirmish matches.
+- Keep the Windows baseline viable as platform dependencies are replaced.
+- Prepare reproducible builds and packaging with external retail data.
 
-Before a substantial change, check the [delivery priorities](docs/PORT_READINESS.md)
-and [project architecture](docs/PROJECT.md). Small fixes to original production
-owners are preferred. Preserve retail behavior, deterministic simulation, fixed
-save layouts, and the Windows baseline. Contributor and coding guidance is in
-[AGENTS.md](AGENTS.md) and [.github/instructions](.github/instructions).
+The [delivery plan](docs/PORT_READINESS.md) sets priorities. The
+[project architecture](docs/PROJECT.md) and [build graph](docs/BUILD_GRAPH.md)
+explain the engine boundaries and native targets.
 
-Useful documentation entry points:
+## Contribute
 
-- [Build graph](docs/BUILD_GRAPH.md): native targets and validation boundaries.
-- [Native training](docs/NATIVE_SINGLEPLAYER_SLICE.md): training scope and evidence.
-- [Terran campaign integration](docs/NATIVE_TERRAN_CAMPAIGN.md): campaign entry, persistence, and transitions.
-- [Game material path](docs/GAME_MATERIAL_PATH.md): production rendering integration and known limits.
-- [Native audio](docs/NATIVE_AUDIO_STREAMER.md): speech, streaming, and decoder requirements.
+Bug reports, playtest feedback, documentation, and focused code fixes are welcome.
+Use the [issue tracker](https://github.com/Michael2543/frontierX/issues) for reproducible
+problems. Include your revision, build configuration, mission or map, steps to
+reproduce, and expected and observed behavior. Include GPU and driver details for
+rendering problems.
 
-## Origins, license, and game data
+Remove personal paths and private information from shared logs. Keep retail
+assets, saves containing retail material, binaries, and memory dumps out of public
+reports.
 
-FrontierX builds on [Revan67's ConquestFWR restoration](https://github.com/Revan67/ConquestFWR)
-and the source released by Fever Pitch Studios in December 2013. That release is
-a later CQ2 development snapshot, rather than the exact 2001 retail source.
-Restoring compatibility with shipped data is therefore part of the work.
+Before a substantial change, read [AGENTS.md](AGENTS.md) and the
+[scoped contributor instructions](.github/instructions). Preserve original game
+behavior and add focused validation for the production owner you change.
 
-This is a modified version of the Program. Revan67's restoration and FrontierX changes, with their dates and attribution, are recorded in
-[MODIFICATIONS.md](MODIFICATIONS.md).
+## Origins and credits
 
-The controlling [Conquest source license](Conquest%20Source%20License.txt) permits
-non-commercial use only and is revocable. Payment, donations, reimbursement, or
-other consideration for the Program, distribution, warranty, or support are
-prohibited. The complete license governs, including its warranty and liability
-terms. [LEGAL.md](LEGAL.md) records the project's distribution procedures and does
-not amend the license.
+- **Fever Pitch Studios and the original development team** for *Conquest: Frontier Wars*
+  and the December 2013 source release.
+- **[Revan67's ConquestFWR restoration](https://github.com/Revan67/ConquestFWR)** for the
+  Windows restoration on which FrontierX builds.
+- **FrontierX contributors and playtesters** for the native Linux port, compatibility
+  repairs, and gameplay feedback. Dated attribution is in [MODIFICATIONS.md](MODIFICATIONS.md).
 
-Retail executables, DLLs, maps, textures, audio, movies, fonts, manuals, and SDK
-redistributables must remain outside this repository and public packages.
-Dependency redistribution requires a separate provenance and license review.
+The released source is a later CQ2 development snapshot, so restoring compatibility
+with the shipped game is part of this project. FrontierX is a community modification.
+
+The original North American box cover above is referenced from the
+[LaunchBox Games Database](https://gamesdb.launchbox-app.com/games/images/32522-conquest-frontier-wars).
+The artwork and trademarks belong to their respective owners. The image is hosted
+externally and is not included in the source tree or covered by a new project license.
+
+## License
+
+FrontierX is released solely under the complete, unmodified
+[Conquest source license](Conquest%20Source%20License.txt), copyright Fever Pitch
+Studios, December 2013. Its terms are non-commercial and revocable, with the
+warranty and liability provisions stated in that license.
+
+Payment, donations, reimbursement, and other consideration for the Program,
+distribution, warranty, or support are prohibited. [LEGAL.md](LEGAL.md) documents
+project procedures without changing the controlling license. Retail media and
+third-party redistributables require their own distribution basis; public
+packaging remains subject to the [dependency review](docs/DEPENDENCIES.md).
