@@ -41,6 +41,7 @@ open. Multiplayer and other native platforms are deferred.
 
 Current builds are intended for developers and early playtesters.
 
+- [Install the prebuilt Linux preview](docs/INSTALL_LINUX.md); public download pending.
 - [Build and run on Linux / build the Windows baseline](docs/GETTING_STARTED.md)
 - [Report a bug or contribute](docs/CONTRIBUTING.md)
 - [Explore the roadmap and architecture](docs/PROJECT.md)

@@ -1,5 +1,8 @@
 # Build and run FrontierX
 
+To use a prebuilt candidate, follow the [Linux installation guide](INSTALL_LINUX.md).
+The instructions below are for building from source.
+
 FrontierX currently targets developers and early playtesters. An optimized local
 single-player candidate is prepared; public binary distribution is not cleared.
 You need a lawfully obtained retail installation to play.
